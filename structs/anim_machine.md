@@ -1,0 +1,211 @@
+# `C_animations_machine_de_luxe` — the animation machine (`anim_machine_`)
+
+**Created** 2026-07-13 11:22 +0200 · **Modified** 2026-09-17 22:55 +0200
+
+The engine's per-object **animation state machine**: it owns the animation tracks, the
+currently-playing clip, the blend state, the "extended" (overlay) animation slot, and the
+recompiled bone matrix. It is a **sub-object**, not a scene actor — it has no `kind` tag and no
+vtable of its own in the PC build.
+
+| | |
+|---|---|
+| PC prefix | **`anim_machine_`** (the static track table and its helpers: `anim_track_*`) |
+| PC cluster | `[0x005aa800, 0x005ad600)` |
+| Object size | **>= `0x124`** (§2) |
+| Method coverage | 22 of 24 PS2 methods located (§4) |
+
+Confidence: treat every field as **[M]** unless marked **[H]**.
+
+It sits under both the human animation path and the traffic/pedestrian path, so a function that
+looks like `C_human` animation code may belong to this class instead.
+
+---
+
+## 1. Where the object lives (five owners)
+
+Established by a scan of `.text` for every `E8` call to the machine's methods, then a back-trace of
+the ECX source (`lea ecx,[reg+disp]` = EMBEDDED, `mov ecx,[reg+disp]` = POINTER) with each callsite
+attributed to its containing function. **86 callsites.** The decomp cannot answer this on its own:
+MSVC passes the machine in ECX and Ghidra hides the `this` at every callsite.
+
+| Owner | How it holds the machine | Offset | Conf | Evidence |
+|---|---|---|---|---|
+| **`C_human`** (and its subclasses `C_player` / `C_entity`) | EMBEDDED | **`+0xbc`** | H | 23 distinct owning functions. Worked example — `human_do_play_anim` (`0x004a63f0`): prologue `8b f1` (`mov esi,ecx`, ESI = `this`), then `8d be bc 00 00 00` (`lea edi,[esi+0xbc]`), `8b cf` (`mov ecx,edi`), `call anim_machine_set_anim` |
+| **`C_dog`** | EMBEDDED | `+0xe8` | H | 6 owning functions in the `0x0047b800..0x0047f3a0` cluster; the cluster's strings are `hlavapsa_I3D` (*hlava psa* = dog's head), `Datack_I3D` / `Dbark1_i3d` / `Dbreath_i3d` / `Ddeath_I3D` |
+| **`C_pumper`** (gas-station attendant) | EMBEDDED | `+0xe0` | H | The band's strings are `_pumpa_*` (*pumpa* = fuel pump), the idle set `Kurak*` (*kuřák* = smoker) and `Nuda*` (*nuda* = boredom) — `structs/pumper.md` |
+| `C_traffic_element` | POINTER | `+0x08` | H | `pedestrian_end_taxi_wave` / `pedestrian_deactivate` deref `*(elem+8)` |
+| `S_rail_human` (the tram passenger, `rail_passenger_`) | POINTER | `+0x08` | H | Built by `railway_game_init`, driven by `rail_passenger_set_anim` from the passenger state at `+0x14` through the table `g_rail_passenger_anims`, destroyed by `rail_passenger_done` — `structs/railway.md` §2b |
+
+**The owner set is closed at five.** The machine's caller set is exactly this owner set:
+`human_ctor`, `dog_ctor`, `pumper_ctor`, `pedestrian_manager_add_pedestrian` (building a
+`C_traffic_element`) and `railway_game_init`.
+
+**`pedestrian_set_anim` and `pedestrian_drop_umbrella` deref `this+0x8` as an anim-machine
+pointer**, so their `this` is a `C_traffic_element`, not a `C_human`.
+
+### Consistency check on `C_human + 0xbc`
+
+The machine is **>= `0x124` bytes** (§2), so embedded at `+0xbc` it spans `+0xbc .. ~+0x1e0`.
+`structs/human.md` documents `C_human` fields at `+0x4c`, `+0x74`, `+0x98`, `+0xac` (all below
+`+0xbc`) and then `+0x1e4` / `+0x1e5` / `+0x1e8` (all above `+0x1e0`) — **not a single documented
+`C_human` field falls inside `+0xbc..+0x1e0`**. The machine fills exactly the hole the field map
+leaves open, which pins its size at roughly `0x124..0x128`.
+
+---
+
+## 2. Field layout (PC offsets)
+
+```c
+typedef struct C_animations_machine_de_luxe {
+    /* +0x08 */ void    *anim_object;        // [H] the I3D animation/model object. ALL track work is
+                                             //     vtable-dispatched through it: +0x64 = get track by
+                                             //     index, +0x68 = stop track N, +0x7c = get track length.
+    /* +0x0c */ uint8_t  flags[7];           // [M] 7 byte-flags written by SetAnim (+0xc..+0x12)
+    /* +0x14 */ uint32_t f_14;               // [U] written by SetAnim
+    /* +0x18 */ uint32_t f_18;               // [U] written by SetAnim
+    /* +0x1c */ uint32_t active_track;       // [H] index of the ACTIVE track/clip; passed as the track
+                                             //     selector to anim_object vtable +0x64 / +0x7c
+    /* +0x20 */ uint32_t blend_block[8];     // [M] +0x20..+0x3c — per-clip blend/weight params (SetAnim)
+    /* +0x40 */ float    matrix[16];         // [H] 4x4 recompiled bone matrix; RecompileMatrix copies
+                                             //     0x10 dwords from anim_object+0x50 into here...
+    /* +0x70 */ float    translation[3];     // [H] ...then ZEROES +0x70/+0x74/+0x78 — i.e. the matrix's
+                                             //     translation row is discarded (rotation-only recompile)
+    /* +0x80 */ uint32_t pose_block[8];      // [M] +0x80..+0x9c — second transform/pose block
+    /* +0xdc */ uint32_t misc_block[6];      // [M] +0xdc..+0xf0 — written by SetAnim
+    /* +0xf4 */ uint8_t  ext_active;         // [H] extended (overlay) animation is active
+    /* +0xf5 */ uint8_t  ext_blending_out;   // [H] extended anim is blending out
+    /* +0xfc */ uint32_t ext_time;           // [H] extended-anim time/phase (reset to 0 on blend-out)
+    /* +0x100*/ float    ext_blend;          // [H] extended-anim blend time; stored NEGATED while
+                                             //     blending out (`= -blend`)
+    /* +0x104*/ uint8_t  ext_flag;           // [M] cleared on both blend-out paths
+    /* +0x10e*/ int16_t  ext_clip_id;        // [H] the extended anim's CLIP ID. 0xffff (-1) = none.
+                                             //     -0x2357 is the "hail a taxi" wave clip — that exact
+                                             //     magic is how pedestrian_end_taxi_wave detects it.
+    /* +0x110*/ uint8_t  ext_locked;         // [H] gate: when non-zero, DelExtendedAnim refuses to run
+    /* +0x114*/ uint32_t tail_block[4];      // [M] +0x114..+0x120 — written by SetAnim
+} C_animations_machine_de_luxe;              // size >= 0x124 (upper bound not established)
+```
+
+**Track count = 8.** `anim_machine_stop_anims` loops `i = 0..7` calling
+`anim_object->vtable[+0x68](i)`. The **extended/overlay animation uses track slot 2**
+(`anim_machine_del_extended_anim` stops track `2` specifically).
+
+## 3. Field evidence
+
+| Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
+|---|---|---|---|---|---|
+| +0x08 | anim_object | H | `anim_machine_set_anim` | `anim_machine_get_active_anim_time`, `anim_machine_stop_anims`, `anim_machine_del_extended_anim`, `anim_machine_recompile_matrix` | the I3D animation object; every track op is a vtable call on it (+0x64/+0x68/+0x7c) |
+| +0x1c | active_track | H | `anim_machine_set_anim` | `anim_machine_get_active_anim_time` | the track selector handed to anim_object's getters |
+| +0x40..+0x7f | matrix | H | `anim_machine_recompile_matrix` | `anim_machine_set_anim` | 16 dwords copied from `anim_object+0x50` |
+| +0x70..+0x78 | translation | H | `anim_machine_recompile_matrix` | - | zeroed right after the matrix copy |
+| +0xf4 | ext_active | H | `anim_machine_del_extended_anim` | - | guard for the whole extended-anim teardown |
+| +0xf5 | ext_blending_out | H | `anim_machine_del_extended_anim` | - | set when a blend time > 0 was given |
+| +0xfc | ext_time | H | `anim_machine_del_extended_anim` | - | zeroed when the blend-out starts |
+| +0x100 | ext_blend | H | `anim_machine_del_extended_anim` | - | stored as `-blend` while blending out |
+| +0x10e | ext_clip_id | H | `anim_machine_del_extended_anim` | `pedestrian_end_taxi_wave` | `0xffff` = none; `-0x2357` = the taxi-wave clip |
+| +0x110 | ext_locked | H | - | `anim_machine_del_extended_anim` | when set, DelExtendedAnim is a no-op; writer not located |
+
+## 4. Method coverage — 22 of 24 PS2 methods
+
+PC VA order, PC name first.
+
+| PC VA | PC name | PS2 twin | Status |
+|---|---|---|---|
+| 0x005aab20 | `anim_machine_ctor` | `__ct__28C_animations_machine_de_luxeFv` | CONFIRMED |
+| 0x005aab30 | `anim_machine_load_track` | `LoadTrack__28C_animations_machine_de_luxeFPc` | CONFIRMED |
+| 0x005aaf80 | `anim_track_dtor` | `ClearTracks__28C_animations_machine_de_luxeFv` | CONFIRMED ¹ |
+| 0x005aafb0 | `anim_machine_get_track` | `GetTrack__28C_animations_machine_de_luxeFPc` | CONFIRMED |
+| 0x005ab020 | `anim_machine_clear_non_base_tracks` | `ClearNoBaseTracks__28C_animations_machine_de_luxeFv` | CONFIRMED |
+| 0x005ab170 | `anim_machine_init_from_actor` | `Init__28C_animations_machine_de_luxeFP7C_actor` | CONFIRMED |
+| 0x005ab1e0 | `anim_machine_init_from_traffic_element` | `Init__28C_animations_machine_de_luxeFP17C_traffic_element` | CONFIRMED |
+| 0x005ab250 | `anim_machine_init_from_model` | `Init__28C_animations_machine_de_luxeFP9I3D_model` | CONFIRMED |
+| 0x005ab2b0 | `anim_machine_reset` | `Reset__28C_animations_machine_de_luxeFv` | CONFIRMED |
+| 0x005ab300 | `anim_machine_sync_track_time` | `EqualTime__28C_animations_machine_de_luxeFii` | CONFIRMED |
+| 0x005ab3a0 | `anim_machine_get_active_anim_time` | `GetActiveAnimTime__28C_animations_machine_de_luxeFRUiRUi` | CONFIRMED |
+| 0x005ab3f0 | `anim_machine_stop_anims` | `StopAnims__28C_animations_machine_de_luxeFv` | CONFIRMED |
+| 0x005ab410 | `anim_machine_recompile_matrix` | `RecompileMatrix__28C_animations_machine_de_luxeFR8S_matrix` | CONFIRMED |
+| 0x005ab460 | `anim_machine_set_anim` | `SetAnim__28C_animations_machine_de_luxeFPcbbbffbbP8S_vectorbUi` | STRUCTURAL ² |
+| 0x005abc80 | `anim_machine_is_active` | `IsActive__28C_animations_machine_de_luxeFv` | CONFIRMED ³ |
+| 0x005abcc0 | `anim_machine_tick` | `Tick__28C_animations_machine_de_luxeFUi` | CONFIRMED ³ |
+| 0x005acb70 | `anim_machine_set_extended_anim` | `SetExtendedAnim__28C_animations_machine_de_luxeFP17I3D_animation_setffb` | CONFIRMED |
+| 0x005acc60 | `anim_machine_del_extended_anim` | `DelExtendedAnim__28C_animations_machine_de_luxeFf` | CONFIRMED |
+| 0x005acce0 | `anim_machine_get_placement_from_track` | `GetPlacementFromTCK__28C_animations_machine_de_luxeFPcR8S_vectorR8S_vector` | CONFIRMED |
+| 0x005ace20 | `anim_machine_get_track_end_point` | `GetEndPointOfTCK__28C_animations_machine_de_luxeFPcR8S_vector` | CONFIRMED |
+| 0x005ace60 | `anim_machine_get_track_mixing_point` | `GetMixingPointOfTCK__28C_animations_machine_de_luxeFPcR8S_vector` | CONFIRMED |
+| 0x005acee0 | `anim_machine_stage_blending_tick` | `StageBlendingTick__28C_animations_machine_de_luxeFUi` | CONFIRMED |
+| - | - | `__dt__28C_animations_machine_de_luxeFv` | not located |
+| - | - | `GetAnimBaseDelta__28C_animations_machine_de_luxeFP17I3D_animation_set` | not located |
+
+¹ The same PC body is the track table's element destructor (§4a).
+² 2073 B against 2812 B, body not read; the position is boxed 1:1 by eight anchors — a structural
+argument, not a body one.
+³ Both fell out of the `human_extern_ai_update` body diff: the PS2 calls `IsActive(this+0x250)` and,
+if true, `Tick(this+0x250, t)`; the PC function makes exactly those two calls in that order with the
+same guard polarity, its receiver hidden in ECX because `C_human` embeds the machine at `+0xbc`.
+
+**There is no PC function between `anim_machine_set_anim` and `anim_machine_is_active`** where
+`GetAnimBaseDelta` would sit. That is a gap, not evidence that the method is absent; inlining into
+`SetAnim` is a suspicion, not a fact (§7).
+
+The PC cluster preserves the PS2 emission order: every located pair comes out in the same relative
+order on both sides. Interpolation is only safe between two anchors with exactly one gap — by strict
+index the run after `SetAnim` would put `Tick` at `0x005acb70`, which is 0xf0 bytes before the
+`DelExtendedAnim` anchor while PS2 `Tick` is ~0x11d0 bytes, so the cluster has extra and/or missing
+entries. Body-diff everything else.
+
+### 4a. The static track table
+
+| PC address | name | meaning |
+|---|---|---|
+| `0x006efdb8` | `g_anim_track_table_dtor_guard` | once-flag for the atexit destructor |
+| `0x006efdbc` | `g_anim_track_table` | STL allocator byte |
+| `0x006efdc0` | `g_anim_track_table_begin` | records of **100 bytes** each |
+| `0x006efdc4` | `g_anim_track_table_end` | - |
+| `0x006efdc8` | `g_anim_track_table_cap` | - |
+| `0x006efdcc` | `g_anim_base_track_count` | the high-water mark `anim_machine_clear_non_base_tracks` pops down to |
+
+One record = a track name at `+0x00`, two `0xc`-stride key vectors at `+0x48` and `+0x58`, and the
+header fields `anim_machine_load_track` reads. Tracks are loaded from `anims\%s`, and **the file's
+version dword must be 4**.
+
+**The 10 `anim_track_table_*` / `anim_track_*` container helpers belong to this table**, not to a
+shared STL instantiation: each body is byte-unique in `.text`, each has 0 datarefs, an image-wide
+`E8`+`E9` census finds no foreign referrer, and — the decisive, body-internal evidence — each calls
+this table's own element ctor/dtor (`anim_track_construct_copy`, `anim_track_dtor`) at the 100-byte
+record stride. A fold of two classes' vector helpers would require both element types to share a
+constructor, i.e. to be one type.
+
+`anim_track_table_destroy_range` (`0x005ad4a0`) has a second caller in `engine_shutdown`
+(`0x005fb4f0`), which passes `ecx = 0x6efdbc` — this table's **own** allocator/header word, loading
+`[0x6efdc0]` and `[0x6efdc4]` immediately before. That is the static table's teardown inlined into
+shutdown, not another class.
+
+## 5. PC vs PS2
+
+- **`C_human` embeds the machine at PC `+0xbc` ↔ PS2 `+0x250`**; `C_traffic_element` holds the
+  pointer at PC `elem+0x08` ↔ PS2 `elem+0x188`.
+- **Field delta:** the only firmly paired field is `ext_clip_id` — PC `+0x10e` ↔ PS2 `+0x12a`
+  (delta `0x1c`), pinned by the shared `-0x2357` magic. Do **not** extrapolate that delta to other
+  fields; cross-build layouts diverge.
+- **Three `Init` overloads** exist on both builds (`P7C_actor`, `P17C_traffic_element`,
+  `P9I3D_model`), matching the owner set of §1. The PS2 also puts `SetAnim` on `C_dog`, `C_pumper`
+  and `S_rail_human` — all three identified owners.
+- **`tracks__28C_animations_machine_de_luxe` is a static class member** on the PS2, which is what
+  makes the PC global at `0x006efdbc` this class's member rather than a free table; the PC decomp
+  cannot supply that.
+
+## 6. Cross-references
+
+- `structs/human.md` — `C_human` embeds the machine at `+0xbc`.
+- `structs/pumper.md` — the gas-station attendant, embedded at `+0xe0`.
+- `structs/railway.md` §2b — `S_rail_human`, pointer at `+0x08`.
+
+## 7. Open items
+
+| item | state |
+|---|---|
+| `__dt__` and `GetAnimBaseDelta` | not located; the `GetAnimBaseDelta` slot is an order gap, which is not evidence of absence |
+| `ClearTracks`'s PC body | the registry maps it onto `anim_track_dtor` (`0x005aaf80`), the track table's element destructor; whether MSVC folded the method onto that body or the two are the same routine by construction is not settled |
+| `g_anim_base_track_count`'s writer | not located; the startup path matching `engine_shutdown`'s teardown (§4a) is the place to look |
+| `+0x110` `ext_locked` writer | not located |
+| the object's upper size bound | only `>= 0x124` is measured; the `C_human` hole argument suggests `0x124..0x128` |

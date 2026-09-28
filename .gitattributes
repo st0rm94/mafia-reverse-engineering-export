@@ -1,0 +1,6 @@
+# Store every file byte-for-byte: the annotated decompilation is pure CRLF, the .md files are LF,
+# and newline normalisation would rewrite one set or the other. Diffs still work on text files.
+* -text
+
+# Ghidra packed database: never diff or merge.
+*.gzf binary

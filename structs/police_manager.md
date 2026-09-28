@@ -1,6 +1,6 @@
 # `police_manager` & `pursuit_record` — struct layout
 
-**Created** 2026-07-20 19:59 +0200 · **Modified** 2026-09-18 10:32 +0200
+**Created** 2026-07-20 19:59 +0200 · **Modified** 2026-09-28 19:34 +0200
 
 Two C++ structs (unnamed in the binary) reconstructed from static analysis of
 `Game-ghidra.exe.annotated.c`. **`police_manager`** is the police tracker embedded as a **SINGLE
@@ -577,7 +577,6 @@ tagged terminal.
 - `police-system/artifacts/police-system.md` — runtime behaviour, state machine, call chain.
 - `structs/police-board.md` + `structs/police-action.md` — the officer-squad system (`police_board`
   board + `police_action` squad).
-- `structs/police_manager-reconstruction-notes.md` — field-by-field reconstruction notes.
 - `ghidra/Game-ghidra.exe.functions.md` — the function registry.
 
 ---

@@ -1,6 +1,6 @@
 # `C_web_path` — the navigation web (the game's road/path graph)
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-28 19:12 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-28 19:40 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c`, cross-checked against the non-stripped PS2 ELF
 (`SLUS_206.71`). This documents the PC build; the PS2 symbol table supplies the original developer

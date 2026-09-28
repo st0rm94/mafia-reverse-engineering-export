@@ -1,6 +1,6 @@
 # `ai_check_builder` / `ai_check_desc` — the 8-direction space test and the descriptor unpackers
 
-**Created** 2026-07-30 13:41 +0200 · **Modified** 2026-09-28 19:12 +0200
+**Created** 2026-07-30 13:41 +0200 · **Modified** 2026-09-28 19:40 +0200
 
 Two small classes (PS2 class names) that both serve the navigation searches, and that both live in
 the translation unit immediately *below* the `ai_wayfind` / `ai_path` cluster:
@@ -59,15 +59,15 @@ So the scan is **24 collision queries** and yields 8 clearances. The tail:
 
 ```c
 fVar1 = local_54 * 0.125 - 0.25;                       // mean of the 8 clearances, minus 0.25
-do { if (fVar1 < local_20[i]) local_60 |= 1 << i; } while (i < 8);
+do { if (fVar1 <= local_20[i]) local_60 |= 1 << i; } while (i < 8);   // x87 fcom / test ah,0x41
 if (param_3 == (float *)0x0) return local_60;
 *param_3 = fVar1;                                       // ONE store, NULL-guarded
 ```
 
 * **The third parameter is one optional float**, not an array: it receives the computed threshold,
   and NULL is tolerated.
-* **The return value is a bitmask**: bit *i* is set iff direction *i*'s clearance exceeds the
-  8-direction **mean − 0.25**, i.e. *"directions with above-average clearance"*. Its consumer is
+* **The return value is a bitmask**: bit *i* is set iff direction *i*'s clearance is at least
+  the 8-direction **mean − 0.25**, i.e. *"directions with above-average clearance"*. Its consumer is
   `ai_space_coverage_compute`, which stores it at `coverage+0x50` as the direction-permission mask,
   and `ai_space_coverage_tick` tests it bit by bit with `1 << i`. `ai_space_coverage` is `0x5c`
   bytes, with the threshold float at `+0x54`.

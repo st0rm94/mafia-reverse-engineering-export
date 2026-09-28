@@ -1,6 +1,6 @@
 # `ai_space_coverage` — the 8-direction "where should I go next" scorer
 
-**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-17 13:50 +0200
+**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-28 19:37 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c`, cross-checked against the non-stripped PS2 ELF
 (`SLUS_206.71`). This documents the PC build; cross-build material is confined to §5.
@@ -58,7 +58,7 @@ typedef struct ai_space_coverage {        /* 0x5c bytes */
 
 ```c
 fVar1 = local_54 * 0.125 - 0.25;                  // mean of the 8 clearances, minus 0.25
-do { if (fVar1 < local_20[i]) local_60 |= 1 << i; } while (i < 8);
+do { if (fVar1 <= local_20[i]) local_60 |= 1 << i; } while (i < 8);   // x87 fcom / test ah,0x41
 if (param_3 == (float *)0x0) return local_60;     // the out-param is OPTIONAL
 *param_3 = fVar1;                                 // and receives exactly ONE float
 ```
@@ -68,8 +68,8 @@ third parameter takes **one float**, the computed threshold, and tolerates NULL.
 
 * the object is **`0x5c` bytes**, `probe_threshold` at `+0x54` is one float, and `+0x58` is the
   chosen-direction sentinel;
-* the return value is the **permit mask**: bit *i* is set iff direction *i*'s clearance exceeds
-  the 8-direction mean minus `0.25` — **"directions with above-average clearance"**, slot `i` ↔
+* the return value is the **permit mask**: bit *i* is set iff direction *i*'s clearance is at
+  least the 8-direction mean minus `0.25` — **"directions with above-average clearance"**, slot `i` ↔
   bit `i` as `tick` assumes.
 
 The out-parameter is decided by these four lines at the *end* of a 1280-byte function, not by its

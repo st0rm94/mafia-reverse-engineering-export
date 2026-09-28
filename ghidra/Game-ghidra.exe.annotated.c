@@ -4507,11 +4507,17 @@ void crt_atexit_register_004022b0(void)
  * scale it by `radius`, cast a VERTICAL collision line from `pos` along it, and record
  * the distance to the hit - or `radius` itself when the probe is clear. Each direction
  * is probed three times, re-rotating the ray by `0.25` and then `-0.5` between probes,
- * so the scan is 24 collision queries wide. The 8 resulting clearances are written to
- * the caller's array. The loop's cursor starts at `g_dir8_table_normalized[0].z` and reads
+ * so the scan is 24 collision queries wide. Each direction's clearance is the mean of its
+ * three probes (x 0.3334), kept in a LOCAL array `local_20[8]` that never leaves the function.
+ * The threshold is the 8-direction mean clearance minus 0.25; bit i of the result is set iff
+ * clearance[i] >= threshold (x87 `fcom` / `test ah,0x41` / `jp`), and the threshold itself is
+ * the only value written through param_3. The loop's cursor starts at
+ * `g_dir8_table_normalized[0].z` and reads
  * each entry as [-2],[-1],[0].
- * Parameters: param_1 (float *): the centre position (vec3). param_2 (float): the probe radius, also the value stored for a clear direction. param_3 (float *): out - 8 clearances.
- * Returns: uint: a bitmask/count summarising the scan (exact encoding not established).
+ * Parameters: param_1 (float *): the centre position (vec3). param_2 (float): the probe radius, also the value stored for a clear direction. param_3 (float *): out, may be NULL -
+ *   receives ONE float, the threshold (mean clearance - 0.25).
+ * Returns: uint: the permit mask - bit i set iff direction i's clearance is at least the
+ *   threshold, i.e. the directions with above-average clearance.
  * PS2 twin: `TestSpace8RExt__16ai_check_builderFR8S_vectorfPf`  [CONFIRMED]
  * Evidence: VA 0x004022c0. CONFIRMED - shared magic rotation constants **0.25** then **-0.5** in that order on both builds (PS2 passes them to RotateVect, PC to vec3_rotate_by_angle_in_place); same 8-entry table; same clear-probe-substitutes-radius rule. Signature (pos, radius, out float*) matches `FR8S_vectorfPf` exactly. Sole caller `ai_space_coverage_compute`. Ratio 1280/768 = 1.67. Renamed from `FUN_004022c0`.
  * Layout and the full PC<->PS2 method table: exe-re/structs/ai_check.md
@@ -16256,99 +16262,30 @@ ai_sensors_get_smelled_target_info(int param_1,int param_2,undefined4 *param_3,f
 }
 
 /*
- * ai_sensors_get_heard_sound_info(this, target_key, out_pos, out_secondary, p5) -> bool —
- *     Close sibling of `ai_sensors_get_smelled_target_info` — performs a CACHED-ONLY
- *     target query (no live
- *     fallback). Returns 1 if a fresh cached snapshot exists for
- *     `target_key`; populates the 2 optional output fields from the
- *     cached snapshot. Returns 0 otherwise.
- *
- *   Algorithm:
- *     1. Lookup slot index via `ai_sensors_find_sound_contact(target_key, p5, 0)`
- *        (3-arg slot lookup; sibling of the 1-arg
- *        `ai_sensors_find_visual_contact` used by `ai_sensors_can_see`).
- *        Bail (return 0) if slot_idx < 0.
- *     2. Walk to slot: `slot_base = this + slot_idx * 0x20` (note:
- *        stride 0x20 — DIFFERENT from ai_sensors_get_smelled_target_info's stride 0x1c).
- *     3. **Staleness predicate**: `(1.0 - ai_character_get_hearing()) <
- *        *(float*)(slot_base + 0xd8)` — score sum gate (same algorithm
- *        as `ai_sensors_can_see`, but using
- *        ai_character_get_hearing as the score producer — sibling of ai_character_get_sight
- *        used by the basic predicate).
- *     4. If predicate passes, populate outputs from the cached slot:
- *        - `*out_pos` (3 floats) = slot+0xc8 / +0xcc / +0xd0
- *          (cached pos vec3 — NOTE: offset 200 = 0xc8 in body).
- *        - `*out_secondary` = `*(this + (slot_idx + 6) * 0x20)` —
- *          jump 6 slots ahead in the same 0x20-stride array for the
- *          secondary value (different from ai_sensors_get_smelled_target_info's
- *          `cached_slot+0x18` timestamp).
- *     5. Return 1.
- *     Else: return 0.
- *
- *   Differences vs `ai_sensors_get_smelled_target_info`:
- *     - NO live fallback path (no flag check at police_manager+0xf08).
- *     - Slot stride: 0x20 (here) vs 0x1c (ai_sensors_get_smelled_target_info's per-target
- *       observation slot).
- *     - Different slot field layout for the cached pos (+0xc8..+0xd0
- *       here vs cached-slot.ptr->+0x00..+0x0b there).
- *     - Different secondary computation (jump 6 slots ahead vs
- *       cached-slot.ptr->+0x1c there).
- *     - Returns 2 fields (pos + secondary) vs 4 fields (pos +
- *       facing + timestamp + secondary).
- *     - Score producer: ai_character_get_hearing (here, also used by
- *       `ai_sensors_can_hear`) vs ai_character_get_sight
- *       (ai_sensors_get_smelled_target_info, also used by `ai_sensors_can_see`).
- *
- *   The (+6) slot-stride-arithmetic for the secondary is the same
- *   layout pattern seen in `ai_sensors_can_hear`
- *   — confirms these functions operate on the SAME parallel-slot-
- *   table layout (0x20-stride with secondary block at +(idx+6)*0x20).
- *
- *   Gameplay role: see the next docblock ("where did the sound I heard come from?").
- *
- * Calling convention: `__thiscall` — `this` in ECX.
- *
- * Params:
- *   - this (ECX)           = receiver pointer (with 0x20-stride slots).
- *   - target_key (param_2) = lookup key.
- *   - out_pos (param_3)    = optional output vec3 (cached pos); NULL OK.
- *   - out_secondary (param_4) = optional output dword (secondary); NULL OK.
- *   - p5 (param_5)         = passthrough to `ai_sensors_find_sound_contact` (likely a
- *                            sub-key or filter).
- *
- * Returns: undefined4 — 1 on success (cached snapshot fresh), 0 on
- *     no-slot OR stale-cache.
- *
- * Side effects:
- *   - May write to *out_pos and *out_secondary.
- *
- * Callers: 8 visible callsites file-wide.
- *
- * Evidence: 28-line body fully read. The stride-0x20 + (+6)-jump
- *   secondary + ai_character_get_hearing score producer cleanly establishes
- *   this as the cached-only variant of `ai_sensors_get_smelled_target_info`.
- *   Renamed from `FUN_004105a0`.
- */
-/*
  * ai_sensors_get_heard_sound_info(this, actor, out_pos, out_extra, type) -> bool
  * What it does: answers **"where did the sound I heard come from?"**. Looks up `actor`'s
  *   SOUND contact of exactly `type` (`ai_sensors_find_sound_contact` with the exact-match
  *   flag = 0), and if the contact's strength exceeds `1.0 - <the NPC's HEARING stat>`, writes
  *   the stored source position to `out_pos` (vec3) and the slot's leading dword to
- *   `out_extra`. Either out-param may be NULL and is then skipped. Read-only.
+ *   `out_extra`. Either out-param may be NULL and is then skipped. Read-only: it answers from
+ *   the stored contact and never re-queries the world.
  *   See exe-re/structs/ai_sensors.md.
- *   NOTE the threshold is **1.0** here, whereas `ai_sensors_can_hear` uses 1.05 — this query
+ *   NOTE the threshold is **1.0** here, whereas `ai_sensors_can_hear` uses 1.05 - this query
  *   is slightly more permissive than the audibility predicate.
+ * Slot layout read: sound contacts are 0x20-byte slots starting at `this+0xc0`; per slot
+ *   `+0x00` = the dword copied to `out_extra` (the body spells the address
+ *   `(idx + 6) * 0x20 + this`), `+0x08..+0x10` = source position, `+0x18` = strength.
  * Parameters: param_1 (this, ECX): the ai_sensors (C_entity+0xbb4);
  *             param_2 (actor): the sound's source actor; param_3 (out_pos): vec3 out, may be
  *             NULL; param_4 (out_extra): uint out, may be NULL; param_5 (type): contact type
  *             (**2 = GUNFIRE**).
- * Returns: bool — 1 = info produced, 0 = nothing audible from `actor` of that type.
+ * Returns: bool - 1 = info produced, 0 = no contact of that type, or too weak to be heard.
+ * Callers: 6 callsites.
  * PS2 twin: `Hear__10ai_sensorsFP7C_actorP8S_vectorPUiUi`  [CONFIRMED]
  *   Same call sequence with the SAME exact-match flag 0; `GetSluch` + the SHARED MAGIC
  *   CONSTANT **1.0** (distinct from isHearable's 1.05 on both builds); **5 params on both**.
  *   PS2 copies the position with `memcpy(dst, slot+0xc0, 0x10)` (a 16-byte S_vector) where PC
- *   copies 3 dwords (a 12-byte vec3) — the standard S_vector/vec3 difference; and both copy a
+ *   copies 3 dwords (a 12-byte vec3) - the standard S_vector/vec3 difference; and both copy a
  *   single dword to the second out-param.
  * Evidence: VA 0x004105a0. Renamed from `FUN_004105a0` (original Ghidra id).
  */
@@ -51280,18 +51217,16 @@ void __fastcall ai_talkman_begin_frame(int param_1)
  *   +0x40..+0x48  vec3     — anchor world position (copied from param_2)
  *   +0x4c         uint     — anchor tick stamp / cooldown (*(g_act_mission+0x24)+0x2b0c)
  *   +0x50         uint     — direction-permission bitmask, 1 bit per direction
- *   +0x54         float(?) — the out-parameter handed to ai_check_builder_test_space_8dir
+ *   +0x54         float    — probe threshold: ai_check_builder_test_space_8dir's single
+ *                            out-float, the mean of the 8 clearances minus 0.25
  *   +0x58         uint     — chosen direction 0..7, or 0x29a (the project-wide "none/unset"
  *                            sentinel)
  *
- * ⚠️ OPEN CONFLICT at +0x54. This block gives the struct as 0x5c bytes, which leaves +0x54 room
- * for ONE float. But `structs/ai_check.md` §1a
- * documents `ai_check_builder_test_space_8dir` as filling an out[8] array — 0x20 bytes, which
- * would run from +0x54 to +0x74 and swallow the +0x58 sentinel. The SAME collision appears on
- * PS2 (`TestSpace8RExt(..., param_1 + 0x16)` = byte +0x58, with the sentinel at byte +0x5c), so
- * it is not a PC rendering artifact and not a rebase error. Exactly one of "the struct is 0x5c"
- * and "the probe writes 8 floats" is wrong; both are load-bearing elsewhere, so neither is
- * changed here. See exe-re/structs/ai_space_coverage.md §4.
+ * The object is 0x5c bytes: the probe's third argument receives exactly ONE float (a single
+ * NULL-guarded `fstp dword [eax]` at the probe's tail), so +0x54 holds the threshold and the
+ * +0x58 sentinel is never overwritten. The 8 clearances stay inside the probe. The probe's
+ * return value, stored at +0x50, is the permit mask of directions whose clearance is at least
+ * that threshold. See exe-re/structs/ai_space_coverage.md §1a and exe-re/structs/ai_check.md §1a.
  *
  * Body: this+0x50 = ai_check_builder_test_space_8dir(anchor_pos, 10.0f, this+0x54); copy the
  * anchor to +0x40..+0x48; stamp +0x4c from the mission clock; write 0x29a to +0x58; then the
@@ -212405,8 +212340,8 @@ void __fastcall vehicle_dtor(undefined4 *param_1)
  * PS2 twin: `CreateLightProjector__9C_VehicleFP9I3D_framePP9I3D_light` *(STRUCTURAL
  * 20:05 +0200)*
  * Evidence: VA 0x0050e0c0. 🔴 STRUCTURAL: the PS2 symbol is an EIGHT-BYTE stub, so the mapping is
- * certain from the position and the `PROJ` magic but "the bodies agree" cannot be asserted (lesson
- * 58's gutted direction). Called six times by `vehicle_init_lights`. Renamed from `FUN_0050e0c0`.
+ * certain from the position and the `PROJ` magic but "the bodies agree" cannot be asserted,
+ * since the PS2 body is empty. Called six times by `vehicle_init_lights`. Renamed from `FUN_0050e0c0`.
  * Class layout: `exe-re/structs/vehicle.md`
  */
 int * vehicle_create_light_projector(I3D_frame *param_1)
@@ -325853,8 +325788,7 @@ void __fastcall particle_manager_mission_done(int param_1)
  * Parameters: param_1 (int, ECX): the manager.
  * Returns: void.
  * Evidence: VA 0x005a3da0. Two callers, `particle_manager_ctor` and
- *  `particle_manager_mission_start`. The shipped filename is the identification (lesson
- *  154/178).
+ *  `particle_manager_mission_start`. The shipped filename is the identification.
  * PS2 twin: `LoadData__17C_ParticleManagerFv` [CONFIRMED]
  * Renamed from `FUN_005a3da0`.
  */
@@ -397879,8 +397813,7 @@ void joy_device_list_register_atexit_dtor(void)
  * joy_device_list_static_dtor(void) -> void
  *
  * What it does: loads `0x006f92cc` into ECX and tail-jumps to `the inlined vector destructor`.
- *  MSVC's `??__F` shape; taken only by address, from the `crt_atexit` registrar above (lesson
- *  16/101).
+ *  MSVC's `??__F` shape; taken only by address, from the `crt_atexit` registrar above.
  * Parameters: none.
  * Returns: void.
  * Evidence: VA 0x005f82b0. `mov ecx, 0x006f92cc; jmp the inlined vector destructor`.
@@ -407294,8 +407227,8 @@ void mission_get_scene_bounds(undefined4 *param_1,undefined4 *param_2)
  * Returns: void.
  * Evidence: VA 0x00605250. A `Mission.cpp` file static with two `E8` callers
  *  (`mission_get_scene_bounds` and itself) and zero datarefs. `frame_tree_` was refused as a
- *  2-member invented prefix and `i3d_frame_tree_` as an extension of a class prefix (lesson
- *  84/190); `scene_` is the project's free scene-graph-helper family.
+ *  2-member invented prefix and `i3d_frame_tree_` as an extension of a class prefix;
+ *  `scene_` is the project's free scene-graph-helper family.
  * Renamed from `FUN_00605250`. TU: `Mission.cpp`. See
  *  `exe-re/structs/mission.md`.
  */
@@ -417083,7 +417016,6 @@ void __thiscall racing_set_race_camera_index(int param_1,uint param_2)
  * PS2 twin: `GetRacePoints__10C_opponentFv` (0x0039a000)  [CONFIRMED]
  * Evidence: VA 0x0060f750. Same retired gate and same ladder; field bridges PC `+0x80` <-> PS2 `+0x1e4` (retired) and PC `+0x68` <-> PS2 `+0x198` (finishing place), both already documented in `structs/racing.md` §5. Ratio 0.78. Renamed from `FUN_0060f750`.
  * Class layout: exe-re/structs/racing.md
-  * Renamed from `FUN_0060f750` — the two PC names were exactly transposed; this one takes no place and reads the racer's own `+0x68`.
 */
 undefined4 __fastcall opponent_get_race_points(int param_1)
 
@@ -417120,7 +417052,6 @@ undefined4 __fastcall opponent_get_race_points(int param_1)
  * PS2 twin: `GetRacePoints__10C_opponentFUi` (0x0039a090)  [CONFIRMED]
  * Evidence: VA 0x0060f7c0. Identical ladder; PS2 renders it as a jump table, the PC as a switch. Ratio 0.88. ⚠️ Despite the `__10C_opponent` tag the PC body touches no instance state — Ghidra's call expressions hide the receiver, so `racing_fill_champ_results` renders the call with the `this` elided. Renamed from `FUN_0060f7c0`.
  * Class layout: exe-re/structs/racing.md
-  * Renamed from `FUN_0060f7c0` — the two PC names were exactly transposed; this one takes the place as an argument.
 */
 undefined4 __fastcall opponent_get_race_points_for_place(undefined4 param_1)
 
@@ -423836,7 +423767,6 @@ void crt_atexit_register_00617a80(void)
  *  callers: `car_save_data_chunk`, `car_load_data_chunk`.
  * Renamed from `FUN_00617a90`.
  * PS2 twin: `Compress__FPvUiPPvPUib` [CONFIRMED]
- * Renamed from `FUN_00617a90`.
  */
 uint __fastcall
 ram_compress_or_expand(int *param_1,uint param_2,undefined4 *param_3,uint *param_4,char param_5)
@@ -424225,7 +424155,6 @@ void __fastcall roads_dtor(undefined4 *param_1)
  *  0x20 -> 0x18) before writing; the PC's in-memory layout already IS the file layout.
  * Renamed from `FUN_00617e50`.
  * PS2 twin: `SaveData__7C_roadsFP7C_chunk` [CONFIRMED]
- * Renamed from `FUN_00617e50`.
  */
 undefined4 __thiscall roads_save_data(int param_1,int param_2)
 
@@ -424729,7 +424658,6 @@ LAB_006185ca:
  *  and the same `1e-08` epsilon and sqrt fast-path on both builds.
  * Renamed from `FUN_00618730`.
  * PS2 twin: `RecompileDistances__7C_roadsFv` [CONFIRMED]
- * Renamed from `FUN_00618730`.
  */
 uint __fastcall roads_recompile_distances(int param_1)
 
@@ -425501,7 +425429,6 @@ uint __thiscall roads_get_near_node(int param_1,float param_2,float param_3,floa
  *  diff.
  * Renamed from `FUN_00619680`.
  * PS2 twin: `FindCrossing__7C_roadsFUsUs` [CONFIRMED]
- * Renamed from `FUN_00619680`.
  */
 uint __thiscall roads_find_crossing(int param_1,uint param_2,uint param_3)
 
@@ -425645,7 +425572,6 @@ int __thiscall roads_find_road_slot_to_crossing(int param_1,uint param_2,short p
  * Renamed from `FUN_00619820`.
  * PS2 twin: `NPC_FindPathFromNodeToCross__7C_roadsFUsR8S_vectorPQ23gif22vector<10S_car_node,8>`
  *  [CONFIRMED]
- * Renamed from `FUN_00619820`.
  */
 undefined4 __thiscall roads_find_car_path_from_node_to_crossing(int param_1,uint param_2)
 
@@ -425786,7 +425712,6 @@ LAB_00619a3b:
  *  the 16-byte `S_vector` difference.
  * Renamed from `FUN_00619be0`.
  * PS2 twin: `NPC_FindPathToNextCross1__7C_roadsFUsiPQ23gif22vector<10S_car_node,8>` [CONFIRMED]
- * Renamed from `FUN_00619be0`.
  */
 undefined4 __thiscall roads_find_car_path_to_next_crossing(int param_1,uint param_2,int param_3,int param_4)
 
@@ -425857,7 +425782,6 @@ undefined4 __thiscall roads_find_car_path_to_next_crossing(int param_1,uint para
  * PS2 twin:
  *  `FillPathFromNodeToCross__7C_roadsFUsUsRQ23std32vector<Us,Q23std13allocator<Us>>UsUs`
  *  [CONFIRMED]
- * Renamed from `FUN_00619d20`.
  */
 void __thiscall
 roads_fill_path_from_node_to_crossing(int param_1,uint param_2,uint param_3,int param_4,short param_5,short param_6)
@@ -425978,7 +425902,6 @@ uint __thiscall roads_find_crossing_from_node(int param_1,uint param_2,uint para
  *  callsites in `roads_find_path` pass the literals 0 and 1 in the same order on both builds.
  * Renamed from `FUN_00619f20`.
  * PS2 twin: `FindNearCrossingFromNode__7C_roadsFUsRib` [CONFIRMED]
- * Renamed from `FUN_00619f20`.
  */
 uint __thiscall roads_find_near_crossing_from_node(int param_1,uint param_2,undefined4 *param_3,char param_4)
 
@@ -426052,7 +425975,6 @@ uint __thiscall roads_find_near_crossing_from_node(int param_1,uint param_2,unde
  * Renamed from `FUN_0061a070`.
  * PS2 twin: `FindPathBeweenCross__7C_roadsFUsUsRQ23std32vector<Us,Q23std13allocator<Us>>`
  *  [CONFIRMED]
- * Renamed from `FUN_0061a070`.
  */
 undefined4 __thiscall roads_find_path_between_crossings(int param_1,float param_2,float param_3,int param_4)
 
@@ -426262,7 +426184,6 @@ LAB_0061a2cc:
  *  on the PS2 side.
  * Renamed from `FUN_0061a540`.
  * PS2 twin: `__ct__Q27C_roads27S_pathfind$3865road_web_cppFv` [CONFIRMED]
- * Renamed from `FUN_0061a540`.
  */
 void __fastcall roads_pathfind_entry_ctor(undefined2 *param_1)
 
@@ -426291,7 +426212,6 @@ void __fastcall roads_pathfind_entry_ctor(undefined2 *param_1)
  * PS2 twin:
  *  `FillPathFromCrossToCross__7C_roadsFUsUsRQ23std32vector<Us,Q23std13allocator<Us>>UsUs`
  *  [CONFIRMED]
- * Renamed from `FUN_0061a550`.
  */
 undefined4 __thiscall
 roads_fill_path_from_crossing_to_crossing(int param_1,uint param_2,uint param_3,int param_4,short param_5,short param_6)
@@ -426346,7 +426266,6 @@ roads_fill_path_from_crossing_to_crossing(int param_1,uint param_2,uint param_3,
  *  with the same 0 and 1 literals in the same order on both builds.
  * Renamed from `FUN_0061a5f0`.
  * PS2 twin: `FindPath__7C_roadsFUsUsRQ23std32vector<Us,Q23std13allocator<Us>>` [CONFIRMED]
- * Renamed from `FUN_0061a5f0`.
  */
 undefined4 __thiscall roads_find_path(int param_1,uint param_2,uint param_3,int param_4)
 
@@ -426521,7 +426440,6 @@ LAB_0061a87a:
  *  `roads_get_near_node` can binary-search on X.
  * Renamed from `FUN_0061a9a0`.
  * PS2 twin: `SortNodesByX__7C_roadsFv` [CONFIRMED]
- * Renamed from `FUN_0061a9a0`.
  */
 void __fastcall roads_sort_nodes_by_x(int param_1)
 
@@ -426654,11 +426572,9 @@ void __fastcall roads_sort_nodes_by_x(int param_1)
  * Returns: undefined4: 1 when sorted, 0 when not.
  * Evidence: VA 0x0061abb0. Identical loop on both builds - start at index 1, compare `node[i].x
  *  < node[i-1].x`, PC stride 0x18 against PS2 0x20. Harvested for free from the
- *  `roads_sort_nodes_by_x` diff, which calls it as its first statement on both builds (lesson
- *  106).
+ *  `roads_sort_nodes_by_x` diff, which calls it as its first statement on both builds.
  * Renamed from `FUN_0061abb0`.
  * PS2 twin: `IsSorted__7C_roadsFv` [CONFIRMED]
- * Renamed from `FUN_0061abb0`.
  */
 undefined4 __fastcall roads_is_sorted(int param_1)
 
@@ -426698,7 +426614,6 @@ undefined4 __fastcall roads_is_sorted(int param_1)
  *  the four zero lane bytes are what the body actually tests (feedback section 3b).
  * Renamed from `FUN_0061ac10`.
  * PS2 twin: `DestroyAllOffPaths__7C_roadsFv` [CONFIRMED]
- * Renamed from `FUN_0061ac10`.
  */
 void __fastcall roads_disconnect_unused_road_links(int param_1)
 
@@ -427019,7 +426934,6 @@ void thunk_zero_vector_006f96b0_static_ctor(void)
  *  `<object>_static_ctor` families, not reconstructed; the VA suffix
  *  disambiguates the several copies of these header tables in the image.
  * Renamed from `FUN_0061b030`.
- * Renamed from `FUN_0061b030`.
  */
 void zero_vector_006f96b0_static_ctor(void)
 
@@ -427129,7 +427043,6 @@ void thunk_dir8_unit_xz_006f96c0_static_ctor(void)
  *  shipped PC binary reads the table - an image-wide little-endian scan of `.text` for its
  *  address returns only this initialiser.
  * Renamed from `FUN_0061b090`.
- * Renamed from `FUN_0061b090`.
  */
 void dir8_unit_xz_006f96c0_static_ctor(void)
 
@@ -427205,7 +427118,6 @@ void thunk_dir8_square_xz_006f9590_static_ctor(void)
  * Evidence: VA 0x0061b1a0. The PS2 ships it as the `STT_OBJECT` `Dir8Table` (128 B = 8 entries).
  *  Unit-versus-square is decided by the actual constants, not by the symbol. No reader in the
  *  PC image.
- * Renamed from `FUN_0061b1a0`.
  * Renamed from `FUN_0061b1a0`.
  */
 void dir8_square_xz_006f9590_static_ctor(void)
@@ -427307,7 +427219,6 @@ void thunk_dir16_square_xz_006f95f0_static_ctor(void)
  *  of a 16-byte S_vector; 192 B on the PC), which is what fixes the entry count. No reader in
  *  the PC image.
  * Renamed from `FUN_0061b2b0`.
- * Renamed from `FUN_0061b2b0`.
  */
 void dir16_square_xz_006f95f0_static_ctor(void)
 
@@ -427376,7 +427287,6 @@ void dir16_square_xz_006f95f0_static_ctor(void)
  *  from the registry; the `g_` stays on the GLOBAL and is dropped on the
  *  FUNCTION.
  * Renamed from `FUN_0061b4a0`.
- * Renamed from `FUN_0061b4a0`.
  */
 void sound_group_static_init(void)
 
@@ -427397,7 +427307,6 @@ void sound_group_static_init(void)
  *  element is 0x24 bytes with the group name at `+0x00` and the id at `+0x20`, matched byte for
  *  byte against PS2 `AddGroup__13C_sound_tableFPCc`, whose own global the PS2 symbol table
  *  names `sound_group`.
- * Renamed from `FUN_0061b4b0`.
  * Renamed from `FUN_0061b4b0`.
  */
 void __fastcall sound_group_static_ctor(undefined4 param_1)
@@ -427440,7 +427349,6 @@ void sound_group_register_atexit_dtor(void)
  * Evidence: VA 0x0061b4e0. Reached only through the `crt_atexit` registration in
  *  `sound_group_register_atexit_dtor`, so it has zero `E8` callers by construction.
  * Renamed from `FUN_0061b4e0`.
- * Renamed from `FUN_0061b4e0`.
  */
 void sound_group_static_dtor(void)
 
@@ -427463,7 +427371,6 @@ void sound_group_static_dtor(void)
  * Returns: void.
  * Evidence: VA 0x0061b500, referenced from `.CRT$XCU` at `.data:0x006462e8`.
  * Renamed from `FUN_0061b500`.
- * Renamed from `FUN_0061b500`.
  */
 void sound_table_static_init(void)
 
@@ -427484,7 +427391,6 @@ void sound_table_static_init(void)
  *  every access to the object is `__thiscall`, so it travels in ECX and a grep for 0x006f9720
  *  over the decomp returns zero hits.
  * Renamed from `FUN_0061b510`.
- * Renamed from `FUN_0061b510`.
  */
 void sound_table_static_ctor(void)
 
@@ -427500,7 +427406,6 @@ void sound_table_static_ctor(void)
  * Parameters: none.
  * Returns: void.
  * Evidence: VA 0x0061b520. Address-only reference to its target.
- * Renamed from `FUN_0061b520`.
  * Renamed from `FUN_0061b520`.
  */
 void sound_table_register_atexit_dtor(void)
@@ -427520,7 +427425,6 @@ void sound_table_register_atexit_dtor(void)
  * Returns: void.
  * Evidence: VA 0x0061b530. Same immediate operand as `sound_table_static_ctor`, which is the
  *  second witness for the singleton's address.
- * Renamed from `FUN_0061b530`.
  * Renamed from `FUN_0061b530`.
  */
 void sound_table_static_dtor(void)
@@ -427547,7 +427451,6 @@ void sound_table_static_dtor(void)
  *  PC name at all before this sweep.
  * Renamed from `FUN_0061b540`.
  * PS2 twin: `Activate__9C_compassFP9I3D_frame` [CONFIRMED]
- * Renamed from `FUN_0061b540`.
  */
 void __fastcall compass_activate(undefined4 *param_1)
 
@@ -427677,7 +427580,6 @@ void __fastcall fire_dtor(int param_1)
  *  0x15, same 2000 ms gate before driver object type 4.
  * Renamed from `FUN_0061b6a0`.
  * PS2 twin: `Init__6C_fireFR8S_vectorP9I3D_frameiffb` [CONFIRMED]
- * Renamed from `FUN_0061b6a0`.
  */
 void __thiscall
 fire_init(undefined4 *param_1,undefined4 *param_2,undefined4 param_3,int param_4,float param_5,
@@ -428060,7 +427962,6 @@ void __thiscall using_object_del_object(int param_1,int param_2)
  *  same adjacent pair the PS2 calls in `GameInit`/`GameDone`.
  * Renamed from `FUN_0061bdb0`.
  * PS2 twin: `ClearObjects__14C_using_objectFv` [CONFIRMED]
- * Renamed from `FUN_0061bdb0`.
  */
 void __fastcall using_object_clear_objects(int param_1)
 
@@ -428110,7 +428011,6 @@ void __fastcall using_object_clear_objects(int param_1)
  *  `AI_walk__8C_player` against PC `player_ai_walk`.
  * Renamed from `FUN_0061be50`.
  * PS2 twin: `IsAnyObjectNear__14C_using_objectFRC8S_vectorRC8S_vectorP9I3D_frame` [CONFIRMED]
- * Renamed from `FUN_0061be50`.
  */
 uint __thiscall using_object_is_any_object_near(int param_1,float *param_2,undefined4 param_3,float param_4)
 
@@ -428321,7 +428221,6 @@ using_object_find_near_objects(int param_1,float *param_2,undefined4 param_3,int
  *  adjacent-pair witness.
  * Renamed from `FUN_0061c1b0`.
  * PS2 twin: `ClearInvalidItems__14C_using_objectFv` [CONFIRMED]
- * Renamed from `FUN_0061c1b0`.
  */
 void __fastcall using_object_clear_invalid_items(int param_1)
 
@@ -428509,7 +428408,6 @@ uint __thiscall using_object_is_invalid_item(int param_1,int param_2)
  *  savegame blob is per-build and is never exchanged.
  * Renamed from `FUN_0061c430`.
  * PS2 twin: `SaveGameGetSize__14C_using_objectFv` [CONFIRMED]
- * Renamed from `FUN_0061c430`.
  */
 int __fastcall using_object_save_game_get_size(int param_1)
 
@@ -428567,7 +428465,6 @@ int __fastcall using_object_save_game_get_size(int param_1)
  *  ORDER differs between builds, which is expected for a per-build savegame blob.
  * Renamed from `FUN_0061c4b0`.
  * PS2 twin: `SaveGameSave__14C_using_objectFPPv` [CONFIRMED]
- * Renamed from `FUN_0061c4b0`.
  */
 undefined4 __thiscall using_object_save_game_save(int param_1,int *param_2)
 
@@ -428699,7 +428596,6 @@ undefined4 __thiscall using_object_save_game_save(int param_1,int *param_2)
  *  against 1888 B is the whole difference.
  * Renamed from `FUN_0061c750`.
  * PS2 twin: `SaveGameLoad__14C_using_objectFPPv` [CONFIRMED]
- * Renamed from `FUN_0061c750`.
  */
 undefined4 using_object_save_game_load(int *param_1)
 
@@ -428912,7 +428808,6 @@ code_r0x0061cb7e:
  *  vector triple. Its only caller is `sound_table_static_ctor`.
  * Renamed from `FUN_0061cba0`.
  * PS2 twin: `__ct__13C_sound_tableFv` [CONFIRMED]
- * Renamed from `FUN_0061cba0`.
  */
 void __fastcall sound_table_ctor(undefined4 *param_1)
 
@@ -428942,7 +428837,6 @@ void __fastcall sound_table_ctor(undefined4 *param_1)
  *  vector destroy. Promoted from CANDIDATE to CONFIRMED by this diff.
  * Renamed from `FUN_0061cbd0`.
  * PS2 twin: `__dt__13C_sound_tableFv` [CONFIRMED]
- * Renamed from `FUN_0061cbd0`.
  */
 void __fastcall sound_table_dtor(undefined4 *param_1)
 
@@ -429066,7 +428960,6 @@ void __thiscall sound_table_add_group(int param_1,char *param_2)
  *  same swap-and-pop of a 0x24-byte record.
  * Renamed from `FUN_0061cd50`.
  * PS2 twin: `DelGroup__13C_sound_tableFi` [CONFIRMED]
- * Renamed from `FUN_0061cd50`.
  */
 void __thiscall sound_table_del_group(int *param_1,uint param_2)
 
@@ -429123,7 +429016,6 @@ LAB_0061cdd8:
  *  preloaded-sound pointer array at `+0x40`.
  * Renamed from `FUN_0061ce50`.
  * PS2 twin: `AddSound__13C_sound_tableFPCcUi` [CONFIRMED]
- * Renamed from `FUN_0061ce50`.
  */
 void __thiscall sound_table_add_sound(int param_1,char *param_2,undefined4 param_3)
 
@@ -429295,7 +429187,6 @@ int __thiscall sound_table_get_record_by_id(int param_1,int param_2)
  *  i*4`. The verb is carried because slot, signature and behaviour all agree.
  * Renamed from `FUN_0061d040`.
  * PS2 twin: `SetFileName__13C_sound_tableFPQ213C_sound_table13S_sound_tableiPCc` [CONFIRMED]
- * Renamed from `FUN_0061d040`.
  */
 void sound_table_set_file_name(int param_1,int param_2,char *param_3)
 
@@ -429418,7 +429309,6 @@ void sound_table_sort_variants_by_weight(int *param_1)
  *  `count * 0x24` bulk read. Only the record stride differs (0xd0 against 0xe8).
  * Renamed from `FUN_0061d160`.
  * PS2 twin: `LoadTables__13C_sound_tableFPCc` [CONFIRMED]
- * Renamed from `FUN_0061d160`.
  */
 void __thiscall sound_table_load_tables(int param_1,undefined4 param_2)
 
@@ -429525,7 +429415,6 @@ void __thiscall sound_table_load_tables(int param_1,undefined4 param_2)
  *  writes.
  * Renamed from `FUN_0061d3b0`.
  * PS2 twin: `SaveTables__13C_sound_tableFPCc` [CONFIRMED]
- * Renamed from `FUN_0061d3b0`.
  */
 void __thiscall sound_table_save_tables(int param_1,int param_2)
 
@@ -430787,7 +430676,6 @@ void crt_atexit_register_0061e0f0(void)
  *  immediately after the all-settled test and before the ring cursor advances.
  * Renamed from `FUN_0061e100`.
  * PS2 twin: `PrepareGlassSingleObject__FR6S_DICE` [CONFIRMED]
- * Renamed from `FUN_0061e100`.
  */
 undefined4 __fastcall glass_shatter_merge_settled_shards(int param_1)
 
@@ -431143,7 +431031,6 @@ LAB_0061e87a:
  *  open item rather than explained.
  * Renamed from `FUN_0061e8f0`.
  * PS2 twin: `Init__19C_Break_plain_glassFi` [CONFIRMED]
- * Renamed from `FUN_0061e8f0`.
  */
 uint __thiscall glass_shatter_init(int param_1,int param_2)
 
@@ -431228,7 +431115,6 @@ uint __thiscall glass_shatter_init(int param_1,int param_2)
  *  `game_done`.
  * Renamed from `FUN_0061ea60`.
  * PS2 twin: `Done__19C_Break_plain_glassFv` [CONFIRMED]
- * Renamed from `FUN_0061ea60`.
  */
 undefined4 __fastcall glass_shatter_done(int param_1)
 
@@ -431381,7 +431267,6 @@ LAB_0061ec2a:
  *  cursor. Sole caller `game_tick`.
  * Renamed from `FUN_0061ecd0`.
  * PS2 twin: `Tick__19C_Break_plain_glassFUi` [CONFIRMED]
- * Renamed from `FUN_0061ecd0`.
  */
 void __thiscall glass_shatter_tick(int param_1,uint param_2)
 
@@ -432055,7 +431940,6 @@ int __thiscall glass_shatter_pane_copy_assign(int param_1,int param_2)
  *  `rail_window_hit`, `game_tick_shoot`, `game_new_explosion`.
  * Renamed from `FUN_0061fc90`.
  * PS2 twin: `BreakGlass__19C_Break_plain_glassFP9I3D_framePC8S_vectorPCcb` [CONFIRMED]
- * Renamed from `FUN_0061fc90`.
  */
 void __thiscall
 glass_shatter_break_frame(float param_1,I3D_frame *param_2,float *param_3,undefined4 param_4,char param_5)
@@ -433007,7 +432891,6 @@ undefined4 glass_shatter_prepare_object(undefined4 param_1,undefined4 param_2,fl
  *  MECHANICAL name is the correct answer, not a fallback
  *. 0 datarefs.
  * Renamed from `FUN_00621660`.
- * Renamed from `FUN_00621660`.
  */
 int __fastcall std_vector4_capacity(int param_1)
 
@@ -433060,7 +432943,6 @@ void std_allocator_deallocate(undefined4 param_1)
  *  mechanical name is correct. 0 datarefs. Structural correspondent on the PS2 side:
  *  `reserve__Q23gif22vector<10I3D_vertex,8>Fi`, a different function (Metrowerks grows through
  *  `reserve`), so no twin is stamped.
- * Renamed from `FUN_00621690`.
  * Renamed from `FUN_00621690`.
  */
 int __thiscall std_vector20_insert_at(int param_1,undefined4 *param_2,undefined4 *param_3)
@@ -433172,7 +433054,6 @@ int __thiscall std_vector20_insert_at(int param_1,undefined4 *param_2,undefined4
  * Evidence: VA 0x00621830. 4 SAFE callsites in TWO unrelated modules - three in
  *  `game_box_save_info` and one in `std_vector20_insert_at` - so it is shared. 0 datarefs.
  * Renamed from `FUN_00621830`.
- * Renamed from `FUN_00621830`.
  */
 int __fastcall std_vector20_size(int param_1)
 
@@ -433197,7 +433078,6 @@ int __fastcall std_vector20_size(int param_1)
  * Evidence: VA 0x00621850. 1 SAFE callsite, in `glass_shatter_cut_mesh`; 0 datarefs. Its four
  *  leaf primitives are reachable ONLY from it, so the whole stride-6 closure has exactly one
  *  owner - the lesson-229 test, run on the primitives rather than on the members.
- * Renamed from `FUN_00621850`.
  * Renamed from `FUN_00621850`.
  */
 int __thiscall glass_shatter_triface_list_insert_at(int param_1,undefined4 *param_2,undefined4 *param_3)
@@ -433299,7 +433179,6 @@ int __thiscall glass_shatter_triface_list_insert_at(int param_1,undefined4 *para
  * Evidence: VA 0x00621a50. 1 SAFE callsite, inside `glass_shatter_triface_list_insert_at`; 0
  *  datarefs. A leaf primitive of the single-owner stride-6 closure.
  * Renamed from `FUN_00621a50`.
- * Renamed from `FUN_00621a50`.
  */
 int __fastcall glass_shatter_triface_list_size(int param_1)
 
@@ -433326,7 +433205,6 @@ int __fastcall glass_shatter_triface_list_size(int param_1)
  * Evidence: VA 0x00621a70. 1 SAFE callsite, `lea ecx,[eax + 0x10]` inside
  *  `glass_shatter_break_frame` - which also pins the vector object at manager `+0x10`
  *  (allocator) / `+0x14` begin / `+0x18` end / `+0x1c` cap. 0 datarefs, one owner.
- * Renamed from `FUN_00621a70`.
  * Renamed from `FUN_00621a70`.
  */
 void __thiscall glass_shatter_pane_list_insert_n(int param_1,int param_2,uint param_3,int param_4)
@@ -433451,7 +433329,6 @@ void __thiscall glass_shatter_pane_list_insert_n(int param_1,int param_2,uint pa
  *  (uint): how many. param_4 (undefined4 *): the value.
  * Returns: void.
  * Evidence: VA 0x00621d70. 2 SAFE callsites, both in `glass_shatter_cut_mesh`; 0 datarefs.
- * Renamed from `FUN_00621d70`.
  * Renamed from `FUN_00621d70`.
  */
 void __thiscall glass_shatter_triface_list_insert_n(int param_1,undefined4 *param_2,uint param_3,undefined4 *param_4)
@@ -433610,7 +433487,6 @@ void __thiscall glass_shatter_triface_list_insert_n(int param_1,undefined4 *para
  *  takes no vector receiver (`stl_uninit_copy_stride_0x1c`, `stl_fill_n_stride_0x1c`,
  *  `stl_copy_back_stride_0x18`), grepped rather than invented.
  * Renamed from `FUN_00622070`.
- * Renamed from `FUN_00622070`.
  */
 void stl_uninit_copy_stride_0x20(undefined4 *param_1,undefined4 *param_2,undefined4 *param_3)
 
@@ -433647,7 +433523,6 @@ void stl_uninit_copy_stride_0x20(undefined4 *param_1,undefined4 *param_2,undefin
  * Returns: void.
  * Evidence: VA 0x006220b0. 3 SAFE callsites in TWO unrelated modules - `game_box_save_info` and
  *  `std_vector20_insert_at`. 0 datarefs.
- * Renamed from `FUN_006220b0`.
  * Renamed from `FUN_006220b0`.
  */
 void stl_fill_n_stride_0x20(undefined4 *param_1,int param_2,undefined4 *param_3)
@@ -433686,7 +433561,6 @@ void stl_fill_n_stride_0x20(undefined4 *param_1,int param_2,undefined4 *param_3)
  * Evidence: VA 0x006220e0. 3 SAFE callsites, all inside `glass_shatter_triface_list_insert_at`;
  *  0 datarefs.
  * Renamed from `FUN_006220e0`.
- * Renamed from `FUN_006220e0`.
  */
 void glass_shatter_triface_list_uninit_copy(undefined4 *param_1,undefined4 *param_2,undefined4 *param_3)
 
@@ -433713,7 +433587,6 @@ void glass_shatter_triface_list_uninit_copy(undefined4 *param_1,undefined4 *para
  * Returns: void.
  * Evidence: VA 0x00622120. 1 SAFE callsite, in `glass_shatter_triface_list_insert_at`; 0
  *  datarefs.
- * Renamed from `FUN_00622120`.
  * Renamed from `FUN_00622120`.
  */
 void glass_shatter_triface_list_fill_n(undefined4 *param_1,int param_2,undefined4 *param_3)
@@ -433743,7 +433616,6 @@ void glass_shatter_triface_list_fill_n(undefined4 *param_1,int param_2,undefined
  * Returns: void.
  * Evidence: VA 0x00622160. 6 SAFE callsites, ALL of them inside
  *  `glass_shatter_pane_list_insert_n`; 0 datarefs. One owner.
- * Renamed from `FUN_00622160`.
  * Renamed from `FUN_00622160`.
  */
 void __fastcall glass_shatter_pane_construct_copy(undefined1 *param_1,undefined1 *param_2)
@@ -433799,7 +433671,6 @@ void __fastcall glass_shatter_pane_construct_copy(undefined1 *param_1,undefined1
  * Returns: void.
  * Evidence: VA 0x00622210. 2 SAFE callsites, both inside `glass_shatter_triface_list_insert_at`;
  *  0 datarefs.
- * Renamed from `FUN_00622210`.
  * Renamed from `FUN_00622210`.
  */
 void __fastcall glass_shatter_triface_list_construct_copy(undefined4 *param_1,undefined4 *param_2)
@@ -433882,7 +433753,6 @@ void crt_atexit_register_00622250(void)
  *  caller `game_init`, `lea ecx,[esi + 0x240]`.
  * Renamed from `FUN_00622260`.
  * PS2 twin: `Init__8C_DebrisFf` [CONFIRMED]
- * Renamed from `FUN_00622260`.
  */
 undefined4 __thiscall debris_init(int param_1,float param_2)
 
@@ -433911,7 +433781,6 @@ undefined4 __thiscall debris_init(int param_1,float param_2)
  *  skew, not a behavioural difference. Sole caller `game_done`.
  * Renamed from `FUN_006222f0`.
  * PS2 twin: `Done__8C_DebrisFv` [CONFIRMED]
- * Renamed from `FUN_006222f0`.
  */
 undefined4 __fastcall debris_done(int param_1)
 
@@ -434211,7 +434080,6 @@ uint __thiscall debris_tick(int param_1,uint param_2)
  *  `human_ai`.
  * Renamed from `FUN_00622a30`.
  * PS2 twin: `GenerateDebris__8C_DebrisFRC8S_vectorifffPC8S_vector` [CONFIRMED]
- * Renamed from `FUN_00622a30`.
  */
 void __thiscall
 debris_generate(int param_1,float param_2,float param_3,undefined4 param_4,float param_5,float param_6)
@@ -434462,7 +434330,6 @@ debris_generate(int param_1,float param_2,float param_3,undefined4 param_4,float
  *  `crash_obj_ai`.
  * Renamed from `FUN_006230f0`.
  * PS2 twin: `GenerateFlash__8C_DebrisFP12S_FLASH_INIT` [CONFIRMED]
- * Renamed from `FUN_006230f0`.
  */
 void __thiscall debris_generate_flash(int param_1,int *param_2)
 
@@ -434669,7 +434536,6 @@ void __thiscall debris_generate_flash(int param_1,int *param_2)
  *  colour to 0x3dcccccd. Sole caller `debris_generate`.
  * Renamed from `FUN_00623700`.
  * PS2 twin: `PrepareObject__8C_DebrisFP10I3D_objectfPC8S_vector` [CONFIRMED]
- * Renamed from `FUN_00623700`.
  */
 undefined4 debris_prepare_object(undefined4 param_1,undefined1 *param_2)
 
@@ -434780,7 +434646,6 @@ undefined4 debris_prepare_object(undefined4 param_1,undefined1 *param_2)
  * Returns: undefined4 *: the position, as `erase` requires.
  * Evidence: VA 0x00623ab0. 1 SAFE callsite, in `debris_tick`, in the compaction pass that
  *  removes pieces which fell below -20.0; 0 datarefs. One owner.
- * Renamed from `FUN_00623ab0`.
  * Renamed from `FUN_00623ab0`.
  */
 undefined4 * __thiscall debris_list_erase_at(int param_1,undefined4 *param_2)
@@ -435496,7 +435361,6 @@ undefined4 cd_scan_drives_for_disc(void)
  *  `std_string_tidy`, `std_string_dtor`, `std_string_ctor_formatted`; deliberately
  *  NOT `std_string_grow`, which would read as a duplicate of `std_string_grow_buffer`.
  * Renamed from `FUN_00624190`.
- * Renamed from `FUN_00624190`.
  */
 undefined4 __thiscall std_string_reserve(int param_1,uint param_2,char param_3)
 
@@ -435907,7 +435771,6 @@ void operator_delete_wrapper(undefined4 param_1)
  *  `0x00644c38` whose catchable array has three entries (length_error, logic_error, exception).
  *  2 direct callers.
  * Renamed from `FUN_006243b7`.
- * Renamed from `FUN_006243b7`.
  */
 void std_string_xlen(void)
 
@@ -435952,7 +435815,6 @@ void std_string_xlen(void)
  *  then overwrites the vptr with its own derived table - the textbook base-then-derived
  *  constructor sequence.
  * Renamed from `FUN_00624411`.
- * Renamed from `FUN_00624411`.
  */
 undefined4 * std_logic_error_ctor_from_string(void)
 
@@ -435992,7 +435854,6 @@ undefined4 * std_logic_error_ctor_from_string(void)
  *  `g_std_string_nil` is byte-verified as a lone NUL with a zero refcount byte in front of it.
  * Renamed from `FUN_00624475`.
  * PS2 twin: what__Q23std11logic_errorCFv [STRUCTURAL]
- * Renamed from `FUN_00624475`.
  */
 undefined * __fastcall std_logic_error_what(int param_1)
 
@@ -436018,7 +435879,6 @@ undefined * __fastcall std_logic_error_what(int param_1)
  *  `_ThrowInfo` argument is `0x00644ca8`, whose catchable array has TWO entries - logic_error
  *  and exception - which is the hierarchy depth this class and no other has.
  * Renamed from `FUN_00624482`.
- * Renamed from `FUN_00624482`.
  */
 void __fastcall std_logic_error_throw_copy(undefined4 param_1)
 
@@ -436042,7 +435902,6 @@ void __fastcall std_logic_error_throw_copy(undefined4 param_1)
  *  flagged destructor, which is why the PS2 twin sits on the deleting one and not here.
  * Evidence: VA 0x0062449f. It is the `pmfnUnwind` field of the `_ThrowInfo` at `0x00644ca8`,
  *  read straight out of the image, and it is called by `std_logic_error_scalar_deleting_dtor`.
- * Renamed from `FUN_0062449f`.
  * Renamed from `FUN_0062449f`.
  */
 void std_logic_error_dtor(void)
@@ -436073,7 +435932,6 @@ void std_logic_error_dtor(void)
  * Evidence: VA 0x006244dc. 1 dataref, at `0x0063ef48` = slot 0 of the logic_error vtable.
  * Renamed from `FUN_006244dc`.
  * PS2 twin: __dt__Q23std11logic_errorFv [STRUCTURAL]
- * Renamed from `FUN_006244dc`.
  */
 undefined4 __thiscall std_logic_error_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -436106,7 +435964,6 @@ undefined4 __thiscall std_logic_error_scalar_deleting_dtor(undefined4 param_1,by
  * Evidence: VA 0x006244f8. 3 direct callers - and they are exactly the three `*_throw_copy`
  *  slots, one per class, which is what proves this is the shared base copy constructor rather
  *  than a class-specific one.
- * Renamed from `FUN_006244f8`.
  * Renamed from `FUN_006244f8`.
  */
 undefined4 * std_logic_error_copy_ctor(void)
@@ -436143,7 +436000,6 @@ undefined4 * std_logic_error_copy_ctor(void)
  *  whose catchable array has three entries. Not folded with its two siblings despite the
  *  identical 61-byte shape, because each embeds a different absolute address.
  * Renamed from `FUN_00624555`.
- * Renamed from `FUN_00624555`.
  */
 void std_length_error_dtor(void)
 
@@ -436172,7 +436028,6 @@ void std_length_error_dtor(void)
  *  throws with `_ThrowInfo` `0x00644c38`, the one whose descriptor reads
  *  `.?AVlength_error@std@@`.
  * Renamed from `FUN_00624592`.
- * Renamed from `FUN_00624592`.
  */
 void __fastcall std_length_error_throw_copy(undefined4 param_1)
 
@@ -436196,7 +436051,6 @@ void __fastcall std_length_error_throw_copy(undefined4 param_1)
  * Evidence: VA 0x006245af. 1 dataref, at `0x0063ef28` = slot 0 of the length_error vtable.
  * Renamed from `FUN_006245af`.
  * PS2 twin: __dt__Q23std12length_errorFv [STRUCTURAL]
- * Renamed from `FUN_006245af`.
  */
 undefined4 __thiscall std_length_error_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -436218,7 +436072,6 @@ undefined4 __thiscall std_length_error_scalar_deleting_dtor(undefined4 param_1,b
  * Returns: undefined4 *: `this`.
  * Evidence: VA 0x006245cb. Calls `std_logic_error_copy_ctor` and stores `0x0063ef28`; its only
  *  caller is `std_length_error_throw_copy`.
- * Renamed from `FUN_006245cb`.
  * Renamed from `FUN_006245cb`.
  */
 undefined4 * __thiscall std_length_error_copy_ctor(undefined4 *param_1,undefined4 param_2)
@@ -436242,7 +436095,6 @@ undefined4 * __thiscall std_length_error_copy_ctor(undefined4 *param_1,undefined
  * Evidence: VA 0x006245e3. String literal, vtable `0x0063ef5c` whose descriptor reads
  *  `.?AVout_of_range@std@@`, and `_ThrowInfo` `0x00644d60` - three artifacts. Its 2 callers are
  *  `std_string_assign_substring` and `std_string_erase`, both as the position guard.
- * Renamed from `FUN_006245e3`.
  * Renamed from `FUN_006245e3`.
  */
 void std_string_xran(void)
@@ -436280,7 +436132,6 @@ void std_string_xran(void)
  * Returns: nothing.
  * Evidence: VA 0x0062463d. It is the `pmfnUnwind` field of the `_ThrowInfo` at `0x00644d60`.
  * Renamed from `FUN_0062463d`.
- * Renamed from `FUN_0062463d`.
  */
 void std_out_of_range_dtor(void)
 
@@ -436309,7 +436160,6 @@ void std_out_of_range_dtor(void)
  * Evidence: VA 0x0062467a. 1 dataref, at `0x0063ef64` = slot 2 of the out_of_range vtable;
  *  throws with `_ThrowInfo` `0x00644d60`.
  * Renamed from `FUN_0062467a`.
- * Renamed from `FUN_0062467a`.
  */
 void __fastcall std_out_of_range_throw_copy(undefined4 param_1)
 
@@ -436332,7 +436182,6 @@ void __fastcall std_out_of_range_throw_copy(undefined4 param_1)
  * Returns: undefined4: `this`.
  * Evidence: VA 0x00624697. 1 dataref, at `0x0063ef5c` = slot 0 of the out_of_range vtable.
  * Renamed from `FUN_00624697`.
- * Renamed from `FUN_00624697`.
  */
 undefined4 __thiscall std_out_of_range_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -436354,7 +436203,6 @@ undefined4 __thiscall std_out_of_range_scalar_deleting_dtor(undefined4 param_1,b
  * Returns: undefined4 *: `this`.
  * Evidence: VA 0x006246b3. Calls `std_logic_error_copy_ctor` and stores `0x0063ef5c`; its only
  *  caller is `std_out_of_range_throw_copy`.
- * Renamed from `FUN_006246b3`.
  * Renamed from `FUN_006246b3`.
  */
 undefined4 * __thiscall std_out_of_range_copy_ctor(undefined4 *param_1,undefined4 param_2)
@@ -436381,7 +436229,6 @@ undefined4 * __thiscall std_out_of_range_copy_ctor(undefined4 *param_1,undefined
  *  mutated.
  * Evidence: VA 0x006246cb. 2 direct callers. The three-way branch, the `_Xran` guard and the
  *  `0xfe` saturation ceiling are all Dinkumware `basic_string::assign` verbatim.
- * Renamed from `FUN_006246cb`.
  * Renamed from `FUN_006246cb`.
  */
 int __thiscall std_string_assign_substring(int param_1,int param_2,uint param_3,uint param_4)
@@ -436448,7 +436295,6 @@ int __thiscall std_string_assign_substring(int param_1,int param_2,uint param_3,
  *  through it, and so does `std_string_freeze`.
  * Renamed from `FUN_00624799`.
  * PS2 twin: assign__Q23std59basic_string<>FPCcUi [STRUCTURAL]
- * Renamed from `FUN_00624799`.
  */
 int __thiscall std_string_assign_buffer(int param_1,undefined4 param_2,int param_3)
 
@@ -436477,7 +436323,6 @@ int __thiscall std_string_assign_buffer(int param_1,undefined4 param_2,int param
  *  corrupt every other string sharing it.
  * Evidence: VA 0x006247ce. 2 direct callers, both inside `std_string_assign_substring`'s
  *  self-assignment arm.
- * Renamed from `FUN_006247ce`.
  * Renamed from `FUN_006247ce`.
  */
 int __thiscall std_string_erase(int param_1,uint param_2,uint param_3)
@@ -436521,7 +436366,6 @@ int __thiscall std_string_erase(int param_1,uint param_2,uint param_3)
  * Evidence: VA 0x00624835. The two sentinel values `0` and `0xff` are the Dinkumware
  *  "unshareable" and "frozen" markers; 1 direct caller (`std_string_erase`).
  * Renamed from `FUN_00624835`.
- * Renamed from `FUN_00624835`.
  */
 void __fastcall std_string_freeze(int param_1)
 
@@ -436555,7 +436399,6 @@ void __fastcall std_string_freeze(int param_1)
  *  and nothing else could tell you so. Name shape copied verbatim from
  *  `crt_static_init_guard_006242b0`, not reconstructed from prose.
  * Renamed from `FUN_00624865`.
- * Renamed from `FUN_00624865`.
  */
 void crt_static_init_guard_00624865(void)
 
@@ -436580,7 +436423,6 @@ void crt_static_init_guard_00624865(void)
  * Evidence: VA 0x0062488f. Body is `push 0x0060b700; call atexit; pop ecx; ret`, read from
  *  `Game.exe`. 1 direct caller, `crt_static_init_guard_00624865`. Shape from the 60-member
  *  `crt_atexit_register_<va>` family.
- * Renamed from `FUN_0062488f`.
  * Renamed from `FUN_0062488f`.
  */
 void crt_atexit_register_0062488f(void)
@@ -436851,7 +436693,6 @@ void dtaSetDtaFirstForce(void)
  *  function reachable only through a hook slot is invisible to every `E8` and dataref count
  *  until you look at the slot.
  * Renamed from `FUN_006248e4`.
- * Renamed from `FUN_006248e4`.
  */
 void crt_fp_init(void)
 
@@ -436895,7 +436736,6 @@ void stub_noop_cdecl_006248fb(void)
  *  printf float formatters at `0x00628d03`, `0x00628d24`, `0x00628d3b` and `0x00629f16` index
  *  the same six slots. Statically all six hold one shared stub, so the whole table is
  *  runtime-installed. 1 direct caller, `crt_fp_init`.
- * Renamed from `FUN_006248fc`.
  * Renamed from `FUN_006248fc`.
  */
 void crt_cfltcvt_init(void)
@@ -437018,7 +436858,6 @@ int crt_atexit(undefined4 param_1)
  *  C-initializer table `_cinit` walks BEFORE the C++ one, which is exactly where the crt_atexit
  *  machinery has to be armed. `0x18` is MSVC's `_RT_ONEXIT` abort code.
  * Renamed from `FUN_006249c1`.
- * Renamed from `FUN_006249c1`.
  */
 void crt_onexit_init(void)
 
@@ -437073,7 +436912,6 @@ longlong __ftol(void)
  *  registration-record layout, and the `mov fs:[0], [fs:[0]]` before it is the standard frame
  *  unlink. 1 direct caller, inside the C++ EH engine.
  * Renamed from `FUN_00624a17`.
- * Renamed from `FUN_00624a17`.
  */
 void crt_eh_jump_to_continuation(code *UNRECOVERED_JUMPTABLE)
 
@@ -437098,7 +436936,6 @@ void crt_eh_jump_to_continuation(code *UNRECOVERED_JUMPTABLE)
  *  that survives `/OPT:ICF`.
  * Evidence: VA 0x00624a4b. 2 direct callers, both in the funclet-invocation machinery; one
  *  passes an extra argument and one does not, which is what shows the helper is arity-agnostic.
- * Renamed from `FUN_00624a4b`.
  * Renamed from `FUN_00624a4b`.
  */
 void crt_eh_call_member_function_00624a4b(undefined4 param_1,code *UNRECOVERED_JUMPTABLE)
@@ -437146,7 +436983,6 @@ void crt_eh_call_member_function_00624a52(undefined4 param_1,code *UNRECOVERED_J
  *  followed by `record->ExceptionFlags &= ~2` is MSVC's `_UnwindNestedFrames` verbatim. 2
  *  direct callers, one of them `crt_eh_translator_guard_handler`.
  * Renamed from `FUN_00624a59`.
- * Renamed from `FUN_00624a59`.
  */
 void crt_eh_unwind_nested_frames(PVOID param_1,PEXCEPTION_RECORD param_2)
 
@@ -437176,7 +437012,6 @@ void crt_eh_unwind_nested_frames(PVOID param_1,PEXCEPTION_RECORD param_2)
  *  nothing. That population, and the EAX-in / eight-arguments-out shape, identify it beyond
  *  doubt.
  * Renamed from `FUN_00624aa8`.
- * Renamed from `FUN_00624aa8`.
  */
 undefined4 crt_cxx_frame_handler(undefined4 param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4)
 
@@ -437201,7 +437036,6 @@ undefined4 crt_cxx_frame_handler(undefined4 param_1,undefined4 param_2,undefined
  *  inside a catch block find the NEXT enclosing try rather than its own.
  * Evidence: VA 0x00624ade. Installs `crt_eh_catch_guard_handler` by immediate operand at
  *  `0x00624af7` and calls `__CallSettingFrame_12`; 1 direct caller.
- * Renamed from `FUN_00624ade`.
  * Renamed from `FUN_00624ade`.
  */
 undefined4
@@ -437262,7 +437096,6 @@ void crt_eh_catch_guard_handler(undefined4 param_1,int param_2,undefined4 param_
  * Evidence: VA 0x00624b57. Installs `crt_eh_translator_guard_handler` and dispatches through the
  *  global at `0x006f97e0`; 1 direct caller.
  * Renamed from `FUN_00624b57`.
- * Renamed from `FUN_00624b57`.
  */
 undefined4
 crt_eh_call_se_translator(undefined4 *param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
@@ -437318,7 +437151,6 @@ crt_eh_call_se_translator(undefined4 *param_1,undefined4 param_2,undefined4 para
  *  it calls `crt_eh_unwind_nested_frames` and is installed by immediate operand at
  *  `0x00624b67`.
  * Renamed from `FUN_00624c0b`.
- * Renamed from `FUN_00624c0b`.
  */
 undefined4 crt_eh_translator_guard_handler(int param_1,int param_2,undefined4 param_3)
 
@@ -437354,7 +437186,6 @@ undefined4 crt_eh_translator_guard_handler(int param_1,int param_2,undefined4 pa
  *  (catchHigh). That arithmetic is the identification.
  * Evidence: VA 0x00624c80. 2 direct callers, matching MSVC's two call sites in the handler
  *  search.
- * Renamed from `FUN_00624c80`.
  * Renamed from `FUN_00624c80`.
  */
 int crt_eh_get_try_range_to_check(uint param_1,int param_2,int param_3,uint *param_4,uint *param_5)
@@ -455479,8 +455310,8 @@ undefined4 crt_environ_from_wide(void)
  * Returns: int: 1 less-than, 2 equal, 3 greater-than, 0 on failure.
  * PS2 twin: — (Win32-specific: the PS2 has no SEH and no Win32 API).
  * Evidence: VA 0x00631088. sole caller `__mbsnbicoll`. Named to match the registry's existing
- *   `crt_lcmapstring_ansi`, the sibling A-wrapper that shares its `crt_strnlen` helper (lesson
- *   192). Renamed from `FUN_00631088`.
+ *   `crt_lcmapstring_ansi`, the sibling A-wrapper that shares its `crt_strnlen` helper.
+ *   Renamed from `FUN_00631088`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
 int crt_comparestring_ansi(LCID param_1,DWORD param_2,byte *param_3,int param_4,byte *param_5,int param_6,
@@ -458484,8 +458315,8 @@ void string_ref_construct_at_cdecl(undefined4 *param_1,undefined4 *param_2)
  * PS2 twin: — (the PS2 links the STANDARD TEMPLATED <fstream>; this is MSVC's
  *   classic pre-standard iostream - a different library, not a different name).
  * Evidence: VA 0x00633ab0. sole caller `crashreport_map_stream_static_ctor`, with `this =
- *   g_crashreport_map_file`. The 0x38-byte allocation is the `filebuf`'s class signature (lesson
- *   10). Renamed from `FUN_00633ab0`.
+ *   g_crashreport_map_file`. The 0x38-byte allocation is the `filebuf`'s class signature.
+ *   Renamed from `FUN_00633ab0`.
  * Class layout: MSVC classic iostream; `ios` is a VIRTUAL base (vbtable at +0)
  */
 int * ifstream_ctor(void)
@@ -459765,8 +459596,8 @@ int __thiscall streambuf_setbuf(int param_1,int param_2,int param_3)
  * Returns: int: the number of characters actually stored.
  * PS2 twin: — (the PS2 links the STANDARD TEMPLATED <fstream>; this is MSVC's
  *   classic pre-standard iostream - a different library, not a different name).
- * Evidence: VA 0x006344a5. 🔑 named `xsputn` and NOT `sputn` because the SLOT decides (lesson
- *   174/175): this is slot 5 of `g_streambuf_vt`, the virtual; `sputn` is the non-virtual
+ * Evidence: VA 0x006344a5. 🔑 named `xsputn` and NOT `sputn` because the SLOT decides:
+ *   this is slot 5 of `g_streambuf_vt`, the virtual; `sputn` is the non-virtual
  *   inline that calls it. 2 datarefs - the same address fills slot 5 of both the streambuf and
  *   the filebuf vtable, which is inheritance, not a fold. Renamed from `FUN_006344a5`
  *   14:13 +0200.
@@ -484509,8 +484340,8 @@ undefined4 safedisc_show_error_box(int *param_1,undefined4 param_2)
  *   0 hits in the PS2 symbol table - the PS2 has no disc protection).
  * Evidence: VA 0x00701dc0. 2 `E8` callers, both in `safedisc_run` and both at points where a
  *   check would sit (immediately before and after the payload extraction). Named MECHANICALLY on
- *   purpose: a name like `_check_disc` would assert a feature the body does not contain (lesson
- *   84 - the honest unanswered question is what was removed here). Renamed from `FUN_00701dc0`.
+ *   purpose: a name like `_check_disc` would assert a feature the body does not contain
+ *   (the open question is what was removed here). Renamed from `FUN_00701dc0`.
  * Class layout: — (free function of the SafeDisc stub; the stub has no classes)
  */
 undefined4 safedisc_stub_ret0(void)

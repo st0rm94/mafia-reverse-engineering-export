@@ -1,6 +1,6 @@
 # `ai_fight_manager` / `ai_fight_followship` — fight parties and the party manager
 
-**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-28 19:12 +0200
+**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-28 19:40 +0200
 
 Two classes, one translation unit, one subsystem — **how NPCs fight as a group instead of
 individually**:

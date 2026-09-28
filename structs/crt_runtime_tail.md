@@ -1,6 +1,6 @@
 # The statically-linked runtime tail — `[0x006243b7, 0x00633d75)`
 
-**Created** 2026-09-04 18:07 +0200 · **Modified** 2026-09-28 19:12 +0200
+**Created** 2026-09-04 18:07 +0200 · **Modified** 2026-09-28 19:40 +0200
 
 This is a **linker region, not a translation unit and not a class** — the tail of `.text` where
 the linker parked the objects that came out of `.lib` files rather than out of Mafia's own

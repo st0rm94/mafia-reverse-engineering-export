@@ -1,7 +1,7 @@
 # Mafia: The City of Lost Heaven (PC, 2002) — reverse-engineering export
 
 <!-- version -->
-**Export version:** `2026.09.28`
+**Export version:** `2026.09.28.1`
 <!-- /version -->
 
 Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
@@ -31,7 +31,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 |---|---:|---|
 | `basic/artifacts/` | 11 | gameplay and engine write-ups |
 | `police-system/artifacts/` | 5 | the police and offence system |
-| `structs/` | 116 | one doc per class/subsystem: layout, fields, methods, PC↔PS2 twin tables |
+| `structs/` | 115 | one doc per class/subsystem: layout, fields, methods, PC↔PS2 twin tables |
 | `def-files-docs/` | 5 | shipped data formats and tables |
 | `script-mapping/artifacts/` | 3 | the mission-script VM: opcode ↔ command ↔ handler |
 
@@ -53,7 +53,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
   `gui_screen.md`, `gui_widget.md`, `hud.md`, `human.md`, `i3d_cache.md`, `i3d_frame.md`, `input.md`,
   `inventory.md`, `lightness.md`, `line_batch.md`, `loadsave.md`, `mission.md`, `multiplayer.md`,
   `net_event_msg.md`, `net_session.md`, `particle.md`, `pedestrian.md`, `physical_object.md`, `player.md`,
-  `police-action.md`, `police-board.md`, `police_manager-reconstruction-notes.md`, `police_manager.md`,
+  `police-action.md`, `police-board.md`, `police_manager.md`,
   `program.md`, `public_physics.md`, `pumper.md`, `pursuit-event-manager.md`, `pursuit_group_manager.md`,
   `race_session.md`, `racecam.md`, `racing.md`, `racing_menus.md`, `railway.md`, `railway_switch.md`,
   `random_morph.md`, `recorder.md`, `roads.md`, `safedisc_stub.md`, `screen_fade.md`, `seagull_flock.md`,
@@ -87,7 +87,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 | globals and data | ~1,100 `g_*` globals + ~1,700 `s_*` strings named; raw `DAT_` tokens 1,253 → 14 |
 | data types | arrays, vectors, tables and structs typed in Ghidra and spliced back into the source |
 | function set | missing function starts recovered (e.g. the CRT tail, callbacks); a lost jump table restored; ~300 phantom functions invented by the Aggressive Instruction Finder removed |
-| cleanup | Ghidra `WARNING` lines removed (2,688 → 3); records sorted by VA |
+| cleanup | Ghidra `WARNING` lines removed; records sorted by VA |
 <!-- /stats -->
 
 ## Approach

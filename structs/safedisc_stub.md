@@ -1,6 +1,6 @@
 # The SafeDisc 2.70.030 protection stub — `stxt774` + `stxt371`
 
-**Created** 2026-09-07 16:52 +0200 · **Modified** 2026-09-28 19:12 +0200
+**Created** 2026-09-07 16:52 +0200 · **Modified** 2026-09-28 19:40 +0200
 
 50 functions, all named, prefix `safedisc_`. PC range `[0x00633d75, 0x00701f20]`.
 

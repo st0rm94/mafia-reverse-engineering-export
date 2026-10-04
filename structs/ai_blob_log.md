@@ -1,6 +1,6 @@
 # `ai_blob_log` / `ai_blob` — the scent trail
 
-**Created** 2026-07-16 14:59 +0200 · **Modified** 2026-09-17 14:08 +0200
+**Created** 2026-07-16 14:59 +0200 · **Modified** 2026-09-29 09:31 +0200
 
 An `ai_blob_log` is a **scent trail**: a 16-slot ring of `ai_blob` records, each one a position the
 owning human occupied, dropped at most once every 500 ms. It is the *trail* producer of Mafia's
@@ -73,13 +73,14 @@ The clock is `C_game + 0x2b0c` (`*(g_act_mission+0x24) + 0x2b0c`).
 
 ### 1b. The blob flag word at `+0x1c`
 
-Built at emission from the owner's state; consumers are **[U]** beyond
-`entity_trace_human_scent`'s use of the record as a position.
+Built at emission from the owner's state, and **never read**. The only reader interface is
+`ai_sensors_get_smelled_target_info`'s flags out-parameter, and all 9 of its callers (9 `E8`, no tail
+jump) pass `0` for it; `entity_trace_human_scent` uses the record as a position only.
 
 | Bit | Written when |
 |---|---|
 | `0x02` | the owner's byte at `+0x1e4` is non-zero — the **crouched** flag per `structs/human.md` [H] |
-| `0x04` | the owner's byte at `+0x1ec` is non-zero **[U]** |
+| `0x04` | the owner's byte at `+0x1ec` is non-zero — the **shooting** latch per `structs/human.md` [H] |
 | `0x01` / `0x08` | selected by a `switch` on the owner's animation id (`owner+0x70 & 0x1ff`) [H] ¹ |
 
 ¹ PC cases `5`, `0x5e`/`0x5f`, `0x60`…
@@ -127,8 +128,11 @@ have producers outside the class that owns the container.
 **Who lays a trail.** `ai_blob_log_add_blob` has exactly one caller: a byte scan of `.text` finds
 one `E8` call (`0x004930df`), no tail jump and no pointer to it in `.rdata`/`.data`. The caller is
 `human_update` (`0x00492ff0`), with `lea ecx,[esi+0x758]`, immediately before `ai_loc_update` on
-its main per-frame path. That path is not reached when the `+0xa58` countdown is still positive
-or when `C_human+0x04 & 5` is non-zero (that branch runs `human_ai` and returns).
+its main per-frame path. That path is not reached when the `+0xa58` freeze countdown is still
+positive or when `C_human+0x04 & 5` is non-zero (that branch runs `human_ai` and returns). `+0x04 & 5`
+is the recorded-track playback mask (`structs/actor_track.md` §3a), and nothing ever sets `+0xa58`
+positive (`structs/human.md`), so **every human lays a trail except while a recorded track drives its
+pose**.
 
 | Step | Function | What it does |
 |---|---|---|
@@ -187,12 +191,3 @@ movement direction per blob and why the follower LOS-tests each one.
 - `structs/human.md` — the owner class and its sub-object offsets.
 - `structs/dog.md` §2 — why `C_dog` is not a scent consumer.
 
----
-
-## 6. Open items
-
-| item | state |
-|---|---|
-| which humans lay a trail | the gate is `human_update`'s path (§3); what `C_human+0x04` bits `0x1`/`0x4` and the `+0xa58` countdown mean in gameplay terms is not traced |
-| the `+0x1ec` owner byte behind blob flag `0x04` | **[U]** |
-| who reads `ai_blob.flags` | `entity_trace_human_scent` uses the position only; if nothing reads the flag word, the crouch/animation bits are recorded for a cut feature |

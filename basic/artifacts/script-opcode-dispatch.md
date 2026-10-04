@@ -1,6 +1,6 @@
 # How a script command becomes a `program_process_command` case
 
-**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-09-24 21:39 +0200
+**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 This file answers the question *given a script command name, which `case 0xNN:` in
 `program_process_command` implements it?* The answer is byte-exact for all 391 commands and
@@ -45,17 +45,15 @@ struct KEYWORD { char name[0x20]; int opcode; };   /* stride 0x24 */
 * The frame size is the census: **`0x3704 = 391 × 0x24 + 8`**, and the search loop bound is
   `index <= 0x186`. Both say 391.
 * The matcher is `strncasecmp`, which is why the script language is case-insensitive.
-* **The record is `{name, opcode}`, in that order.** The PS2 twin's decompiled body settles it
-  in one glance: it computes `strlen(base + i*0x24)`, so the NAME is at offset 0. An opcode
+* **The record is `{name, opcode}`, in that order** (the cross-build check is in §7). An opcode
   listing built on the opposite layout reads a window four bytes early and pairs every name
   with the PREVIOUS record's opcode; in such a listing the "raw" number for a command at table
   index *i* is the opcode at index *i−1*.
 
 **Why the function is 35 641 bytes.** MSVC materialises the whole `const` array inline —
 `rep movsd` / bare `movsw` / bare `movsb` out of `.data` string slots for each name, and a
-`mov [esp+N], imm32` for each opcode. That unrolling *is* the function. The PS2 build
-compiles the identical source with GCC, which copies the same array out of `.rodata` with a
-loop, and comes to **380 bytes** — a size ratio of 94 on a statement-identical twin.
+`mov [esp+N], imm32` for each opcode. That unrolling *is* the function (§7 compares the other
+build's size).
 
 ### 1b. The dispatch
 
@@ -99,12 +97,10 @@ Nine independent checks, none of which was consulted while building the extracti
 | structural | 391 records; opcodes **`0x000`–`0x186` contiguous, 0 gaps, 0 collisions, 0 duplicate names, 391/391 named** |
 | `script-mapping/artifacts/opcodes-verified.md` anchors | `VLVP`=`0x122`, `POLICEITCHFORPLAYER`=`0x12c`, `POLICEMANAGER_ON`=`0x86`, `GET_PM_HUMANSTATE`=`0xb2` — 4/4 |
 | in-game confirmed anchors | `DAN_INTERNAL_1`=`0x185`, `DAN_INTERNAL_2`=`0x186` — 2/2 |
-| the PS2 twin's own name | `M7_ZASTAVZKURVENEPOLISE`=`0x183`, the case `ZastavMotorizovaneJednotky` had already fixed |
-| the dispatcher's verified-label docblock | **26 of 27 agree**; the 27th is `case 0xd` (§6) |
+| the PS2 build — three checks | all three agree (§7) |
+| the dispatcher's verified-label docblock | **31 of 31 agree**, including `case 0xd` = `FINDFRAME` (§6) |
 | the parser's 13 anonymous strings | they resolve exactly: `DIM_FLT`(7) `LET`(8) `IF`(9) `RND`(0xa) `DIM_FRM`(0xb) `WAIT`(4) `BEEP`(5) `END`(6) `GOTO`(1) `ZATMYSE`(0xe9) `[BREAK]`(0xaa) `{`(0x45) `}`(0x46) |
-| the PS2 `.rodata` table | 411 records at file `0x395be0` (VA `0x00495b60`); **385 of the 391 PC names match verbatim** |
-| the 6 that do not | exactly `RECCLEAR RECADDACTOR RECLOAD RECLOADFULL RECWAITFOREND RECUNLOAD` — and `structs/recorder.md` independently records `C_recorder` as **PC-only** |
-| the function registry's notes | `case 0x171` = `ACTOR_ADDDORICI` against the PS2 callee `AddDoRiciActor`; `case 0x80/0x81` = `AUTOSAVEGAME`/`AUTOSAVEGAMEFULL`; `case 0x148` = `PM_SETPROGRESS` calling `hud_set_police_wanted_bar` |
+| the function registry's notes | `case 0x171` = `ACTOR_ADDDORICI`; `case 0x80/0x81` = `AUTOSAVEGAME`/`AUTOSAVEGAMEFULL`; `case 0x148` = `PM_SETPROGRESS` calling `hud_set_police_wanted_bar` |
 
 The bijection is the strongest of these. 391 records producing 391 distinct opcodes that
 exactly fill `0x000..0x186` cannot survive an off-by-one, a dropped record or a
@@ -134,26 +130,18 @@ rows.
 | `script-mapping/artifacts/opcodes-verified.md` | what each command DOES — the curated per-command evidence; its opcode column agrees with the generated table |
 | this document | how the mapping is derived, and the mechanisms the table cannot show (§6, §8, §9) |
 
-### 5a. The evidence rule
-
-A byte read of the game's own keyword table does not outrank an anchor confirmed in game, but
-it is the **default answer**: it has been checked against every in-game anchor the project
-holds (§3). If it ever disagrees with one, that disagreement is a finding — re-run the
-extraction and read its gate output before touching the anchor.
-
 ---
 
 ## 6. Two case facts the table settles
 
-1. **`case 0xd` is `FINDFRAME`, not `FINDACTOR`.** Both bodies read: `case 0xd` writes the
+1. **`case 0xd` is `FINDFRAME`; `FINDACTOR` is `case 0x11`.** Both bodies read: `case 0xd` writes the
    **frame** register file (`param_1[0x14]`, bounded by `[0x15]`) from an `I3D_scene` vtable
    `+0x58` name lookup, while `case 0x11` writes the **actor** file (bounded by
    `param_1[0x17]`) by walking the actor list comparing `i3d_frame_get_name`.
-   `FINDFRAME` = `0xd`, `FINDACTOR` = `0x11`.
 2. **`POLICE_SUPPORT` (`0x15e`) is implemented.** Its jump-table slot points at `0x005c64a6`,
-   a real arm that reads an argument and bounds-checks the actor register file. The 15 commands
-   that genuinely point at the default arm (`0x005c76da`) are listed in the generated table's
-   header.
+   a real arm that reads an argument and bounds-checks the actor register file. 15 opcodes'
+   base jump-table slots point at the default arm (`0x005c76da`); the `C_detector` override
+   handles 6 of them (§9) and the other 9 are §9a.
 
 ---
 
@@ -162,6 +150,16 @@ extraction and read its gate output before touching the anchor.
 The PS2 build carries the same table in `.rodata` at **file offset `0x395be0`, VA
 `0x00495b60`**, 411 records of the identical `{char name[0x20]; int opcode;}` layout —
 which is what makes it a free check on the PC extraction.
+
+* **Three checks on the PC extraction come from this build** (§3): the PS2 `.rodata` table's
+  names match **385 of the 391** PC names verbatim; the 6 that do not are exactly the `REC*`
+  family below; and `M7_ZASTAVZKURVENEPOLISE` = `0x183` is the case that calls
+  `police_board_release_all_group_vehicles`, whose PS2 twin is `ZastavMotorizovaneJednotky`.
+  The registry's `case 0x171` = `ACTOR_ADDDORICI` row matches the PS2 callee `AddDoRiciActor`.
+* **The record layout.** The PS2 twin of `program_decode_instruction` computes
+  `strlen(base + i*0x24)`, which puts the NAME at offset 0 independently of the PC extraction.
+* **Size.** GCC copies the same array out of `.rodata` with a loop, so the PS2 twin is **380
+  bytes** against the PC's 35 641 — a size ratio of 94 on a statement-identical twin.
 
 * **PC 391 commands, PS2 411.**
 * **6 PC-only:** the `REC*` recorder family (`RECCLEAR`, `RECADDACTOR`, `RECLOAD`,
@@ -176,12 +174,18 @@ which is what makes it a free check on the PC extraction.
   `CAMERA_HARDUNLOCK`, `CAR_SETNEUTRAL`, `HUMAN_CROUCH`.
   The two `INTERCITY` commands are the script-side face of the PS2-only city-streaming
   subsystem — a third independent corroboration that it is PS2-port-only.
-* ⚠️ **The two builds' opcode NUMBERS diverge.** They agree up to `SETCOMPASS`/`SETCOMPASS2`
-  and drift thereafter (PS2 max `0x19c` vs PC `0x186`). A PS2 case number is never a PC case
+* ⚠️ **The two builds' opcode NUMBERS diverge.** They agree only on `0x000`–`0x00e` (`LABEL` …
+  `FRM_SETON`): the PS2-only `FRM_SETON1` takes `0x0f`, so from `FRM_ISON` on every shared command
+  sits one or more higher on the PS2 — `FINDACTOR` is PC `0x11`, PS2 `0x12`; `SETCOMPASS` is PC
+  `0x1d`, PS2 `0x1e`. The PS2's highest opcode is `0x1a0` against the PC's `0x186`; its 411
+  records fill `0x000..0x1a0` except the six `REC*` slots. A PS2 case number is never a PC case
   number; use the PC table for PC work, and locate a PS2 arm by byte-reading the PS2 keyword
   table rather than by translating a PC case.
 * The PS2 build **inlines** the §8 accessors into its own `Process__9C_programFUi` arm, so the
-  PS2 arm for a command is a second body for every helper that arm calls.
+  PS2 arm for a command is a second body for every helper that arm calls. `STREAM_CONNECT`'s
+  PS2 arm is an empty stub; its helpers' second body is `glass_shatter_cut_mesh`, whose twin is
+  CONFIRMED and which walks the same chain.
+* `program_set_event`'s twin is `SetEvent__9C_programFi`.
 
 ---
 
@@ -190,7 +194,7 @@ which is what makes it a free check on the PC extraction.
 126 function starts. **112 are reached ONLY from `program_process_command`**, which is what
 makes this range hard to name from behaviour alone (`structs/program.md` §6): a one-line
 accessor tells nothing by itself, and its single consumer is a 50 KB switch. With the case map
-the consumer is readable, and the PS2 build's inlined arm (§7) supplies the second body.
+the consumer is readable.
 
 Each callsite is attributed to an arm by taking the greatest jump-table arm start ≤ the
 callsite VA. ⚠️ **This is a strong lead, not a proof:** arms share tails and fall through, so
@@ -340,11 +344,11 @@ The names are the validation: every row lands on the command its name predicts �
 
 | VA | command | what it settles |
 |---|---|---|
-| `0x005c8550` / `_8560` / `_8570` | `STREAM_CONNECT` | `i3d_face_group_get_material_ptr`, `i3d_mesh_level_get_face_group_count_ptr`, `i3d_mesh_object_get_lod_count_ptr`. The PS2 arm for this command is an empty stub, so the second body comes from `glass_shatter_cut_mesh`, which walks the identical chain and whose twin is CONFIRMED (`structs/i3d_frame.md` §9) |
+| `0x005c8550` / `_8560` / `_8570` | `STREAM_CONNECT` | `i3d_face_group_get_material_ptr`, `i3d_mesh_level_get_face_group_count_ptr`, `i3d_mesh_object_get_lod_count_ptr`; `glass_shatter_cut_mesh` walks the identical chain (`structs/i3d_frame.md` §9) |
 | `0x005c86b0` | `CREATEWEAPONFROMFRAME` | the `operator_new(0x38)` constructor's owner class: `using_object_record_ctor` |
 | `0x005c9060` | `SETLMLEVEL` | the `'LMAP'` frame-tree walk: `program_switch_light_map` |
-| `0x005c8fe0` | `HUMAN_RETURNFROMPANIC` | `entity_set_ai_state_resettable`, whose noun had no consumer behind it |
-| `i3d_frame_get_lmap_entry_ptr` | `SETLMLEVEL` | its noun, now backed by a consumer |
+| `0x005c8fe0` | `HUMAN_RETURNFROMPANIC` | the consumer of `entity_set_ai_state_resettable` |
+| `0x005c85b0` | `SETLMLEVEL` | the consumer of `i3d_frame_get_lmap_entry_ptr` |
 | `0x005c8740` / `0x005c8a90` | `DAN_INTERNAL_1` | the two writes that seat the player in the spawned Thunderbird |
 | `0x005c92d0` / `_9480` / `_90d0` / `_9290` | `GOSUB` / `RETURN` / `CALL` | the script call-stack machinery |
 | `0x005c8880`..`0x005c89e0` (7 fns) | `CARLIGHT_*` | a complete, coherent car-lighting family |
@@ -357,7 +361,7 @@ has no dispatcher callsite and belongs to the next translation unit.
 
 ## 9. The base dispatcher is not the only dispatcher
 
-`Process__9C_programFUi` is **virtual**. `C_detector` overrides it, and
+`program_process_command` is **virtual**. `C_detector` overrides it, and
 `detector_program_process` handles six opcodes itself before delegating everything else
 to the base — which is why `DETECTOR_WAITFORUSE` and `DETECTOR_WAITFORHIT` work in the 30+
 shipped scripts that use them while the base jump table sends their opcodes to the default arm:
@@ -380,8 +384,8 @@ program counter stays put and the script re-runs the same instruction every tick
 ⚠️ Their base-dispatcher slot points at the default arm *precisely because* the derived
 class owns them — the empty slot is the consequence of the override, not evidence of a
 missing feature. `structs/detector.md` §1 carries five of these six mappings from the
-`C_detector` side. The extraction carries the six-opcode map, so the generated table reports
-**9** genuinely unimplemented commands, not 15.
+`C_detector` side. Of the 15 opcodes whose base slot is the default arm, 6 are these; the
+other **9** are §9a.
 
 **How to find the other overrides of any dispatcher:** grep the decomp for the functions
 that TAIL INTO it. There are exactly two here — this one and `entity_process_command`,
@@ -399,7 +403,7 @@ through to `return 0`, a decode failure at script load.
 
 | group | commands | what actually happens |
 |---|---|---|
-| **implemented — a MARKER, not a command** (1) | `EVENT` (`0x48`) | Its parser arm resolves the event NAME to an id (`use_AB` → 60000, `death` → 60001, `enemy_to_AI` → 60002, `enemy_to_Script` → …, else `atoi`) and emits an instruction of **type `0x48`**. `program_set_event` (PS2 `SetEvent__9C_programFi`) scans the instruction vector for `type == 0x48` carrying that id and moves the program counter there. So `event` is a **jump-target label**, exactly like `label` — which is why shipped scripts write it after `end` — and the default arm, a no-op that advances the pc, is the CORRECT fall-through. Matches the in-game report that `event` works |
+| **implemented — a MARKER, not a command** (1) | `EVENT` (`0x48`) | Its parser arm resolves the event NAME to an id (`use_AB` → 60000, `death` → 60001, `enemy_to_AI` → 60002, `enemy_to_Script` → …, else `atoi`) and emits an instruction of **type `0x48`**. `program_set_event` scans the instruction vector for `type == 0x48` carrying that id and moves the program counter there. So `event` is a **jump-target label**, exactly like `label` — which is why shipped scripts write it after `end` — and the default arm, a no-op that advances the pc, is the CORRECT fall-through. Matches the in-game report that `event` works |
 | **compiles, then silently ignored** (1) | `HUMAN_CANDIE` (`0x15a`) | Has a parser arm (one `atoi` integer, in the large shared group) and no dispatcher arm. No error, no effect — a genuinely dead command that 16 shipped scripts still use |
 | **fails to COMPILE** (7) | `BEEP` (`0x005`), `DEBUG_TEXT` (`0x037`), `[BREAK]` (`0x0aa`), `[DEBUG_ME]` (`0x0eb`), `[DEBUG_STOP]` (`0x0ec`), `DEBUG_GETFRAMEINFO` (`0x12b`), `[DAN_DEBUG]` (`0x13a`) | No parser arm at all ⇒ `program_decode_params` returns 0 at load time. `DEBUG_TEXT` reproduces this in game as a compilation error, which is what validates the split. The other six are the developers' in-house debugger vocabulary, kept in the keyword table and stripped from both the parser and the VM |
 
@@ -407,10 +411,6 @@ through to `return 0`, a decode failure at script load.
 instruction type, so the marker `program_set_event` scans for *is* the `EVENT` command — which
 joins this document's `EVENT = opcode 0x48` to `structs/program.md` §5d's event marker at
 instruction type `0x48`.
-
-The extraction carries all three groups, plus a gate that fails if a hand-classified opcode
-stops being a default-arm case, so a re-extraction cannot leave a stale note behind. That gate
-was exercised on a deliberately broken input before being relied on.
 
 ---
 

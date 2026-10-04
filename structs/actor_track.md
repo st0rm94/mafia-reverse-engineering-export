@@ -1,6 +1,6 @@
 # `C_actor_track` — the base class of `C_actor`, and the `C_recorder` client interface
 
-**Created** 2026-08-04 18:07 +0200 · **Modified** 2026-09-24 17:18 +0200
+**Created** 2026-08-04 18:07 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`actor_track_`**.
 
@@ -40,12 +40,10 @@ Read directly from the vtables in `Game.exe`'s `.rdata`:
   `Update` / `NetDirect`, all folded by `/OPT:ICF` onto the single stub
   `stub_noop_args4_004776f0`.
 
-**What is *not* established:** whether the source declared this as a separate base class or
-as `C_actor`'s first 13 virtuals (§7). What *is* measured is that the 13 form one coherent
-block, that they are emitted as **COMDATs in a shared band** (`0x0044a650`–`0x0044b5c0`)
-rather than inside any one translation unit — `C_actor_shot`'s two overrides sit in that band
-while its own TU is 0x4000 bytes away — and that they are a self-contained interface to one
-subsystem. Because the band is COMDAT-grouped, its emission order carries no information.
+**What is measured:** the 13 form one coherent block (§7); they are emitted as **COMDATs in a
+shared band** (`0x0044a650`–`0x0044b5c0`) rather than inside any one translation unit —
+`C_actor_shot`'s two overrides sit in that band while its own TU is 0x4000 bytes away — and they
+are a self-contained interface to one subsystem. Because the band is COMDAT-grouped, its emission order carries no information.
 
 ## 2. The vtable slots
 
@@ -135,18 +133,16 @@ Expect a fold whenever two `C_PhThing`-family classes fill the same slot.
 ### 2c. Slot 21 = `DuplicateFrom`, and the `C_car` overrides
 
 **Slot 21** is not part of the 0–12 interface; it is recorded here because this is where the
-family slot map lives. The CONFIRMED `box_new_duplicate_from` ↔
-`DuplicateFrom__9C_box_newFP7C_actor` pair pins it: **96 bytes on both builds**, copying the same
-six fields in the same order after a base call. Every class that does not override it holds a
+family slot map lives. `box_new_duplicate_from` pins it: a **96-byte** body copying six fields in
+order after a base call (its PS2 twin: §5). Every class that does not override it holds a
 folded no-op stub there: `C_bottle` → `thunk_stub_noop_args4_00461180` (`0x004773f0`, a 5-byte
 JMP thunk; Ghidra names a thunk after its target), `C_box` → `stub_noop_args4_004776f0`.
 
 **The six `C_car` overrides** (§2a) carry `car_track_`, not `vehicle_`: the receiver is
 byte-proven `5C_car`. Every one reads the track from `this+0x08` and the I3D frame from
 `this+0x68`, both `C_actor` **base** fields that `C_Vehicle` — which lives at `car+0x80` — does
-not have. Vtable `0x0063bc08` also carries `AI__5C_carFUi`, `Update__5C_carFUi`,
-`GameInit__5C_carFv` and `GetActorSpeed__5C_carFR8S_vector`, and a vtable belongs to exactly
-one class.
+not have. Vtable `0x0063bc08` also carries `car_ai_tick`, `car_update`, `car_game_init` and
+`car_get_actor_speed` (their PS2 twins: §5), and a vtable belongs to exactly one class.
 
 `car_track_spawn_dropout_part` (slot 1) replays an "a part came off" key by spawning a
 **`C_DropOut`** actor (kind `0x11`) bound to the named car part. That kind is labelled data:
@@ -172,8 +168,8 @@ and `actor_ctor` writes the derived vptr at `+0x00`.
 
 | Bit | Meaning | Evidence |
 |---|---|---|
-| `0x01` | **playback active** | `human_update` runs `human_animation_evaluate_and_dispatch` **only while it is clear** — the bit stands the normal animation driver down so the track can own the pose |
-| `0x02` | **recording active** | `human_track_queue_anim_event` is gated on it, and the record it produces has exactly one consumer: `human_track_record_key` |
+| `0x01` | **playback active** | `human_update` runs `human_animation_evaluate_and_dispatch` **only while it is clear** — the bit stands the normal animation driver down so the track can own the pose. Tested together with `0x04` (mask `5`) by `actor_tick`, `car_update` (four sites), `car_on_act_state_changed`, `human_update` and `entity_suspend_ai_and_hide` |
+| `0x02` | **recording active** | `human_track_queue_anim_event` is gated on it, and the record it produces has exactly one consumer: `human_track_record_key`. `dropout_on_act_state_changed` returns early while it is set, so a `C_DropOut` going inactive is not recycled mid-recording, and `dropout_game_done` tests it with `0x01` (mask `3`) |
 | `0x04` | playback **requested** | promoted to `0x01` by `actor_track_apply_mode_changes` |
 | `0x08` | recording **requested** | promoted to `0x02` by the same |
 | `0x10` | **has a track** | set by `recorder_add_track`; read by `human_update` (skip the frame's own tick) and `game_init` (find the player actor that has no track yet) |
@@ -182,11 +178,12 @@ and `actor_ctor` writes the derived vptr at `+0x00`.
 and only when the mode is not already active; `set(false)` clears the active and request
 bits together. So a mode change always lands at a controlled point.
 
-**Evidence asymmetry.** `0x02 = recording` is proven by a closed writer→reader data chain.
-`0x01 = playback` rests on the suppression semantics plus exclusion — the two bits are
-symmetric halves of one pending/commit pair and the other half is proven. The three setters
-have **0 direct callsites and 35 vtable datarefs each**, so no caller passes a literal; the
-meaning can only come from the readers.
+**Where the meanings come from.** The three setters have **0 direct callsites and 35 vtable
+datarefs each**, so no caller passes a literal and the meaning comes from the readers.
+`0x02 = recording` rests on a closed writer→reader data chain plus the `C_DropOut` readers;
+`0x01 = playback` on the suppression readers above, which always test it together with its own
+*requested* bit `0x04` and never with `0x02` or `0x08`. The readers were found by disassembling
+every function for bit tests on displacement `+0x04` and keeping those whose receiver is the actor.
 
 ## 4. The key record
 
@@ -221,7 +218,10 @@ sentinel; entry 0 of the size table is the 8-byte chunk-link record.
 `key[0x16]` (the last dword of `C_actor`'s `0x5c` record) has bit `0x4000`, it fills
 `g_actor_track_captured_pose` (`0x00656464`, 0x20 bytes): `valid` is set to 1 by a byte store,
 `pos` takes the frame's world position and `rot0`..`rot3` its rotation quaternion. Nothing in the
-image reads it back: each field has exactly one reference.
+image reads it back: every dword in every section whose value falls in
+`0x00656464..0x00656483` was enumerated, and the only ones are these eight stores and four bytes
+of the text `"freeride"` in `.data` (`0x006512a9`). The capture is write-only in this build; what
+it was meant for is not recoverable from the binary.
 
 ## 5. PC vs PS2
 
@@ -236,8 +236,9 @@ the usual case, where the PS2 port *added* subsystems.
 * **The PS2 vptr placement.** PS2 `__ct__7C_actorFv` stores its vtable at `this+0x78`: GCC 2.x
   places the vptr **after** the data for a class with no polymorphic base, and PS2 `C_actor`
   has none — `__dt__7C_actorFv` restores exactly one vptr and calls no base destructor.
-* **Field delta, unreconciled:** PC's frame pointer is at `+0x68` and PS2's at `+0x70`, but PC's
-  `C_actor` data starts at `+0x04` where PS2's starts at `+0x48`. One delta cannot be both (§7).
+* **Field layout:** the base fields this interface uses — `+0x04` mode flags and `+0x08` track —
+  have no PS2 counterpart, and PS2's `C_actor` data starts at `+0x00` with its cached vectors.
+  The full pair table is `structs/actor.md` §6.
 * **`.tck` track files ship on both builds** (`Ddeath.tck`, `DturnL.tck`, `DturnR.tck`,
   `Nuda01.tck`, `Nuda02.tck`, `turn1.tck`) and the PS2 keeps consumers for them
   (`LoadTCK__5C_dogFv`, `GetPlacementFromTCK__5C_car`,
@@ -245,6 +246,12 @@ the usual case, where the PS2 port *added* subsystems.
   readers, and cut the recorder that produced it.
 * **`C_DropOut`'s two initialisers** on the PS2 are `InitWheel` and `InitBox` — the same
   two-branch split `car_track_spawn_dropout_part` makes (§2c).
+* **Slot 21 = `DuplicateFrom`** (§2c) is pinned by the CONFIRMED pair `box_new_duplicate_from` ↔
+  `DuplicateFrom__9C_box_newFP7C_actor`: **96 bytes on both builds**, copying the same six fields
+  in the same order after a base call.
+* **The `C_car` vtable `0x0063bc08`** (§2c) holds `car_ai_tick` ↔ `AI__5C_carFUi`, `car_update` ↔
+  `Update__5C_carFUi`, `car_game_init` ↔ `GameInit__5C_carFv` and `car_get_actor_speed` ↔
+  `GetActorSpeed__5C_carFR8S_vector`.
 
 ## 6. Related
 
@@ -256,7 +263,4 @@ the usual case, where the PS2 port *added* subsystems.
 
 | Item | State |
 |---|---|
-| is the base a real class, or `C_actor`'s first 13 virtuals? | no class outside the `C_actor` family uses the interface, so there is no independent witness |
-| the `0x01`/`0x02` bit meanings rest on one reader each | a second consumer for either would close the asymmetry noted in §3a |
-| PC↔PS2 `C_actor` field-delta reconciliation | the frame-pointer delta (`+0x68`/`+0x70`) and the data-start delta (`+0x04`/`+0x48`) disagree (§5) |
-| who reads `g_actor_track_captured_pose` | the key bit `0x4000` that fills it is known; no reader exists in the image, so what the capture was for is unknown |
+| is the base a real class, or `C_actor`'s first 13 virtuals? | no class outside the `C_actor` family uses the interface. No stand-alone 13-slot vtable exists in `.rdata` — all 28 vtables holding the slot-0 default run 39 slots or more — and `actor_ctor` and `actor_dtor` each store a single vptr, so a separate base could only have been declared `__declspec(novtable)`. The binary cannot tell that apart from 13 leading virtuals |

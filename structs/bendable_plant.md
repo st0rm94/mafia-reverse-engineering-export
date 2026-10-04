@@ -1,6 +1,6 @@
 # `bendable_plant` — entity kind `0x1d`
 
-**Created** 2026-08-14 14:23 +0200 · **Modified** 2026-09-17 13:46 +0200
+**Created** 2026-08-14 14:23 +0200 · **Modified** 2026-10-04 11:52 +0200
 
 PC prefix **`bendable_plant_`**. 16/16 PC starts named.
 
@@ -23,12 +23,12 @@ PC prefix **`bendable_plant_`**. 16/16 PC starts named.
 >
 > Nothing in the binary names the cloned prop: the class clones whatever `OBJ_` child frames the
 > designer parented to its own frame, and no string, table, material, asset or consumer says
-> "plant". There is no PS2 symbol, no shipped scene uses kind `0x1d`, and no construction path is
-> located (§5), so no in-game observation backs the noun either. The class name is the project's
-> own — the PS2 build has no such class (compare `C_actor_track` and `C_recorder`, also
-> project-invented names).
+> "plant". Nothing in the shipped game constructs one (§5), so no in-game observation backs the
+> noun either. The class name is the project's own (compare
+> `C_actor_track` and `C_recorder`, also project-invented names); there is no PS2 counterpart
+> (§6).
 >
-> **Not observed during gameplay; most likely unused in the shipped game** (§5).
+> **Never constructed in the shipped game** (§5).
 
 ## 1. What it is
 
@@ -47,7 +47,7 @@ if and only if something physically passes through it.
 |---|---|---|---|
 | `+0x00` | vtable | H | `0x0063c608` |
 | `+0x10` | entity kind | H | `0x1d` |
-| `+0x65` | byte, set to 1 by `GameInit` | M | a `C_actor` field, not the class's own |
+| `+0x65` | `C_actor` save_excluded, set to 1 by `GameInit` | H | a `C_actor` field (`structs/actor.md` §1b): the savegame skips the plant |
 | `+0x68` | `I3D_frame*` | H | `C_actor`'s frame; its CHILD frames are the clone prototypes |
 | `+0x70` | allocator byte of the element vector | H | - |
 | `+0x74` / `+0x78` / `+0x7c` | **element vector** begin / end / cap | H | stride `0x74`; freed by the dtor, emptied by `GameDone` |
@@ -66,7 +66,7 @@ it).
 
 | Offset | Field | Notes |
 |---|---|---|
-| `+0x00` | dyn-coll type | **`0x47`** — this class's own type value |
+| `+0x00` | dyn-coll type | **`0x47`** — this class's own type value (`structs/collision.md` §1d) |
 | `+0x10` .. `+0x18` | world position | the ground-snapped point, `+0.2` on Y |
 | `+0x1c` | radius | `0.4f` |
 | `+0x44` | **owner** | back-pointer to the `bendable_plant` instance; read as `record[0x11]` by the collision arm |
@@ -152,9 +152,11 @@ class's.
 `g_bendable_plant_list_allocator` / `_list` / `_list_end` / `_list_cap` (`0x00656060`..`0x0065606c`)
 is a static member vector with the same head shape as the per-instance one. It is constructed by
 `bendable_plant_static_list_ctor` and freed by `bendable_plant_static_list_free`, and **nothing else
-in the binary reads or writes it** (§7).
+in the binary reads or writes it**: a whole-image search for the four addresses finds only those
+two functions. The free routine runs no element destructor, so the element type is trivially
+destructible; nothing else about it is recoverable.
 
-## 5. No construction path is located
+## 5. Nothing constructs it
 
 Two routes build an actor in this engine. Both dead-end.
 
@@ -163,12 +165,14 @@ runtime-spawned class works (`pedestrian_crowd_ctor`, kind `0x13`, has exactly o
 never goes through the factory). **`bendable_plant_ctor` has exactly ONE callsite in the whole
 decomp, and it is `case 0x1d:` of the entity factory.** No direct creator exists.
 
-**(b) The factory `mission_create_actor(kind)`** — 7 callsites, all enumerated:
+**(b) The factory `mission_create_actor(kind)`** — 8 callsites, all enumerated by a census of the
+`E8` calls to it:
 
 | caller | where the kind comes from | can it be `0x1d`? |
 |---|---|---|
-| `loadsave_savegame_load` | the scene's `0xAE22` special-object type | not in any of the 79 shipped scenes |
-| savegame chunk 200 (×2) | read from the save chunk (with a `2 → 0x1b` remap) | only replays what a scene created |
+| `mission_open_bin` | the scene's `0xAE22` object kind | not in any of the 79 shipped scenes |
+| `game_load_differences` (×2) | the `.chg` difference file: chunk 200 (with a `2 → 0x1b` remap) and chunk 400 (`structs/chunk.md` §4b) | not in any of the 92 shipped files, which carry kinds 1, 2, 4, 5, 6, 9, `0x1b` and `0x21` |
+| `loadsave_savegame_load` | the savegame | only replays actors a running game created |
 | `program_process_command` | **copied from an existing actor** via `folded_get_dword_0x10` (its `C_actor::GetKind` role) | needs one to exist already |
 | `loadsave_freeride_setup_scene` (×2) | disassembled: `push 2`, `push 4` | no — hard-coded player + car |
 | `garage_game_init` | literal `4` | no |
@@ -184,7 +188,10 @@ weight.
 **In-game corroboration (user):** nothing in the game bends except the trees in the MISE09
 thunderstorm — and the four MISE09 scenes contain special types `{1, 2, 4, 5, 6, 0x1b, 0x23}`, no
 `0x1d`. That storm is a different subsystem (the `0xAEF0`/`0xAEF1` weather chunks plus the
-`weather_setparam` script commands); the bending trees are most likely morph animation (§6).
+`weather_setparam` script commands), and the shipped data ties tree bending in MISE09 to the
+random-morph module (`structs/random_morph.md`): `MISE09-PREJIMKA`'s `rmorf.bin` drives the morph
+channels of 14 tree frames (`s_oranz*` / `s_barevny*`, placed by the same mission's `scene2.bin`),
+two juniper frames and two laundry frames, and `MISE09-KRAJINA`'s drives `Truck.Mesh00`.
 
 **What would overturn this:** any sighting in game of a small object bending aside as you walk
 through it and springing back. Then one of (a), (b) or the scene set is wrong, and (a) is the
@@ -201,7 +208,9 @@ cheapest to recheck.
   places PC vtable `0x0063c608` between `C_irenka` (`0x0063c568`) and `C_don_ocas` (`0x0063c6d8`);
   the PS2 sequence steps straight from `C_irenka` to `C_don_ocas`.
 * **No PS2 source file fits.** The PS2 `__sinit_*` symbols (one per `.cpp`) list no file sorting
-  between `C_irenka.cpp` and `C_movement.cpp`.
+  between `C_irenka.cpp` and `C_movement.cpp`, which is where the PC link order puts this
+  translation unit. `Game.exe` carries no source-file strings at all, so the file's name is not
+  recoverable from either build.
 
 Every function in this class is graded on the PC body alone — there is no second body to diff — and
 none carries a `PS2 twin:` line.
@@ -210,16 +219,7 @@ none carries a `PS2 twin:` line.
 `strom morph1.4ds` / `truckmorph.4ds` / `TE-hadicemorph.4ds`, and the PS2 carries
 `__sinit_C_rmorf.cpp` plus a five-symbol class — `__ct__7C_rmorfFv`, `__dt__7C_rmorfFv`,
 `Mission_Start__7C_rmorfFv`, `Mission_Done__7C_rmorfFv`, `Tick__7C_rmorfFi` — and
-`LoadRAWSet__13RMRF_S_SETREFFPP13RMRF_S_SETREFPc`, which loads **RAW morph sets**. A mission-scoped
-per-tick vertex-morph player is the shape that fits "two kinds of tree bending in a storm".
-
-## 7. Open items
-
-| Item | State |
-|---|---|
-| what the objects ARE | the mechanism (ground-rooted, springs upright, bends on contact, r=0.4, up to 7 prototypes) is certain; the noun "plant" is the user's decision, and nothing that creates an instance is located (§5) |
-| the file-scope vector | §4a — no consumer, element type unknown |
-| the source file name | the TU sorts alphabetically **between `C_irenka.cpp` and `C_movement.cpp`**, so the file begins `C_i…`..`C_m…`; the PS2 has nothing in that window, consistent with a PC-only file |
-| `+0x65` | set to 1 by `GameInit`; a `C_actor` field with no documentation here |
-| the `0x47` dyn-coll type | used by this class alone; `structs/collision.md` carries no type table, and `0x47` belongs in one with "no hit reported" against it |
-| the PC side of the MISE09 morph player (§6) | no PC function is read for it; the PS2 `C_rmorf` symbols are a lead only |
+`LoadRAWSet__13RMRF_S_SETREFFPP13RMRF_S_SETREFPc`, which loads **RAW morph sets** — a mission-scoped
+per-tick vertex-morph player. Its PC side is `random_morph_*` (`structs/random_morph.md`, all
+5 `C_rmorf` and 2 `RMRF_S_SETREF` methods matched), and the MISE09 `rmorf.bin` files of §5 are
+what it plays.

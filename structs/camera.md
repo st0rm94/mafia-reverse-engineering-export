@@ -1,6 +1,6 @@
 # `G_Camera` — the camera manager
 
-**Created** 2026-09-01 22:14 +0200 · **Modified** 2026-09-26 20:30 +0200
+**Created** 2026-09-01 22:14 +0200 · **Modified** 2026-09-30 11:44 +0200
 
 The range `[0x005d4800, 0x005dc180]`. PC prefix **`camera_`**. PS2 class **`G_Camera`**, source
 file `g_camera.cpp`.
@@ -13,7 +13,7 @@ receiver is byte-proven twice: the instruction loading ECX before the single `E8
 `game_get_camera()` immediately before `camera_lock_at_human_pair`.
 
 **Coverage: 36 of 39 PS2 methods, every row body-diffed.** The three that are absent are
-explained in §7a.
+explained in §6a.
 
 ---
 
@@ -36,7 +36,7 @@ either 16-aligned with padding or carrying direct `E8` callers. The order-alignm
 PS2 corroborates it independently (§4).
 
 Of the 38 defs in block B, 36 are `G_Camera` methods, one is `camera_get_race_camera_at` (no PS2
-counterpart, §7a), and one is `copy_range_stride_0x14` — a genuinely shared STL helper with **22
+counterpart, §6a), and one is `copy_range_stride_0x14` — a genuinely shared STL helper with **22
 callers across at least six unrelated families**, which is why it keeps a mechanical name. Four of
 those 22 callsites load `g_camera_dialog_actors_alloc`, which is the second proof of that vector's
 base address.
@@ -102,13 +102,19 @@ Every mode value below is pinned by the function that sets or tests it, not infe
 |---|---|---|
 | `1`..`3` | on foot | latched into `g_camera_last_onfoot_mode` by `camera_set_mode` |
 | `5` | **sniper scope** | `camera_set_sniper_mode` pushes it; `camera_set_sniper_fov` only acts in it; `camera_end_mode` restores the HUD when leaving it |
-| `7`..`0xf` | in a vehicle | latched into `g_camera_last_vehicle_mode`; `7` is also what `camera_set_climbing_into_car(true)` forces |
+| `6` | **death camera** | set by `human_death` and twice by `human_movement_intern`; `camera_tick` interpolates towards the victim's `neck` frame through `g_camera_death_interp` / `_pos` / `_dest_pos` |
+| `7`..`0xf` | in a vehicle | latched into `g_camera_last_vehicle_mode`; `7` is also what `camera_set_climbing_into_car(true)` forces and what `camera_enable_free_look` restores from modes `0xc`..`0xf` |
 | `0x11` | linked to a frame | set by `camera_link_to_frame`; suppresses the whole dialogue camera |
 | `0x13` | **dialogue** | set by `camera_dialog_start`, tested by `camera_is_in_dialog` |
-| `0x14` | race camera | set from `racing_set_race_camera_index` |
+| `0x14` | race camera | set from `racing_set_race_camera_index` (§3b) |
 | `0x15` | look-to | set by `camera_set_look_to` |
 | `0x16` | **locked** | entered by `camera_lock_at` and `camera_lock_at_human_pair`, left by `camera_unlock` |
-| `0x17` | shares `camera_end_mode`'s teardown with `0x11` | `camera_end_mode`'s switch |
+| `0x17` | **riding on a truck's cargo bed** | set by `human_intern_use_car_truck` when the human is the player, right after `camera_link_to_frame` binds the camera to the truck's frame; shares `camera_end_mode`'s teardown with `0x11` |
+| `0x18` | **menu camera** — the owner drives the `I3D_camera` itself | set by `carcyclopedia_ctor` and `gui_menu_execute_modal`, each after `camera_push_mode`; `camera_tick` returns at once in this mode. It has no `g_camera_mode_table` record |
+
+The table is complete: a byte scan of `.text` finds 17 calls and jumps to `camera_set_mode`, and
+together with the direct stores to `+0x10` in `camera_reset`, `camera_set_car` and
+`camera_set_climbing_into_car` they produce exactly the modes above.
 
 **`g_camera_mode_table` (`0x00650450`) is the table behind all of this**: 17 records of `0x44`
 bytes, scanned by `camera_begin_mode` up to `0x006508d4`. Layout, measured from the bytes:
@@ -150,8 +156,27 @@ The decomp types the `param` block as ten separate fields `param0`..`param9`, so
 | 16 | `0x14` | `0x07` | `C Racing` | `0x0` |
 
 The in-car records' `restore` values chain the camera-change key through the vehicle modes:
-`0x07 -> 0x08 -> 0x09 -> 0x0c -> 0x0d -> 0x0e -> 0x07`. Modes `2`, `0xa` and `0x12` have arms in
-`camera_tick` (§5) but no record. What flag bit `0x8` does is not decoded.
+`0x07 -> 0x08 -> 0x09 -> 0x0c -> 0x0d -> 0x0e -> 0x07`.
+
+**Dead code.** Modes `2`, `0xa` and `0x12` have arms in `camera_tick` (§5) but no record, and none
+of the setters above ever produces them — the restore chain, the pushed modes and the two latches
+only carry values that were set first — so those arms never run. Flag bit `0x8` (records 13..15)
+has no reader: `camera_begin_mode` and `camera_tick` test bits `0x1`, `0x2` and `0x4` only, and a
+scan of the whole of `.text` finds no `test` of bit `0x8` at `+0x18`.
+
+### 3b. Race cameras in the retail game
+
+The race-camera path runs in mission 6. Its `GameInitStart` script calls
+`racing_mission6_init 5, 12, 0, 44`, and `race_mission6_init` constructs `g_racing`. The mission's
+`scene2.bin` carries 26 `C_racecam` actors (kind `0x1c`). `camera_add_race_camera` has one caller,
+`racecam_game_init`, which registers the actor's record only while `g_racing` is set, and
+`camera_init_race_cameras` (called from `racing_game_init`) only pairs the already-registered
+records with the circuit's gates.
+`racing_tick` then steps the camera to the next racer with `racing_set_race_camera_index`
+(mode `0x14`) whenever its dwell timer expires. `racecam_game_done` unregisters through
+`camera_remove_race_camera` without testing `g_racing`, so in every other mission the removal runs
+against an empty vector. **Confirmed in game:** after the race finishes, the
+player watches the other racers from these trackside cameras.
 
 ---
 
@@ -175,7 +200,7 @@ Ordered by PC VA. 38 PC defs against 39 PS2 methods, forced 1:1 in every gap.
 | 0x005d4d10 | `camera_set_mode` | `SetMode__8G_CameraFUib` | CONFIRMED |
 | 0x005d4d70 | `camera_set_climbing_into_car` | `LezeDoToyoty__8G_CameraFb` | CONFIRMED |
 | 0x005d4dd0 | `camera_tick` | `Tick__8G_CameraFUi` | CONFIRMED |
-| - | - | `CalcUpDown__8G_CameraFRC8S_vector` | PS2-port-only candidate (§7a) |
+| - | - | `CalcUpDown__8G_CameraFRC8S_vector` | PS2-port-only candidate (§6a) |
 | 0x005d9710 | `camera_apply_desired_pos_car` | `WantPosCar__8G_CameraFRC8S_vectorRC8S_vectorf` | CONFIRMED |
 | 0x005d9b90 | `camera_apply_desired_pos` | `WantPos__8G_CameraFRC8S_vectorRC8S_vectorRC8S_vectorf` | CONFIRMED |
 | 0x005da4b0 | `camera_begin_mode` | `Begin__8G_CameraFv` | CONFIRMED |
@@ -186,8 +211,8 @@ Ordered by PC VA. 38 PC defs against 39 PS2 methods, forced 1:1 in every gap.
 | 0x005db000 | `camera_lock_at` | `LockAt__8G_CameraFRC8S_vectorRC8S_vector` | CONFIRMED |
 | 0x005db080 | `camera_lock_at_human_pair` | `CumNaNe__8G_CameraFP7C_humanP7C_human` | CONFIRMED |
 | 0x005db5d0 | `camera_unlock` | `Unlock__8G_CameraFb` | CONFIRMED |
-| - | - | `HardLockAt__8G_CameraFRC8S_vectorRC8S_vector` | PS2-only (§7a) |
-| - | - | `HardUnlock__8G_CameraFv` | PS2-only (§7a) |
+| - | - | `HardLockAt__8G_CameraFRC8S_vectorRC8S_vector` | PS2-only (§6a) |
+| - | - | `HardUnlock__8G_CameraFv` | PS2-only (§6a) |
 | 0x005db5f0 | `camera_push_mode` | `PushMode__8G_CameraFv` | CONFIRMED |
 | 0x005db820 | `camera_pop_mode` | `PopMode__8G_CameraFb` | CONFIRMED |
 | 0x005db8e0 | `camera_dialog_look` | `DialogLook__8G_CameraFP7C_humanP7C_human` | CONFIRMED |
@@ -200,7 +225,7 @@ Ordered by PC VA. 38 PC defs against 39 PS2 methods, forced 1:1 in every gap.
 | 0x005dc000 | `camera_set_look_to` | `SetLookTo__8G_CameraFRC8S_vectorP9I3D_frame` | CONFIRMED |
 | 0x005dc070 | `camera_set_sniper_fov` | `SetSniperFov__8G_CameraFf` | CONFIRMED |
 | 0x005dc0b0 | `camera_set_sniper_mode` | `SetSniperMode__8G_CameraFb` | CONFIRMED |
-| 0x005dc0f0 | `camera_get_race_camera_at` | - | PC-only (§7a) |
+| 0x005dc0f0 | `camera_get_race_camera_at` | - | PC-only (§6a) |
 | 0x005dc120 | `copy_range_stride_0x14` | - | shared STL helper, no owner |
 
 ### 4a. The static-init quartet (block A)
@@ -248,6 +273,7 @@ Every one is pinned by a statement that matches on both builds.
 | `0x006f9118` | `g_camera_prev_pos` | last frame's position |
 | `0x006f9128` | `g_camera_crouch_eye_drop` | eye height is `1.65 - this` |
 | `0x006f912c` | `g_camera_rot_in_act` | zeroed by `camera_begin_mode` case 0xd (head cam); no reader |
+| `0x006f9124` | `g_camera_swing_phase` | advanced by `camera_tick` (`+= dt·0.3`, wraps at 2.0); `camera_apply_desired_pos` tilts the up vector by `sin(phase·π) × camera+0x5c` |
 | `0x006f9130` | `g_camera_look_from_eyes` | the first-person request flag |
 | `0x006f9134` | `g_camera_eye_blend` | weights behind-pose against eye-pose |
 | `0x006f9138` / `0x006f913c` | `g_camera_dialog_look_from` / `_to` | the two speakers |
@@ -256,24 +282,24 @@ Every one is pinned by a statement that matches on both builds.
 | `0x006f8f1c` | `g_camera_car_prev_velocity` | `camera_tick` static `S_vector`, a copy of `C_car+0x1f7c` |
 | `0x006f8f28` | `g_camera_tick_static_dtor_guard` | bit 0 / bit 1 guard registering the atexit destructors of the two vectors above |
 | `0x006f8f34` | `g_camera_car_old_dir_y_mode_7_9` | modes 7/8/9: look-direction Y, smoothed through `g_camera_stability_factor` |
-| `0x006f8f30` | `g_camera_car_old_dir_y_mode_0xa` | mode 0xa: the same Y, copied unsmoothed |
+| `0x006f8f30` | `g_camera_car_old_dir_y_mode_0xa` | mode 0xa: the same Y, copied unsmoothed; the arm never runs (§3a) |
 | `0x006f8f2c` | `g_camera_car_old_dir_y_mode_0xb` | mode 0xb: smoothed like the mode 7/8/9 value |
-| `0x006f9158` | `g_camera_dir_yaw` | mode 2: integrates the filtered mouse X × `g_aiming_sensitivity_x`, wrapped to [0, 2π) |
-| `0x006f915c` | `g_camera_dir_pitch` | mode 2: pitch as a fraction of π, clamped to 0.01..0.99 |
+| `0x006f9158` | `g_camera_dir_yaw` | mode 2: integrates the filtered mouse X × `g_aiming_sensitivity_x`, wrapped to [0, 2π); the arm never runs (§3a) |
+| `0x006f915c` | `g_camera_dir_pitch` | mode 2: pitch as a fraction of π, clamped to 0.01..0.99; the arm never runs (§3a) |
 | `0x006f9150` | `g_camera_sniper_sway_phase_pitch` | mode 5: `+= dt·2.5`, wrapped; its sine is added to the view's vertical component |
 | `0x006f9154` | `g_camera_sniper_sway_phase_yaw` | mode 5: `+= dt·3.0`, wrapped; its sine offsets the eye horizontally |
-| `0x006f914c` | `g_camera_orbit_yaw` | mode 0x12: `+= dt·0.0002`, wrapped; the camera circles the target 2 m up |
+| `0x006f914c` | `g_camera_orbit_yaw` | mode 0x12: `+= dt·0.0002`, wrapped; the camera circles the target 2 m up; the arm never runs (§3a) |
 | `0x006724a4` / `0x006724a8` | `g_camera_last_onfoot_mode` / `_last_vehicle_mode` | the last on-foot / vehicle mode (§3) |
 
 `DAT_005d96f0` / `DAT_005d9700` are **not globals**: they are code inside `.text`, the atexit
 destructors of the two `camera_tick` static vectors, passed to `crt_atexit` by address under
-`g_camera_tick_static_dtor_guard`. The global still unnamed is listed in §9.
+`g_camera_tick_static_dtor_guard`.
 
 ---
 
-## 7. PC vs PS2
+## 6. PC vs PS2
 
-### 7a. The three PS2 methods with no PC counterpart
+### 6a. The three PS2 methods with no PC counterpart
 
 Each is a measurement, not a gap.
 
@@ -297,7 +323,7 @@ gutted per-class networking (19 of its 21 `NetDirect` bodies are 8-byte stubs), 
 accessor's single consumer is `net_session_partition_peers_by_relevance`. Here the PS2 method
 count is a **lower** bound.
 
-### 7b. Behaviour differences
+### 6b. Behaviour differences
 
 **The PC ships three more camera modes.** `camera_begin_mode` scans `g_camera_mode_table` to
 `0x006508d4`, i.e. **17** records of `0x44`; the PS2's `Begin` loops `while (iVar6 < 0xe)`, i.e.
@@ -322,7 +348,7 @@ pitch. None of that exists on the PS2.
 **The graphics interface.** PC `camera_tick` reads `g_engine`'s vtable slots `0xd0` and `0xd4` to
 fill the frame-time ring; the PS2 reads `igraph`'s `0xf0` and `0xf4` at the same statements.
 
-### 7c. Layout differences
+### 6c. Layout differences
 
 **Field-offset deltas.** `+0x10` mode is common. Above `+0x58` the PS2 runs `0x18` higher
 (`+0x58/+0x5c/+0x60/+0x64` ↔ `+0x70/+0x74/+0x78/+0x7c`), and above `+0x6c` it runs `0x14` higher
@@ -336,7 +362,7 @@ from another.
 
 **`G_CameraDialog`** is `0x14` bytes on the PC and `0x30` on the PS2.
 
-**Globals.** `0x006f9124` is PS2 `naklon` (twin CONFIRMED); `g_camera_tick_static_dtor_guard` is a
+**Globals.** `g_camera_swing_phase` is PS2 `naklon` (twin CONFIRMED); `g_camera_tick_static_dtor_guard` is a
 packed flag word (bits 0 and 1) where the PS2 keeps separate `init$NNNN` statics. The `camera_tick`
 statics are PS2 function-local statics of `Tick`, each matched by case label and statement:
 
@@ -351,20 +377,22 @@ statics are PS2 function-local statics of `Tick`, each matched by case label and
 | `g_camera_dir_yaw` | `cameraDirRot$2605` | 2π wrap |
 | `g_camera_dir_pitch` | `cameraDirUpDown$2608` | the same 0.01..0.99 clamp |
 
-### 7d. `ParheliaSetFov` and `S_auto_hide_machine`
+### 6d. `ParheliaSetFov` and `S_auto_hide_machine`
 
-**`ParheliaSetFov__17G_IndicatorsClassFP10I3D_cameraf`.** At both of its callsites inside this TU
-— `CumNaNe` and `SetSniperFov` — the PC calls the `I3D_camera`'s own FOV vtable slot `0x50`
-directly with the identical argument (π/4 = `0x3f490fdb` in the first). That is evidence toward
-`structs/hud.md`'s "7 PS2 methods not located" row, but a third PS2 callsite exists outside this
-TU and is not checked (§9), so it stays a measurement about these two sites and not a terminal
-tag.
+**`ParheliaSetFov__17G_IndicatorsClassFP10I3D_cameraf` — PS2-only.** It has three PS2 callsites,
+and at every one the PC calls the `I3D_camera`'s own FOV vtable slot `0x50` directly with the same
+argument: `CumNaNe` → `camera_lock_at_human_pair` (π/4 = `0x3f490fdb`), `SetSniperFov` →
+`camera_set_sniper_fov`, and `GM_Carcyclopedia::OnCreate` → `carcyclopedia_ctor`
+(π/3 = `0x3f860a92`). The PS2 wrapper adjusts the field of view and the aspect ratio for Matrox
+Parhelia multi-head output (`structs/hud.md` §4b); the PC has no such branch at any caller.
 
-**`Tick`'s `S_auto_hide_machine`.** PS2 `Tick` calls
-`Tick__19S_auto_hide_machineFUi(*(act_mission+0x20) + 0x1578, 100000)`. Nothing equivalent is
-located in `camera_tick`, and the class is not searched (§9).
+**`Tick`'s `S_auto_hide_machine` — PS2-only.** PS2 `Tick` calls
+`Tick__19S_auto_hide_machineFUi(*(act_mission+0x20) + 0x1578, 100000)`, a `C_game` member whose area
+data `C_mission::OpenBin` loads from `scene2.bin` chunk `0xae52`. The PC `mission_open_bin` has no
+case for chunk `0xae52` (its arms above `0xae50` are `0xaef0` and `0xaef1`), so the subsystem has no
+data path on the PC, and `camera_tick` calls nothing in its place.
 
-### 7e. What MSVC inlined that the PS2 calls out of line
+### 6e. What MSVC inlined that the PS2 calls out of line
 
 Marked in the decomp with `PS2-INLINED HERE` / `PS2 CALLS A REAL FUNCTION HERE` banners.
 
@@ -385,34 +413,21 @@ callers spread across the image. Naming any of them `camera_*` would be a false 
 
 ---
 
-## 8. Related
+## 7. Related
 
 - `structs/game.md` §2 — the `+0x4c` field and `game_get_camera`.
 - `structs/racecam.md` — `C_racecam`, whose `+0x70` record is the `G_RaceCamera`.
 - `structs/hud.md` — `g_hud_flags` and the `ParheliaSetFov` row.
 - `structs/input.md` — the action slots `0x12`/`0x13` the free-look path reads.
-- `basic/artifacts/racing.md` — why nothing constructs a `C_racing`.
+- `basic/artifacts/racing.md` — the racing mode; mission 6 is the retail path into `C_racing` (§3b).
+- `structs/carcyclopedia.md` — the screen that uses menu mode `0x18`.
 
 ---
 
-## 9. Open items
+## 8. Open items
 
-* `0x006f9124`: twin CONFIRMED (PS2 `naklon`), but the English noun is [M]: only ever consumed as
-  `sin(x·π) × swing_amount`, no writer located. CANDIDATE `g_camera_swing_phase`.
-* Modes `2`, `0xa` and `0x12` have `camera_tick` arms but no `g_camera_mode_table` record (§3a);
-  nothing found SETS them. Flag bit `0x8` of the records is not decoded.
-
-* The `S_auto_hide_machine` at `*(act_mission+0x20) + 0x1578` (§7d) has no PC counterpart located
-  and is not searched.
-* The third PS2 callsite of `ParheliaSetFov`, outside this TU (§7d), is not checked.
-* `camera_init_race_cameras`, `camera_add_race_camera` and `camera_remove_race_camera` are
-  unreachable in the retail build for the same reason: nothing constructs a `C_racing`
-  (`basic/artifacts/racing.md`). The remove side is ungated on both builds and runs against an
-  empty vector.
-* Mode `0x17` shares `camera_end_mode`'s teardown with the linked mode `0x11`, but nothing found
-  SETS it.
 * **In game:** the sniper scope is mode 5, and entering/leaving it flips two `g_hud_flags` bits
   (`0x20000` on entry, `0x20` on exit) — confirm the HUD really disappears under the scope and
   comes back.
-* **In game:** `camera_set_swing` arms a tilt driven by `sin(0x006f9124 · π)`. What triggers the
-  swing, and on which vehicles, is undecoded.
+* **In game:** `camera_set_swing` arms a tilt driven by `sin(g_camera_swing_phase · π)`. What
+  triggers the swing, and on which vehicles, is undecoded.

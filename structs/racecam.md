@@ -1,6 +1,6 @@
 # `C_racecam` — the race-track camera actor (kind `0x1c`)
 
-**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`racecam_`** (distinct from the `race_` prefix of `race_compare_position` and its
 siblings: the fifth character differs).
@@ -37,10 +37,14 @@ The class position is fixed by five independent measurements:
 | kind byte | the PC ctor writes `0x1c` at `+0x10`, matching `structs/entity.md` §1 (PS2 bridge in §4) |
 | body agreement | all eight methods agree statement for statement across builds |
 
-**In the retail PC build no `C_racecam` ever registers itself.** `racecam_game_init` gates the
-registration on `g_racing != 0`, and nothing in the shipped game constructs a `C_racing` (see
-`basic/artifacts/racing.md`). The actor still constructs, still loads from the scene chunk and
-still runs its lifecycle; it simply never reaches the camera manager.
+**In the retail PC build the race cameras run in mission 6.** `racecam_game_init` gates the
+registration on `g_racing != 0`. Mission 6 (MISE06-AUTODROM) builds `g_racing` through its
+`racing_mission6_init` script command, and its `scene2.bin` carries 26 `C_racecam` actors. Because
+`racecam_game_init` is the only caller of `camera_add_race_camera`, the cameras seen in game are
+these actors registering (`basic/artifacts/racing.md` §8a, `structs/camera.md` §3b). **Confirmed in game:**
+after the race finishes, the player watches the other racers from these trackside cameras. In every
+other mission `g_racing` stays NULL; an actor there still constructs, loads and runs its lifecycle,
+and never reaches the camera manager.
 
 ## 2. Instance layout
 
@@ -51,7 +55,7 @@ typedef struct C_racecam {           /* extends C_actor */
     /* +0x00 */ void      *vtable;   // [H] 0x0063cb00, 39 slots
     /* +0x10 */ uint32_t   kind;     // [H] 0x1c
     /* ...  */                       //     C_actor base
-    /* +0x65 */ uint8_t    active;   // [H] set to 1 by racecam_game_init
+    /* +0x65 */ uint8_t    save_excluded; // [H] C_actor field; racecam_game_init sets 1
     /* +0x68 */ I3D_frame *own_frame;// [H] C_actor's frame
 
     /* ── G_RaceCamera, 0x18 bytes — the whole of C_racecam's own state ── */
@@ -59,8 +63,8 @@ typedef struct C_racecam {           /* extends C_actor */
     /* +0x74 */ float      param_a;  // [M] designer default 70.0f
     /* +0x78 */ float      param_b;  // [M] designer default 70.0f
     /* +0x7c */ float      weight;   // [M] designer default 1.0f
-    /* +0x80 */ uint32_t   runtime_a;// [U] zeroed by ctor path + GameInit
-    /* +0x84 */ uint32_t   runtime_b;// [U] zeroed by ctor path + GameInit
+    /* +0x80 */ int32_t    gate_a;   // [H] index of the gate before the camera; -1 at the lap wrap
+    /* +0x84 */ int32_t    gate_b;   // [H] index of the gate after the camera; 0 at the lap wrap
 } C_racecam;
 ```
 
@@ -77,16 +81,21 @@ states the parameter type outright.
 |---|---|---|---|---|---|
 | `+0x70` | camera frame | H | `racecam_init`, `racecam_load_data`, `racecam_game_init`, `racecam_duplicate_from` | `camera_add_race_camera`, `camera_remove_race_camera` | seeded from the actor's frame `+0x68`; re-bound after load ¹ |
 | `+0x74` | designer float A | M | `racecam_init` (70.0f), `racecam_load_data`, `racecam_duplicate_from` | - | no reader inside the class; consumed by `G_Camera` |
-| `+0x78` | designer float B | M | same | - | same value, same writers; FOV vs activation distance is [U] |
-| `+0x7c` | weight | M | `racecam_init` (1.0f), `racecam_load_data`, `racecam_duplicate_from` | - | named for its 1.0f default and position; role not proven |
-| `+0x80` | runtime A | U | `racecam_init` (0), `racecam_game_init` (0), `racecam_load_data`, `racecam_duplicate_from` | - | cleared on every activation ⇒ runtime state |
-| `+0x84` | runtime B | U | same | - | same |
+| `+0x78` | designer float B | M | same | - | same value, same writers (§5) |
+| `+0x7c` | weight | M | `racecam_init` (1.0f), `racecam_load_data`, `racecam_duplicate_from` | - | named for its 1.0f default and position (§5) |
+| `+0x80` | gate A | H | `racecam_init` (0), `racecam_game_init` (0), `racecam_load_data`, `racecam_duplicate_from`, `camera_init_race_cameras` | - | ² |
+| `+0x84` | gate B | H | same | - | ² |
 
 ¹ `racecam_load_data` re-binds the frame after reading, because a serialized pointer is stale by
 construction.
 
-Three of the six fields have no located reader on either build; they are read inside `G_Camera`
-(§5).
+² `camera_init_race_cameras`, called from `racing_game_init`, walks the registered records, finds
+the `C_circuit` race-camera node (`+0xcc` vector) nearest to each camera frame, and stores the index
+(`gate+0x1c`) of that node's two gates here — the lower-indexed gate first, as
+`circuit_determine_race_cams` ordered them. When the first gate is gate 0 and the second is the
+last gate, the pair is written as `-1` / `0` instead, so the camera straddles the start/finish line.
+
+The three floats have no located reader on either build; they are read inside `G_Camera` (§5).
 
 ## 3. Method coverage
 
@@ -125,7 +134,7 @@ documents as the `G_Camera` sub-object.
 
 * **Kind bridge:** `__ct__9C_racecamFv` writes `0x1c` at PS2 `+0x50`, the same value the PC ctor
   writes at `+0x10`.
-* **Field delta:** a uniform `+0x10` inside the class band — `active` PC `+0x65` ↔ PS2 `+0x69`,
+* **Field delta:** a uniform `+0x10` inside the class band — `save_excluded` PC `+0x65` ↔ PS2 `+0x69`,
   `own_frame` `+0x68` ↔ `+0x70`, the `G_RaceCamera` record `+0x70..+0x84` ↔ `+0x80..+0x94`.
 * **Receiver path:** PS2 reaches the `G_Camera` object as `*(act_mission+0x20)+0x70`.
 
@@ -133,7 +142,6 @@ documents as the `G_Camera` sub-object.
 
 | item | state |
 |---|---|
-| the two 70.0f floats and the 1.0f weight | designer defaults with no reader inside this class on either build; consumed by `G_Camera`, of whose 39 methods only 6 are mapped |
-| `+0x80` / `+0x84` | cleared on every activation, so runtime state, but nothing located writes them a non-zero value; same answer: `G_Camera` |
-| what a race camera looks like in game | unobservable in retail, because no `C_racing` is ever constructed; the racing mod makes it reachable (`basic/artifacts/racing.md` §7), and one modded race with the cameras placed would settle the FOV-vs-distance question |
+| the two 70.0f floats and the 1.0f weight | designer defaults with no reader inside this class on either build; consumed by `G_Camera`, whose reader of the record is not traced |
+| field of view against activation distance | which of the two 70.0f floats is which; the mission 6 cameras are the observable case (§1) |
 | the scene side | `circuit_load_gates_from_scene` finds race-camera nodes by testing bit `0x8` of a web-path node's flag word, starting from node id `0x27c`; which scene authoring tool sets that bit, and what the node's sub-type `2` means, are not traced |

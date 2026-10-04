@@ -1,22 +1,22 @@
 # `C_console` — the on-screen text console
 
-**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-09-27 17:33 +0200
+**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-10-01 10:30 +0200
 
 | | |
 |---|---|
 | PC prefix | **`console_`** (with the extensions `console_registry_` and `console_unused_vector_`) |
 | PC translation unit | `[0x005d3a60, 0x005d4640)` — 15 functions, all named |
 | Class size | `0x3c` bytes |
-| PS2 symbols | 8, all accounted for; 5 body-diffed CONFIRMED twins (§4, §5) |
+| PS2 symbols | 13 — 8 `C_console` methods + 5 free functions; 10 CONFIRMED twins, 3 methods with no PC function (§4, §5) |
 
 A 0x3c-byte scrolling text buffer with five methods, plus a global registry of live
 instances, a shared bitmap font and a 1000-vertex quad batch.
 
-> 🔴 **The console is not reachable in the retail build.** No input is bound to it; per the
-> user it is exposed by the separate `MafiaCon.exe` launcher, which starts the game in place of
-> `Game.exe`. That is consistent with the measurement: an image-wide `mov ecx, <console>` scan
-> finds only `console_clear`, `console_tick`, `console_register` and `console_unregister` —
-> **nothing in `Game.exe` ever writes a console LINE.**
+> 🔴 **No console line is ever written in the retail build.** The two global instances and the
+> network session's registered one (§3a) are drawn every frame, but they stay empty: an
+> image-wide `mov ecx, <console>` scan finds only `console_clear`, `console_tick`,
+> `console_register` and `console_unregister`, no code touches either global's line vector, and
+> the PC has no `OutText` / `Sprintf` (§5). No input is bound to a console.
 
 > ⚠️ Not to be confused with the HUD's own message console (`hud_console_push_message`), which is
 > a different class in a different translation unit, nor with `G_ConsoleControls`, where
@@ -56,7 +56,7 @@ typedef struct S_console_line {   /* 0x1c bytes */
 /* +0x04 */ int   r;              // -1 => use the console's default
 /* +0x08 */ int   g;              // -1 => default
 /* +0x0c */ int   b;              // -1 => default
-/* +0x10 */ int   group;          // line group id (§7)
+/* +0x10 */ int   group;          // line group id; no PC code reads or writes it (§5)
 /* +0x14 */ float x_override;     // > 0.0 => use instead of the console's x
 /* +0x18 */ float y_override;
 } S_console_line;
@@ -91,7 +91,7 @@ the otherwise unattributable object at `0x006efde0` inside it:
 | `0x006f8ef8` | `0x10` | `g_console_registry` (+ begin/end/cap) |
 | `0x006f8f08` | `4` | `g_console_font_texture` |
 | `0x006f9160` | `0x78` | `g_console_overlay` + `g_console_log` (`0x006f919c`) — two separate objects (§3) |
-| `0x00650410` | `4` | `g_console_enabled` — **shipped as 1**, no writer |
+| `0x00650410` | `4` | `g_console_enabled` — **shipped as 1**, one reader (`console_render_all`), no writer |
 
 Two of those sizes fall out of the code rather than out of the addresses, and they agree
 with the addresses exactly:
@@ -171,9 +171,9 @@ registered: `console_register` has exactly one callsite in `net_session_ctor` an
 | 0x005d4650 | `console_unused_vector_static_ctor` | - | - | STRUCTURAL | zero the unused vector |
 | 0x005d4670 | `console_unused_vector_register_atexit_dtor` | - | - | STRUCTURAL | - |
 | 0x005d4680 | `console_unused_vector_static_dtor` | - | - | STRUCTURAL | free the unused vector |
-| - | - | `Sprintf__9C_consoleFiPCce` | 0x002745b0 | **not located** | see §5 |
-| - | - | `OutText__9C_consoleFPciiii` | 0x00274660 | **not located** | see §5 |
-| - | - | `RenderIndicators__9C_consoleFv` | 0x002749b0 | **not located** | see §5 |
+| - | - | `Sprintf__9C_consoleFiPCce` | 0x002745b0 | **PS2-only** | see §5 |
+| - | - | `OutText__9C_consoleFPciiii` | 0x00274660 | **PS2-only** | see §5 |
+| - | - | `RenderIndicators__9C_consoleFv` | 0x002749b0 | **PS2-only** | see §5 |
 
 `console_registry_` and `console_unused_vector_` are proper EXTENSIONS of the `console_` class
 prefix — the same shape as `particle_effect_pool_` extending `particle_` — so the eight CRT
@@ -199,11 +199,11 @@ expression as the PC's, and part of the shared evidence for `console_render`.
 `g_console_registry` = PS2 `0x004e4e80`, `g_console_font_texture` = `fonty`, `g_console_enabled`
 = `_is_on_`.
 
-**Free functions.** Five of the eight PS2 console symbols are free functions with an empty class
+**Free functions.** Five of the thirteen PS2 console symbols are free functions with an empty class
 column (`ConsoleReg`, `ConsoleUnReg`, `ConsoleRender`, `ConsolesInit`, `ConsolesDone`), so a
 search by class misses them; a search of the raw symbol names for `Console` finds all five.
 
-**Three PS2 methods have no located PC function.**
+**Three PS2 methods have no PC function.**
 
 * `RenderIndicators__9C_consoleFv` (568 B) — measured cause: PS2 `ConsoleRender__Fv` tests the
   registry record's flags a third time and dispatches `flags & 4` to `RenderIndicators` instead
@@ -211,10 +211,14 @@ search by class misses them; a search of the raw symbol names for `Console` find
   `OutText__17G_IndicatorsClass`. **The PC dispatcher has no flag-4 branch at all**, so no PC
   code path could reach a PC `RenderIndicators`. An inline banner sits at that exact statement
   in `console_render_all`.
-* `Sprintf__9C_consoleFiPCce` (168 B) and `OutText__9C_consoleFPciiii` (328 B) — all 15 defs of
-  the PC TU were read and neither is among them, and the image-wide `mov ecx, <console>` scan
-  shows nothing writes a console line through an immediate receiver. With the console
-  unreachable in retail, `/OPT:REF` stripping is at least as likely as inlining (§7).
+* `Sprintf__9C_consoleFiPCce` (168 B) and `OutText__9C_consoleFPciiii` (328 B) are **not in the
+  PC image** — dropped as unreferenced, not inlined. Three measurements close it: the TU's 15
+  defs tile `[0x005d3a60, 0x005d4690)` with no gap longer than 8 bytes; no code touches the line
+  vector (`+0x04`..`+0x0c`) of `g_console_overlay` or `g_console_log`; and the image's only
+  0x1c-stride vector insert, `std_vector1c_insert_n`, has three callers —
+  `car_load_particle_effects`, `vehicle_init` and `game_add_frame_for_shadow` — none of them
+  console code. Without `OutText`, the replace-last-line rule on `S_console_line.group` has no
+  PC code, and no PC function reads or writes that field.
 
 **Two PC functions have no PS2 counterpart to look for.** `console_load_font` is the out-of-line
 body of the `ConsolesInit` forwarder — both builds carry the same forwarder-plus-body pair, and
@@ -227,6 +231,14 @@ third, so there is no PS2 symbol to name its element type from.
 `Sprintf` calls printing the mission name and the player's world position.
 `MessageBoxGraph__FPcPcPcPcPc` emits seven more. The PC `game_tick` calls `console_tick`
 at exactly the same position and then stops; an inline banner records that.
+
+**`MessageBoxGraph__FPcPcPcPcPc` is PS2-only.** It is a modal on-screen error box: a stack
+`C_console`, up to five caller lines, then `"Press any key to continue..."`, rendered until a key
+is pressed. Its two PS2 callers are `C_cache_base_block::Open` (`"Chybi model"`, "model
+missing") and `GM_Menu::CreateCompsByDef` (`"Nenasel menu:"`, "menu not found"). The PC
+`cache_base_block_open` reports the same missing model through Win32 `MessageBoxA` with the
+caption `"Chybi model"`, `gui_menu_build_components_from_design` has no not-found branch, and
+neither `"Nenasel menu:"` nor `"Press any key to continue..."` occurs in `Game.exe`.
 
 ## 6. `g_console_unused_vector` — constructed, destroyed, never used
 
@@ -251,12 +263,7 @@ and the three pointers are `g_console_unused_vector_begin` / `_end` / `_cap`, th
 
 | item | state |
 |---|---|
-| what `MafiaCon.exe` patches to make the console reachable | the repo ships it (`mods/Editors/Editors/Mafia Console/MafiaCon.exe`, plus an x64 update and two archives under `programs/`); a diff against `Game.exe` would show whether `OutText`/`Sprintf` were stripped or inlined, and what input it binds |
-| `Sprintf` / `OutText` on PC | alternatively settled by a byte scan of `.text` for the `strlen` + `operator new[]` + insert shape |
-| `S_console_line.group` (`+0x10`) | no PC writer exists to confirm the PC keeps the PS2 replace-last-line behaviour |
-| `g_console_enabled` | no writer, 1 in the shipped image; whether anything was meant to clear it is unknown |
-| `MessageBoxGraph__FPcPcPcPcPc` | PS2 free function, 652 B, seven console writes; no PC counterpart searched for |
-| in game (needs MafiaCon) | the two consoles should be distinguishable — a pale-green block mid-screen that vanishes every frame, and a white log at the bottom that grows upward and holds each line for ten seconds |
+| in game | nothing in the retail build writes a console line (§5), so the consoles show nothing without added code that writes one; §3a fixes what they would show — a pale-green block mid-screen that clears every frame, and a white log at the bottom that grows upward and holds each line for ten seconds |
 
 **Related:** [input.md](input.md) (the previous TU) · [hud.md](hud.md) (the *other*
 console — `hud_console_push_message`) · [net_session.md](net_session.md) (two more

@@ -1,6 +1,6 @@
 # `C_clock` — the working clock actor (PC prefix `clock_`)
 
-**Created** 2026-08-12 20:08 +0200 · **Modified** 2026-09-17 13:45 +0200
+**Created** 2026-08-12 20:08 +0200 · **Modified** 2026-10-01 08:59 +0200
 
 | | |
 |---|---|
@@ -29,14 +29,16 @@ Position is over-determined:
 |---|---|
 | PC `.rdata` vtable order | `0x0063be18` (`C_cartridge`) → **`0x0063beb8`** → `0x0063bf68` (`C_crash_obj`) |
 | link order by source file | `C_cartridge.cpp` → **`c_clock.cpp`** → `C_crash_obj.cpp` (the sort is case-insensitive) |
-| kind byte | PC ctor writes `0x22` at `+0x10`; `__ct__7C_clockFv` writes `0x22` at PS2 `+0x50` |
+| kind byte | PC ctor writes `0x22` at `+0x10` |
 | the entity factory | `case 0x22: operator_new(0x88)` — and the class's last field ends at exactly `0x88` |
-| body agreement | `Init`, `GameInit` and `AI` are statement-for-statement identical across builds |
+
+The PS2 constructor and the three twinned bodies agree as well (§5f).
 
 ## 2. The shipped assets are the label
 
-`clock_init` resolves three child frames **by name**: `Mala`, `Velka`, `Sekundova` — Czech
-*malá / velká / sekundová ručička* = **hour / minute / second hand**.
+`clock_init` resolves three child frames **by name**: `Mala`, `Velka`, `Sekundova` — the
+**hour / minute / second hand**. The three literals are
+`s_clock_hand_hour`, `s_clock_hand_minute` and `s_clock_hand_second`.
 
 A census of all **3219** shipped models finds exactly three files carrying those frame names:
 
@@ -45,6 +47,18 @@ A census of all **3219** shipped models finds exactly three files carrying those
 | `9hodinky.4ds` (*hodinky* = watch) | ✔ | ✔ | ✔ |
 | `xhodiny 4.4ds` (*hodiny* = clock) | ✔ | ✔ | - |
 | `rucky.4ds` (*ručky* = clock hands) | ✔ | ✔ | - |
+
+**Where clocks are placed.** A walk of the object definitions of all 79 shipped `scene2.bin`
+files finds four of kind `0x22`, and no other code creates one:
+
+| scene | frame | model |
+|---|---|---|
+| `00MENU` | `9hodinky` | `9hodinky.i3d` — the watch in the main-menu scene |
+| `MISE19-BANKA` | `xhodiny 1` | `xhodiny 4.i3d` |
+| `MISE19-BANKA` | `xhodiny 1954` | `xhodiny 4.i3d` |
+| `MISE19-BANKA` | `xhodiny 5442` | `xhodiny 4.i3d` |
+
+No scene places a `rucky` clock.
 
 The census **explains the code's shape**. `clock_init` returns success on `Mala && Velka` alone, and
 both `clock_game_init` and `clock_ai_tick` wrap every second-hand operation in `if (+0x78 != 0)`,
@@ -77,7 +91,8 @@ which is **60 seconds**. There is no 24-hour dial anywhere in this game.
 struct C_clock /* : C_actor, 0x88 bytes */ {
     /* +0x00 */ void      *vtable;         // 0x0063beb8
     /* +0x10 */ uint32_t   kind;           // 0x22
-    /* +0x65 */ char       active;         // [H] raised by clock_game_init
+    /* +0x65 */ char       save_excluded;  // [H] C_actor field, raised by clock_game_init:
+                                       //     the savegame skips the clock (actor.md)
     /* +0x68 */ I3D_frame *frame;          // [H] C_actor's own frame — the lookup root
     /* +0x70 */ I3D_frame *hand_hour;      // [H] child frame "Mala"       — REQUIRED
     /* +0x74 */ I3D_frame *hand_minute;    // [H] child frame "Velka"      — REQUIRED
@@ -90,13 +105,12 @@ struct C_clock /* : C_actor, 0x88 bytes */ {
 };
 ```
 
-Every field is `[H]`: each one is written and read by a body that agrees statement-for-statement
-with its PS2 twin (§5c).
+Every field is `[H]` (§5f).
 
 ## 4. Behaviour — the arithmetic, and one defect
 
 **`clock_game_init`** (vtable slot 25) zeroes `+0x80`, `+0x84`, `+0x7c` (in that order), chains
-`actor_game_init`, raises `+0x65`, then calls the Win32 **`GetLocalTime`** and converts the real
+`actor_game_init`, raises `+0x65` (the `C_actor` save-exclusion byte), then calls the Win32 **`GetLocalTime`** and converts the real
 time of day into radians:
 
 ```
@@ -121,7 +135,7 @@ hand_second <- pi - ms_accum * 2*pi/60000              // every tick; one revolu
                                                       // = the sub-dial of §2a
 ```
 
-### 4a. The hour hand's per-hour step is half the 12-hour dial's — identical on both builds
+### 4a. The hour hand's per-hour step is half the 12-hour dial's
 
 On a 12-hour dial the hour hand must travel **30° per hour**. The two halves of this class disagree
 about that:
@@ -141,7 +155,7 @@ behaviour is precise:
   so the hour hand **jumps 15° backwards** and is 15° behind from then on. After *n* whole hours in
   the same scene it lags `n × 15°`.
 
-**This is original behaviour, not a PC artifact** — both builds make the same decision (§5d).
+**This is original behaviour, not a PC artifact** (§5d).
 
 **Why it ships unnoticed:** `ms_accum` counts **real** milliseconds and `clock_game_init` re-seeds
 from `GetLocalTime` on **every scene load**. The error is therefore exactly **zero for the first
@@ -197,7 +211,7 @@ agreement can be asserted for half of a fused method.
 |---|---|---|---|---|
 | `+0x00` vtable | `+0x78` | | `+0x74` minute-hand frame | `+0x84` |
 | `+0x10` kind | `+0x50` | | `+0x78` second-hand frame | `+0x88` |
-| `+0x65` active | `+0x69` | | `+0x7c` ms accumulator | `+0x8c` |
+| `+0x65` save_excluded | `+0x69` | | `+0x7c` ms accumulator | `+0x8c` |
 | `+0x68` actor frame | `+0x70` | | `+0x80` hour angle | `+0x90` |
 | `+0x70` hour-hand frame | `+0x80` | | `+0x84` minute angle | `+0x94` |
 
@@ -228,10 +242,18 @@ The §4a defect is on both builds: PS2 `GameInit__7C_clockFv` uses the same `<<1
 The by-name child lookup is called through the actor frame's vtable: **PC `+0x38`**, PS2 `+0x50`.
 Same call, same `(name, 1)` arguments, same three-in-a-row usage.
 
+### 5f. Cross-build levers behind §1 and §3
+
+| lever | result |
+|---|---|
+| kind byte | `__ct__7C_clockFv` writes `0x22` at PS2 `+0x50`, where the PC ctor writes it at `+0x10` |
+| body agreement | `Init`, `GameInit` and `AI` are statement-for-statement identical across builds |
+
+Every §3 field is `[H]` because each one is written and read by a body that agrees
+statement-for-statement with its PS2 twin (§5c).
+
 ## 6. Open items
 
 | item | state |
 |---|---|
 | the §4a hour-hand lag in game | untested: stay in one scene for more than an hour of real time near a clock — after the first hour boundary the hour hand should sit 15° behind, and 30° after two |
-| string-global names | inconsistent: `s_clock_hand_hour` (`0x0064b8c0`) sits beside Ghidra's own `s_Velka_0064b8b8` and `s_Sekundova_0064b8ac` |
-| where clocks are placed | nothing beyond the generic entity factory creates a `C_clock`; which missions instantiate the three models is unmapped |

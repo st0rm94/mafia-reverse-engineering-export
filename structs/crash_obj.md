@@ -1,6 +1,6 @@
 # `C_crash_obj` — the breakable scene prop (kind `0x1a`)
 
-**Created** 2026-08-13 00:24 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-08-13 00:24 +0200 · **Modified** 2026-10-01 10:31 +0200
 
 PC prefix **`crash_obj_`**.
 
@@ -65,8 +65,8 @@ the tag is irrelevant**. This is the class's entire configuration surface; there
 | `M<f>` | mass scale → `+0x3b8`; divides the spawn impulse |
 | `N<i>` | surface material id → `+0x3e1`, the byte `crash_obj_get_material_id` returns |
 | `L<i>` | particle id → `+0x3e0`, and `flags \|= 0x80` (emit a dust particle on death) |
-| `I<i>` | `+0x308` — **[U]** |
-| `T<i>` | `+0x338`, stored as a bool — **[U]** |
+| `I<i>` | `+0x308` — the `C_PhThing` impact-sound column (`structs/physical_object.md` §4b) |
+| `T<i>` | `+0x338`, stored as a bool — the impact sound may restart while still playing (`structs/physical_object.md` §4b) |
 
 A second, separate tag grammar is read by `crash_obj_parse_model_swap_tag` from the same
 string: a `.` anywhere in it means the model name already carries its extension (so the
@@ -82,8 +82,8 @@ The `+0x3b0` band is `C_PhThing`'s; only the fields this class writes are listed
 ```c
 typedef struct C_crash_obj {          /* 0x3e4 bytes */
     /* +0x000 */ C_PhThing base;      // [H] kind 0x1a at +0x10, frame at +0x68
-    /* +0x308 */ int    tag_I;        // [U] the `I<i>` tag value
-    /* +0x338 */ bool   tag_T;        // [U] the `T<i>` tag value, as a bool
+    /* +0x308 */ int    impact_sound_column;  // [H] C_PhThing field, set by the `I<i>` tag
+    /* +0x338 */ bool   impact_sound_restart; // [H] C_PhThing field, set by the `T<i>` tag
     /* +0x3b0 */ uint   flags;        // [H] tag bits (above) + 0x8000 "destroy me"
     /* +0x3b4 */ float  health;       // [H] every impact subtracts the impulse; <0 = break
     /* +0x3b8 */ float  mass_scale;   // [H] divides the spawn impulse; tag default 10.0f
@@ -102,6 +102,8 @@ typedef struct C_crash_obj {          /* 0x3e4 bytes */
 
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
+| `+0x308` | `impact_sound_column` | H | `crash_obj_init` | `physical_object_update` | a `C_PhThing` field; −1 = no impact sound (`structs/physical_object.md` §4b) |
+| `+0x338` | `impact_sound_restart` | H | `crash_obj_init` | `physical_object_update` | a `C_PhThing` field (`structs/physical_object.md` §4b) |
 | `+0x3b0` | `flags` | H | `crash_obj_init`, `crash_obj_destroy_outermost` (bit `0x8000`) | `crash_obj_ai`, `crash_obj_on_collision`, `crash_obj_hit`, `crash_obj_set_model_file_name` | bit `0x01` = has health; `0x8000` = destroy me |
 | `+0x3b4` | `health` | H | `crash_obj_init`, `crash_obj_on_collision`, `crash_obj_hit` | `crash_obj_ai` | goes negative → the break-up ladder fires |
 | `+0x3b8` | `mass_scale` | H | `crash_obj_init` | `crash_obj_create_actor` | `1/mass_scale` scales the spawn impulse |
@@ -110,8 +112,6 @@ typedef struct C_crash_obj {          /* 0x3e4 bytes */
 | `+0x3e0` | `particle_id` | H | `crash_obj_init` | `crash_obj_ai` | passed to `particle_manager_create_particle` |
 | `+0x3e1` | `material_id` | H | `crash_obj_init` | `crash_obj_get_material_id` | vtable slot 32 |
 | `+0x3e2` | `solver_enabled` | H | `crash_obj_ctor`, `crash_obj_init` | `crash_obj_on_collision`, `crash_obj_hit` | `Z` tag clears it |
-| `+0x308` | `tag_I` | U | `crash_obj_init` | - | no located reader |
-| `+0x338` | `tag_T` | U | `crash_obj_init` | - | no located reader |
 
 ## 4. The break-up ladder (`crash_obj_ai`)
 
@@ -202,9 +202,3 @@ the player.
 
 `structs/physical_object.md` (the base) · `structs/entity.md` §1 (the kind enum) ·
 `structs/detector.md` (the next TU) · `structs/debris.md` · `structs/glass_shatter.md`.
-
-## 9. Open items
-
-| item | state |
-|---|---|
-| `+0x308` / `+0x338` | written by the `I` and `T` tags, no located reader on either build |

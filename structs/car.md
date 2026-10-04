@@ -1,6 +1,6 @@
 # `C_car` — the car entity
 
-**Created** 2026-07-23 10:48 +0200 · **Modified** 2026-09-24 21:19 +0200
+**Created** 2026-07-23 10:48 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 **Subject:** the **PC** `Game.exe` class the reconstruction calls `car_*`. The car ENTITY: it owns
 the physics/drivetrain sub-object `C_Vehicle` (`structs/vehicle.md`) embedded at **`car+0x70`**,
@@ -32,22 +32,25 @@ PC offsets, off the `C_car` base. PS2-equivalent offsets are in §6, not here.
 |---|---|---|---|
 | +0x10 | entity kind (= **4** for a car) | H | standard entity kind (`structs/entity.md` §1) |
 | +0x70 | embedded `C_Vehicle` (physics/drivetrain) | H | `lea ecx,[car+0x70]` at the `vehicle_set_engine_on` / `vehicle_get_engine_rpm` callsites |
-| +0x294 | flags — bit 25 (`0x2000000`) gates the drawbridge exit-block | H | `human_find_blocking_drawbridge` reads `(car+0x294 >> 0x19 & 1)`; a magic bit shared across builds (§6) |
-| +0xd90 / +0xd94 | **per-seat array #2** begin / end (stride `0x24`) — parallel to `+0x210c`, same index space | H | `vehicle_get_seat_count` (`0x00425460`) returns `(end − begin)/0x24` ¹ |
+| +0x294 | the `C_Vehicle` master flag word (`C_Vehicle+0x224`, `structs/vehicle.md` §1). Bit 25 (`0x2000000`) = **the last physics step made a contact whose collision record carries flag `0x10000`** | H | `vehicle_update_visuals` sets `0x2000001` when `C_Vehicle+0x28` is set and clears bit 25 otherwise; `+0x28` is raised by `vehicle_wheel_contact_solve` and `vehicle_body_coll_resolve` on such a contact. Readers: `human_find_blocking_drawbridge` (`car+0x294 >> 0x19 & 1`, the drawbridge exit-block) and two arms of `vehicle_wheel_contact_solve` |
+| +0x634 | **engine revs per second** = `C_Vehicle+0x5c4` | H | written by the drivetrain (`vehicle_update_motor_revs`) and, on a remote car, by `car_recompute_velocity` from the received 16-bit value × `+0x1f88`; `vehicle_get_engine_rpm` returns it × 60 while the engine runs; `car_extended_update` builds its rev fraction from it (`structs/vehicle.md` §1) |
+| +0x6d8 | **idle revs per second** = `C_Vehicle+0x668` | H | `vehicle_apply_carinit_params` sets it from the CARINIT `idling rpm` ÷ 60 (`def-files-docs/vehicles-bin.md`); the drivetrain and `vehicle_update_strips` measure the revs above it |
+| +0xd18 | **engine running** (byte) = `C_Vehicle+0xca8` | H | `vehicle_set_engine_on` writes it; `car_recompute_velocity` sets it on a remote car while the received revs are at least 1 per second. Read by `car_update` (four times, the steady-vibration force-feedback effect among them), `car_extended_update`, `player_ai_drive`, `player_do_action_button_in_car` and `traffic_car_take_over_cruising_car` |
+| +0xd90 / +0xd94 | **door/window record array** begin / end (stride `0x24`) = `C_Vehicle+0xd20` — parallel to `+0x210c`, same index space | H | `vehicle_get_seat_count` (`0x00425460`) returns `(end − begin)/0x24` ¹ |
 | +0x1ac | under-pursuit flag | H | pursuit dispatch 1 / remove 0 (§1a) |
 | +0x1f7c..+0x1f84 | velocity vec3 (vehicle-space) | H | `car_recompute_velocity` writes it, `car_get_actor_speed` copies it out; the wheel-contact proximity helpers use it |
-| +0x1f88 | max engine revs/sec | H | the HUD normalises RPM as `vehicle_get_engine_rpm / (car+0x1f88 * 60)` (`basic/artifacts/hud_elements.md` §6b) |
+| +0x1f88 | max engine revs/sec = `C_Vehicle+0x1f18` | H | `vehicle_apply_carinit_params` sets it from the CARINIT `maximum rpm` ÷ 60; the HUD normalises RPM as `vehicle_get_engine_rpm / (car+0x1f88 * 60)` (`basic/artifacts/hud_elements.md` §6b) |
 | +0x1f8c | fuel-tank capacity | H | denominator of the HUD fuel-needle ratio |
-| +0x1ff4.. | 6-field CARINIT scratch block | H | `car_set_model_level` copies 6 dwords here from the level record `+0x1124` |
-| +0x2004 | saved and restored across a level switch | M | `car_set_model_level` preserves it around the copy |
+| +0x1ff4.. | 6-field CARINIT scratch block | H | `car_set_model_level` copies 6 dwords here from the level record `+0x1124`; `+0x1ffc` is the maximum of damage pool 2 (§1b) |
+| +0x2004 | **damage pool 2, current value** | H | `car_hit` and `car_on_collision_apply_damage` subtract damage from it and clamp at 0; `car_get_condition_fraction` channel 2 reads it against `+0x1ffc`; `car_set_model_level` preserves it around the block copy, so a boost swap keeps the damage; `car_init`, `car_game_init`, `car_reset` and `car_explosion` write it |
 | +0x2020 | derived power/mass ratio | H | `car_set_model_level` writes `(+0x660·+0x564)/(+0x6e0·+0x69c)` |
-| +0x2036 | **stopped-for-arrest flag** (byte) | H | written `1` by `police_action_tick` and `police_action_dispatch_officer_commands` at the moment a stopped chase car's crew is ordered out (event `0xf`) and the squad enters its on-foot arrest phase |
+| +0x2036 | **must-steal flag** (byte) — the lock must be forced before the car can be entered | H | setter `car_set_must_steal` (script `car_muststeal`, dispatcher case `0xc5`). Also written `1` by `traffic_car_activate_elements` and by `police_action_tick` / `police_action_dispatch_officer_commands` when a stopped chase car's crew is ordered out (event `0xf`); cleared by `human_movement` and `human_do_throw_occupant_from_car`; saved by `car_save_game_save`. Read three times by `player_do_action_button_on_foot`, which takes its ordinary enter-car path only while the flag is 0 |
 | +0x2038 | chase-flag word (`0xC00`) | H | pursuit dispatch / remove (§1a) |
 | +0x2044 | **is-police-car flag** | H | task seed; read by the police-car sighting/assault path. `police_action_tick` **clears** it just before handing the car to `traffic_car_adopt_car_with_new_driver`, so a released chase car stops being a police car |
 | +0x209c | player-driving flag | H | `car_set_owner` sets it when the player takes the driver seat; `car_refresh_player_is_driver_flag` refreshes it |
 | +0x20b8 | **condition channel selector** | H | §1b |
 | +0x20bc | **automatic-headlight suppress** (byte) | H | `car_set_auto_headlights_suppressed` writes it; `car_update`'s automatic headlight block runs only while it is 0. Script command `carlight_main` sets it when it forces the lights off, so the per-frame night-time re-enable cannot undo it |
-| +0x20bd | a SECOND, different light-related byte | U | read by `car_deactivate` together with `C_game+0x2d44` before clearing the `0x0ff00000` override bits. Not the same field as `+0x20bc` |
+| +0x20bd | **is-traffic-car flag** (byte) | H | written only by `car_ctor`, `car_set_is_traffic_car` and `car_save_game_load`. The ambient-traffic gate `car_ai_tick` reads; `car_deactivate` clears a traffic car's script light overrides (`0x0ff00000`) when `C_game+0x2d44` says day. Not the same field as `+0x20bc` |
 | +0x20c / +0x3f8 | **light-state flag word** / the `C_Vehicle` wake-up callback slot the light setters invoke | H | ² |
 | +0x20ec | **current model level** (CARINIT level index) | H | `car_get_model_level` returns it, `car_set_model_level` writes it ³ |
 | +0x20f4 / +0x20f8 | model-level table begin / end (stride `0x113c`) | H | `car_get_model_level_count` = `(+0x20f8 − +0x20f4)/0x113c`; these are the `vehicles.bin` boost levels (`police-system/artifacts/boosting.md`) |
@@ -58,10 +61,11 @@ PC offsets, off the `C_car` base. PS2-equivalent offsets are in §6, not here.
 
 ¹ Three consumers feed that index straight into `car_get_owner`:
 `ai_fight_followship_count_free_seats`, `ai_follow_manager_get_car_seat_for_follower` and
-`ai_follow_manager_group_fits_leader_vehicle`; the car initialiser calls the pair "the seat list".
-Element `+0x20` selects an enter-car animation variant (`human_get_anim_id_for_use_car`). The array
-is reached as `C_Vehicle+0xd20` by its own accessor — the same two-bases situation as `+0x688`
-speed. Its record contents are not decoded (§9).
+`ai_follow_manager_group_fits_leader_vehicle`; the car initialiser builds one seat record per
+element. The array is reached as `C_Vehicle+0xd20` by its own accessor — the same two-bases
+situation as `+0x688` speed — and `structs/vehicle.md` §1 decodes it: one record per door, the
+door/window object at record `+0x20`. `car_init` passes whether element 0 has that object to
+`human_get_anim_id_for_use_car`, which picks the enter-car animation variant.
 
 ² The `C_Vehicle` spelling of the pair is `+0x19c` / `+0x388`; the slot belongs to the callback
 bank and the light setters are its consumers (`structs/vehicle.md` §8a). The authoritative bit map
@@ -124,20 +128,19 @@ a car non-solid, non-enterable and still visible.
 ### 1b. The condition CHANNEL (`+0x20b8`) and the four damage pools
 
 `car_get_condition_fraction` returns a 0..1 fraction, and `+0x20b8` selects WHICH meter it
-reports. The PC arms are unreadable — Ghidra renders the FPU returns as integer returns — so the
-decode comes from the PS2 twin `ShowCarEnergy__5C_carFv`, which decompiles correctly. Every arm is
-**current ÷ maximum** of a separate damage pool, and the damage applicator decrements all of them
-per hit, each through its own resistance percentage.
+reports. Ghidra renders its FPU returns as integer returns, so the arms are read from the
+disassembly: a four-entry jump table at `0x00470868`. Arms 0..2 are **current ÷ maximum** of a
+separate damage pool; arm 3 is one deform zone's integrity.
 
-| Channel | Formula (PS2 offsets) | Notes |
+| Channel | Formula (PC offsets) | Notes |
 |---|---|---|
-| 0 | `+0x684 / +0x688` | resistance `+0x68c` |
-| **1** | `+0x658 / +0x65c` | resistance `+0x660`. Exhaustion latches PS2 `+0x22a8` and de-rates the scalar `+0x654 = +0x650 + (1−+0x650)·(pool/max)`. **This is the channel the chase AI uses** |
-| 2 | `(+0x238c <= 0) ? 0 : +0x239c / +0x2394` | resistance `+0x2398`; `+0x238c` is a fitted/enabled gate |
-| 3 | mean of `part+0x24 / part+0x1c` over the body-part array (`+0x6a0` count, `+0x6a4` base, stride `0x3c`) counting only parts flagged `part+0x3a == 1` | **overall body integrity**; the value the constructor seeds |
+| 0 | `+0x2dc / +0x2e0` (`C_Vehicle+0x26c / +0x270`) | `car_hit` subtracts from it and clamps at 0; `car_is_usable` requires it above 0 |
+| **1** | `+0x2a4 / +0x2a8` (`C_Vehicle+0x234 / +0x238`) | **the engine pool.** `car_hit` subtracts from it and then derives `+0x2a0 = +0x29c + (1 − +0x29c)·(pool/max)` (`C_Vehicle+0x230` from `+0x22c`), the factor `vehicle_compute_motor_force` multiplies the motor force by; `vehicle_apply_damage` drains it the same way and latches `C_Vehicle+0x66c` once it is empty (`structs/vehicle.md` §2a); `car_is_usable` requires the pool above 0. **This is the channel the chase AI uses** |
+| 2 | `+0x2004 / +0x1ffc` | `car_hit` and `car_on_collision_apply_damage` subtract from it (the collision path touches this pool only); the one pool `car_set_model_level` preserves across a boost swap |
+| 3 | `zone+0x20 / zone+0x18` of the **last** `DEFORM BODY` zone (type 1) in the deform-zone table `+0x308` (§4c) | `1.0f` when the car has no body zone |
 | default | `1.0f` | - |
 
-Before any of that, `ShowCarEnergy` returns **0.0f** when `+0x5e` is set — the `C_actor`
+Before any of that, the getter returns **0.0f** when `+0x5e` is set — the `C_actor`
 death-processed latch (`actor_is_death_processed`, `structs/actor.md` §1).
 
 **Reading and restoring the channel** is `car_set_condition_channel` (`0x004f5ad0`), an
@@ -221,7 +224,7 @@ carrying the reason there is no PC function.
 | 0x0046e660 | `car_pack_save_record` | `WriteSaveStruct__5C_carFP6STCarsP9S_CARINITb` | 0x0013bc40 | CONFIRMED | Called by `car_save_data_chunk` between the `0x111d` allocation and the compression, at PS2 `SaveData`'s exact `WriteSaveStruct` position. 4240 vs 3956 B (1.07) |
 | 0x0046f6f0 | `car_unpack_save_record` | `ReadSaveStruct__5C_carFP6STCarsP9S_CARINITb` | 0x0013cbc0 | CONFIRMED | Called by `car_load_data_chunk` after the decompression and before `vehicle_apply_carinit_params`, at PS2 `LoadData`'s exact `ReadSaveStruct` position. 4192 vs 6024 B |
 | 0x00470750 | `car_get_inverse_model_matrix` | `GetInvModelMatrix__5C_carFb` | 0x0013e350 | CONFIRMED | BYTE-EXACT: the `&0x20` dirty test before `UpdateWMatrixProc`, two 16-dword copies into `+0xdd4` and `+0xe14` (PS2 `+0x2e0` / `+0x320`), `S_matrix::Inverse`, return `+0xe14` |
-| 0x004707c0 | `car_get_condition_fraction` | `ShowCarEnergy__5C_carFv` | 0x0013e420 | CONFIRMED | The death-processed latch `+0x5e` (PS2 `+0x62`), then a four-way switch on the channel field `+0x20b8` (PS2 `+0x2404`), channel 3 averaging the body-part array (§1b). Ghidra renders the PC FPU returns as ints, so the switch topology is the evidence. It DISPLAYS nothing — it is the getter the HUD widget reads |
+| 0x004707c0 | `car_get_condition_fraction` | `ShowCarEnergy__5C_carFv` | 0x0013e420 | CONFIRMED | The death-processed latch `+0x5e` (PS2 `+0x62`), then a four-way switch on the channel field `+0x20b8` (PS2 `+0x2404`) over three damage pools and one deform zone (§1b; the build difference in arm 3 is in §6). It DISPLAYS nothing — it is the getter the HUD widget reads |
 | 0x004709f0 | `car_get_ai_probe_point` | `GetAIPos__5C_carFb` | 0x0013e570 | CONFIRMED | BYTE-EXACT and self-validating: it transforms the two model-space probe points `car_init` seeds (`+0x1fc0` / `+0x1fcc`) into `+0x1fd8` / `+0x1fe4`; the PS2 quartet is `+0x22e0` / `+0x22f0` / `+0x2300` / `+0x2310`. 112 vs 112 B |
 | 0x00470a60 | `car_set_enter_protect` | `SetEnterProtect__5C_carFb` | 0x0013e5e0 | CONFIRMED | BYTE-EXACT: seat array `+0x210c` stride `0xa0` (PS2 `+0x2444` stride `0xd0`), the claim/enable mask pair `+0x2100` / `+0x2104` (PS2 `+0x243c` / `+0x2440`), the seat list `+0xd90` stride `0x24` (PS2 `+0xfd0` stride `0x30`), the SAME door action codes `0x7d3` / `0x7d4` / `0x7d9` in the same branch order, and the same `index == 1` special case. Sibling of `car_set_enter_protect1` |
 | 0x00470c50 | `car_set_enter_protect1` | `SetEnterProtect1__5C_carFib` | 0x0013e880 | CONFIRMED | Seat-claimed guard — one door at a time |
@@ -330,6 +333,16 @@ Three of the eleven are unanswerable by shape alone: their raw bytes decode as
 four return constants of `car_get_surface_material_id` itself**. `car_hit` is why this is not
 cosmetic: at its apparent 488 B it looked unmappable against a 5424-byte PS2 method.
 
+### 3d. The TU's globals
+
+Every global the TU's functions reference is named: `0x0064b73c..0x0064b74c` are the five
+force-feedback effect handles (`g_ff_car_effect_wheel_friction` / `_lateral_spring` / `_impact` /
+`_speed_vibration` / `_steady_vibration`), `0x0064b750..0x0064b768` their gain weights and
+change-detect caches (`g_ff_car_gain_*`, `g_ff_car_last_gain_*`), `0x00655ab0` is
+`g_car_ff_prev_velocity`, and the frame-name suffix strings `".DWHL"` / `".DWHR"` are
+`s_dwhl_0064b85c` / `s_dwhr_0064b864`. The remaining data references are string literals Ghidra
+labels itself.
+
 ---
 
 ## 4. The recorder track interface and detachable parts
@@ -374,9 +387,11 @@ The key's selector word `key+0x2c` splits into a low 3-bit part CLASS and a high
 | Class | Resolved through | Which parts |
 |---|---|---|
 | 1 | the wheel list at `car+0xd24` | wheels |
-| 2..7 | remapped to 2/5/7/4/6/8, then the `0x34`-stride body-part table at `car+0x308` | body panels |
+| 2..7 | remapped to deform-zone types 2/5/7/4/6/8, then the `0x34`-stride deform-zone table at `car+0x308` (§4c) | bumper / light / licence plate / mirror / wing / door |
 
 So a DropOut is either a **wheel** or a **body panel** — two initialisation paths, nothing else.
+Which panels can come off depends on the model's zones: the shipped models tag bumpers, lights
+and wings, and none tags a mirror, a licence plate or a door (§4c).
 The kind byte is labelled by the game itself: `recorder_new_track` formats these tracks `drp_%d`
 for kind `0x11`, and a debug name builder is labelled data.
 
@@ -388,51 +403,42 @@ the PC's DropOut vocabulary. The PS2 build sheds **doors as well**; that differe
 `physical_object_ctor` (`0x004be910`), the engine's physics-body base. Both builds have exactly
 **five** `C_PhThing` subclasses.
 
-### 4c. The breakable-part table `car+0x308`
+### 4c. The deform-zone table `car+0x308`
 
-`car+0x308` / `car+0x30c` is a vector of **`0x34`-byte records**, one per breakable body part,
-decoded from its consumers:
+`car+0x308` / `car+0x30c` is `C_Vehicle+0x298` / `+0x29c`: a vector of **`0x34`-byte deform
+zones**, one per breakable or deformable body part. It is built from the car's MODEL, not from
+`tables/`: `vehicle_init` enumerates every mesh frame of the model (type mask `0x10001`, name `*`)
+through `vehicle_cb_enum_deform_zones`, which reads the text between `[` and `]` in the frame's
+user-parameter string and appends one zone per recognised tag:
 
-| Record offset | Type | Meaning |
+| tag | zone type | shipped models carrying it |
 |---|---|---|
-| `+0x00` | `I3D_frame *` | **the model frame this part is** — Ghidra types the cast directly (`this = (I3D_frame *)*puVar11`) |
-| `+0x0c` | `short` | part type; value `3` takes a distinct handling path |
+| `DEFORM BODY` | 1 | 437 |
+| `DEFORM BUMPER` | 2 | 178 |
+| `DEFORM GLASS` | 3 | 381 |
+| `DEFORM MIRROR` | 4 | 0 |
+| `DEFORM LIGHT` | 5 | 193 |
+| `DEFORM WING` | 6 | 2 |
+| `DEFORM SPZ` (licence plate) | 7 | 0 |
+| `DEFORM DOOR` | 8 | 0 |
+| `DEFORM ROOF` | 9 | 48 |
+
+The counts come from the 446 shipped `.4ds` models that carry any `[DEFORM ...]` tag. Two frames
+spell the tag `DEFORMGLASS` without the space and are not recognised, so they get no zone.
+
+| Zone offset | Type | Meaning |
+|---|---|---|
+| `+0x00` | `I3D_frame *` | **the model frame this zone is** — Ghidra types the cast directly (`this = (I3D_frame *)*puVar11`) |
+| `+0x0c` | `short` | zone type, 1..9 (table above); type 3 (glass) takes its own handling path |
 | `+0x0e` | flag byte | bit `1` = already detached (the gate `car_track_spawn_dropout_part` sets), bit `2` = damaged |
+| `+0x18` | `float` | maximum integrity — the denominator of condition channel 3 (§1b) |
 | `+0x20` | `float` | integrity / remaining health, clamped at 0 |
 
 **Consumers**, receiver confirmed by vtable membership rather than proximity: `car_hit` and
 `car_get_surface_material_id` are `C_car` vtable slots 31 and 32; `car_set_transparency` also
-walks it; `car_prepare_body_part_dropout` switches on the part type; and
-`car_track_spawn_dropout_part` indexes it through `vehicle_find_part_at_encoded_position`.
-
-**The data is NOT in `tables/`. It comes from the car's MODEL.** A vector of pointers *into the
-loaded model's frame tree* can only be built after the model loads, so the part list is derived
-per-model at load time. Checked rather than assumed: `vehicles.bin`, whose format is documented in
-`def-files-docs/vehicles-bin.md`, carries **no** breakable-part list, no part geometry and no
-detach flags — its only door/glass entries are **sound filenames** (`+0xB9F carglass.wav`,
-`+0x10FD`/`+0x110D door04op.wav`/`door04cl.wav`). `vehicles.dat` is that file's field schema, so
-it cannot hold it either.
-
-**How the engine encodes per-part attributes: frame-name suffixes.** `crash_obj_init`
-(`0x00478c60`), in this same cluster, parses a frame's name (`frame+0xc`) as a small attribute
-language — split on `;`, uppercase the middle segment, then read flags off individual characters:
-
-| Token | Effect |
-|---|---|
-| `G` · `D` · `F` · `S` · `E` | set bits `0x2` · `0x4` · `0x8` · `0x10` · `0x20` of a flag word |
-| `Z` | clears a byte flag that defaults to 1 |
-| `+` | triggers an extra call (`game_add_hydrant`) |
-| `X<float>` · `M<float>` | parsed with `atof` into two float fields |
-| `N<int>` · `T<int>` | parsed with `atoi` into further fields |
-
-So an artist names a frame `door_l;GD;` and the engine derives its behaviour from the name.
-
-**That link is inference, not proof.** `crash_obj_init` has zero direct callers in the decomp
-(it is reached indirectly), and its `param_1+0x308` is a **scalar** — an `atoi` result written
-straight into it — whereas `C_car`'s `+0x308` is a vector *begin pointer*. Same offset,
-incompatible types ⇒ **different objects**, an offset collision rather than a match. What is
-established: the table is model-frame-derived, and this cluster parses frame names for attributes.
-The builder of `car+0x308` is unlocated (§9).
+walks it; `car_prepare_body_part_dropout` switches on the zone type; `car_get_condition_fraction`
+reads the last body zone; and `car_track_spawn_dropout_part` indexes it through
+`vehicle_find_part_at_encoded_position`.
 
 ---
 
@@ -459,15 +465,17 @@ This is the one section carrying PS2 offsets and cross-build reasoning. PC concl
   the PS2 `C_car` is a larger struct — so the coverage table maps by ROLE, not raw offset.
 * **Detachable parts: the PS2 sheds DOORS, the PC does not.** *(User in-game observation.)* On the
   **PC** a car can lose its wheels, bumpers and lights (§4b); on the **PS2** it can lose doors as
-  well. Treat the PC's `C_DropOut` part vocabulary as the smaller set and do not "fix" a missing
-  door class on the PC side. Static analysis has not been reconciled with this:
-  `car_track_spawn_dropout_part`'s selector remaps six body-panel classes (2→2, 3→5, 4→7, 5→4,
-  6→6, 7→8) through `car+0x308`, and which of those six the PC actually populates has not been
-  traced (§9). The difference is most likely MODEL DATA rather than code — both builds run the
-  identical two-branch `if (selector == 1) InitWheel else InitBox` logic, and `car+0x308` is built
-  from the loaded model's frame tree (§4c), so the PS2 probably sheds doors because its car models
-  tag door frames as detachable and the PC models do not. That reading is testable only outside
-  the decomp, by comparing a car's frame names between the two builds' model archives.
+  well. The difference is MODEL DATA, not code: the PC handles a door zone (deform type 8,
+  DropOut class 7) exactly like the other panels, both builds run the identical two-branch
+  `if (selector == 1) InitWheel else InitBox` logic, and no shipped PC model carries a
+  `[DEFORM DOOR]` tag (§4c). The PS2 side of that reading is open (§9).
+* **Condition channels (`ShowCarEnergy`).** The PS2 arms are: 0 `+0x684 / +0x688` (resistance
+  `+0x68c`); 1 `+0x658 / +0x65c` (resistance `+0x660`; exhaustion latches `+0x22a8` and de-rates
+  `+0x654 = +0x650 + (1 − +0x650)·(pool/max)`); 2 `(+0x238c <= 0) ? 0 : +0x239c / +0x2394`
+  (resistance `+0x2398`, `+0x238c` an enabled gate); 3 the mean of `part+0x24 / part+0x1c` over the
+  body-part array (`+0x6a0` count, `+0x6a4` base, stride `0x3c`) counting parts with
+  `part+0x3a == 1`. Channel 1 carries the same de-rate on both builds (§1b). The PC arm 2 has no
+  enabled gate, and the PC arm 3 reads one body zone where the PS2 averages every flagged part.
 * **`C_DropOut` cross-build material:**
   * The two-path split is corroborated by the PS2 class itself: `C_DropOut` exposes exactly two
     initialisers, `InitWheel__9C_DropOutFP15S_DROPOUT_WHEEL` and
@@ -492,10 +500,10 @@ This is the one section carrying PS2 offsets and cross-build reasoning. PC concl
   `car+0xfd0`/`+0xfd4` stride `0x30`; `ai_fight_followship_count_free_seats` body-diffs against
   that pair. **There are TWO parallel per-seat arrays sharing one index space** — §1's `+0xd90`
   and `+0x210c` rows.
-* **Cheap accessor offsets (PS2 side, PC not located):** `SetDriver`/`GetDriver` byte
-  `car+0x2299`; `SetTrafficCar` byte `car+0x2460`; `GetActorSpeed` vec3 `car+0x460`;
-  `SetTimeParking` writes `car+0x23a8` from `*(act_mission+0x20)+0xe54`, `GetTimeParking` returns
-  the delta.
+* **Cheap accessor offsets (§2):** `SetDriver`/`GetDriver` byte PC `car+0x3b0` = PS2 `car+0x2299`;
+  `SetTrafficCar` byte PC `car+0x20bd` = PS2 `car+0x2460`; `GetActorSpeed` vec3 PC `car+0x1f7c` =
+  PS2 `car+0x460`; `SetTimeParking` writes PC `car+0x2010` = PS2 `car+0x23a8` (the PS2 from
+  `*(act_mission+0x20)+0xe54`), and `GetTimeParking` returns the delta.
 * **Drawbridge flag `+0x294`** — what CONFIRMED `human_find_blocking_drawbridge`: the PC renders
   the test as `(*(uint *)(car + 0x294) >> 0x19 & 1) != 0`, the PS2 as
   `(*(uint *)(car + 0x648) & 0x2000000) != 0` — the same bit 25, differently decompiled. So PC
@@ -596,14 +604,6 @@ Full write-up of the message layer: `structs/net_event_msg.md`.
 
 | item | state |
 |---|---|
-| `+0x2004` | saved and restored across a model-level switch, so it matters, but no consumer reveals what it configures |
-| `+0x2036` | written `1` at the arrest moment; no reader located |
-| `+0x20bd` as a light byte | `car_deactivate` reads it together with `C_game+0x2d44` before clearing the `0x0ff00000` override bits; its meaning there is unobserved. It is also the ambient-traffic gate `car_ai_tick` reads, and those two roles have not been reconciled |
-| `+0x294` bit 25 | the drawbridge exit-block gate is proven, but what the flag word means beyond that bit is not pinned |
-| the `+0xd90` per-seat array #2 | begin/end and stride `0x24` are proven and element `+0x20` selects an enter-car animation variant; the rest of the record is not decoded |
-| the four damage pools (§1b) | each pool's physical subsystem is unestablished. Pool 1 is engine-shaped — its exhaustion latches a flag and scales a derived term — but no noun is asserted |
-| the builder of `car+0x308` | unlocated. The table is model-frame-derived (§4c); `crash_obj_init`'s same-offset field is a different object, so it is not the builder |
-| which selector values the PC's part table fills | untraced, and it is the correct form of the "PS2 sheds doors" question (§6). The test is a model-archive comparison, outside the executables |
-| the PC twin of `DoLights__9C_VehicleFf` | not located. It should also explain light flag bit `0x800` and the real notify mechanism behind `C_Vehicle+0x19c` |
-| the TU's globals | ten are named — `0x0064b73c..0x0064b74c` are the five force-feedback effect handles (`g_ff_car_effect_wheel_friction` / `_lateral_spring` / `_impact` / `_speed_vibration` / `_steady_vibration`) and `0x0064b750..0x0064b768` their gain weights and change-detect caches (`g_ff_car_gain_*`, `g_ff_car_last_gain_*`); `0x00655ab0` is `g_car_ff_prev_velocity` and the frame-name suffix strings `".DWHL"` / `".DWHR"` are `s_dwhl_0064b85c` / `s_dwhr_0064b864`. The remainder are unnamed |
-| two `C_car` fields the subclass reads | the update branch selector `+0xd18`, and the damping ratio built from `+0x634` / `+0x6d8` / `+0x1f88`. Neither is documented in §1; they are tracked in `structs/car_extended.md` §5 |
+| `+0x294` bit 25 | set when the last physics step made a contact whose collision record carries flag `0x10000` (§1); which collision faces carry that flag is not decoded |
+| damage pools 0 and 2 (§1b) | pool 1 is the engine (it scales the motor force); no consumer names what pools 0 and 2 stand for |
+| PS2 door drop-outs (§6) | attributed to model data because no shipped PC model carries a `[DEFORM DOOR]` tag; the PS2 model archives were not examined |

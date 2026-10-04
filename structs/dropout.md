@@ -1,6 +1,6 @@
 # `C_DropOut` — a part that has come off a car (kind `0x11`)
 
-**Created** 2026-08-13 17:18 +0200 · **Modified** 2026-09-17 13:52 +0200
+**Created** 2026-08-13 17:18 +0200 · **Modified** 2026-10-01 18:52 +0200
 
 PC prefix **`dropout_`**. The translation unit follows `C_driver`'s.
 
@@ -25,7 +25,8 @@ every per-frame virtual, and a **cap of fifteen live parts**.
 
 `car_track_spawn_dropout_part` replays a *"a part came off"* keyframe by spawning a kind-`0x11`
 actor — wheel via `car+0xd24`, body panel via the `0x34`-stride table at `car+0x308`
-(`structs/actor_track.md` §2c) — which is exactly the `InitWheel` / `InitBox` pair below.
+(`structs/actor_track.md` §2c) — the same two part sources the `InitWheel` / `InitBox` pair below
+initialises. The replay calls neither initialiser: the recorded track supplies the pose.
 `recorder_new_track` formats this kind's track names **`drp_%d`**.
 
 Three creators, and they are the whole feature:
@@ -55,13 +56,41 @@ Everything below `+0x3b0` belongs to `C_actor` / `C_actor_track` / `C_PhThing`.
 | `+0x04` | 4 | `C_actor_track` mode flags — bit `0x01` playback, `0x02` recording | `structs/actor_track.md` §3a; read by `dropout_game_done` |
 | `+0x08` | 4 | `C_recorder` track pointer | written by `dropout_track_create` |
 | `+0x10` | 4 | `kind` = `0x11` | written by the ctor |
-| `+0x65` | 1 | actor flag raised at scene start | `dropout_game_init` |
+| `+0x65` | 1 | `C_actor` save_excluded, raised at scene start: the savegame skips the part | `dropout_game_init` |
 | `+0x68` | 4 | `I3D_frame*` — the part's own scene frame | created by `dropout_init` |
-| `+0x3b0` | 4 | **panel / wheel id** copied from the car's descriptor | `dropout_init_box` (`S_DROPOUT_BOX+0x14`) |
+| `+0x3b0` | 4 | **body-panel part kind** 2..7; 0 for a wheel and for a replayed part | `dropout_init_box` copies `S_DROPOUT_BOX+0x14` (§2a); nothing reads it |
 | `+0x3b4` | 1 | **settled flag** — 0 while the part is still moving | `dropout_game_init` clears it; every per-frame virtual gates on it |
 
 `0x3b4 + 4 = 0x3b8`, exactly the `operator_new` size at all three creation sites — the layout and
 the allocation confirm each other.
+
+`+0x3b0` is written twice in the translation unit (the ctor's 0 and `dropout_init_box`'s copy) and
+read nowhere; the creators carry the part kind separately, in the network message and in the
+recorder key.
+
+### 2a. The two spawn descriptors
+
+Read from the stack stores of `car_prepare_wheel_dropout` and `car_prepare_body_part_dropout`, the
+two builders that hand a descriptor to `car_drop_out_part`. The network arm of
+`car_apply_net_event_msg` initialises from the same block, carried in the message from the sender.
+
+| struct | offset | field | value |
+|---|---|---|---|
+| `S_DROPOUT_WHEEL` | `+0x00` | wheel radius | wheel record `+0x10c` |
+| `S_DROPOUT_WHEEL` | `+0x04` | wheel parameter | wheel record `+0x138` |
+| `S_DROPOUT_WHEEL` | `+0x08` | mass | 10.0 |
+| `S_DROPOUT_WHEEL` | `+0x0c` | initial velocity (vec3) | the part's velocity + 0.1 × the impulse |
+| `S_DROPOUT_WHEEL` | `+0x18` | friction | wheel record `+0xd4` |
+| `S_DROPOUT_WHEEL` | `+0x1c` | damping | wheel record `+0xe0` |
+| `S_DROPOUT_BOX` | `+0x00` | mass | by zone type: 10.0 bumper, 4.0 light, 2.0 plate, 2.0 mirror, 7.0 wing, 20.0 door |
+| `S_DROPOUT_BOX` | `+0x04` | initial velocity (vec3) | the part's velocity + the impulse ÷ the mass |
+| `S_DROPOUT_BOX` | `+0x10` | friction | 0.5 |
+| `S_DROPOUT_BOX` | `+0x14` | part kind | 2 bumper, 3 light, 4 plate, 5 mirror, 6 wing, 7 door |
+
+`S_DROPOUT_WHEEL` is `0x20` bytes with exactly the `S_THING_WHEEL` layout, and `S_DROPOUT_BOX` is
+`0x18`: `S_THING_BOX` plus the part kind (`structs/box_new.md` §1a). The part kind is the
+selector `car_drop_out_part` also receives, and the one `structs/car.md` §4b maps onto the
+deform-zone types.
 
 ---
 
@@ -140,6 +169,11 @@ count tells you the owner.**
 The other two track overrides have **one dataref each**, so they *are* this class's own and carry
 the `dropout_` prefix.
 
+Read from the `C_box` side, the fold is sound: `box_track_record_key` and `dropout_track_record_key`
+both allocate their keys through `recorder_key_stream_alloc` and write the same prefix — `[1]` = 1,
+`[2..4]` the position, `[5..8]` the quaternion — and the shared playback body reads exactly the
+time `[0]`, the position and the quaternion. Both classes replay correctly through the one symbol.
+
 ---
 
 ## 5. `dropout_game_done`
@@ -186,20 +220,17 @@ implement; the function itself is a `C_DropOut` method.
 
 ---
 
-## 7. Open items
-
-| item | state |
-|---|---|
-| meaning of `+0x3b0` | copied out of `S_DROPOUT_BOX+0x14`; no reader located on either build |
-| `S_DROPOUT_BOX` / `S_DROPOUT_WHEEL` layouts | undocumented; they come from `car+0x308`'s `0x34`-stride table (`structs/car.md`) |
-| is the 15-part cap observable in play? | a fifteen-part pile-up should make the oldest wreckage vanish on the PC; not tested in game |
-| the `C_box` half of the slot-2 fold | never read from the `C_box` side; ICF proves byte-identity of the two playback paths, not intent |
-
----
-
-## 8. Related
+## 7. Related
 
 `structs/physical_object.md` (the base, §2 lists this class) · `structs/drop_in_weapon.md` (the
 sibling TU) · `structs/actor_track.md` (§2a the override table, §2b the fold trap, §4 the key sizes)
 · `structs/recorder.md` (the PC-only subsystem) · `structs/car.md` (where the parts come from) ·
 `structs/entity.md` §1 (the kind enum).
+
+---
+
+## 8. Open items
+
+| item | state |
+|---|---|
+| is the 15-part cap observable in play? | a fifteen-part pile-up should make the oldest wreckage vanish on the PC; not tested in game |

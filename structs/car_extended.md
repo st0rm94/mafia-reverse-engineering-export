@@ -1,6 +1,6 @@
 # `C_car_ex` — the EXTENDED car (PC prefix `car_extended_`)
 
-**Created** 2026-08-12 15:55 +0200 · **Modified** 2026-09-17 17:52 +0200
+**Created** 2026-08-12 15:55 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 | | |
 |---|---|
@@ -40,14 +40,15 @@ the data parses.
 |---|---|---|
 | `~E~` | an **exhaust part**: `{frame, random 0..2π phase, rest quat}` appended to the `+0x2204` vector | `traktor.4ds`, `valec.4ds` — the two vehicles with a vertical exhaust stack |
 | `~C` `[R]` `<X\|Y\|Z>` `<value>` `~` | a **shake part** ¹ | `traktor.4ds` (`~CRX0.2~`, `~CRX0.35~`, `~CY3~`, `~CZ2~`), `fordtTud00K.4ds` (`~CX3~`, `~CX5~`) |
-| `~DCS~` | the **board/drop spot**: sets flag `+0x2214`, position `+0x2218`, direction `+0x2224` | the 5 truck models, on a frame named **`misto`** (Czech: *place*) |
+| `~DCS~` | the **cargo-bed rider spot**: sets flag `+0x2214`, position `+0x2218`, direction `+0x2224`, where `human_intern_use_car_truck` places a boarding rider | the 5 truck models, on a frame named **`misto`** (Czech: *place*) |
 | `~DCC~` | a **dynamic-collision box**, only on frames of type 6 ² | the 5 truck models, on `Dummy16`…`Dummy20` and **`kolize pla`** (*collision tarp*) |
 
 ¹ `R` ⇒ rotate `<value>` **degrees** (`crt_atof` × `0.01745`); no `R` ⇒ translate `<value>`
 **millimetres** (`crt_atof` × `0.001`), with a ±0.4 random jitter on the other two axes. The
 trailing `~` is found with `strchr` and NUL'd.
-² Allocates a 0x48-byte record, fills its half-extents from the frame AABB × frame scale, builds
-transform + inverse, appends it to `+0x2238` and hands it to `collision_dyn_take_out_to_list`.
+² Allocates a 0x48-byte record of dynamic-collision type `0x40` (§2d), fills its box corners from
+the frame AABB × frame scale, builds transform + inverse, appends it to `+0x2238` and hands it to
+`collision_dyn_take_out_to_list`.
 
 **Complete shipped user set:** `traktor`, `valec`, `fordtTud00K`, `TruckBxx00`, `truckmorph`,
 `truckmorph00`, `trucksplachtou`, `FMVanimTruckB00`.
@@ -72,8 +73,8 @@ typedef struct C_car_ex /* extends C_car */ {
     /* +0x220c */ S_exh_top   *exhaust_end;   // [H]
     /* +0x2210 */ S_exh_top   *exhaust_cap;   // [H]
     /* +0x2214 */ uint8_t      dcs_present;   // [H] a `~DCS~` frame was found
-    /* +0x2218 */ S_vector     dcs_position;  // [H] the board/drop spot
-    /* +0x2224 */ S_vector     dcs_direction; // [H]
+    /* +0x2218 */ S_vector     dcs_position;  // [H] the cargo-bed rider spot, car-local
+    /* +0x2224 */ S_vector     dcs_direction; // [H] the rider's facing there
     /* +0x2230 */ void        *dyn_coll_list; // [H] the world dynamic-collision list
     /* +0x2234 */ vec_alloc    _a2;           // [H]
     /* +0x2238 */ S_dyn_coll **dyn_begin;     // [H] the class's own records, stride 0x10
@@ -97,8 +98,8 @@ decomp gives the stride; only the PS2 signature says what the elements are.
 | +0x21f8 | shake-part vector | H | `car_extended_ctor`, `car_extended_scan_frame_tags`, `car_extended_shake_part_vector_insert_n` | `car_extended_update`, `car_extended_game_done`, `car_extended_shake_part_vector_erase` | stride 0x38 |
 | +0x2208 | exhaust-part vector | H | `car_extended_ctor`, `car_extended_scan_frame_tags`, `stl_insert_n_stride_0x18` | `car_extended_update`, `car_extended_game_done`, `car_extended_exhaust_part_vector_copy` | stride 0x18 |
 | +0x2214 | `~DCS` present | H | `car_extended_scan_frame_tags`, `car_extended_game_init` | `car_extended_can_board` | set to 1 on the first `~DCS~` frame ¹ |
-| +0x2218 | drop-spot position | H | `car_extended_scan_frame_tags` | - | no located reader (§6) |
-| +0x2224 | drop-spot direction | H | `car_extended_scan_frame_tags` | - | no located reader (§6) |
+| +0x2218 | rider-spot position | H | `car_extended_scan_frame_tags` | `human_intern_use_car_truck` | copied into the boarding human's position `+0x24` before the human is parented to the car frame |
+| +0x2224 | rider-spot direction | H | `car_extended_scan_frame_tags` | `human_intern_use_car_truck` | copied into the boarding human's direction `+0x30` |
 | +0x2230 | dynamic-collision list | H | `car_extended_scan_frame_tags`, `car_extended_game_init`, `car_extended_game_done` | `car_extended_update`, `human_game_done` | `human_game_done` returns a departing rider's own records to this list |
 | +0x2238 | dyn-coll record vector | H | `car_extended_scan_frame_tags` | `car_extended_game_done` | stride 0x10; records are 0x48 bytes |
 | +0x2248 | carried-person vector | H | `car_extended_add_carried_person`, `car_extended_remove_carried_person` | `car_extended_update` | `C_human*`; riders outside any seat (`+0xac == -1`) |
@@ -113,16 +114,52 @@ script command passes before calling `human_intern_use_car_truck` (PS2 side in �
 | +0x00 | `I3D_frame *frame` | the tagged frame |
 | +0x04 | `uint8_t mode` | 0 = translate, 1 = rotate |
 | +0x08 | `S_vector axis` | from the `X`/`Y`/`Z` character, ±0.4 jitter on the other two in translate mode |
-| +0x14 | `float phase` | advanced by `(k·0.02 + 0.04)·dt`, wrapped at 2π |
+| +0x14 | `float phase` | advanced by `(0.04 + 0.02·r)·dt`, r the engine-rev fraction (§2c), wrapped at 2π |
 | +0x18 | `float amplitude` | degrees×0.01745 or millimetres×0.001 |
 | +0x1c | `S_vector rest_pos` | the frame's pose at scan time |
 | +0x28 | `S_quat rest_rot` | the frame's rotation at scan time |
 
-Applied each frame as `offset = sin(phase) · damping · amplitude · axis + rest_pos` (mode 0) or as a
-quaternion about `axis` composed with `rest_rot` (mode 1).
+Applied each frame as `offset = sin(phase) · (1 − 0.5·r) · amplitude · axis + rest_pos` (mode 0) or
+as a quaternion about `axis` composed with `rest_rot` (mode 1).
 
 The **exhaust-part record** (stride 0x18) is `{frame*, phase, rest quat}`; its phase advances by
-`dt·0.006` and it rotates about local Z.
+`dt·0.006` and it rotates about local Z, with the swing scaled by `(1 − r)·π/2`.
+
+### 2c. The engine-rev fraction r
+
+`car_extended_update` drives both families from the engine state of the base car
+(`structs/car.md` §1, `structs/vehicle.md` §1):
+
+| Input | Field | Role |
+|---|---|---|
+| engine running | `car+0xd18` = `C_Vehicle+0xca8` | clear: only the exhaust parts are posed; set: both families animate |
+| engine revs per second | `car+0x634` = `C_Vehicle+0x5c4` | the live value |
+| idle revs per second | `car+0x6d8` = `C_Vehicle+0x668` | CARINIT `idling rpm` ÷ 60 |
+| maximum revs per second | `car+0x1f88` = `C_Vehicle+0x1f18` | CARINIT `maximum rpm` ÷ 60 |
+
+`r = (revs − idle) / (max − idle)`, clamped to 0..1 — the same normalisation
+`vehicle_update_strips` applies. As the engine revs up, the shake speeds up and its amplitude
+falls to half, and the exhaust swing shrinks to nothing at maximum revs.
+
+### 2d. The `~DCC` record (0x48 bytes)
+
+Built by `car_extended_scan_frame_tags`; every one of its 18 dwords is written there (the
+allocation is zero-filled first). Word 0 is the dynamic-collision type, and `0x40` is the
+transformed-box type of `structs/collision.md` §1d.
+
+| Offset | Field | Source |
+|---|---|---|
+| +0x00 | type `0x40` | literal |
+| +0x04 | the tagged `I3D_frame` | the scanned frame |
+| +0x08 | query-exclusion mask, 0 | `collision_line_in_dynamics` skips an object when this word shares a bit with the query's `+0x3c` |
+| +0x0c | grid-bucket back-link, 0 | set by `collision_dyn_insert` (`structs/collision.md` §1) |
+| +0x10 | centre | the frame's local position `frame+0x80` |
+| +0x1c | bounding radius | the length of the larger scaled box corner |
+| +0x20 | zero fill | - |
+| +0x24 / +0x30 | box min / max corner | the frame bounding box `frame+0x140` × the frame scale `frame+0x90` |
+| +0x3c | pointer to the 0x40-byte transform | the frame rotation plus its position |
+| +0x40 | pointer to the 0x40-byte inverse transform | `S_matrix::Inverse` of a copy |
+| +0x44 | owner | the `C_car_ex` |
 
 ## 3. Method coverage — PC first
 
@@ -170,7 +207,7 @@ Identical width and slot order to `C_car`'s `0x0063bc08` — slot-for-slot align
 | 26 | `car_game_done` | `car_extended_game_done` |
 
 The second vtable at `+0x70` (`0x0063bd64`) is the `C_car` / `C_Vehicle` multiple-inheritance pair's
-second base, **not** an "engine sub-object".
+second base.
 
 ## 5. PC vs PS2
 
@@ -220,12 +257,3 @@ on shared constants and vtable slots).
 `__ct__Q28C_car_ex6S_clapFRCQ28C_car_ex6S_clap` (the shake-record copy ctor), both
 `reserve__Q23gif...` and both `push_back__Q23gif...` instantiations, and the
 `__vector_deleter<S_dyn_coll>` triple — all folded into the PC's five STL helpers or emitted inline.
-
-## 6. Open items
-
-| Item | State |
-|---|---|
-| the `~DCS` drop spot (`+0x2218` / `+0x2224`) has **no located reader** | `car_extended_scan_frame_tags` writes both, `car_extended_game_init` clears the flag, and no decomp reader is found; a zero-hit decomp search does not prove there is none — a byte scan of `.text` for the two displacements is the next check |
-| `car_extended_update`'s branch selector `+0xd18` | selects between an exhaust-only animation path and the full shake+exhaust path; the field is a `C_car` member not documented in `structs/car.md` |
-| the damping ratio built from `+0x634` / `+0x6d8` / `+0x1f88` | drives the shake amplitude and the exhaust amplitude in opposite directions; the three fields are `C_car` members, and which is health and which is a threshold is not established, so no polarity claim is made |
-| the 0x48-byte `~DCC` record's layout | only the fields `car_extended_scan_frame_tags` writes are known (type tag `0x40`, frame, owner, two half-extent vectors, radius, transform, inverse transform) |

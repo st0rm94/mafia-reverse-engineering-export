@@ -1,6 +1,6 @@
 # `C_chunk` — the `.dta` archive chunk reader/writer
 
-**Created** 2026-08-14 23:01 +0200 · **Modified** 2026-09-17 13:46 +0200
+**Created** 2026-08-14 23:01 +0200 · **Modified** 2026-10-04 11:52 +0200
 
 **PS2 class:** `C_chunk` (mangled tag `7C_chunk`). **PC prefix: `chunk_`.** Cross-build material
 is in §7.
@@ -44,9 +44,9 @@ The allocator byte at `+0x04`'s low byte is copied from the optional argument
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
 | +0x00 | vtable | H | `chunk_ctor` | - | `g_chunk_vt`, **two slots only** (§6). An STL allocator interface, not a class vtable — no `C_chunk` method is virtual |
-| +0x04..+0x0c | open-chunk stack | H | `chunk_enter_next`, `chunk_leave`, `chunk_close` | `chunk_read`, `chunk_bytes_remaining`, `chunk_close` | `end - begin >> 2` is the depth; `*(end-1)` is the current chunk's recorded offset (§4) |
-| +0x10 | is_open | H | `chunk_open_file`, `chunk_close` | `chunk_open_file`, `chunk_read`, `chunk_close` | `chunk_open_file` refuses to re-open an already-open chunk; `chunk_read` returns false when closed |
-| +0x14 | dta_handle | H | `chunk_open_file` | `chunk_read`, `chunk_close` | passed straight to the `rw_data.dll` entry points |
+| +0x04..+0x0c | open-chunk stack | H | `chunk_enter_next`, `chunk_leave`, `chunk_close`, `chunk_dtor` | `chunk_read`, `chunk_bytes_remaining`, `chunk_close`, `chunk_dtor` | `end - begin >> 2` is the depth; `*(end-1)` is the current chunk's recorded offset (§4) |
+| +0x10 | is_open | H | `chunk_open_file`, `chunk_close`, `chunk_dtor` | `chunk_open_file`, `chunk_read`, `chunk_close`, `chunk_dtor` | `chunk_open_file` refuses to re-open an already-open chunk; `chunk_read` returns false when closed |
+| +0x14 | dta_handle | H | `chunk_open_file`, `chunk_close`, `chunk_dtor` | `chunk_read`, `chunk_close`, `chunk_dtor` | passed straight to the `rw_data.dll` entry points |
 | +0x18 | write_mode | H | `chunk_open_file` | `chunk_read`, `chunk_close` | `chunk_read` refuses when set; on ascend or close a write-mode chunk **back-patches its own size** ¹ |
 | +0x1c | file_size | H | `chunk_open_file` | - | `dtaSeek(h,0,SEEK_END)` on the read path; left `-1` on the write path |
 
@@ -59,9 +59,9 @@ seek back.
 |---|---|---|
 | 0x004be680 | `chunk_ctor` | installs the allocator vtable + copies the allocator byte. 3 callsites, all `lea ecx,[esp+N]` — a stack local every time |
 | 0x004be6b0 | `chunk_open_file` | `dtaOpen`/`dtaOpenWrite`, records the handle, seeks to the end for the size on the read path, rewinds, sets `is_open` |
-| 0x00453a50 | `chunk_read` | bounded read: refuses when closed or in write mode, clamps the request against the enclosing chunk's remaining bytes |
-| 0x004be720 | `chunk_close` | in write mode unwinds the open-chunk stack, back-patching each chunk's size; then `dtaClose`, handle `-1`, frees the stack vector |
-| 0x00544590 | `chunk_close_handle` | second emission of the close body (§5) |
+| 0x00453a50 | `chunk_read` | bounded read: refuses when closed or in write mode, and refuses a request larger than what remains of the enclosing chunk |
+| 0x004be720 | `chunk_dtor` | the destructor: the `chunk_close` sequence inline, then frees the stack vector (§5) |
+| 0x00544590 | `chunk_close` | in write mode unwinds the open-chunk stack, back-patching each chunk's size; then `dtaClose`, handle `-1`, open byte cleared; returns 1, or 0 when not open (§5) |
 | 0x005a5c10 | `chunk_open_stack_insert_at` | vector insert on the open-chunk stack; 18 callsites |
 | 0x005a5db0 | `chunk_open_stack_insert_n` | vector fill-insert on the open-chunk stack; 1 callsite |
 | 0x005a5fe0 | `chunk_enter_next` | reads the 6-byte header, pushes the chunk's end offset, returns the id (§4) |
@@ -83,7 +83,7 @@ A class's PC code is not one contiguous cluster:
   `chunk_read_string_and_leave` sit in the `C_PData` translation unit `[0x005a5fe0, 0x005a7070)`,
   emitted with the `effects.tbl` loader that uses them.
 * `chunk_get_dta_handle` and `chunk_read_dword_and_leave` sit with `mission_open_bin`.
-* `chunk_close_handle` sits alone in the `C_recorder` TU (§5).
+* `chunk_close` sits alone in the `C_recorder` TU (§5).
 
 ## 4. The open-chunk stack
 
@@ -99,18 +99,65 @@ The stack at `+0x04..+0x0c` is a `std::vector<int>` grown through `chunk_open_st
 So the record is `{u16 id, u32 size}` with the payload following, and `size` counts the 6-byte
 header.
 
-## 5. 🔑 `C_chunk::Close` has TWO PC emissions
+### 4a. The files read through a `C_chunk`, and where their ids are decoded
 
-`chunk_close` (`0x004be720`) and `chunk_close_handle` (`0x00544590`) carry the same body: unwind the
-open-chunk stack at `this+0x04`/`+0x08`, back-patching each chunk's 4-byte length at
-`chunk_start + 2` through `dtaSeek`/`dtaWrite`, then `dtaClose` and invalidate the handle.
+`C_chunk` itself never interprets an id. Every file opened through `chunk_open_file` (a closed set
+of eleven `E8` calls) is listed here with the document that decodes its ids:
 
-They differ in exactly one thing: `chunk_close` also releases the stack vector through its
-allocator slot and returns `void`; `chunk_close_handle` stops after clearing the is-open byte and
-returns `1`.
+| File | Opened by | Ids walked by | Decoded in |
+|---|---|---|---|
+| `missions\<mission>\scene2.bin` | `mission_open_bin` | `mission_open_bin` | `structs/mission.md` §4a |
+| `missions\<mission>\check.bin` | `mission_open` | `web_path_load_nodes` | `structs/web_path.md` §4 |
+| `missions\<mission>\road.bin` | `mission_open` | `roads_load_data` | `structs/roads.md` |
+| `missions\<mission>\cache.bin` | `mission_open` | `cache_base_block_open` | `structs/cache_base_block.md` §3 |
+| `tables\effects.tbl` | `particle_manager_load_data` | `particle_manager_load_data`, `particle_data_type_load_data` | `structs/particle.md` §5a |
+| `missions\<mission>\effects.bin` | `particle_manager_load_static_particles` | `particle_manager_load_static_particles` | `structs/particle.md` §5b |
+| `*.tck` recorder tracks | `recorder_load_tck` | `recorder_load_tck` | `structs/recorder.md` |
+| `anims\<name>` | `anim_machine_load_track` | `anim_machine_load_track` | - |
+| `diff\*.chg` | `game_load_differences` | `game_load_differences` | §4b |
+| `system\taxi_pas.dat` | `pedestrian_wave_at_taxi` | `program_load_source_code` | §4c |
 
-The second copy sits alone inside the `C_recorder` TU, 500 KB from the rest of the class — the
-shape of a per-TU inline instantiation (§9).
+### 4b. The `.chg` scene-difference files
+
+`game_load_differences` (script command `loaddifferences`) reads one `.chg` file from `Mafia\diff`;
+92 ship. The root chunk must be **1234** (`0x4d2`); its children are:
+
+| Id | Shipped | What `game_load_differences` does with it |
+|---|---:|---|
+| 100 | 4 148 | adds a frame: creates it through the I3D driver, names it, places it under its parent, and loads a model (type 9) or sound (type 4) through the model or sound cache |
+| 200 | 1 178 | adds an actor: the record opens with the kind dword (a 2 becomes `0x1b`), then the actor's own data; `mission_create_actor` of that kind, `Init` on the new frame, `LoadData`, `mission_add_actor`, and records it in the removed-actor difference vector. Shipped kinds: 1 (530), `0x1b` (463, the cutscene characters), 4 (98), `0x21` (77), 9 (7), 5 (3) |
+| 300 | 1 | no arm: skipped |
+| 400 | 190 | binds an actor to an existing frame: the record is a `u32` name length, the frame name and the kind dword; looks the frame up by name and, when the frame has no actor yet, creates one of that kind. Shipped kinds: 1 (143), `0x21` (45), 2 (1), 6 (1) |
+| 500 | 89 | scripts: one `C_program` per entry (`program_ctor`) |
+
+### 4c. `system\taxi_pas.dat` — a script template, not a chunk tree
+
+The file has no chunk headers. `pedestrian_wave_at_taxi` opens it through a stack `C_chunk` and
+hands that to `program_load_source_code`, which reads a serialised `C_program`: a `u8`, a `u32`
+length and that many bytes of `source_a`, then a `u32` length and that many bytes of `source_b`.
+The shipped file is `01`, length 0, length `0xc65`, then 3 173 bytes of script text — exactly its
+3 182 bytes. The text is the **taxi passenger's script**, a template whose `%s` / `%i` placeholders
+`pedestrian_wave_at_taxi` fills with `crt_sprintf` (the two frame names, three `flt` values and
+the `timeron` arguments) before `program_set_source_code`. Scene chunk `0xAE51` carries the same
+serialised form (`structs/mission.md` §4a).
+
+## 5. 🔑 `chunk_close` and `chunk_dtor` — the close, and the destructor that repeats it
+
+Both bodies unwind the open-chunk stack at `this+0x04`/`+0x08`, back-patching each chunk's 4-byte
+length at `chunk_start + 2` through `dtaSeek`/`dtaWrite`, then `dtaClose` and invalidate the
+handle. They are two functions, not one body emitted twice:
+
+| | `chunk_close` (`0x00544590`) | `chunk_dtor` (`0x004be720`) |
+|---|---|---|
+| role | `C_chunk::Close` | the destructor |
+| after the close | returns 1 (0 when not open) | frees the stack vector through allocator slot 1, returns `void` |
+| references | 13 direct `E8` calls across the binary | 7 direct `E8` calls plus 8 `E9` jumps from MSVC unwind funclets of the form `lea ecx,[ebp-N]; jmp chunk_dtor` |
+
+The unwind funclets are what identify the destructor: they run when an exception leaves a scope
+that holds a stack `C_chunk`, and a funclet only ever calls destructors. Callers that close the
+file early call `chunk_close` and let `chunk_dtor` run at scope exit, where it finds the chunk
+already closed and only frees the vector. `chunk_close` sits in the `C_recorder` TU, 500 KB from
+the rest of the class.
 
 ## 6. The allocator vtable pair and the folded vector ctor
 
@@ -144,19 +191,20 @@ The PS2 build has **6 `C_chunk` symbols**.
 | PS2 method | PS2 VA | size | PC twin | status |
 |---|---|---|---|---|
 | `OpenFile__7C_chunkFPCcb` | 0x0011f7b0 | 184 | `chunk_open_file` | **CONFIRMED** |
-| `Read__7C_chunkFPvi` | 0x003861d0 | 216 | `chunk_read` | **CANDIDATE** — same role, same arity; not body-diffed |
-| `Close__7C_chunkFv` | 0x0011f3a0 | 292 | `chunk_close` + `chunk_close_handle` | **CONFIRMED** — body-diffed ¹ |
+| `Read__7C_chunkFPvi` | 0x003861d0 | 216 | `chunk_read` | **CONFIRMED** — body-diffed: the `max(0, remaining) < size` idiom (`structs/bottle.md` §3c) |
+| `Close__7C_chunkFv` | 0x0011f3a0 | 292 | `chunk_close` | **CONFIRMED** — statement-identical ¹ |
 | `Descend__7C_chunkFv` | 0x0011f4d0 | 228 | `chunk_leave` (`0x005a61b0`) | **CONFIRMED** — the verb is inverted: it ASCENDS ² |
 | `RAscend__7C_chunkFRUs` | 0x00482e00 | 168 | `chunk_enter_next` (`0x005a5fe0`) | **CONFIRMED** — the verb is inverted: it DESCENDS ² |
 | `Size__7C_chunkCFv` | 0x00482230 | 128 | `chunk_bytes_remaining` (`0x005a6250`) | **CONFIRMED** — returns what is LEFT, not the chunk size |
 | - | - | - | `chunk_read_string_and_leave` (`0x005a6280`) | PC-only helper |
 | - | - | - | `chunk_read_dword_and_leave` (`0x00607720`) | PC-side fusion of a read and `Descend`; matches neither |
 | - | - | - | `chunk_ctor` | no PS2 symbol — inlined there |
+| - | - | - | `chunk_dtor` | no PS2 symbol — the PS2 open-chunk stack is an array inside the object, so there is nothing to free |
 | - | - | - | `chunk_vector_allocate` / `std_allocator_deallocate` | no PS2 symbol; the 2-slot allocator vtable is an MSVC STL artifact |
 
-¹ The distinctive part is the write-path back-patch: read the current position, compute
-`pos - chunk_start`, `dtaSeek` to `chunk_start + 2`, `dtaWrite` the 4-byte length, seek back. Two PC
-emissions (§5).
+¹ The same open test with its 0 return, the same write-path back-patch (read the current position,
+compute `pos - chunk_start`, `dtaSeek` to `chunk_start + 2`, `dtaWrite` the 4-byte length, seek
+back), `dtaClose` and the 1 return (§5).
 ² `RAscend` reads a SIX-byte header and **pushes** a level; `Descend` **pops** one and reads
 nothing. The PC names follow the behaviour.
 
@@ -175,13 +223,6 @@ two element types, so no single PS2 constructor is its twin (the fold note lives
 `structs/glass_shatter.md` (the only direct caller of `std_allocator_deallocate`) ·
 `structs/check_seg.md` (the `0x2c`-stride owner of the folded ctor) ·
 `structs/pedestrian.md` (the `taxi_pas.dat` consumer) · `structs/recorder.md` (the TU holding
-`chunk_close_handle`) · `ghidra/Game-ghidra.exe.functions.md` (the function registry).
-
-## 9. Open items
-
-| item | state |
-|---|---|
-| `chunk_read` ↔ `Read__7C_chunkFPvi` | role and position agree; bodies not diffed |
-| why MSVC emitted the close body twice | the lone copy in the `C_recorder` TU has the shape of a per-TU inline instantiation; not measured |
-| the chunk id vocabulary | the header grammar is known (§4); no chunk-id table exists in `def-files-docs/` |
-| `system\taxi_pas.dat` | read through a stack `C_chunk` by `pedestrian_wave_at_taxi`; format undocumented |
+`chunk_close`) · `structs/mission.md`, `structs/particle.md`, `structs/cache_base_block.md`,
+`structs/web_path.md`, `structs/roads.md` (the formats of §4a) ·
+`ghidra/Game-ghidra.exe.functions.md` (the function registry).

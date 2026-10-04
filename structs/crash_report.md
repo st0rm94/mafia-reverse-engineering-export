@@ -1,6 +1,6 @@
 # The crash reporter — `[0x00631620, 0x00633a90]`
 
-**Created** 2026-09-07 09:40 +0200 · **Modified** 2026-09-24 21:22 +0200
+**Created** 2026-09-07 09:40 +0200 · **Modified** 2026-10-01 10:31 +0200
 
 A **PC-only game translation unit**, prefix **`crashreport_`**. Not a class: 28 free functions
 plus two plain record types. It installs an unhandled-exception filter, and when the game faults
@@ -38,7 +38,7 @@ typedef struct {
 |---|---|---|---|---|---|
 | +0x00 | `name` | H | `crashreport_module_load_map_symbols` | `crashreport_build_report` | the token between the section:offset column and the `Rva+Base` column |
 | +0x04 | `rva` | H | `crashreport_module_load_map_symbols` | `crashreport_build_report`, `crashreport_symbol_compare_by_address` | `crt_sscanf(text, "%X", &rva)`; `+= 0x10000000` when the module's preferred load address is `0x10000000` |
-| +0x08 | `lib_object` | H | `crashreport_module_load_map_symbols` | - | parsed and stored; no reader located (§8) |
+| +0x08 | `lib_object` | H | `crashreport_module_load_map_symbols` | - | parsed, stored and copied; never read (§1b) |
 
 The vector is kept **sorted by `rva`** — `crashreport_module_load_map_symbols` ends with
 `crt_qsort(…, 0xc, crashreport_symbol_compare_by_address)` — and
@@ -53,7 +53,7 @@ typedef struct {
 /* +0x04 */ C_string *path;                 // [H] MODULEENTRY32.szExePath
 /* +0x08 */ unsigned  base;                 // [H] modBaseAddr
 /* +0x0c */ unsigned  size;                 // [H] modBaseSize
-/* +0x10 */ vector<C_string> strings;       // [M] allocator byte + begin/end/cap; never populated (§8)
+/* +0x10 */ vector<C_string> strings;       // [M] allocator byte + begin/end/cap; never populated
 /* +0x20 */ unsigned  preferred_base;       // [H] "Preferred load address is ..." from the map file
 /* +0x24 */ vector<S_crashreport_symbol> symbols;  // [H] allocator byte + begin/end/cap
 /* +0x30 */ char      map_tried;            // [H] one-shot guard on the map-file load
@@ -66,10 +66,16 @@ typedef struct {
 | +0x04 | `path` | H | `crashreport_module_list_build` | `crashreport_module_load_map_symbols` | the full path, whose extension is replaced with `.map` |
 | +0x08 | `base` | H | `crashreport_module_list_build` | `crashreport_find_module_for_address` | - |
 | +0x0c | `size` | H | `crashreport_module_list_build` | `crashreport_find_module_for_address` | the containment test is `base <= addr < base + size` |
-| +0x10 | `strings` | M | `crashreport_module_construct_at`, `crashreport_module_assign` | - | constructed, copied and destroyed; nothing pushes into it (§8) |
+| +0x10 | `strings` | M | `crashreport_module_construct_at`, `crashreport_module_assign` | - | constructed, copied and destroyed; nothing pushes into it |
 | +0x20 | `preferred_base` | H | `crashreport_module_load_map_symbols` | `crashreport_module_load_map_symbols` | compared against `0x10000000` to decide the rebase |
 | +0x24 | `symbols` | H | `crashreport_module_load_map_symbols` | `crashreport_build_report` | stride 0xc, sorted by `rva` |
 | +0x30 | `map_tried` | H | `crashreport_build_report` | `crashreport_build_report` | set to 1 before the load, so a module whose `.map` is missing is not searched for twice |
+
+**Two fields are never used, and that is a closed-set measurement.** The module records live only
+in `crashreport_build_report`'s stack-local vector, which `crashreport_module_list_build` fills
+with zeroed records. Every function that receives a module or symbol record is in this translation
+unit or one of its unwind funclets, and none of them pushes into the module's `+0x10` vector or
+reads a symbol's `lib_object`. Both are only constructed, copied, assigned and destroyed.
 
 ## 2. The `.map` file format it parses
 
@@ -139,8 +145,11 @@ the shipped binary's. The walk stops at `_WinMainCRTStartup`, `main` or a frame 
 `KERNEL32.DLL`, and gives up after **0x1e** frames with
 `<Hierachical list can't be build.>` — also the shipped spelling.
 
-Symbol names pass through `UnDecorateSymbolName` on a 0x100-byte buffer whose contents come
-from `string_get_data(buf, 0x100, 0x282)`; the flag word is `0x282` (§8).
+Symbol names pass through `UnDecorateSymbolName(name, buf, 0x100, 0x282)` into a 0x100-byte
+buffer; the decomp shows those three pushes on the preceding `string_get_data` call, which takes
+only ECX. `0x282` is `UNDNAME_NO_MS_KEYWORDS | UNDNAME_NO_ACCESS_SPECIFIERS |
+UNDNAME_NO_MEMBER_TYPE`: the report keeps the return type, the qualified name and the argument
+list, and drops calling-convention keywords, access specifiers and `static` / `virtual`.
 
 ### 3a. The exception-name table
 
@@ -219,6 +228,10 @@ compiler-emitted empty function, not one of the crack's byte patches
 every `.map` file it can find, walks the stack, formats the whole report into a 100 KB buffer —
 and frees it.
 
+No available binary shows what the two callbacks were meant to do: every `Game.exe` variant of
+this release carries the same install call and the same unit byte for byte, and none of the DLLs
+shipped with the game contains a crash reporter.
+
 ### 5a. The re-entrancy hack
 
 A second fault takes a different path. The filter disarms itself with
@@ -258,8 +271,4 @@ before it is called a stub).
 
 | item | state |
 |---|---|
-| module record `+0x10` `vector<C_string>` | constructed, copied, assigned and destroyed, but nothing pushes into it — a cut feature or a producer outside this TU; the one field of `S_crashreport_module` with no established purpose |
-| `S_crashreport_symbol.lib_object` (`+0x08`) | the parser stores it; `crashreport_build_report` prints only `name`; no reader |
-| what the two callbacks were meant to do | no-ops in retail (§5); a log file, dialog or upload is not recoverable from this binary — a pre-release or demo build would settle it |
-| the `UnDecorateSymbolName` flag word `0x282` | not decoded against `dbghelp.h`'s `UNDNAME_*` constants; doing so says how much of the C++ signature the report prints |
 | in game | not tested: force a fault (a debugger write to a code page, or a mod) and confirm nothing is written to disk and no dialog appears |

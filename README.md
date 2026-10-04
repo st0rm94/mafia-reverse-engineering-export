@@ -1,7 +1,7 @@
 # Mafia: The City of Lost Heaven (PC, 2002) — reverse-engineering export
 
 <!-- version -->
-**Export version:** `2026.09.28.1`
+**Export version:** `2026.10.04`
 <!-- /version -->
 
 Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
@@ -31,7 +31,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 |---|---:|---|
 | `basic/artifacts/` | 11 | gameplay and engine write-ups |
 | `police-system/artifacts/` | 5 | the police and offence system |
-| `structs/` | 115 | one doc per class/subsystem: layout, fields, methods, PC↔PS2 twin tables |
+| `structs/` | 114 | one doc per class/subsystem: layout, fields, methods, PC↔PS2 twin tables |
 | `def-files-docs/` | 5 | shipped data formats and tables |
 | `script-mapping/artifacts/` | 3 | the mission-script VM: opcode ↔ command ↔ handler |
 
@@ -54,7 +54,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
   `inventory.md`, `lightness.md`, `line_batch.md`, `loadsave.md`, `mission.md`, `multiplayer.md`,
   `net_event_msg.md`, `net_session.md`, `particle.md`, `pedestrian.md`, `physical_object.md`, `player.md`,
   `police-action.md`, `police-board.md`, `police_manager.md`,
-  `program.md`, `public_physics.md`, `pumper.md`, `pursuit-event-manager.md`, `pursuit_group_manager.md`,
+  `program.md`, `public_physics.md`, `pumper.md`, `pursuit-event-manager.md`,
   `race_session.md`, `racecam.md`, `racing.md`, `racing_menus.md`, `railway.md`, `railway_switch.md`,
   `random_morph.md`, `recorder.md`, `roads.md`, `safedisc_stub.md`, `screen_fade.md`, `seagull_flock.md`,
   `shot_skeleton.md`, `smoke_trail.md`, `soundArena.md`, `sound_table.md`, `speech.md`, `spike_strip.md`,
@@ -68,7 +68,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 | file | what |
 |---|---|
 | `Game-ghidra.exe.annotated.c` | **the annotated PC decompilation** — the main deliverable (19 MB, VA-sorted) |
-| `Game-ghidra.exe.functions.md` | function registry: VA · Ghidra id · project name · PS2 twin (5,098 rows) |
+| `Game-ghidra.exe.functions.md` | function registry: VA · project name · PS2 twin (5,098 rows) |
 | `Game.exe.gzf` | Ghidra 11.4.2 database with all project names and data types (File → Import File) |
 | `Game-racing-mod.exe.c` | raw export of the community racing-mod executable (comparison binary) |
 | `SLUS_206.71.c` | raw export of the PS2 build (unstripped — carries the developers' symbols) |
@@ -81,13 +81,13 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 |---|---|
 | function names | 5,098 functions named, **0 `FUN_` left**; each docblock keeps `Renamed from FUN_xxxxxxxx` |
 | compiler glue | 385 `EHHandler_*` and 1,290 `Unwind_*` funclets named by owner |
-| PS2 twins | 2,651 functions mapped to their original PS2 developer method (`PS2 twin:` line + registry column) |
+| PS2 twins | 2,590 functions mapped to their original PS2 developer method (`PS2 twin:` line + registry column) |
 | docblocks | ~5,400: what it does, parameters, return value, evidence |
-| inline comments | ~9,800 `//` lines inside bodies; ~400 per-`case` docblocks in the script/AI dispatchers |
-| globals and data | ~1,100 `g_*` globals + ~1,700 `s_*` strings named; raw `DAT_` tokens 1,253 → 14 |
+| inline comments | ~9,900 `//` lines inside bodies; ~400 per-`case` docblocks in the script/AI dispatchers |
+| globals and data | ~1,100 `g_*` globals + ~1,800 `s_*` strings named; raw `DAT_` tokens 1,253 → 14 |
 | data types | arrays, vectors, tables and structs typed in Ghidra and spliced back into the source |
 | function set | missing function starts recovered (e.g. the CRT tail, callbacks); a lost jump table restored; ~300 phantom functions invented by the Aggressive Instruction Finder removed |
-| cleanup | Ghidra `WARNING` lines removed; records sorted by VA |
+| cleanup | Ghidra `WARNING` lines removed (2,688 → 0); records sorted by VA |
 <!-- /stats -->
 
 ## Approach

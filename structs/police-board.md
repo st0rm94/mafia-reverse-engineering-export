@@ -1,6 +1,6 @@
 # `police_board` — the pursuit board singleton
 
-**Created** 2026-05-26 11:43 +0200 · **Modified** 2026-09-21 23:38 +0200
+**Created** 2026-05-26 11:43 +0200 · **Modified** 2026-10-04 11:53 +0200
 
 The pursuit **board** singleton that owns and drives all active `police_action` squads. Functions
 whose receiver is this singleton carry the `police_board_*` prefix; the contained per-squad
@@ -10,12 +10,11 @@ whose receiver is this singleton carry the `police_board_*` prefix; the containe
 they still take the board as `this` and walk/mutate the matching squad.
 
 **Relationship to `police_manager.md`:** these are **two genuinely separate structs**.
-`police_manager` is the per-actor sub-object embedded at `actor + 0x2da0` (size 0xB0); this is a
-global singleton. They happen to have unrelated content at overlapping offsets (e.g. both have a
+`police_manager` is the sub-object embedded once in the `C_game` world object at `C_game + 0x2da0`
+(size 0xB0); this is a separate global singleton. They happen to have unrelated content at overlapping offsets (e.g. both have a
 `+0x24` field with completely different meanings) — they are NOT views into the same memory.
 
-**Status:** reconstructed from `Game.exe` disassembly + decomp static analysis. No runtime
-validation.
+**Status:** reconstructed from `Game.exe` disassembly + decomp static analysis (§8).
 
 ---
 
@@ -32,7 +31,8 @@ constructed in place at engine init.
   `B9 A8 52 65 00`) and **zero** references via any other addressing mode (no `[reg+disp]`, no
   `LEA`, no absolute `[imm32]`). Every access is `this`-pointer setup for a `__fastcall` /
   `__thiscall` call.
-- 26 distinct methods are called on it through that pattern (§3).
+- 30 distinct methods are called on it through that pattern, and one more load feeds a tail
+  jump (`jmp police_board_end_pursuit` at `0x00447788`, inside `police_board_invalidate_actor`) (§3).
 - The 89 references cluster in the `0x004469e0..0x004487f0` VA range plus a handful of high-VA
   callers — consistent with a single singleton owned by the police subsystem.
 
@@ -43,8 +43,13 @@ binary as an immediate, not computed via base + offset.
 
 ## 2. Field layout
 
-**Size:** at least `0x34`. Fields are observed up to `+0x30`; no high-confidence field exists past
-it, and the next BSS landmark needed to bound the size has not been identified.
+**Size:** exactly `0x34`. The next member of `ai_manager`, `ai_groups`, starts at `0x006552dc` =
+board `+0x34` (`structs/ai_manager.md`).
+
+The board holds two MSVC `std::vector` objects of 0x10 bytes each — an allocator word, then
+begin / end / capacity: the `ai_anim_item` vector at `+0x00` and the `police_action` vector at
+`+0x10`. `police_board_dtor`'s tidy zeroes both triples (`+0x04/+0x08/+0x0c` and
+`+0x14/+0x18/+0x1c`).
 
 **Confidence tags:** **[H]** disasm or body-read evidence with writer + reader · **[M]** body-read
 evidence, semantics partly inferred · **[U]** never observed accessed.
@@ -59,13 +64,14 @@ typedef struct police_board {
                                                  //     +0x04/+0x08 (§5)
     /* +0x04 */ ai_anim_item*  items_begin;      // [H] stride 0x10 (§5)
     /* +0x08 */ ai_anim_item*  items_end;        // [H]
-    /* +0x0c */ uint32_t       _unk_0c;          // [U]
-    /* +0x10 */ uint32_t       _unk_10;          // [U]
+    /* +0x0c */ ai_anim_item*  items_cap;        // [H] capacity; zeroed only by the dtor
+    /* +0x10 */ uint32_t       squads_alloc;     // [H] allocator word of the squad vector object
+                                                 //     (starts here); never accessed
     /* +0x14 */ police_action* squads_begin;     // [H] begin of the pursuit-squad array, stride
                                                  //     0x6c
     /* +0x18 */ police_action* squads_end;       // [H] one past last; count = (end-begin)/0x6c
-    /* +0x1c */ uint32_t       squads_cap;       // [M] presumed capacity (vector triple); never
-                                                 //     observed in a body read
+    /* +0x1c */ police_action* squads_cap;       // [H] capacity: read by
+                                                 //     police_action_vector_insert_at
     /* +0x20 */ uint32_t       session_id_counter; // [H] monotonic pursuit-session id
     /* +0x24 */ uint32_t       arrest_settle_timer; // [H] post-arrest settling grace timer (ms)
     /* +0x28 */ float          police_speed_factor; // [H] also addressed absolutely as
@@ -73,7 +79,7 @@ typedef struct police_board {
     /* +0x2c */ uint8_t        busted_cutscene_active; // [H] an arrest/fine capture cutscene is
                                                  //     animating
     /* +0x2d */ uint8_t        _pad[0x03];       // [U] padding inferred
-    /* +0x30 */ actor*         tracked_npc;      // [H] suspend/resume "keep" exclusion
+    /* +0x30 */ actor*         tracked_npc;      // [H] also parked by the suspend/resume pair
 } police_board;
 ```
 
@@ -82,14 +88,16 @@ typedef struct police_board {
 | Offset | Type | Field | Conf | Reset value | Notes |
 |---|---|---|---|---|---|
 | +0x04 / +0x08 | ptr | items_begin / items_end | H | end = begin | the embedded `ai_animitem_manager`'s `ai_anim_item` vector, stride 0x10 (§5) |
+| +0x0c | ptr | items_cap | H | unchanged | capacity of the `ai_anim_item` vector; zeroed with `+0x04`/`+0x08` by `police_board_dtor`, no other access |
+| +0x10 | u32 | squads_alloc | H | unchanged | allocator word at the start of the squad vector object; `police_board_create_and_engage` hands `board+0x10` to `police_action_vector_insert_at` / `police_action_vector_count`, which read `+0x04..+0x0c` of it |
 | +0x14 | ptr | squads_begin | H | unchanged | stride-0x6c vector of `police_action` |
 | +0x18 | ptr | squads_end | H | = begin (cleared) | end pointer of the same vector |
-| +0x1c | ptr | squads_cap | M | not written by the reset | inferred from the vector convention |
+| +0x1c | ptr | squads_cap | H | unchanged | read by `police_action_vector_insert_at` (`[ecx+0xc]`, `ECX = board+0x10`); written by `police_board_create_and_engage`'s grow path (`0x0044736f`) and zeroed by `police_board_dtor` |
 | +0x20 | u32 | session_id_counter | H | 0 | bumped by `police_board_increment_counter` ¹ |
 | +0x24 | u32 | arrest_settle_timer (ms) | H | 0xfffffff | post-arrest settle grace, clamped to 12000 on ARREST only ² |
 | +0x28 | float | police_speed_factor | H | 1.0f | the same field as absolute-addressed `DAT_006552d0` ³ |
 | +0x2c | u8 | busted_cutscene_active | H | 0 | "a capture cutscene (arrest or fine) is animating" ⁴ |
-| +0x30 | actor* | tracked_npc | H | 0 | set by `police_board_set_tracked_npc`; the suspend/resume pair `police_board_suspend_npcs` / `police_board_resume_npcs` use it as a "keep" exclusion when adjusting hold-timer offsets on all type-0x1b NPCs |
+| +0x30 | actor* | tracked_npc | H | 0 | set by `police_board_set_tracked_npc`; `police_board_suspend_npcs` / `police_board_resume_npcs` park and un-park it together with the other `C_entity` actors (§3) |
 
 ¹ `*(int*)(this+0x20) += 1`; the function returns the post-increment value in EAX despite Ghidra's
 `void` declaration. The returned value is stamped into each newly-constructed `police_action`'s
@@ -134,7 +142,7 @@ There is no separate `g_police_speed_factor` global; `DAT_006552d0` is an alias 
 
 ### 2c. Three structs that are not this one
 
-Offsets attributed to "the manager" in early work belong to two other objects:
+These offsets belong to three other structs, not to the board:
 
 | offsets | where they really live |
 |---|---|
@@ -167,9 +175,9 @@ sub-state published each tick by `ai_fight_manager_tick`.
 
 ---
 
-## 3. Methods called on the singleton (26 distinct callees)
+## 3. Methods called on the singleton (30 distinct callees)
 
-All 26 are reached via `MOV ECX, 0x006552a8; CALL <method>`. Counts are the number of distinct
+All 30 are reached via `MOV ECX, 0x006552a8; CALL <method>`. Counts are the number of distinct
 `MOV ECX + CALL` immediate pairs in `Game.exe` (a function called from two places counts twice).
 
 | VA | Function | Calls | Notes |
@@ -177,26 +185,29 @@ All 26 are reached via `MOV ECX, 0x006552a8; CALL <method>`. Counts are the numb
 | 0x004469e0 | `police_board_reset` | 1 | clears the squad array + writes the five header fields (§6) |
 | 0x00446b00 | `police_board_increment_counter` | - ¹ | bumps `+0x20` |
 | 0x00446b10 | `police_board_find_group_by_officer` | 10 | walks squads, returns the one containing this officer in its inner subarray |
-| 0x00446ba0 | `police_board_find_group_by_session_id` | 4 | walks squads, returns the one whose `+0x30` matches the supplied session id |
-| 0x00446c00 | `police_board_create_and_engage` | 1 | allocates a new 0x6c-byte `police_action`, stamps it with the `+0x20`-derived session id |
-| 0x004474a0 | `police_board_end_pursuit` | 2 | frees a `police_action` squad + collapses the end pointer down |
-| 0x00447610 | `police_board_invalidate_actor` | 4 | walks squads, applies state transitions when a tracked NPC dies |
+| 0x00446ba0 | `police_board_find_group_by_session_id` | 11 | walks squads, returns the one whose `+0x30` matches the supplied session id |
+| 0x00446c00 | `police_board_create_and_engage` | 5 | allocates a new 0x6c-byte `police_action`, stamps it with the `+0x20`-derived session id |
+| 0x004474a0 | `police_board_end_pursuit` | 2 | frees a `police_action` squad + collapses the end pointer down; also reached by one tail jump (§1) |
+| 0x00447610 | `police_board_invalidate_actor` | 5 | walks squads, applies state transitions when a tracked NPC dies |
 | 0x004477b0 | `police_board_tick` | 1 | the per-frame tick: decrements `+0x24` by dt and ticks each squad |
 | 0x00447820 | `police_board_arrest_settle_is_zero` | 2 | tests `+0x24 == 0` (arrest-settle done) |
-| 0x00447830 | `police_board_raise_gun_escalation` | 4 | loud GUN alarm fan-out (raises committed `+0x3c` = 3) ² |
-| 0x00447950 | `police_board_raise_handcuffs_escalation` | 2 | loud HANDCUFFS alarm fan-out (raises committed `+0x3c` = 2) ² |
+| 0x00447830 | `police_board_raise_gun_escalation` | 5 | loud GUN alarm fan-out (raises committed `+0x3c` = 3) ² |
+| 0x00447950 | `police_board_raise_handcuffs_escalation` | 4 | loud HANDCUFFS alarm fan-out (raises committed `+0x3c` = 2) ² |
 | 0x00447a90 | `police_board_disband_by_target` | 1 | disbands all squads targeting an NPC |
 | 0x00447b00 | `police_board_clamp_arrest_settle_12s` | 1 | caps `+0x24` at 12000 ms (on ARREST only) |
 | 0x00447b10 | `police_board_promote_handcuffs_escalation` | 1 | silent commit half of the handcuffs raise (squad pair (4,5)) |
 | 0x00447bb0 | `police_board_promote_gun_escalation` | 1 | silent commit half of the gun raise (squad pair (0,1)) |
-| 0x00447c40 | `police_board_update_sighting` | 10 | refreshes the per-squad sighting timestamp |
+| 0x00447c40 | `police_board_update_sighting` | 13 | refreshes the per-squad sighting timestamp |
 | 0x00448150 | `police_board_target_matches` | 1 | predicate: any squad has target == npc |
 | 0x004481c0 | `police_board_refresh_target_vehicle` | 1 | refreshes the cached vehicle pointer for a squad |
-| 0x00448230 | `police_board_has_recent_sighting` | 2 | predicate: any squad sighted within the last 2000 ms |
+| 0x00448230 | `police_board_has_recent_sighting` | 4 | predicate: any squad sighted within the last 2000 ms |
+| 0x00448300 | `police_board_has_group_for_target` | 2 | predicate: any squad, of any tier, has target == actor; `police_manager_tick` uses it to pick the identity branch (`structs/police_manager.md` §3.2) |
 | 0x00448350 | `police_board_broadcast_for_target` | 1 | fans event 0x17 to every squad targeting an NPC |
 | 0x004483b0 | `police_board_is_busted_cutscene_active` | 2 | reads `board+0x2c` (`!= 0`); a single byte read, does NOT walk squads |
 | 0x004483c0 | `police_board_set_busted_cutscene_active` | 2 | writes `board+0x2c` (1 = cutscene started, 0 = ended); both callsites are in `entity_action_tick` case 0x21 |
 | 0x004483d0 | `police_board_is_actor_in_pursuit` | 3 | predicate: is `actor` (kind 0x1b NPC or **2 = player**) the tracked target (`squad+0x60`) or an officer (`squad+0x4`/`+0x8`) of any squad? |
+| 0x00448470 | `police_board_suspend_npcs` | 1 | parks every `C_entity` of the mission and game actor lists by adding 10000 to its AI state `+0xf40` (`structs/entity.md` §7), skipping the two caller-given actors and type group 2 (the police, `structs/entity.md` §4e); also parks `tracked_npc` (`+0x30`), hides the ambient traffic and sets `g_ambient_ai_suspended`. Its one caller is `entity_action_tick` case `0x21`, when it captures the player |
+| 0x00448550 | `police_board_resume_npcs` | 1 | the inverse (subtracts 10000, shows the traffic, clears the flag), called by the same arm when the capture cutscene ends; its first loop does not skip type group 2 and its second does not skip the two caller-given actors |
 | 0x00448620 | `police_board_has_active_group_for_target` | 2 | true if a squad has target == npc AND flag bit 0 set |
 | 0x00448680 | `police_board_set_tracked_npc` | 1 | stores npc at `+0x30` |
 | 0x00448690 | `police_board_end_all_pursuits` | 1 | ends every squad's pursuit + clears the anim-item vector (§5) |
@@ -265,10 +276,13 @@ shift-compact tail of `ai_animitem_manager_clear`.
 Each method has exactly **one** callsite, which is what licenses the class attribution rather than a
 shared-helper reading.
 
-**Where entries are pushed is unknown.** A scan of `Game.exe` finds **zero absolute references** to
-`singleton+0x04` (`0x006552ac`) or `singleton+0x08` (`0x006552b0`), and no inlined push via
-`ADD [singleton+0x08], imm8`; all vector-field accesses are ECX-relative, so the push-side helper
-must be inside one of the 26 methods of §3 (§8).
+**Nothing ever adds an entry — the vector is always empty.** The board pointer reaches code only
+through the 89 `MOV ECX, 0x006552a8` loads (§1), and `Game.exe` holds no absolute reference to
+`0x006552ac..0x006552b8`. Across the 30 methods of §3 plus the two item methods and
+`police_board_dtor`, the only writes to `+0x04`/`+0x08`/`+0x0c` are the shrinking ones
+(`ai_animitem_manager_init`'s `end = begin`, the erase in `ai_animitem_manager_clear`) and the
+dtor's tidy. The member is vestigial; what an entry would have represented is not recoverable
+from the binary.
 
 ---
 
@@ -289,6 +303,8 @@ squad is `ai_police_action`; the embedded item manager is `ai_animitem_manager`
 | 0x00447610 | `police_board_invalidate_actor` | `ZinvalidujAktora__18ai_police_nastenka` | CONFIRMED |
 | 0x004477b0 | `police_board_tick` | `Tick__18ai_police_nastenka` | CONFIRMED |
 | 0x004483d0 | `police_board_is_actor_in_pursuit` | `SemTrefenaLocklaKurva__18ai_police_nastenka` ¹ | CONFIRMED |
+| 0x00448470 | `police_board_suspend_npcs` | `VseckyUbozakyStopni__18ai_police_nastenkaFP7C_actorP7C_actor` ³ | CONFIRMED |
+| 0x00448550 | `police_board_resume_npcs` | `VseckyUbozakyRozejdi__18ai_police_nastenkaFP7C_actorP7C_actor` ³ | CONFIRMED |
 | 0x00448690 | `police_board_end_all_pursuits` | `KonecSmeny__18ai_police_nastenkaFv` ("end of shift") | CONFIRMED |
 | 0x004486f0 | `police_board_release_all_group_vehicles` | `ZastavMotorizovaneJednotky__18ai_police_nastenka` | CONFIRMED |
 | 0x00443860 | `police_board_dtor` | - ² | STRUCTURAL |
@@ -297,6 +313,13 @@ squad is `ai_police_action`; the embedded item manager is `ai_animitem_manager`
 
 ¹ A developer joke ("hit-and-locked, dammit"); the body tests squad membership, not a hit/lock flag.
 ² Inlined into `__dt__10ai_managerFv` on PS2.
+³ Statement for statement: the same two loops (the mission actor list, then `C_game`'s temporary
+actors), the same exclusions, including the same asymmetry in the resume half (§3), the same
+traffic switch, `salina_v_kine` ↔ `g_ambient_ai_suspended`, and the same bump of the officer at PS2
+`+0x28` ↔ PC `+0x30`. The PS2 adds and subtracts 10000 through `NeserADejchej` /
+`NeserANedejchej` where the PC writes `+0xf40` directly. The two names are a developer joke pair,
+roughly "stop all the poor sods" and "send all the poor sods on their way"; the second body undoes
+the first and scatters nobody, so the PC name `_resume_npcs` states what it does.
 
 **The board's offset inside `ai_manager` is identical on both builds:** PS2
 `Init__10ai_managerFv` opens `reserve__…(param_1 + 0x90, 100)`, and PC `police_board+0x00` is
@@ -324,6 +347,10 @@ an MSVC `std::vector` carries an allocator word, **and** the board's own vector 
 `police_action` vector **in reverse**, call `police_board_end_pursuit` ↔ `AkceDokoncenaPlukovniku`
 on every record, and finish with the anim-item clear at the same position.
 
+**The anim-item vector is empty on both builds.** PS2 instantiates only the constructor,
+destructor, deleter, `clear` and `erase` of `vector<ai_anim_item>` — no insert and no reserve —
+which matches the PC finding in §5.
+
 **Build differences.** PS2 `ZacatekSmeny` *frees* the record buffer (`__dl__`) and zeroes
 begin/end/cap; PC `police_board_reset` only resets `end = begin`, keeping the capacity. Vtable
 **slot numbers** differ for the anim-item teardown (PS2 `0x40`/`0x38`/`0x8` vs PC
@@ -338,8 +365,8 @@ arity are what match.
   owned by this board at `+0x14`/`+0x18`: field evidence, the squad FSM, the `police_action_*`
   family and the Cheat Engine layout. Each squad is created by `police_board_create_and_engage` and
   ticked by `police_action_tick`, driven from `police_board_tick`.
-- [`police_manager.md`](police_manager.md) — the other struct people call "the manager": per-actor
-  sub-object at `actor + 0x2da0`. Distinct from this singleton.
+- [`police_manager.md`](police_manager.md) — the other struct people call "the manager": the
+  sub-object at `C_game + 0x2da0`. Distinct from this singleton.
 - [`ai_manager.md`](ai_manager.md) — the root object this board is a member of.
 - [`entity.md`](entity.md) §4/§5 — the substate-lock table and `locked_state` (§2c).
 - `police-system/artifacts/police-system.md` — diagrams and flow descriptions of the pursuit-squad lifecycle.
@@ -351,9 +378,4 @@ arity are what match.
 
 | item | state |
 |---|---|
-| upper bound on the struct size | confirmed to `+0x34`; the next BSS landmark after `0x006552d0` has not been identified |
-| `+0x0c` / `+0x10` | never observed accessed |
-| `+0x1c` (`squads_cap`) | presumed capacity from the vector triple; no body read touches it, and `police_board_reset` does not write it |
-| what the `ai_anim_item` entries represent | "3 payload dwords + a polymorphic object with a 3-method cleanup vtable" matches an event/subscriber/handler list, but no writer is identified |
-| where items are pushed into the `+0x04` vector | must be inside one of the 26 methods of §3 (all access is ECX-relative). Candidates to body-read for the alloc+emplace pattern (`operator_new(0x10)` → init 3 dwords + object pointer at `+0x0c` → store at `*end` → bump end): `police_board_raise_gun_escalation`, `police_board_raise_handcuffs_escalation`, `police_board_invalidate_actor`, `police_board_create_and_engage`, `police_board_set_tracked_npc` |
 | runtime validation | none of the layout has been confirmed in game |

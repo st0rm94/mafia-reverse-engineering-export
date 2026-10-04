@@ -1,6 +1,6 @@
 # `C_Debris` — the debris and spark effect
 
-**Created** 2026-09-04 13:25 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-09-04 13:25 +0200 · **Modified** 2026-10-01 14:19 +0200
 
 PC prefix **`debris_`**, code range `[0x0061e100, 0x006243ac]`. Its own translation unit,
 `VE_Debris.cpp`, immediately after `VE_BreakageGlass.cpp`.
@@ -63,11 +63,28 @@ Seventeen dwords. The decoded part:
 |---|---|---|---|
 | `+0x00`..`+0x08` | head velocity | [H] | gravity is accumulated into it each tick |
 | `+0x0c`..`+0x14` | tail velocity | [H] | integrated separately, only after the arm gate |
-| `+0x18`..`+0x20` | a second direction triple | [M] | added to both endpoints each tick; unnamed |
+| `+0x18`..`+0x20` | base velocity | [H] | added × dt to both endpoints every tick and never touched by gravity; copied from the descriptor's optional `+0x08` vector, zero when that pointer is null |
 | `+0x24`..`+0x2c` | head position | [H] | fed to `line_batch_add` |
 | `+0x30`..`+0x38` | tail position | [H] | the other end of the drawn segment |
 | `+0x3c` | age (seconds) | [H] | accumulated by `dt`; the `>= 0.05` gate arms the tail |
 | `+0x40` | lifetime | [H] | the compaction pass drops the record when age exceeds it |
+
+### 1c. `S_FLASH_INIT` — the spawn descriptor (`0x28` bytes)
+
+Read field by field by `debris_generate_flash`; every producer zeroes all ten dwords first.
+
+| offset | field | unit | use |
+|---|---|---|---|
+| `+0x00` | count | streaks | one record per iteration |
+| `+0x04` | `S_vector *` origin | world position | copied into the tail position; the head position is the origin jittered |
+| `+0x08` | `S_vector *` base velocity | m/s | copied into `S_FLASH+0x18`; null = zero |
+| `+0x0c` | `S_vector *` direction | unit vector | the axis of the orthogonal basis |
+| `+0x10` | direction jitter | basis units | `(rand() % 200 - 100) × 0.01 ×` this along each of the two perpendicular axes, then normalised |
+| `+0x14` | origin jitter | m | the same draw applied to the head position |
+| `+0x18` | speed min | m/s | the speed actually used (§2) |
+| `+0x1c` | speed max | m/s | never reached (§2) |
+| `+0x20` | lifetime min | s | `min + (rand() % 100) × (max - min) × 0.01` |
+| `+0x24` | lifetime max | s | the upper bound of the lifetime draw |
 
 ---
 
@@ -85,12 +102,12 @@ airplane_hit / car_on_collision_apply_damage x2 / crash_obj_ai
    -> debris_generate_flash(S_FLASH_INIT *)
         builds an orthogonal basis around the descriptor's direction,
         jitters origin and direction with rand() % 200 - 100 scaled by 0.01,
-        random length between the descriptor's two limits
+        speed = descriptor minimum (the random term is always 0, see below)
         appended to the stride-0x44 vector
 
 game_tick -> debris_tick(dt)            dt clamped to 1..0x53 ms
         pass 1  every piece: gravity, integrate, spin + 2pi wrap, write the frame
-                              transform, clear `live` below y = -20.0
+                              transform, clear `live` once vel_y < -20.0
         pass 2  compaction: release dead frames, debris_list_erase_at
         pass 3  every flash: integrate both endpoints, age, arm the tail past 0.05 s,
                               draw through line_batch_add, then compact by age
@@ -98,6 +115,23 @@ game_tick -> debris_tick(dt)            dt clamped to 1..0x53 ms
 
 **A flash's tail does not exist for the first 50 ms.** The `0.05` gate is what makes a spark read
 as a growing streak rather than a fixed-length line.
+
+**Every flash flies at the descriptor's minimum speed.** The speed is
+`(float)((rand() % 100) / 100) × (max - min) + min`, and the division is an integer one
+(`idiv` by `0x64`, then `fild`), so the random term is always 0. The lifetime draw multiplies
+before it divides and does vary.
+
+### 2a. The four producers
+
+| producer | count | direction | direction jitter | origin jitter | speed | lifetime | base velocity |
+|---|---|---|---|---|---|---|---|
+| `airplane_hit` | 20 + a random draw | the caller's vector | 2.0 | 0 | 8.0 (max 18.0) | 0.25..0.5 s | none |
+| `car_on_collision_apply_damage`, impact above 5.0 | from the impact, at most 15 | up `(0, 1, 0)` | 1.0 | 0.2 | 6.0 (max 10.0) | 0.085..0.2 s | none |
+| `car_on_collision_apply_damage`, impact above 2.0 with `param_7 == 0` | from the impact, at most 7 | the reverse of the `param_6` vector, tilted up by 0.5 and normalised | 1.0 | 0.2 | `4t + 2` (max `4t + 5`) | `0.085 + 0.1(1 - t)` .. `+ 0.075` s | the `param_6` vector |
+| `crash_obj_ai`, flag bit `0x10` of `+0x3b0` | 20 + a random draw | up `(0, 1, 0)` | 1.0 | 0 | 4.0 (max 8.0) | 0.1..0.25 s | none |
+
+`t` in the third row is a value `car_on_collision_apply_damage` computes on the x87 stack just
+before the call.
 
 The PC scales `rand()` by `1/32767` (`3.051851e-05`) and `0.3/32767` (`9.155553e-06`).
 
@@ -168,6 +202,10 @@ PS2 defaults the colour parameter to `0x3dcccccd` = 0.1 grey when the caller pas
 formula, different RNG range — which is why the shared magic constants (`11.309733`, `0.7`, `0.3`)
 match while the multipliers do not.
 
+**The flash speed draw is integer division on both builds.** `GenerateFlash__8C_DebrisFP12S_FLASH_INIT`
+computes `param_2[6] + (max - min) × (float)((rand() % 100) / 100)`, so the PS2's flashes also fly
+at the minimum speed: a source-level property, not a compiler difference.
+
 **Containers.** `reserve__Q23gif19vector<8S_DEBRIS,8>Fi` and
 `reserve__Q23gif18vector<7S_FLASH,8>Fi` are Metrowerks `gif::vector` growth functions —
 **structural correspondents** of the PC's MSVC insert helpers, not twins. No `PS2 twin:` line is
@@ -192,9 +230,7 @@ the passes MSVC unrolls hardest; nothing here is an outlier.
 
 | item | state |
 |---|---|
-| `S_FLASH + 0x18`..`+0x20` | measured (added to both endpoints each tick), unnamed |
-| the `S_FLASH_INIT` descriptor | read field-by-field by `debris_generate_flash`, but its producers' literals are not decoded, so the two spread radii and the two length limits have no real-world units |
-| in game: removal and tail delay | a debris piece that falls below y = -20 is silently removed, and a spark's tail only appears after 50 ms; neither has been watched |
+| in game: removal and tail delay | a debris piece is silently removed once its vertical velocity drops below -20 (falling faster than 20 units/s), and a spark's tail only appears after 50 ms; neither has been watched |
 | in game: gravity | debris gravity is caller-supplied, so different impacts should throw fragments that fall at different rates, unlike glass shards (-8.0); not observed |
 
 ---

@@ -1,6 +1,6 @@
 # `C_web_path` — the navigation web (the game's road/path graph)
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-28 19:40 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-10-04 20:16 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c`, cross-checked against the non-stripped PS2 ELF
 (`SLUS_206.71`). This documents the PC build; the PS2 symbol table supplies the original developer
@@ -20,14 +20,13 @@ it. It is what `ai_wayfind` and `ai_path` (the layer above — `structs/ai_wayfi
 
 **What the graph is, and is not:**
 
-- **One graph tier.** The PS2 symbol table has exactly one graph class — this one — over
-  `C_web_node` / `C_web_connection`. There is no sector tier and no sector class. The
-  long-distance branch diverts to a **ROADS** route (`web_path_find_path_by_roads`), not to a
-  second graph.
-- **The root is `g_act_mission+0x2c`** (194 occurrences in the decomp); `g_display+0x2c` occurs
-  zero times.
-- **The 500-unit threshold** (`250000.0`) and the **structure at `*(g_act_mission+0x30)`**
-  consulted alongside it are real. That structure is the **road network** (§7).
+- **One graph tier** over `C_web_node` / `C_web_connection` (§5). There is no sector tier and
+  no sector class. The long-distance branch diverts to a **ROADS** route
+  (`web_path_find_path_by_roads`), not to a second graph.
+- **The root is `g_act_mission+0x2c`** (194 occurrences in the decomp).
+- **The 500-unit threshold** (`250000.0`) gates the roads diversion together with the
+  **structure at `*(g_act_mission+0x30)`**. That structure is the `C_roads` road network singleton,
+  whose `+0x08` table is the stride-`0xec` crossing array (`structs/roads.md`).
 - **`0x40` on a connection is the editor SELECTED bit** (§2).
 
 **Confidence tags:** **[H]** body-read on both builds · **[M]** inferred · **[U]** not observed.
@@ -131,7 +130,7 @@ and the `C_web_path` **ctor**. §5 covers each.
 ### 3b. False function starts in this cluster
 
 The aggressive instruction finder created two false function starts at mid-body branch
-targets. Neither is in Ghidra's default analysis or the annotated decomp.
+targets. Neither is in Ghidra's default analysis or `Game-ghidra.exe.annotated.c`.
 
 | Fake start | Really is | Proof |
 |---|---|---|
@@ -151,6 +150,8 @@ arrays (stride 8). The rest of the file format is undocumented (§7).
 
 ## 5. PC vs PS2
 
+- **One graph class.** The PS2 symbol table has exactly one graph class — `C_web_path` — over
+  `C_web_node` / `C_web_connection`, and no sector class.
 - **Node record stride: PC `0x1e`, PS2 `0x20`.** Every *field offset* inside the record is
   identical — the difference is a trailing alignment pad only, so field-level findings transfer
   directly. `C_web_connection` has **zero delta** (8 bytes on both).
@@ -190,12 +191,13 @@ arrays (stride 8). The rest of the file format is undocumented (§7).
 
 - `structs/web_node.md` — the node record and its connection list.
 - `structs/ai_wayfind.md` / `structs/ai_path.md` — the layer above this one.
+- `structs/roads.md` — the `C_roads` singleton at `*(g_act_mission+0x30)` that
+  `web_path_find_path_by_roads` routes over.
 
 ## 7. Open items
 
 | item | state |
 |---|---|
-| the road structure at `*(g_act_mission+0x30)` | real, present on both builds, gated by the 500-unit threshold, undocumented anywhere; PC reads it with a stride of `0xec`; `web_path_find_path_by_roads` is the way in |
 | the `+0x14` search scratch | graded [M] from PC only; confirm against PS2 |
 | remaining connection flag bits | unidentified beyond `0x40` / `0x80` |
 | `*HlpMem` trio PS2-only grade | identify the single PS2 caller of `AllocHelpMem`; if it belongs to level load/teardown, the grade is settled |

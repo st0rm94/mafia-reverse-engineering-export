@@ -1,6 +1,6 @@
 # `C_PhThing` — the physics-body base ("**Ph**ysical **Thing**")
 
-**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-09-17 22:52 +0200
+**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-10-01 10:31 +0200
 
 The shared rigid-body base behind everything in the game that falls, rolls, tumbles and
 collides on its own: dropped car parts, crash debris, boxes, dropped weapons and scripted
@@ -38,8 +38,7 @@ The two dispatcher cases are byte-confirmed from the game's own keyword table
 (`script-mapping/artifacts/opcode-table.md`) and written up in
 `script-mapping/artifacts/opcodes-verified.md`. Case `0xcc` must construct one of the five
 subclasses below, selected by one of its four arguments (`create_physicalobject ww, xx, yy, zz`
-per the Mafia Script Data Reference); reading that one case would confirm the whole kind→class
-mapping from the script side, independently of the kind byte (§8).
+per the Mafia Script Data Reference) (§8).
 
 ## 2. The five subclasses — a closed set on both builds
 
@@ -102,10 +101,7 @@ reference, whose 30-object cap for `create_physicalobject` is the literal `0x1e 
 | 0x004c6480 | `physical_object_net_apply_remote_state` | 15 | `NetDirect__9C_PhThingFUi` | STRUCTURAL — §6d |
 | 0x004c6b20 | `i3d_frame_set_direction` | - | - | foreign — an `I3D_frame` method sitting in this TU ² |
 
-¹ Its body is 480 B against the PS2's 564 B (ratio 0.85). A mid-body split at `0x004c5777` was
-a disassembler artifact, not a function: `jne 0x004c5777` at `0x004c5770` is this function's
-`if (cVar2 == '\0') return 0;` early exit, the bytes there are `mov word ptr [ebx], 4` — the
-savegame version tag — and the address has 0 `E8` callers and 0 datarefs.
+¹ Its body is 480 B against the PS2's 564 B (ratio 0.85).
 
 ² Receiver byte-proven an `I3D_frame`: `mov ecx,[ebp+0x68]` (= `this->frame`) from
 `physical_object_move_wheel`, and `mov ecx,[esi+0x60]` from `camera_apply_desired_pos`, outside
@@ -159,19 +155,25 @@ Everything below is **PC**; the cross-build mapping is in §6.
 | `+0x1a0` | **inverse inertia, full world tensor** (16 floats) — precomposed by `physical_object_build_world_inertia_tensor` | H |
 | `+0x1e0` `+0x1e4` `+0x1e8` | **linear velocity** | H |
 | `+0x1ec` `+0x1f0` `+0x1f4` | **angular velocity** | H |
+| `+0x1f8` | copied from descriptor field `friction` (both shapes, `structs/box_new.md` §1a) (§8) | M |
 | `+0x1fc` | restitution, default **1.05** | H |
 | `+0x200` | friction, default **0.03** | H |
 | `+0x204` | derived wheel constant, `width × mass × 37.03704` | H |
 | `+0x208` `+0x20c` `+0x210` | wheel contact offset, `(0,−1,0) × mass × width` | H |
 | `+0x214` | wheel width | H |
-| `+0x220` | wheel radius | H |
+| `+0x21c` | copied from `S_THING_WHEEL +0x04` (§8) | M |
+| `+0x220` | wheel radius, from `S_THING_WHEEL +0x00` | H |
+| `+0x224` | copied from `S_THING_WHEEL +0x1c` (`damping`) (§8) | M |
 | `+0x2ec` | at-rest lifetime accumulator, in seconds | H |
 | `+0x2f0` | at-rest lifetime limit (0.6 by default) | H |
 | `+0x2f4` | frame-clamp ratio `83.0 / Δt`, consumed by the network layer | H |
-| `+0x2f8` | effect object allocated through `g_i3d_driver` slot 0x4c | M |
+| `+0x2f8` | the impact **`I3D_sound`**, allocated through `g_i3d_driver` slot 0x4c; `physical_object_update` tests it with `IsPlaying` (vtable `+0x54`), switches it with `SetOn` (`+0x24`) and loads it with `sound_table_construct_sound` | H |
 | `+0x2fc` `+0x300` `+0x304` | position of the frame's **deepest** hit | H |
-| `+0x308` `+0x30c` | the −1-initialised id pair (`+0x30c` gates the deepest-hit record) | H |
+| `+0x308` | **impact-sound column**, −1 = silent (the constructor default). When a hit's magnitude `+0x330` exceeds `mass × 0.4`, `physical_object_update` loads sound id `g_surface_material_table + 0x130 + (column + material × 0x5c) × 4` — the struck surface's record holds 14 impact-sound ids at `+0x130`. `crash_obj_init` sets it from the `I` tag | H |
+| `+0x30c` | −1-initialised; gates the deepest-hit record | H |
 | `+0x32c` `+0x330` | deepest-hit sub-id and magnitude | H |
+| `+0x334` | ms since the last impact sound, advanced by `physical_object_update` and zeroed when one plays | H |
+| `+0x338` | **impact sound may restart** (bool). Set, a new impact sound cuts off the one still playing once `+0x334` exceeds 150 ms; clear, it waits until the sound stops. `crash_obj_init` sets it from the `T` tag | H |
 | `+0x340` `+0x344` `+0x348` | **the `S_SURR_ACT` vector** — begin / end / capacity | H |
 
 ### 4c. `S_SURR_ACT` — the riding-actor record, 0x14 bytes
@@ -290,11 +292,12 @@ velocity words, and a flag byte at `+0x38`. The receive half is
 | `+0x2ec` | `+0x5d0` | at-rest lifetime |
 | `+0x2f0` | `+0x5d4` | lifetime limit |
 | `+0x2f4` | `+0x5d8` | frame-clamp ratio |
-| `+0x2f8` | `+0x5dc` | effect object |
-| `+0x308` / `+0x30c` | `+0x5e0` / `+0x5e4` | the −1-initialised id pair |
+| `+0x2f8` | `+0x5dc` | impact sound (`I3D_sound`; PS2 vtable `+0x80` `IsPlaying`, `+0x38` `SetOn`) |
+| `+0x308` / `+0x30c` | `+0x5e0` / `+0x5e4` | impact-sound column / deepest-hit gate (both −1-initialised) |
 | `+0x310` | `+0x5f4` | deepest-hit sub-id |
 | `+0x32c` | `+0x610` | deepest-hit flag |
 | `+0x330` | `+0x5e8` | deepest-hit magnitude |
+| `+0x338` | `+0x612` | impact sound may restart |
 | `+0x340`.. | `+0x400`.. | the `S_SURR_ACT` vector |
 
 The deltas are **not constant** (`+0x478`, `+0x410`, `+0x3a0`, `+0x2e4`, `+0xc0`, and several
@@ -324,7 +327,7 @@ signatures** and are selected by `if (*(this+0x76) == 0) … else …` inside
 - PS2's single `CollisionCount` compiles **only** the matrix sandwich
   (`__amu__(+0x1a0)` → `_vmul(+0x1e0)` → `__amu__(+0x160)`).
 
-Two levers disagree and are deliberately not forced:
+Two levers disagree:
 
 | lever | points at |
 |---|---|
@@ -333,8 +336,7 @@ Two levers disagree and are deliberately not forced:
 | size ratio — 0.99 and 1.06, both inside the 1.0–1.6 band | inconclusive |
 
 Both rows therefore carry the same PS2 twin, both graded **STRUCTURAL**, and both are named
-after the inertia model they use; a CONFIRMED tag on either would assert a choice that has not
-been made.
+after the inertia model they use (§8).
 
 **The PC also precomputes what the PS2 recomposes.** PC `+0x1a0` holds the finished world
 tensor, built once per step by `physical_object_build_world_inertia_tensor`; the PS2 body
@@ -390,5 +392,5 @@ role) · `structs/entity.md` (the kind enum) · `structs/actor.md` (the base of 
 |---|---|
 | the `create_physicalobject` dispatcher case body | case `0xcc` is confirmed, but the case body has not been read; it would confirm the kind→class mapping from the script side |
 | `+0x3a0` bit meanings | bits `0x1`, `0x8`, `0x10`, `0x40` all have writers; only `0x40` (collision event posted) has a confirmed reader |
-| `+0x1f8` / `+0x21c` / `+0x224` | wheel tunables copied straight out of `S_THING_WHEEL`; no consumer traced |
-| `S_THING_BOX` / `S_THING_WHEEL` | the PS2 mangled names give the type names; the field *order inside the structs* differs between the two builds' stack layouts and is not reconciled |
+| `+0x1f8` / `+0x21c` / `+0x224` | copied out of the descriptors (`+0x1f8` by both `physical_object_init_box` and `_init_wheel`, the other two by `_init_wheel` only; layouts in `structs/box_new.md` §1a); no consumer traced |
+| the `CollisionCount` twin | which of `_diag` / `_matrix` is the PS2 method's twin is undecided: the algorithm points at `_matrix`, the callsite count at `_diag`, the size ratio at neither (§6c) |

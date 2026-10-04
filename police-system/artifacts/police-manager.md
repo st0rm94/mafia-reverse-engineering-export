@@ -1,6 +1,6 @@
 # police_manager family — the player-side police engine
 
-**Created** 2026-06-21 19:30 +0200 · **Modified** 2026-09-17 17:55 +0200
+**Created** 2026-06-21 19:30 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Static analysis grounded in the body of `police_manager_tick`. Field names follow
 `structs/police_manager.md`; offence storage, escalation and noticing geometry are in
@@ -8,13 +8,13 @@ Static analysis grounded in the body of `police_manager_tick`. Field names follo
 
 **Scope.** Only the `police_manager_*` family — the helpers whose `__thiscall` `this` is the
 `police_manager` (embedded once, at `C_game+0x2da0`), centred on `police_manager_tick`. The
-`pursuit_group_*` / `pursuit_group_manager_*` family (per-officer squad AI) is a **separate system**
+`police_board_*` / `police_action_*` family (per-officer squad AI) is a **separate system**
 (`structs/police-board.md`, `police-system/artifacts/police-board-action.md`); where
 `police_manager_tick` calls into it, this doc stops at the callee's base behaviour.
 
 **Two parallel per-frame engines.** Each frame `game_tick` runs both:
 - `police_board_tick` — per-officer / per-squad AI (out of scope).
-- `police_manager_tick(this = player_police_block, dt_ms)` — **this doc**: the per-frame state
+- `police_manager_tick(this = C_game+0x2da0, dt_ms)` — **this doc**: the per-frame state
   machine for the `police_manager` and its `records` vector (`+0x40`, a
   `std::vector<pursuit_record*>`). One `pursuit_record` = one tracked **suspect** (the player, or a
   pursued NPC). The player has exactly one record; only the player gets a HUD icon.
@@ -44,7 +44,7 @@ are unaffected — matching the in-game rule that driving a cop car waives minor
 
 **End of a fine vs end of an arrest.** Both run through the *busted cutscene*, a
 `police_action`-owned animation flagged by `police_board_is_busted_cutscene_active`
-(`manager+0x2c`):
+(`police_board+0x2c`):
 - **Fine cutscene ends → cops are lost.** While the busted-cutscene flag is set,
   `police_manager_tick` skips its whole live block and instead calls
   `police_manager_record_clear_pursuit_state(player, 0)` — the fine path wipes the player's pursuit
@@ -86,7 +86,7 @@ officers assigned to this suspect**. Every gate below keys on that count.
      no cop qualifies.
    - **Officers already assigned** → commit only if the suspect was **seen recently**
      (`police_board_has_recent_sighting`, or identity already known), so losing sight of the suspect
-     cannot keep escalating the level. Handcuffs/gun first promote the matching pursuit groups.
+     cannot keep escalating the level. Handcuffs/gun first promote the matching squads.
 
 3. **Pick the dispatch level, then try-dispatch.**
    - `wanted_substate_flag` (`+0x50`) clear → dispatch on **pending** (`+0x3e`).
@@ -110,7 +110,7 @@ officers assigned to this suspect**. Every gate below keys on that count.
 
    The dispatcher then **binds each activated cop to `record+0x74`**
    (`police_manager_record_add_officer`), prints the red offence line (`action_code + 0x834` foot /
-   `+0x866` car), and forms a pursuit group. **An offence is noticed only if ≥1 cop/car passed its
+   `+0x866` car), and forms a squad. **An offence is noticed only if ≥1 cop/car passed its
    gates.**
 
 5. **Reconcile by officer-count delta.** The tick snapshots `record+0x74`'s count *before* and
@@ -137,27 +137,27 @@ in step 5 (not a raw LOS query) is also the wanted bar's refill trigger.
 
 The function is structured as independent rate-divided accumulators (period/accumulator pairs on the
 `police_manager`; defaults from `police_manager_ctor` / `police_manager_game_init`), not nested
-timers. In execution order:
+timers. In execution order. The first three phases always run; the rest need `enabled` and an
+unpaused world, and the phases marked *live* also need world load phase ≥ 10 and no active busted
+cutscene (`!busted_cutscene_active`):
 
 | Phase | Gate / rate | What it does | Key callee |
 |---|---|---|---|
-| OUTER NPC cull | `+0x14/+0x18` ≈ 1.1 Hz; **always** | distance-cull far NPCs from `npc_list` | `police_manager_npc_list_tick(0)` |
-| radar-vehicle cap | every frame | keep `rndr_arr_a` (`+0x90`) ≤ 5 radar-tracked cars | `hud_radar_remove_car` |
+| OUTER NPC cull | `+0x14/+0x18` ≈ 1.1 Hz; **always** | despawn the far members of `npc_list` | `police_manager_npc_list_tick(0)` |
+| radar-vehicle cap | every frame | keep `tracked_police_cars` (`+0x90`) ≤ 5 radar-tracked cars | `hud_radar_remove_car` |
 | arrest end-screen | settle timer == 0 | the game-over menu (§1) | `gui_menu_execute_modal`, `gui_game_over_ctor` |
-| *(body gated on `enabled` && world not paused)* | | | |
 | dormant scrub | world load phase < 10 | clear transient offence bits per record (keep sticky 13/14) | - |
-| *(live block gated on `!busted_cutscene_active`)* | | | |
-| VISIBILITY refresh | `+0x1c/+0x20` ≈ 4.6 Hz | per-suspect **red-light** detection; last-seen pos | `roads_get_near_node` |
-| INNER state machine | `+0x04/+0x08` ≈ 3 Hz | re-derive live bits, decay timers, prune officers, drive bar | (see §4) |
-| roadblock scan | inside inner overflow | per visibility-cell roadblock deploy (§4) | `police_manager_spawn_roadblock_in_neighbor_cells` |
-| escalation + commit | inside inner overflow | offence bits → pending → committed; dispatch (§2) | `police_board_promote_*_escalation` |
-| HUD icon + reinforcement | player record only | icon symbol/alpha + backup waves (§4, §6) | `hud_set_police_symbol_and_alpha` |
-| WANTED-BAR fill | end, player record | smooth `g_police_wanted_bar` fraction (§6) | - |
+| VISIBILITY refresh | *live*; `+0x1c/+0x20` ≈ 4.6 Hz | per-suspect **red-light** detection; last-seen pos | `roads_get_near_node` |
+| INNER state machine | *live*; `+0x04/+0x08` ≈ 3 Hz | re-derive live bits, decay timers, prune officers, drive bar | (see §4) |
+| roadblock scan | *live*; inside inner overflow | per visibility-cell roadblock deploy (§4) | `police_manager_spawn_roadblock_in_neighbor_cells` |
+| escalation + commit | *live*; inside inner overflow | offence bits → pending → committed; dispatch (§2) | `police_board_promote_*_escalation` |
+| HUD icon + reinforcement | *live*; player record only | icon symbol/alpha + backup waves (§4, §6) | `hud_set_police_symbol_and_alpha` |
+| WANTED-BAR fill | *live*; end, player record | smooth `g_police_wanted_bar` fraction (§6) | - |
 
 The **INNER tick** is the heart: per suspect it re-derives the live bits (weapon-equipped bit 0 from
 equipped-weapon id `+0x4a0` ∈ [5,15]; speeding bit 2 from vehicle speed vs `police_manager+0x0c`),
-counts every offence-decay timer down and clears its bit on expiry, prunes officers that lost cover
-(`officer+0x5e`), and then runs the wanted-bar / escalation / HUD blocks below. The full bit map and
+counts every offence-decay timer down and clears its bit on expiry, prunes officers whose death latch
+(`officer+0x5e`) is set, and then runs the wanted-bar / escalation / HUD blocks below. The full bit map and
 decay windows are offences.md §2–§3.
 
 ## 4. Wanted substate — what `police_manager_tick` handles
@@ -184,9 +184,11 @@ clears and both the icon and bar disappear; a later re-sighting re-arms from scr
 
 **Reinforcement patrol cars** (HUD-icon block, player only — gated on the icon index, §6):
 - icon index 5 (handcuffs + substate) → if `reinforcement_counter` (`record+0x5c`) < 1, set it to 1
-  and spawn a 4-cop wave via
-  `police_manager_spawn_patrol_car_reinforcements_at_radius(player, 4, 200.0f)`.
-- icon index 6 (gun + substate) → if `+0x5c` < 2, set it to 2 and spawn two more waves at radius 200.
+  and spawn one patrol car crewed by two cops as a handcuffs-tier squad via
+  `police_manager_spawn_patrol_car_reinforcements_at_radius(player, 4, 200.0f)`; the `4` is the
+  squad's opening tier (`structs/police-action.md` §3).
+- icon index 6 (gun + substate) → if `+0x5c` < 2, set it to 2 and spawn two such cars as gun-tier
+  squads (mode 0) at radius 200.
   Waves escalate once per tier; `+0x5c` is the wave latch (0/1/2).
 
 **Roadblocks** (inner overflow, per world visibility cell at `world+0x1b8`, stride 0x14): the tick
@@ -203,38 +205,41 @@ therefore **gun-tier only**.
 
 `identity_pending` (`record+0x51`): **1 = identity UNKNOWN (searching), 0 = KNOWN**. It is the flag
 the HUD reads to draw the searching icon. `police_manager_tick`'s HUD-icon block recomputes it every
-inner tick for the **player record**, branching on whether any officer currently sees the player
-(`police_manager_count_officers_alive_for_target`):
+inner tick for the **player record**, branching on the number of LIVING officers assigned to the
+player (`police_manager_count_officers_alive_for_target`: the `record+0x74` entries whose death latch
+`+0x5e` is clear). The selector is an assignment count, not a visibility test:
 
-- **An officer sees the player** → identity from the pursuit group:
-  - no group → KNOWN (0).
-  - group present → `+0x51 = !police_board_target_matches(...)` (1 if the group's target is not the
-    player).
-- **No officer sees the player** (the transparent-icon case) → identity from disguise, and the test
+- **Living officers assigned** → identity from the chasing squads (`structs/police-action.md`):
+  - no squad targets the player (`police_board_has_group_for_target` is false) → KNOWN (0).
+  - a squad targets him → `+0x51 = !police_board_target_matches(...)`: KNOWN when some squad holds
+    his current vehicle in `+0x64`, or he is on foot and some squad has `+0x68` set.
+- **No living officer assigned** → identity from the copies an ended squad handed back, and the test
   differs by foot vs car:
   - **On foot** (`actor+0x98 == 0`): `+0x51 = (identity_on_foot_byte (record+0x58) == 0)`.
   - **In a car**: `+0x51 = (identity_tracked_vehicle (record+0x54) != actor+0x98 current car)`.
 
-Both `+0x54` (tracked vehicle) and `+0x58` (on-foot byte) are stamped by
-`police_manager_record_set_tracked_vehicle_for_target` from the pursuit group's `+0x64` / `+0x68`;
-the on-foot byte is set-only (never cleared while the group lives). This reproduces the documented
-transitions (`police-system/artifacts/police-system.md` §"Transparent (Faded) Substate",
-`structs/police_manager.md` §3.2):
+`+0x54` and `+0x58` are copies of a squad's `+0x64` / `+0x68` (the latter 0 or 1), written by
+`police_manager_record_set_tracked_vehicle_for_target` when the squad ends (`police_board_end_pursuit`,
+the with-car path of `police_action_disband`). The squad fields themselves are written by
+`police_board_create_and_engage`, `police_board_refresh_target_vehicle` and the identity batch of
+`police_board_update_sighting` (`structs/police_manager.md` §3.2). This reproduces the documented
+transitions (`police-system/artifacts/police-system.md` §"Transparent (Faded) Substate"):
 
 - **identity_pending → 1 (UNKNOWN / searching):**
-  - Player **seen on foot, then enters a car unseen** → the in-car test reads `+0x54` (the car the
-    group tracked, never set because tracking was on foot) ≠ current car → 1.
-  - Player **seen in a car, then leaves the car unseen** → the on-foot test reads `+0x58` (0, never
-    set because tracking was by car) → 1.
-  - Player **switches cars unseen** → `+0x54 != current car` → 1.
+  - Player **seen only in a car, then leaves it unseen** → the squads hold that car in `+0x64` and
+    `+0x68 = 0` → unknown on foot.
+  - Player **seen on foot, then enters a car unseen** → no squad holds the new car → 1.
+  - Player **switches cars unseen** → the held vehicle is not the current car → 1.
 - **identity_pending → 0 (KNOWN / identity established):**
-  - an officer regains LOS and the pursuit group's target matches the player; or
-  - on foot, `+0x58` is set (the group's on-foot flag stamped in); or
-  - in a car, the current car matches the tracked `+0x54`.
+  - a witnessed vehicle entry or exit runs the identity batch, so the squads hold the current state;
+  - on foot, a squad (or, with no living officer, `+0x58`) carries the face-known flag;
+  - in a car, the current car is the held one.
 
-Other writers of `+0x51`: `police_manager_register_actor` and
-`police_manager_record_clear_pursuit_state` (both write 0). The assault-on-officer "searching
-exception" is not explained by this recompute (§8).
+The `+0x51` writers form a closed set — a byte-store census of the whole binary finds six stores on
+a `pursuit_record`: the four in `police_manager_tick` (`0x005cc77b`, `0x005cc786`, `0x005cc7a4`,
+`0x005cc7b1`), `police_manager_register_actor` and `police_manager_record_clear_pursuit_state` (both
+write 0). An in-car assault on an officer keeps the player known through two traced paths, the
+`entity_hit` identity batch and the sticky bit-13 re-dispatch (`structs/police_manager.md` §3.2).
 
 ## 6. Police HUD update (icon + wanted bar)
 
@@ -284,10 +289,6 @@ To drive the reinforcement waves (§4), the same block computes a combined index
 
 ## 8. Open items
 
-- **Assault-on-officer searching exception.** Leaving the car after assaulting an officer keeps the
-  player KNOWN, unlike other in-car offences; the §5 recompute does not explain why `+0x58` stays set
-  on that path.
-- **A pursuit-group-side `+0x51` writer.** A writer of the form
-  `+0x51 = (police_board_target_matches == 0)` outside `police_manager_tick` has been described, but
-  none is located: the writers found are `police_manager_tick`, `police_manager_register_actor` and
-  `police_manager_record_clear_pursuit_state`.
+- **Which identity path an in-car assault takes.** Leaving the car after assaulting an officer
+  keeps the player KNOWN. Both mechanisms are traced (§5); which one fires in a given assault needs
+  an in-game check, with the discriminators listed in `structs/police_manager.md` §9.

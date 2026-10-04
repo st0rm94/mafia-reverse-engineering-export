@@ -1,6 +1,6 @@
 # Vehicle Movement & Physics — Mafia: The City of Lost Heaven
 
-**Created** 2026-06-07 11:06 +0200 · **Modified** 2026-09-17 13:47 +0200
+**Created** 2026-06-07 11:06 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 How a car moves each frame in `Game.exe`. Anchors are VAs / function names / field offsets.
 
@@ -38,16 +38,16 @@ There is no single "Update" — the vehicle is ticked through a cluster of virtu
 | #13 | `+0x34` | `car_ai_tick` | ambient-traffic AI (gated on `+0x20bd`, §5): brake/steer, stall timer; audio block, flasher, horn, **the sidewalk-offence check** |
 | #14 | `+0x38` | `car_update` | camera-distance LOD/cull flags `+0xd54`, path-node lifecycle `+0x210c`, `I3D_frame::UpdateWMatrixProc`, motion cues off `+0x1f7c` |
 | #14 | `+0x38` (`C_car_ex` override) | `car_extended_update` | `C_car_ex::Update`; the burnt-corpse spawn is one of its five blocks |
-| #15 | `+0x3c` | `car_net_apply_remote_state` | 🔴 **NOT the live integrator** — `NetDirect(Ui)`, the dead-reckoning extrapolator for a remotely-owned car (§3); inherited unchanged by `C_car_ex` |
+| #15 | `+0x3c` | `car_net_apply_remote_state` | 🔴 **NOT the live integrator** — the dead-reckoning extrapolator for a remotely-owned car (§3); inherited unchanged by `C_car_ex` |
 
-Slot 15 is `NetDirect(Ui)` family-wide — byte-proven on `C_airplane`, whose slot 15 is a bare `ret 4` (`structs/bottle.md` §3a).
+Slot 15 is the network-extrapolation slot family-wide; `C_airplane`'s slot 15 is a bare `ret 4` (`structs/bottle.md` §3a).
 
 ---
 
 ## 3. Driving physics — what is measured
 
 ### `car_net_apply_remote_state` (`0x0059ad60`) — the REMOTE extrapolator
-`__thiscall(C_car, float ms_delta)`, `C_car` vtable `0x0063bc08` slot 15 = `NetDirect(Ui)`.
+`__thiscall(C_car, float ms_delta)`, `C_car` vtable `0x0063bc08` slot 15.
 
 This function does not move the car the local player drives. It advances a car whose simulation
 belongs to another peer, between the state messages that peer sends — the `C_car` sibling of
@@ -61,9 +61,6 @@ Each frame it:
 - **Max-displacement snap-back clamp:** if the step exceeds `5.0` (or `12.5` when flag `+0x2198` bit `0x200` is set) it reverts to the previous position `+0x2164/68/6c` and zeroes the `+0x21c0/c4/c8` + `+0x21e4/e8/ec` accumulators — anti-tunneling / sanity guard.
 - **Normalizes the orientation basis** (`+0xd28..`, `+0xd44..`).
 - **Runs the wheel solver** `vehicle_wheel_contact_solve(...)` with dt in seconds.
-
-Which function moves a LOCAL car is not answered by this function (§7). `car_update` (slot 14) and
-`vehicle_wheel_contact_solve` are the places to look.
 
 ### `vehicle_wheel_contact_solve` (`0x005334e0`) — the wheel/suspension solver
 Heavy vec/matrix routine (large `S_matrix` scratch). Resolves each wheel's ground contact and writes the contact surface-material id (`contact->+0xb4 = surface`, at `LAB_005341b4`) — the basis of the sidewalk offence (material id 3 = *Chodník*, "sidewalk"). Called with dt-seconds from `car_net_apply_remote_state`, `car_recompute_velocity` and a wheel-loop caller. Related wheel functions: `car_detect_wheel` (`0x0046b8a0`), `car_collision_filter_wheel` (`0x0046e080`). *(Ghidra's recovered signature param order is approximate — the dt float lands in different operand positions across call sites.)*
@@ -111,10 +108,12 @@ So for vehicles on this path the transform is *interpolated from recorded keyfra
 
 | Symbol | VA | Content | Prefix len |
 |---|---|---|---|
-| `s_POLCAD` | `0x0064b79c` | `"POLCAD"` | 7 (`POLCAD\0`) |
-| `s_POLI` | `0x0064b794` | `"POLI"` | 5 (`POLI\0`) |
+| `s_POLCAD` | `0x0064b79c` | `"POLCAD"` | 7 |
+| `s_POLI` | `0x0064b794` | `"POLI"` | 5 |
 | `s_POLIMFOR` | `0x0064b788` | `"POLIMFOR"` | 9 |
 | `s_POLIMTUD` | `0x0064b77c` | `"POLIMTUD"` | 9 |
+
+The prefix length counts the terminating NUL.
 
 These are the police vehicle pool `poli00 / polCad00 / polimFor00 / polimTud00`. On a prefix match `+0x1ff2 = 1`.
 
@@ -130,7 +129,14 @@ Two consumers:
 
 ---
 
-## 7. Open items
+## 7. PC vs PS2
+
+Slot 15's PS2 twin is `C_car::NetDirect(Ui)`, and slot 15 is `NetDirect` across the family, which
+is what makes `C_airplane`'s bare `ret 4` in that slot a network stub (§2).
+
+---
+
+## 8. Open items
 
 | item | state |
 |---|---|

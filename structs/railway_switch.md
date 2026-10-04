@@ -1,6 +1,6 @@
 # `C_turnout` — entity kind `0x18`, the railway turnout (points / track switch)
 
-**Created** 2026-08-17 15:33 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-08-17 15:33 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -103,8 +103,8 @@ is a function. Three are ordinary epilogue arms. The fourth, `0x0050904b`, start
 padding and decompiled straight through into the real function, so its rendering is a
 **verbatim copy of its host's body** — that duplicate rendering is the fingerprint of this shape.
 
-Counted as a function start, it truncates `railway_switch_save_game_load` to **29 B** against a
-640 B PS2 method (ratio 0.045, which reads as a mismatch). The true extent is 432 B (0.68).
+Counted as a function start, it truncates `railway_switch_save_game_load` to **29 B**. The true
+extent is 432 B (the size check against the other build is in §7).
 
 ## 7. PC vs PS2
 
@@ -114,6 +114,10 @@ statement; `Init` folds onto `actor_subclass_init_require_frame` (6 vtables) and
 `if (!frame) return false; return C_actor::Init(frame)`, precisely the shared PC function, and
 PS2 `Hit__9C_turnout` is an 8-byte stub. The PC additionally emits a scalar deleting destructor
 with no PS2 counterpart. Nothing in this class is PS2-port-only and nothing is inlined away.
+
+**Size check on the false start (§5).** Against the 640 B PS2 `SaveGameLoad`, the truncated 29 B
+`railway_switch_save_game_load` gives a ratio of 0.045, which reads as a mismatch; the true 432 B
+extent gives 0.68.
 
 **Field delta is NOT uniform — do not rebase band-wise.** The two builds agree field for
 field in content and differ in offset by `0x100` for the first pair and `0x104` for the

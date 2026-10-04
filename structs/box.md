@@ -1,6 +1,6 @@
 # `C_box` — the PC-only legacy rigid-body box
 
-**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-09-24 12:22 +0200
+**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 A `C_actor` subclass carrying **its own complete rigid-body solver**: force accumulation,
 semi-implicit integration into a double-buffered state, an OBB-vs-OBB separating-axis test, a
@@ -26,8 +26,7 @@ the class name rests on the link-order argument (§5b); if the name were falsifi
 would still stand.
 
 `C_box` is not dead code: it has a live vtable, a kind value the recorder formats, a savegame
-chunk id, and a matching network sender and receiver. Whether any mission instantiates it is
-open (§7).
+chunk id, and a matching network sender and receiver.
 
 ## 1. Field layout
 
@@ -50,6 +49,8 @@ typedef struct C_box {                    /* extends C_actor */
     /* +0x7c  */ int        solver_phase;     // [M] set to 2 by both contact passes
     /* +0x80  */ int        state_read_idx;   // [H] index of the live state buffer
     /* +0x84  */ int        state_write_idx;  // [H] index of the back buffer
+    /* +0x88  */ S_vector   corner_local[8];  // [M] local corner points; box_ai_tick transforms
+                                              //     them into +0x614 and +0x674 (2 if +0xc90)
     /* +0xe8  */ C_box     *resting_on[];     // [H] boxes stacked on this one
     /* +0xfc  */ int        resting_count;    // [H] cleared by box_wake_resting_bodies
     /* +0x104 */ int        sleep_counter;    // [H] set to 5 on any external impulse
@@ -67,9 +68,12 @@ typedef struct C_box {                    /* extends C_actor */
     /* +0x51c */ float      contact_depth[30];// [H] matched to 0.01 by the slot acquire
     /* +0x60c */ int        contact_cursor;   // [H] ring head, modulo 0x1e
     /* +0x610 */ int        contact_count;    // [H] live entries
-    /* +0x674 */ S_vector   contact_normal[]; // [M] stride 0xc, read by box_resolve_contacts
-    /* +0x9f4 */ int        resolve_scratch;  // [U] cleared by both contact passes
-    /* +0x9f8 */ float      resolve_best;     // [U] seeded to -1.0 by box_collect_contacts
+    /* +0x614 */ S_vector   corner_world_a[8];// [H] +0x88 under one pose; see §1d
+    /* +0x674 */ S_vector   corner_world_b[8];// [H] +0x88 under the other pose; ends at +0x6d4
+    /* +0x9f4 */ int        contact_counter;  // [H] reset/bumped by both contact passes,
+                                              //     read by box_ai_tick
+    /* +0x9f8 */ float      deepest_depth;    // [H] seeded -1.0 by box_collect_contacts, which
+                                              //     keeps the deepest; read by box_ai_tick
     /* +0xb68 */ char       awake;            // [H] 0 = asleep; set by every wake path
     /* +0xb69 */ char       just_woke;        // [H] read by box_track_record_key
     /* +0xc34 */ tDynamicCollObject dyn_coll; // [H] 0x12 dwords; collision_dyn_erase target
@@ -78,7 +82,8 @@ typedef struct C_box {                    /* extends C_actor */
     /* +0xc84 */ float      tunable_b;        // [H] default 0.4
     /* +0xc88 */ float      tunable_c;        // [H] default 2.5
     /* +0xc8c */ float      restitution;      // [H] default 0.6; every solver uses -(e+1)
-    /* +0xc90 */ char       tensor_valid;     // [M] gates box_build_inverse_inertia_tensor
+    /* +0xc90 */ char       tensor_valid;     // [M] gates box_build_inverse_inertia_tensor;
+                                              //     set = 2 corner points instead of 8 (§1d)
     /* +0xc94 */ float      bound_radius;     // [H] |half_extent|, from box_game_init
     /* +0xc9c */ S_vector   net_pos;          // [H] replication band, see §1c
     /* +0xca8 */ S_vector   net_lin_vel;      // [H]
@@ -86,7 +91,7 @@ typedef struct C_box {                    /* extends C_actor */
     /* +0xcc4 */ S_quat     net_rot_prev;     // [M] seeded equal to net_rot by box_game_init
     /* +0xcd4 */ int        net_pending;      // [M] cleared by the sender
     /* +0xcd8 */ uint       net_flags;        // [H] bit map in §1c
-    /* +0xcdc */ int        net_owner;        // [U] written by Init, no reader traced
+    /* +0xcdc */ int        unused_cdc;       // [H] zeroed by box_init; nothing reads it
 } C_box;                                       /* >= 0xce0 bytes */
 ```
 
@@ -114,6 +119,17 @@ that slot; only if none matches does it reuse an all-zero slot or append. Reusin
 across frames is what makes a stack of boxes settle instead of jittering — the standard
 warm-starting trick for a sequential-impulse solver. `box_contact_slot_release` zeroes a slot
 by index.
+
+### 1d. The corner arrays `+0x614` / `+0x674`
+
+`box_ai_tick` runs two identical loops over the local corner table at `+0x88`: each corner goes
+through a vector × matrix transform with two different matrices, and the results land in
+`+0x614` and `+0x674` (stride `0xc`). The loop count is `+0xc90 ? 2 : 8`, and the copy length
+`count × 12`, so each array holds 8 vec3 — `+0x614 + 8 × 0xc = +0x674` and `+0x674` ends at
+`+0x6d4`. `box_resolve_contacts` indexes `+0x674` with `ecx*4` (three floats per corner).
+
+`+0xcdc` is zeroed by `box_init` next to `+0xcd4`; of the 24 `disp32 0xcdc` operands in `.text`
+this is the only one on a `C_box`, so nothing reads it.
 
 ### 1c. The replication band `+0xc9c..+0xcd8`
 
@@ -310,6 +326,5 @@ neighbouring class, and the template for the network-pair argument in §2b) ·
 
 | item | state |
 |---|---|
-| `+0x9f4` / `+0x9f8` / `+0xcdc` | [U] — written, no consumer traced |
-| `+0x674` contact-normal array | stride `0xc` is measured but the element count is not; `box_resolve_contacts` indexes it from the resolve list |
+| what `+0xc90` is | it gates `box_build_inverse_inertia_tensor` and also cuts the corner loops from 8 points to 2 (§1d); the name `tensor_valid` covers only the first role, and no writer that sets it is traced |
 | is `C_box` instantiated by any mission? | needs an in-game observation or a mission-file scan; the `dyn*` frame-name convention of `box_build_dyn_collision_from_frame` is what to search the level data for |

@@ -1,13 +1,15 @@
-# `ai_ghost` — the per-entity obstacle memory ("ghosts")
+# `ai_ghost` — the per-entity collision exemptions ("ghosts")
 
-**Created** 2026-08-02 11:32 +0200 · **Modified** 2026-09-17 13:47 +0200
+**Created** 2026-08-02 11:32 +0200 · **Modified** 2026-09-29 12:39 +0200
 
-`ai_ghost` is **how an NPC remembers that something solid was in its way.** While walking a route,
-`ai_path_tick` records a "ghost" for every collidable object it meets on the current path segment:
-the object's world position at the moment it was seen, plus an expiry stamp and a drift tolerance.
-The record survives for a few hundred milliseconds to a couple of seconds, and dies early if the
-real object moves away from where it was remembered. It is a short-term spatial memory, not a
-perception system — `ai_sensors` does perception.
+`ai_ghost` is **how an NPC walks through an object that stands on its detour.** While a route
+follows a spec (detour) waypoint, `ai_path_tick` records a "ghost" for the blocker that waypoint
+was built around — a car, a door or another entity: the object's world position at that moment,
+plus an expiry stamp and a drift tolerance. Every live ghost's collider goes into the entity's
+collision ignore list, which `human_movement_intern` and `human_set_next_coll_owners` hand to
+`g_collision`, so the entity's movement collision skips that object. The record lives from half
+a second to two seconds and dies early if the real object moves away from where it was seen. It
+is a short-term collision exemption, not a perception system — `ai_sensors` does perception.
 
 ```
   C_entity  +0x1268
@@ -27,8 +29,8 @@ perception system — `ai_sensors` does perception.
 | PS2 class | `ai_ghost`, 5 methods, 5 mapped, all CONFIRMED by body diff (§2) |
 
 ¹ Between the `ai_space_coverage` block and `entity_add_blocked_con` — one translation unit with
-`C_entity`'s own AI helpers. The consumer `entity_expire_ghost_trail` is a **`C_entity` method, not
-an `ai_ghost` method** (§3).
+`C_entity`'s own AI helpers. The per-frame driver `entity_tick_ghosts` is a **`C_entity` method,
+not an `ai_ghost` method** (§3).
 
 **Confidence tags:** **[H]** body-read on both builds · **[M]** inferred · **[U]** not observed.
 
@@ -46,11 +48,12 @@ typedef struct ai_ghost_actor {              // stride 0x1c on PC
     /* +0x0c */ uint32_t  expiry_ms;         // [H] absolute mission clock; the record dies once
                                              //     the clock passes it
     /* +0x10 */ float     drift_radius_sq;   // [H] squared distance the REAL object may move away
-                                             //     from `pos` before the memory is discarded
-    /* +0x14 */ C_actor  *actor;             // [H] who the remembered object belongs to; also
-                                             //     half the dedup key and the Invalidate key
+                                             //     from `pos` before the record is discarded
+    /* +0x14 */ C_actor  *actor;             // [H] who the object belongs to; also half the
+                                             //     dedup key and the Invalidate key
     /* +0x18 */ void     *coll_object;       // [H] tDynamicCollObject* - the specific collidable
-                                             //     part; the other half of the dedup key
+                                             //     part; the other half of the dedup key, and the
+                                             //     entry copied into the ignore list (§3a)
 } ai_ghost_actor;                            // 0x1c
 ```
 
@@ -59,23 +62,29 @@ decomp shows only stride-0x1c rows.
 
 The field map is proven **three times independently**: `ai_ghost_add_or_refresh` (dedup key pair
 `+0x14`/`+0x18`, refreshed field `+0x0c`), `ai_ghost_invalidate_actor` (key `+0x14`, 7-dword
-shift) and `entity_expire_ghost_trail` (expiry `+0x0c`, radius² `+0x10`, actor `+0x14` whose
-`+0x70`… is an `I3D_frame`). All three agree.
+shift) and `entity_tick_ghosts` (expiry `+0x0c`, radius² `+0x10`, actor `+0x14` whose `+0x68`
+is an `I3D_frame`). All three agree.
+
+**`pos` is read by exactly one statement**: the drift test in `entity_tick_ghosts`, which
+compares it against the actor frame's world translation (`frame+0x40/+0x44/+0x48`). The record
+buffer is reached only through `+0x126c`, and a displacement census of `C_entity+0x1268..+0x1278`
+over `.text` finds only the class's own methods, `entity_tick_ghosts`, the two producers and the
+entity lifecycle functions (§3), so no other consumer exists.
 
 ### 1b. `ai_ghost` — the vector head, at `C_entity+0x1268`
 
 ```c
 typedef struct ai_ghost {                    // at C_entity+0x1268
-    /* +0x00 */ void     *_alloc;            // [M] MSVC std::vector allocator member; never read
-                                             //     by game code
+    /* +0x00 */ uint8_t   _alloc;            // [H] MSVC std::vector empty-allocator byte:
+                                             //     entity_ctor stores it (mov [esi+0x1268],dl
+                                             //     at 0x004115d5); never read by game code
     /* +0x04 */ ai_ghost_actor *begin;       // [H] == C_entity+0x126c
     /* +0x08 */ ai_ghost_actor *end;         // [H] count = (end - begin) / 0x1c
     /* +0x0c */ ai_ghost_actor *cap;         // [H]
     /* +0x10 */ uint8_t   changed_flag;      // [H] set to 1 whenever the list is modified or
                                              //     force-cleared; polled and cleared by
-                                             //     entity_expire_ghost_trail, which then rebuilds
-                                             //     the derived collision-object list at
-                                             //     C_entity+0x698 (see §3a)
+                                             //     entity_tick_ghosts, which then rebuilds the
+                                             //     ignore list at C_entity+0x698 (§3a)
 } ai_ghost;
 ```
 
@@ -99,7 +108,7 @@ Ordered by **PC VA**, PC name first. **5 of 5.**
 
 ¹ Before the snapshot it forces the actor's world matrix current (gate `frame_flags & 0x20` →
 `I3D_frame::UpdateWMatrixProc`, same magic and same callee on both builds).
-² A human is several collidable parts, so remembering a person means remembering all of them.
+² A human is several collidable parts, so exempting a person means exempting all of them.
 
 ### 2a. The identical-sibling resolution
 
@@ -118,33 +127,36 @@ discriminators agree:
 
 ## 3. Who writes ghosts, and who reads them
 
-**Producers — the path follower.** `ai_path_tick` and `ai_path_revalidate_for_actor` record a
-ghost for each collidable object found on the current path segment, dispatching on the object's
-type field (`obj+0x10`) with **type-dependent expiry and drift tolerance**:
+**Producers — the path follower.** `ai_path_tick` (while the route is in state 2, following a
+spec waypoint) and `ai_path_revalidate_for_actor` ghost the **blocker of the current spec
+waypoint** — the actor at waypoint `+0x10`, with its collider at `+0x14` (`structs/ai_path.md`
+§1b) — dispatching on the actor's kind (`actor+0x10`) with **kind-dependent expiry and drift
+tolerance**:
 
-| object type | call | expiry | drift radius² |
+| actor kind | call | expiry | drift radius² |
 |---|---|---|---|
-| 4 (vehicle) | `ai_ghost_add_or_refresh` | clock + **500 ms** | **0.09** (0.3²) |
-| 6 | `ai_ghost_add_or_refresh` | clock + **800 ms** | **0.25** (0.5²) |
-| 0x1b (entity/human) | `ai_ghost_add_human_colliders` | clock + **2000 ms** | **1.0** (1.0²) |
-| *(revalidate path)* | either, per type | clock + **1000 ms** | 0.09 / 1.0 |
+| 4 (`C_car`) | `ai_ghost_add_or_refresh` | clock + **500 ms** | **0.09** (0.3²) |
+| 6 (`C_door`) | `ai_ghost_add_or_refresh` | clock + **800 ms** | **0.25** (0.5²) |
+| 0x1b (`C_entity`) | `ai_ghost_add_human_colliders` | clock + **2000 ms** | **1.0** (1.0²) |
+| *(revalidate path)* | either, per kind | clock + **1000 ms** | 0.09 / 1.0 |
 
-A parked car is remembered briefly and forgotten the moment it rolls 0.3 units; a person is
-remembered four times longer and allowed a whole unit of movement first. That gradient is the
-clearest statement of what the structure is for.
+A car is exempted briefly and loses its exemption the moment it rolls 0.3 units; a person keeps
+it four times longer and may move a whole unit first. The spec-node searches also pick up a
+closed door on the route, which `ai_path_update_spec_waypoints` then opens for a `C_entity`
+walker (`structs/ai_path.md` §1, `+0x68`).
 
-**Consumer — the per-frame expiry.** `entity_expire_ghost_trail` (VA 0x0043a220) runs once per
-frame from `entity_ai` and drops a record when **either** the clock passes `+0x0c` **or** the real
-object has moved further than `+0x10` from the remembered `pos`. If anything was dropped it sets
-`changed_flag`, then clears it and rebuilds the derived list at **`C_entity+0x698`** (§3a). It is a
+**The per-frame tick.** `entity_tick_ghosts` (VA 0x0043a220) runs once per frame from
+`entity_ai` and drops a record when **either** the clock passes `+0x0c` **or** the real object
+has moved further than `+0x10` from the remembered `pos`. If anything was dropped it sets
+`changed_flag`, then clears it and rebuilds the ignore list at **`C_entity+0x698`** (§3a). It is a
 `C_entity` method documented here because it lives in the same TU and the same PS2 order run.
 
 **Scrubber.** `entity_release_target` calls `ai_ghost_invalidate_actor` when a target dies or is
-despawned, so no entity keeps remembering an object that no longer exists.
+despawned, so no entity keeps an exemption for an object that no longer exists.
 
-### 3a. `C_entity+0x698` — the derived collision-object list
+### 3a. `C_entity+0x698` — the collision ignore list
 
-When `changed_flag` (`ai_ghost+0x10`) is set, `entity_expire_ghost_trail` clears the flag and then:
+When `changed_flag` (`ai_ghost+0x10`) is set, `entity_tick_ghosts` clears the flag and then:
 
 ```c
 begin = *(this + 0x69c);                    // stride-4 std::vector at C_entity+0x698
@@ -155,19 +167,40 @@ for (i = ghost_count - 1; i >= 0; i--)      // rebuild, walking the ghost vector
 ```
 
 ```c
-    /* +0x698 */ allocator_t             derived_alloc;  // [M] MSVC std::vector member
-    /* +0x69c */ void                  **derived_begin;  // [H] stride 4
-    /* +0x6a0 */ void                  **derived_end;    // [H]
+    /* +0x698 */ uint8_t                 ignore_alloc;   // [H] MSVC empty-allocator byte
+                                                         //     (human_ctor stores it)
+    /* +0x69c */ void                  **ignore_begin;   // [H] stride 4
+    /* +0x6a0 */ void                  **ignore_end;     // [H]
 ```
 
-The pushed value is **`ai_ghost_actor+0x18` — the `tDynamicCollObject *`** (§1a). So `+0x698` is
-a **flat list of the collision objects currently remembered as ghosts**, one entry per live ghost
-record, kept in sync lazily: it is only rebuilt on the frames where the ghost list actually
+The pushed value is **`ai_ghost_actor+0x18` — the `tDynamicCollObject *`** (§1a), one entry per
+live ghost record, kept in sync lazily: it is only rebuilt on the frames where the ghost list
 changed. That is what `changed_flag` exists for.
 
+**Its two readers.** `human_set_next_coll_owners` and `human_movement_intern` both concatenate
+the human's own colliders (`+0x688`, count `+0x690`) and this list into the scratch vector at
+`+0x6a8` (begin `+0x6ac`) and pass it to `collision_dyn_set_next_multiple_owners`. Every
+`g_collision` query then walks that owner array and skips any object found in it, so the next
+collision test ignores both the human's own body and every ghosted object. A displacement census
+of `+0x698..+0x6a4` finds no other reader: the list is written by `human_ctor`, `human_dtor`,
+`entity_game_init` / `entity_reset` (cleared) and `entity_tick_ghosts`, and read by those two.
+
 `+0x700` is not part of this: it is a **C_human** field, occurring ~25 times in the C_human band
-always paired with `+0x6f8` and `+0x704` as movement/anim gates, and `entity_expire_ghost_trail`
-never touches it.
+always paired with `+0x6f8` and `+0x704` as movement/anim gates, and `entity_tick_ghosts` never
+touches it.
+
+### 3b. Ghosts and blocked connections are separate mechanisms
+
+`entity_add_blocked_con` (the `vector<blocked_con>` at `C_entity+0x119c`, `structs/entity.md`)
+sits in the same translation unit and also answers "something is in the way", but the two share
+no data. A census of both vectors finds no function touching both except `entity_ctor` and
+`entity_dtor`:
+
+| | ghost (`+0x1268`) | blocked connection (`+0x119c`) |
+|---|---|---|
+| what it holds | a collider to ignore, for 0.5–2 s | a nav-graph edge to avoid, for 30 s (1 s when the blocker is an entity) |
+| written by | `ai_path_tick`, `ai_path_revalidate_for_actor` | `entity_add_blocked_con`, from the `blocked_con` the `ai_path_find_spec_node_*` searches leave at `ai_path+0x30` |
+| consumed by | the movement collision query (§3a) | the route planner (`structs/ai_wayfind.md`) |
 
 ---
 
@@ -183,6 +216,10 @@ never touches it.
   discounted: MSVC inlines vector growth, so a compiler-emitted container helper has no PC
   function. The gap is forced against the PS2 entries that can have a PC function, not against
   the raw PS2 run length.
+- **`TickGhost__8C_entityFUi` ↔ `entity_tick_ghosts`** [CONFIRMED]: the same reverse walk, the
+  same time and drift tests (PS2 reads the frame translation at `frame+0x70`, the actor's frame
+  at `actor+0x70`), the same shift-down erase and the same rebuild of the ignore list, which PS2
+  keeps at `C_human+0x6fc` (count `+0x700`).
 - **Object base: PC `C_entity+0x1268` / PS2 `C_entity+0x1460`.** Pinned by PS2
   `Invalidate(iVar2 + 0x1460, param_2, 0)`, the class's only `Invalidate` callsite, where the
   vector begins at base`+0x00`.
@@ -225,23 +262,8 @@ never touches it.
 ## 5. Related
 
 - `structs/entity.md` §6c — the `C_entity` AI sub-object map.
-- `structs/ai_path.md` — `ai_path_tick` / `ai_path_revalidate_for_actor`, the producers.
+- `structs/ai_path.md` — `ai_path_tick` / `ai_path_revalidate_for_actor`, the producers, and the
+  spec waypoint that names the blocker.
+- `structs/human.md` — the `+0x688`/`+0x698`/`+0x6a8` collider vectors.
 - `structs/ai_sensors.md` — the actual perception system; `ai_ghost` is not one.
 - `structs/ai_fight_manager.md` — a neighbouring AI class.
-
----
-
-## 6. Open items
-
-1. **Who reads `C_entity+0x698`** is [U]. Its content is known (§3a), but no consumer of the list
-   is traced; that is what stands between knowing the layout and knowing what ghosts do.
-2. **`ai_ghost_actor+0x00..+0x08` is asserted to be a position from the *writer* side only.** The
-   snapshot comes from the actor's `I3D_frame` and the expiry test reads it back as one, so the
-   reading is safe — but no consumer treats it as a position for anything other than the drift
-   test.
-3. **Object type 6 is unidentified.** Types 4 (vehicle) and 0x1b (entity) are documented in
-   `structs/entity.md` §3; 6 is not, and it gets its own expiry/radius pair, so it is a real
-   distinct case.
-4. **Nothing links ghosts to blocked navigation.** `entity_add_blocked_con` (blocked nav-graph
-   edges, `C_entity+0x119c`) sits in the same translation unit and answers a similar-sounding
-   question. Whether the two systems interact is **[U]** — do not assume they do.

@@ -1,15 +1,14 @@
 # `C_rmorf` — the random-morph tickable module
 
-**Created** 2026-08-31 15:07 +0200 · **Modified** 2026-09-24 11:26 +0200
+**Created** 2026-08-31 15:07 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 The translation unit `[0x005ca290, 0x005cad40)`, the second of the three translation units in
 `[0x005c9720, 0x005d14a0)`.
 
 PC prefix **`random_morph_`** (the record class is `random_morph_set_`). The PS2 class is
-`C_rmorf`, its source file is `C_rmorf.cpp`, and the PS2 ELF's own string for the object is
-**`randomMorfTickableModule`** — "morf" is Czech-flavoured shorthand for *morph*, which is
-what the class actually does, so the PC name states the behaviour rather than transliterating
-the abbreviation.
+`C_rmorf` (§7) — "morf" is Czech-flavoured shorthand for *morph*, which is what the class
+actually does, so the PC name states the behaviour rather than transliterating the
+abbreviation.
 
 ---
 
@@ -105,7 +104,7 @@ typedef struct RMRF_S_SETREF {     /* 0x430 bytes */
 | +0x018 | period_ms | H | `random_morph_tick` | `random_morph_tick` | re-drawn every cycle |
 | +0x01c | weight | H | `random_morph_set_load_raw` (seed), `random_morph_tick` | `random_morph_tick` | row 0 of each set seeded to 1.0f |
 | +0x21c | delta | H | `random_morph_set_load_raw` (zero), `random_morph_tick` | `random_morph_tick` | |
-| +0x41c | mode | M | `random_morph_set_load_raw` (from the file) | `random_morph_tick` | [M] — the three arms are measured, the designer-facing meaning is not |
+| +0x41c | mode | M | `random_morph_set_load_raw` (from the file) | `random_morph_tick` | [M] — see §8 |
 | +0x420..+0x42c | timing / pick tuning | H | `random_morph_set_load_raw` (from the file) | `random_morph_tick` | defaults 1000 / 1 / 1 / 1 |
 
 **The per-cycle algorithm** (`random_morph_tick`, byte-identical across builds): mark each
@@ -128,10 +127,44 @@ period. Then push the interpolated weights into every frame's morph interface th
 | +0x08 | 4 | record count |
 | +0x0c | size−0x0c | the payload, read into one heap buffer and walked once |
 
-Each record in the payload is `{ int frame_count; char name[] * frame_count; int mode; int
-period_base; int period_spread; int pick_base; int pick_spread; }` — the names are
-NUL-terminated and variable length, which is why `random_morph_set_load_raw` returns the
-advanced cursor rather than taking an index.
+Each record in the payload is `{ int frame_count; int mode; int period_base; int period_spread;
+int pick_base; int pick_spread; char name[] * frame_count; }` — six ints, then the frame names.
+`random_morph_set_load_raw` copies the six ints to the set record (`+0x00` count, `+0x41c` mode,
+`+0x420` / `+0x424` period, `+0x428` / `+0x42c` pick) and then walks the names, which are
+NUL-terminated and variable length; that is why it returns the advanced cursor rather than taking
+an index, and `random_morph_mission_start` passes the returned cursor straight into the next call.
+
+Every shipped file parses exactly under this layout and ends with one zero byte per record that the
+header's size counts and the loader never reads.
+
+### 5a. The shipped files
+
+Twelve missions ship an `rmorf.bin`. One entry per record, as frames · mode · period base / spread
+· pick base / spread:
+
+| mission | records |
+|---|---|
+| `MISE02-ULICKA` | 9 · 0 · 1000 / 1 · 1 / 1 |
+| `MISE04-MOTOREST` | 1 · 0 · 1000 / 201 · 1 / 1; 1 · 0 · 800 / 601 · 1 / 1 |
+| `MISE06-AUTODROM` | 4 · 128 · 100 / 1 · 1 / 1 |
+| `MISE07-SARA` | 3 · 128 · 1000 / 1 · 1 / 1 |
+| `MISE09-KRAJINA` | 1 · 0 · 150 / 51 · 0 / 1 |
+| `MISE09-PREJIMKA` | 1 · 0 · 100 / 301 · 1 / 1; 1 · 128 · 200 / 601 · 1 / 1; 2 · 0 · 400 / 1001 · 1 / 1; 8 · 0 · 800 / 401 · 1 / 1; 6 · 0 · 500 / 1001 · 1 / 1 |
+| `MISE10-LETISTE` | 2 · 128 · 160 / 1 · 1 / 1 |
+| `MISE13-ZRADCE` | 9 · 129 · 1000 / 1001 · 1 / 1 |
+| `MISE14-PARNIK` | 1 · 128 · 170 / 1 · 1 / 1; 1 · 128 · 200 / 1 · 1 / 1 |
+| `MISE15-PRISTAV` | 1 · 1 · 2000 / 1 · 1 / 1 |
+| `MISE16-LETISTE` | 2 · 128 · 160 / 1 · 1 / 1 |
+| `MISE18-PRISTAV` | 1 · 128 · 1000 / 1 · 1 / 1 |
+
+The two MISE09 files name what they drive. `MISE09-KRAJINA`: `Truck.Mesh00`. `MISE09-PREJIMKA`: two
+laundry frames (`pradlo mor2.Rectangle02`, `pradlo mor.Rectangle02`, one per record), two juniper
+frames (`s_jalovec00.Box14`, `s_jalovec.Box14`) and 14 tree frames (`s_oranz*` / `s_barevny*`,
+8 + 6), which the same mission's `scene2.bin` places.
+
+**Mode.** `random_morph_tick` tests the mode twice, at two widths: the additive arm fires when the
+LOW BYTE is negative (`(char)mode < 0`), the eased arm when the whole dword equals 1. So the shipped
+values split three ways: 0 ramps linearly, 1 eases, and 128 and 129 take the additive arm.
 
 ---
 
@@ -139,21 +172,24 @@ advanced cursor rather than taking an index.
 
 | PC VA | PC name | PS2 twin | Status |
 |---|---|---|---|
-| 0x005ca2c0 | `random_morph_static_init` | - | PC CRT scaffolding |
-| 0x005ca2d0 | `random_morph_static_ctor` | - | PC CRT scaffolding |
-| 0x005ca2e0 | `random_morph_register_atexit_dtor` | - | PC CRT scaffolding |
-| 0x005ca2f0 | `random_morph_static_dtor` | - | PC CRT scaffolding |
+| 0x005ca2c0 | `random_morph_static_init` | - | - |
+| 0x005ca2d0 | `random_morph_static_ctor` | - | - |
+| 0x005ca2e0 | `random_morph_register_atexit_dtor` | - | - |
+| 0x005ca2f0 | `random_morph_static_dtor` | - | - |
 | 0x005ca300 | `random_morph_set_load_raw` | `LoadRAWSet__13RMRF_S_SETREFFPP13RMRF_S_SETREFPc` | CONFIRMED |
 | 0x005ca4b0 | `random_morph_ctor` | `__ct__7C_rmorfFv` | CONFIRMED |
 | 0x005ca4c0 | `random_morph_dtor` | `__dt__7C_rmorfFv` | CONFIRMED |
 | 0x005ca510 | `random_morph_set_destroy` | `__dt__13RMRF_S_SETREFFv` | CONFIRMED |
 | 0x005ca560 | `random_morph_mission_start` | `Mission_Start__7C_rmorfFv` | CONFIRMED |
-| 0x005ca680 | `std_string_ctor_formatted` | `__ct__7fstringFPCce` | CONFIRMED — not a member of either class |
+| 0x005ca680 | `std_string_ctor_formatted` | `__ct__7fstringFPCce` | CONFIRMED |
 | 0x005ca790 | `random_morph_mission_done` | `Mission_Done__7C_rmorfFv` | CONFIRMED |
 | 0x005ca7e0 | `random_morph_tick` | `Tick__7C_rmorfFi` | CONFIRMED |
-| 0x005caba0 | `std_string_dtor` | `__dt__Q23std59basic_string<>Fv` | STRUCTURAL — shared, not a member |
-| 0x005cabe0 | `std_string_tidy` | - | shared CRT template member |
-| 0x005cac30 | `std_string_grow_buffer` | - | shared CRT template member |
+| 0x005caba0 | `std_string_dtor` | `__dt__Q23std59basic_string<>Fv` | STRUCTURAL |
+| 0x005cabe0 | `std_string_tidy` | - | - |
+| 0x005cac30 | `std_string_grow_buffer` | - | - |
+
+The first four rows are PC CRT scaffolding; the four `std_string_*` rows are shared CRT template
+members, not members of either class (below).
 
 **5/5 `C_rmorf` methods and 2/2 `RMRF_S_SETREF` methods are matched. The class is CLOSED.**
 
@@ -189,17 +225,19 @@ callers in the CRT band at `0x0062xxxx`, so they are genuinely shared.
   from `std::basic_string<char>`; MSVC inlines the same three calls (default ctor, `vsprintf`,
   `assign`) into one function. Both use a **1000-byte** stack scratch buffer, which is the
   shared constant that made the match falsifiable.
-* **The morph interface offset differs**: the channel interface hangs off `I3D_frame + 0x140`
-  on the PC. The PS2 side of that offset was not measured.
+* **The morph interface offset**: the channel interface hangs off `I3D_frame + 0x140` on the
+  PC; the PS2 side is open (§8).
 
 ---
 
 ## 8. Open items
 
 * **`+0x41c` (`mode`) is [M].** The three arms are measured exactly — `== 1` applies a
-  `(1 − cos(pi·t)) / 2` ease, a negative value accumulates deltas additively without picking
-  a new target, anything else ramps linearly — but nothing says what a level designer calls
-  them, and no shipped `rmorf.bin` has been decoded.
-* **What actually morphs in game has not been observed.** The candidate list is anything
-  with vertex morph channels on a mission model — flags, water, foliage, cloth. **In game:**
+  `(1 − cos(pi·t)) / 2` ease, a negative low byte accumulates deltas additively without picking
+  a new target, anything else ramps linearly — and the shipped files use 0, 1, 128 and 129
+  (§5a), but nothing says what a level designer calls them.
+* **What actually morphs in game has not been observed.** The MISE09 files name laundry,
+  juniper, tree and truck frames (§5a); the other ten are not yet matched to their models. **In game:**
   load a mission with an `rmorf.bin` and look for a model that deforms on a ~1 s random cycle.
+* **The PS2 offset of the morph interface is not measured.** The PC reaches the channel interface
+  through `I3D_frame + 0x140` (§4); the PS2 side of that offset is unmeasured.

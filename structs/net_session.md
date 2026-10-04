@@ -1,6 +1,6 @@
 # `g_net_session` — the multiplayer session object
 
-**Created** 2026-08-16 18:02 +0200 · **Modified** 2026-09-24 21:24 +0200
+**Created** 2026-08-16 18:02 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -54,7 +54,7 @@ settings `+0x1ac`, peers `+0x268`, send queues, lobby flags, AI racer slots `+0x
 refuses on `+0x100 == 0`; **5** in game, written by `net_session_start` and by the type-6 receive;
 **7** this machine hosts a networked game — the gate `box_ai_tick`,
 `bottle_post_collision_net_event_msg` and `opponent_do_recover` test. `1` and `5` also appear as
-`gui_mp_lobby_tick` exit codes (`0x3d` start, `0x3f`); `2`, `3`, `4`, `6` are unexplained (§7).
+`gui_mp_lobby_tick` exit codes (`0x3d` start, `0x3f`); for `2`, `3`, `4`, `6` see §7.
 ² 8 vtable slots are used: `+0x14`/`+0x18`/`+0x1c` enumerate sessions, `+0x20` set session name,
 `+0x24` set password, `+0x34` create session, `+0x50` local player id, `+0x54` set player name.
 Layout inside `INet.dll`: §4c.
@@ -128,18 +128,18 @@ consumer of 27 of the 39 message descriptors (`structs/net_event_msg.md`).
 ### 3b. Send
 
 Every outbound message is an `operator_new(0x18)` record posted through `net_session_post_event_msg`,
-with the type in `[2]` and `g_net_session+0x274` in `[4]`. The types this sweep walked:
+with the type in `[2]` and `g_net_session+0x274` in `[4]`. The located outbound types (§7):
 
 | type | vtable | posted by | meaning |
 |---|---|---|---|
-| `0x05` | `PTR_FUN_0063e140` | the disconnect handler | a player left |
-| `0x0f` | `PTR_FUN_0063e140` | `racing_tick` phase 2 | pre-start sync tick |
-| `0x2e` / `0x2f` | - | `net_session_set_ready_flag` / `net_session_request_ready_flag` | lobby ready echo / request |
-| `0x32` | `PTR_FUN_0063e1c8` | `net_session_add_ai_racer` | an AI opponent was added |
-| `0x33` | `PTR_FUN_0063e1d8` | `net_session_remove_ai_racer` | an AI opponent was removed |
-| `0x38` | `PTR_FUN_0063e304` | `racing_do_gates` | a racer finished (slot, time, place) |
-| `0x3b` / `0x3c` | `PTR_FUN_0063e140` | `racing_set_damage_enabled` | damage on / off |
-| `0x3d` | `PTR_FUN_0063e140` | `opponent_do_recover` | a car respawned |
+| `0x05` | `g_event_msg_vt_base` | the disconnect handler | a player left |
+| `0x0f` | `g_event_msg_vt_base` | `racing_tick` phase 2 | pre-start sync tick |
+| `0x2e` / `0x2f` | `g_event_msg_vt_slot_flag` | `net_session_set_ready_flag` / `net_session_request_ready_flag` | lobby ready echo / request |
+| `0x32` | `g_event_msg_vt_ai_racer_add` | `net_session_add_ai_racer` | an AI opponent was added |
+| `0x33` | `g_event_msg_vt_ai_racer_remove` | `net_session_remove_ai_racer` | an AI opponent was removed |
+| `0x38` | `g_event_msg_vt_race_finish` | `racing_do_gates` | a racer finished (slot, time, place) |
+| `0x3b` / `0x3c` | `g_event_msg_vt_base` | `racing_set_damage_enabled` | damage on / off |
+| `0x3d` | `g_event_msg_vt_base` | `opponent_do_recover` | a car respawned |
 
 ## 4. The DirectPlay / `inet.dll` layer
 
@@ -246,4 +246,4 @@ here in the reverse direction.
 | `+0x100` values `2`, `3`, `4`, `6` | no writer or reader identified |
 | `+0x230` | read both as the local peer's slot byte (disconnect match) and as the highest peer slot in the roster arm; which the field is named for is unsettled |
 | the join path | the type-`0xffff0007` arm allocates peer records, but no writer is located for a `+0x268` / `+0x294` entry outside it and the two add paths; the module `[0x00597ab0, 0x0059e120)` is not fully swept |
-| message numbering | only the types listed in §3b were walked; the space is larger |
+| message numbering | only the types listed in §3b are located as outbound; the space is larger |

@@ -1,8 +1,8 @@
 # `ai_follow_manager` / `ai_follow_group` — escort and follower behaviour
 
-**Created** 2026-08-01 20:14 +0200 · **Modified** 2026-09-21 23:38 +0200
+**Created** 2026-08-01 20:14 +0200 · **Modified** 2026-09-30 23:08 +0200
 
-Cross-build material is in §5; the method tables in §2 are PC↔PS2 twin tables.
+Cross-build material is in §4; the method tables in §2 are PC↔PS2 twin tables.
 
 This is **how an NPC follows, escorts, or is escorted by another actor — and how a group of
 followers gets into their leader's car.** Two classes, one subsystem:
@@ -41,29 +41,30 @@ followers gets into their leader's car.** Two classes, one subsystem:
 
 ```c
 typedef struct ai_follow_group {          // stride 0x38 on PC (0x40 on PS2)
-    /* +0x00 */ uint8_t   _b0;            // [U] written from the low byte of the first follower
+    /* +0x00 */ uint8_t   _alloc;         // [H] the follower vector's MSVC empty-allocator byte:
+                                          //     the vector object spans +0x00..+0x0f
     /* +0x04 */ C_actor **followers_begin;// [H]
     /* +0x08 */ C_actor **followers_end;  // [H] count = (end - begin) >> 2
     /* +0x0c */ C_actor **followers_cap;  // [H]
     /* +0x10 */ float     destination[3]; // [H] an S_vector; only meaningful when flag 1 is set.
                                           //     Written by add_follower_with_destination, read by
                                           //     update when it dispatches the vehicle task
-    /* +0x1c */ uint32_t  _u1c;           // [U] serialised, no reader located
+    /* +0x1c */ uint32_t  _unused_1c;     // [H] a declared member no code path sets: copied,
+                                          //     saved and loaded only (§1a)
     /* +0x20 */ uint32_t  flags;          // [H] bit 0x01 = a destination is set at +0x10
-                                          //     bit 0x20 = the leader's car was handed to the
-                                          //                vehicle-task dispatcher
+                                          //     bit 0x20 = followers leave this car: set when a
+                                          //                dispatched task ends with status
+                                          //                2..4, together with +0x34
                                           //     bit 0x10 = the dispatched task completed
     /* +0x24 */ uint32_t  state;          // [H] 0..5, the state machine in §3
-    /* +0x28 */ uint32_t  retry_deadline; // [H] mission clock; state 4 re-dispatches past it
+    /* +0x28 */ uint32_t  retry_deadline; // [H] mission clock + 7000 ms, set by event 4; state 4
+                                          //     re-dispatches past it
     /* +0x2c */ uint32_t  task_deadline;  // [H] mission clock + 6000 ms, armed on dispatch
     /* +0x30 */ C_actor  *leader;         // [H] the group key - every lookup matches on this
-    /* +0x34 */ C_car    *linked_car;     // [H] the car the dispatcher was asked to bring
+    /* +0x34 */ C_car    *linked_car;     // [H] the car whose dispatched task failed (bit 0x20);
+                                          //     cleared when the leader boards another car
 } ai_follow_group;                        // 0x38
 ```
-
-**`+0x30` and `+0x34` sit at the SAME offsets on both builds** despite the 0x38-vs-0x40 stride
-difference — the divergence is entirely inside the follower vector (§5). That coincidence is what
-made `ai_follow_manager_invalidate_actor`'s three-way dispatch diff so clean.
 
 `+0x24` and `+0x20` are proven together by `ai_follow_manager_should_follower_leave_group`, which
 switches on the first and masks the second with **0x20**; `+0x2c`, `+0x28` and `+0x34` by
@@ -73,14 +74,21 @@ The **0x38 stride** is proven outright by the allocation itself — `operator_ne
 PS2's `__nw__(0x40)`.
 The record's full field order is also visible in one body, `ai_follow_group_copy_ctor` (§2b).
 
-**`+0x00` is [U].** Both `add_follower` overloads write the low BYTE of the follower pointer
-there and nothing reads it — most likely a compiler-materialised temporary rather than a field
-(§7).
+**`+0x00` is the follower vector's allocator byte.** The MSVC `std::vector` object spans
+`+0x00..+0x0f`: both `add_follower` overloads copy an empty allocator into `+0x00`
+(`mov cl,[esp+0x14]; mov [eax],cl` at `0x0043cffd`), and every vector insert takes the record
+base itself as the vector (`lea ecx,[edi+eax*8]` at `0x0043cfd9`, `mov ecx,esi` at
+`0x0043d03e`). The same shape sits at `ai_ghost+0x00` and `ai_loc+0x20`.
+
+**`+0x1c` is a member nothing sets.** Neither add overload writes it (the record comes straight
+from `operator_new(0x38)`). It is only copied (`ai_follow_group_copy_ctor`,
+`ai_follow_group_copy_assign`, the erase shifts), written by `ai_follow_manager_save` and read
+back by `ai_follow_manager_load`, so a savegame carries whatever the heap held there.
 
 ### 1b. The follower vector — `C_actor *`, stride 4
 
 The PC decomp shows only "a vector of dwords at `group+0x04`"; the element type `C_actor *` comes
-from the PS2 template instantiation in the same translation unit (§5), as does the outer
+from the PS2 template instantiation in the same translation unit (§4), as does the outer
 container's element type `ai_follow_group`.
 
 ### 1c. `ai_follow_manager` — the group vector
@@ -121,7 +129,13 @@ full picture in `structs/ai_manager.md`). Its entire state is one
 | 0x0043e0b0 | `ai_follow_manager_should_follower_leave_group` | `mustLeave__17ai_follow_managerFP7C_actor` | **CONFIRMED** | yes | Identical truth table on `+0x24`: state 1 unconditional, states 0/2/3/4/5 gated by `+0x20 & 0x20` |
 | 0x0043e150 | `ai_follow_manager_get_save_size` | `GetSize__17ai_follow_managerFv` | **CONFIRMED** | yes | `8 + Σ(4 + (followers + 3) * 0x20)` — the `+3` is the leader and the linked car alongside the followers |
 | 0x0043e1c0 | `ai_follow_manager_save` | `Save__17ai_follow_managerFPPv` | **CONFIRMED** | yes | **Five consecutive identical field offsets in identical order** (`+0x1c`, `+0x20`, `+0x24`, `+0x28`, `+0x2c`) after the 0xc-byte destination vector |
-| 0x0043e3d0 | `ai_follow_manager_load` | `Load__17ai_follow_managerFPPv` | **CONFIRMED** | yes | Opens with `destroy` on both builds, mirrors `save`'s order, kind-checks each restored reference (follower `0x1b`, leader `2`/`0x1b`, car `4`) |
+| 0x0043e3d0 | `ai_follow_manager_load` | `Load__17ai_follow_managerFPPv` | **CONFIRMED** | yes | Opens with `destroy` on both builds, mirrors `save`'s order, kind-checks each restored reference (follower `0x1b`, leader `2`/`0x1b`). The linked car is never restored ¹ |
+
+¹ The car's name is read (`0x0043e585`) but never looked up: the kind-4 test (`0x0043e596`)
+runs on the leader pointer still held from the previous lookup, so `+0x34` always loads as 0
+while `+0x20` bit `0x20` is restored. The only clear of that bit on boarding a different car
+tests `+0x34 != 0`, so after a load it cannot fire and `ai_follow_manager_should_follower_leave_group`
+keeps answering "leave" for that group until another path clears the bit (§3).
 
 PC-only: `ai_follow_manager_dtor` (`0x00443a20`) walks the follow-group vector (stride `0x38`),
 drains and frees each group's inner `vector<C_actor*>` (element `+0x04`, stride 4), then frees the
@@ -137,18 +151,27 @@ falls straight through and the call is a no-op. The six live callsites pass five
 | 0 | `entity_action_tick` | none — no arm matches |
 | 1 | `entity_action_tick` | none — no arm matches |
 | 2 | `entity_death` | forwards to `ai_follow_manager_del_follower(target)` and returns |
-| 3 | `entity_force_script` | cancel-by-target: drops the matching follower and moves its group to state 3 |
-| 4 | `player_do_action_button_in_car` | flips the matched group between states 2 and 4, restamping `+0x04` |
+| 3 | `entity_force_script` | keyed on a follower: the first group in state 2 or 4 holding it, whose leader sits in a car, has its vehicle task removed and moves to state 3; the follower stays |
+| 4 | `player_do_action_button_in_car` | keyed on the leader (`+0x30`): state 2 → 4 with `+0x28` = now + 7000 ms, state 4 → 1 with `+0x28` = 0. Sent only while the player's seat index `+0xac` is not 0, a passenger seat |
 
-So two of the six callsites are inert as the code stands.
+So two of the six callsites are inert as the code stands, and event 4 needs the player riding
+as a passenger in a group whose car an NPC drives. By the user's in-game observation the shipped
+game never seats the player as a passenger, so event 4 has no effect in shipped play; whether
+that was ever intended is not recoverable from the binary. (State 4 is unreachable in shipped
+play for a second, independent reason: no group ever gets a destination, §3.)
 
 ### 2b. `ai_follow_group` — 1 of 1
 
 | PC VA | PC name | PS2 twin | Status | Body-diffed | Role / decisive evidence |
 |---|---|---|---|---|---|
-| 0x00441620 | `ai_follow_group_vector_insert_at` | - | - | n/a | `std::vector<ai_follow_group>::insert`; 3 callers, all `ai_follow_manager_*` |
 | 0x004426f0 | `ai_follow_group_copy_ctor` | `__ct__15ai_follow_groupFRC15ai_follow_group` | **CONFIRMED** | yes | Same member set, same record size, 224/204 B = 1.10 |
-| 0x00442b30 | `ai_follow_group_copy_assign` | - | **STRUCTURAL** | n/a | GCC inlines it on the PS2 |
+
+**Compiler-generated member and container helper** (neither has a PS2 twin):
+
+| PC VA | PC name | note |
+|---|---|---|
+| 0x00441620 | `ai_follow_group_vector_insert_at` | `std::vector<ai_follow_group>::insert`; 3 callers, all `ai_follow_manager_*` |
+| 0x00442b30 | `ai_follow_group_copy_assign` | `operator=`; GCC inlines it on the PS2 |
 
 ### 2c. The three `ai_follow_manager` methods without a PC function — none PS2-only
 
@@ -156,7 +179,6 @@ So two of the six callsites are inert as the code stands.
 |---|---|
 | `MemWrite__17ai_follow_managerFPPvPvUiUi` | **Factoring.** PS2 wraps the savegame stream primitive in a 72-byte per-class method; PC calls `entity_mem_write` **directly** at every site |
 | `MemRead__17ai_follow_managerFPPvPvUiUi` | Same, against `entity_mem_read` |
-
 | `mustEnter__17ai_follow_managerFP7C_actor` | **COMDAT fold.** It HAS a PC body, but the body is `return 0` and MSVC folded it onto `stub_retfalse_args4_0043e0a0` together with every other identical `return 0` in the image ¹ |
 
 ¹ The mapping is real at one callsite and false for the symbol, so it is recorded as an inline
@@ -192,25 +214,39 @@ The per-frame engine. Its four worker calls are all `pursuit_event_*`.
 
 Each group runs a six-state machine on `+0x24`:
 
-| state | meaning | leaves when |
+| state | meaning | transitions [H] |
 |---|---|---|
-| 0 | followers are outside the leader's vehicle | all aboard → 2 · leader on foot → 1 · not boardable → 3 |
-| 1 | the leader has no vehicle | he acquires one → 0 |
-| 2 | a vehicle task is dispatched and running | task completes → 5 · task fails → 1 · a follower drops out → 0 |
-| 3 | the group cannot use the leader's vehicle | a follower's situation changes → 0 |
-| 4 | waiting on `+0x28` before re-dispatching | deadline passes → re-dispatch, → 2 |
-| 5 | settled | — |
+| 0 | the leader is in a vehicle, followers boarding | leader on foot → 1 · all followers in his vehicle, a destination set (bit 1), the vehicle a car and its owner a `C_entity` → dispatch → 2 · all aboard otherwise → 3 |
+| 1 | the leader is on foot | he gets a vehicle → 0 (a car other than `+0x34` clears `+0x34` and bit `0x20`) · every follower on foot too → 5 |
+| 2 | a vehicle task is running | status 1 → bit `0x10`, task removed, → 5 · status 2..4 → task removed, bit `0x20`, `+0x34` = the car, → 1 · a follower off → 0 · vehicle not a car → 3 · leader on foot → 1 |
+| 3 | all aboard, nothing dispatched | a follower off → 0 · leader on foot → 1 · also entered by event 3 from states 2 and 4 |
+| 4 | the task is held until `+0x28` | only entered by event 4 from state 2. Past the deadline → re-dispatch, → 2 · before it the task is removed each tick; a follower off → 0 · leader on foot → 1 · vehicle not a car → 3 · event 4 again → 1 |
+| 5 | settled | a follower's vehicle differs from the leader's → 0, or 1 if the leader is on foot |
 
-On dispatch it arms `+0x2c` with `now + 6000` and calls **`pursuit_event_dispatch_pursuit_vehicle`**
-if any follower is in danger (`entity_is_in_danger`), otherwise
-**`pursuit_event_dispatch_move_to_vehicle`**. State 2 polls
+The add overloads create a group in state 5, or in state 0 when the destination overload finds
+the leader and the follower already in the same vehicle. On each 2000 ms heartbeat the update
+also drops `C_entity` followers that have no `ai_action` of type 1 or have one of type 6, and
+erases a group whose follower vector empties.
+
+On dispatch it arms `+0x2c` with `now + 6000` and sends the car to the destination at `+0x10`:
+**`pursuit_event_dispatch_pursuit_vehicle`** if any follower is in danger (`entity_is_in_danger`),
+otherwise **`pursuit_event_dispatch_move_to_vehicle`**. State 2 polls
 **`pursuit_event_record_get_action_status_by_vehicle`** and tears down with
-**`pursuit_event_remove_vehicle`**.
+**`pursuit_event_remove_vehicle`**. Bit `0x20` is what
+`ai_follow_manager_should_follower_leave_group` tests: once a task has failed, the followers are
+told to leave that car.
+
+The destination comes only from `ai_follow_manager_add_follower_with_destination`, whose single
+caller is `entity_process_command` case `0x1012` (`enemy_action_follow`) with its `TARGET <frame>`
+keyword: the destination is that frame's world position. No shipped script uses `TARGET` (its
+one occurrence, in MISE04-MESTO `Paulie`, is commented out). Bit 1 has no other writer, so in
+shipped play no group carries a destination: the dispatch arm of state 0 is not reached, and
+states 2 and 4 with it.
 
 🔴 **None of that is police.** The `pursuit_event_*` family is `C_sledovacka`, the **generic
 vehicle-task dispatcher** — the same one the police use, and named for that dominant consumer.
-The body-diff maps those four calls 1:1 onto PS2 `AddCarHunt` / `AddCarMoveTo` / `ActionStatus` /
-`RemoveCar`, all `__12C_sledovacka`. An escorting NPC uses it to make a car come to him.
+A group uses it to have an NPC-driven car carry the leader and his followers to the group's
+destination (the four calls' PS2 twins: §4).
 
 ### 3a. The `mustEnter` callsite
 
@@ -232,7 +268,7 @@ it is true: at the callsite.
 
 ---
 
-## 5. PC vs PS2
+## 4. PC vs PS2
 
 - **Group record stride: PC `0x38` / PS2 `0x40`**, proven by the allocation pair
   `operator_new(0x38)` ↔ `__nw__(0x40)` rather than inferred from the walk stride.
@@ -253,7 +289,18 @@ it is true: at the callsite.
   difference explains every constant that differs between the paired `GetSize` bodies
   (PC `4 + (n+3) * 0x20` vs PS2 `n * 4 + 0x2c`) and the 0.44 size ratio on `Load`. It also holds
   for `ai_groups` (`structs/ai_group.md` §5), so it is a build-wide convention, not a per-class choice.
-- **`MemWrite` / `MemRead` are a factoring difference, not PS2-only** — see §2b.
+- **`MemWrite` / `MemRead` are a factoring difference, not PS2-only** — see §2c.
+- **`Load` restores the linked car on PS2 only.** PS2 resolves it with a third
+  `GetActorFromGUID__6C_gameFUi` before its kind-4 test; the PC build reads the name and skips
+  the lookup (§2a ¹). A PC-only defect.
+- **The record's `+0x1c` is unset on PS2 too**: neither `AddFollower` body writes `puVar5[7]`,
+  while `Save` writes `puVar4 + 7` and the copy constructor copies it.
+- **The event arms and the state machine** are the same on both builds (the `Event` and
+  `Update` twins in §2a).
+- **The four `pursuit_event_*` calls in `ai_follow_manager_update`** (§3) map 1:1 by body-diff:
+  `pursuit_event_dispatch_pursuit_vehicle` ↔ `AddCarHunt`, `pursuit_event_dispatch_move_to_vehicle`
+  ↔ `AddCarMoveTo`, `pursuit_event_record_get_action_status_by_vehicle` ↔ `ActionStatus` and
+  `pursuit_event_remove_vehicle` ↔ `RemoveCar`, all `__12C_sledovacka`.
 - **The mission clock**: PC `*(g_act_mission+0x24)+0x2b0c` ↔ PS2 `*(act_mission+0x20)+0xe54`.
 - **The `2000` ms heartbeat and the `6000` ms task deadline are identical on both platforms**, as
   are the state codes, the flag bits and the `mustLeave` truth table.
@@ -272,7 +319,7 @@ it is true: at the callsite.
 
 ---
 
-## 6. Related
+## 5. Related
 
 - `structs/ai_manager.md` — the root object that holds `ai_follow_manager` at `+0xec`.
 - `structs/ai_group.md` — `ai_group` / `ai_groups`, the neighbours in this translation unit.
@@ -283,14 +330,3 @@ it is true: at the callsite.
   `ai_follow_manager_update` drives (§3).
 - `structs/entity.md` §6c — `entity_action_tick`, which calls
   `ai_follow_manager_should_follower_leave_group` and the folded `mustEnter` stub.
-
----
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| `ai_follow_group+0x1c` [U] | serialised by `ai_follow_manager_save` and restored by `ai_follow_manager_load`, so real state, but no reader located on either build; lever: the PS2 `Save` body's `puVar4 + 7` slot |
-| `ai_follow_group+0x00` [U] | probably not a field at all (§1a); the only byte-sized write in the record, settled by one disassembly read |
-| states 3, 4 and 5 [M] | inferred from which arms write them, not from a consumer; lever: `ai_follow_manager_event`, the only other writer |
-| callers of `ai_follow_manager_add_follower_with_destination` | not enumerated; this is how a script or mission tells an escort *where* to go |

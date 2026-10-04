@@ -1,6 +1,6 @@
 # `C_cache_base_block` — the `cache.bin` object-streaming system
 
-**Created** 2026-08-30 15:50 +0200 · **Modified** 2026-09-17 17:54 +0200
+**Created** 2026-08-30 15:50 +0200 · **Modified** 2026-09-30 11:31 +0200
 
 **PC prefix: `cache_base_block_`.** **PC singleton: `g_cache_base_block` @ `0x006efd80`.**
 Class and source-file names come from the PS2 build (§7).
@@ -146,6 +146,28 @@ whose scaled bound extents are all below **2.0** and hands every `'OBJ_'`-tagged
 (magic `0x5f4a424f`) of a newly activated block to `mission_fade_in_object` with the literal
 **700** — a 700 ms alpha fade-in that `mission_tick` ramps from 0 to 1.
 
+**Retiring pooled instances.** Step 1 above is the only place pooled `I3D` instances are freed:
+each tick looks at the model set under the cursor at `+0x20`, and when that set's last pool slot
+is not in use it destroys the object and erases the slot. The cursor then advances and wraps.
+
+### 4a. The `wcol` / `LLwcol` frames
+
+`cache_base_block_prepare_scene` runs at the start of `cache_base_block_open` and walks every frame
+of the mission scene through `cache_base_block_prepare_scene_cb`. A frame whose name starts with
+`LLwcol` or `wcol` (case-insensitive) is linked under the first such frame; the first one is linked
+under the scene frame at `scene+0x210` and switched off. The frames are **invisible collision
+geometry**, measured from the shipped mission data:
+
+| measurement | result |
+|---|---|
+| frame kind in `scene.4ds` | ordinary mesh frames (visual type 0), 943 distinct names across 37 missions |
+| mission `tree.klz` collision name table | 886 of the 943 names appear in the same mission's `tree.klz` |
+| `scene2.bin` frame records | 530 of 532 records of these frames carry the empty chunk `0x4033`, which `mission_open_bin` applies as "switch the frame off" (frame vtable `+0x24` with 0); 165 of 113,496 other frame records carry it |
+
+So the scene data already hides them; the cache pass only groups them under one frame. It runs only
+in the 25 missions that ship a `cache.bin`, because `mission_open` calls `cache_base_block_open`
+only when that file opens.
+
 ## 5. PC function set
 
 | PC VA | PC name | role |
@@ -157,7 +179,7 @@ whose scaled bound extents are all below **2.0** and hands every `'OBJ_'`-tagged
 | 0x005a7590 | `cache_base_block_ctor` | zero both vectors, clear the loaded flag |
 | 0x005a75c0 | `cache_base_block_dtor` | free both vectors and everything they own |
 | 0x005a7710 | `cache_base_block_close` | unload; called from `mission_close` and from `Open` |
-| 0x005a7800 | `cache_base_block_prepare_scene` | fold the scene's `wcol` collision frames |
+| 0x005a7800 | `cache_base_block_prepare_scene` | group the scene's `wcol` collision frames (§4a) |
 | 0x005a7830 | `cache_base_block_prepare_scene_cb` | the frame-walk callback that does it |
 | 0x005a7910 | `cache_base_block_open` | **the `cache.bin` loader** |
 | 0x005a8180 | `cache_base_block_free_block` | one `S_cache_base_block` destructor |
@@ -223,6 +245,11 @@ The PS2 has **two** near-identical cache classes: `C_cache_base_block` (`m_cache
 `cbDupl` — and the PC has a counterpart for **all six**. That closed-set agreement settles the
 identification.
 
+The PC has **no `C_cache_base_block_ex`**. The PS2 mission loader opens a second file,
+`missions\%s\cache_ex.bin`, into a second singleton of the `_ex` class right after `cache.bin`. The
+PC loader opens `cache.bin` only: the string `cache_ex` does not occur in `Game.exe`, and no shipped
+mission contains a `cache_ex.bin`.
+
 ### 7b. Twin table
 
 | PC VA | PC name | PS2 twin | PS2 size | PC size | status |
@@ -243,17 +270,17 @@ identification.
 | 0x005a91f0 | `cache_base_block_deactivate_all_blocks` | `VisibleAllFrames__18C_cache_base_blockFv` | 848 | 455 | CONFIRMED |
 | 0x005a93c0 | `cache_base_block_is_block_in_range` | `IsBlockInRange__18C_cache_base_blockFUi9S_vector2f` | 1320 | 859 | CONFIRMED |
 | 0x005c8290 | `cache_base_block_is_loaded` | - | - | 5 | PC-only |
-| - | - | `AssociateBaseBlocks__18C_cache_base_blockFv` | 420 | - | not located |
-| - | - | `GetNumModelVisual__18C_cache_base_blockFP9I3D_modelPP10I3D_object` | 168 | - | not located |
-| - | - | `cbVisCount__Q218C_cache_base_block22S_hlp$2923_m_cache_cppFP9I3D_framePiPP10I3D_object` | 276 | - | not located |
-| - | - | `IsModelOnlyObject__18C_cache_base_blockFUs` | 36 | - | not located |
-| - | - | `ShowObject__18C_cache_base_blockFUs` | 840 | - | not located |
-| - | - | `HideObject__18C_cache_base_blockFP10I3D_object` | 48 | - | not located |
-| - | - | `ShowModel__18C_cache_base_blockFUsPUs` | 1228 | - | not located |
-| - | - | `HideModel__18C_cache_base_blockFUsUs` | 144 | - | not located |
-| - | - | `ClearUnusedModels__18C_cache_base_blockFv` | 276 | - | not located |
+| - | - | `AssociateBaseBlocks__18C_cache_base_blockFv` | 420 | - | inlined ² |
+| - | - | `GetNumModelVisual__18C_cache_base_blockFP9I3D_modelPP10I3D_object` | 168 | - | PS2-only ³ |
+| - | - | `cbVisCount__Q218C_cache_base_block22S_hlp$2923_m_cache_cppFP9I3D_framePiPP10I3D_object` | 276 | - | PS2-only ³ |
+| - | - | `IsModelOnlyObject__18C_cache_base_blockFUs` | 36 | - | PS2-only ³ |
+| - | - | `ShowObject__18C_cache_base_blockFUs` | 840 | - | PS2-only ³ |
+| - | - | `HideObject__18C_cache_base_blockFP10I3D_object` | 48 | - | PS2-only ³ |
+| - | - | `ShowModel__18C_cache_base_blockFUsPUs` | 1228 | - | inlined ² |
+| - | - | `HideModel__18C_cache_base_blockFUsUs` | 144 | - | inlined ² |
+| - | - | `ClearUnusedModels__18C_cache_base_blockFv` | 276 | - | PS2-only ³ |
 
-¹ See §7d.
+¹ See §7d. ² See §7e, first table. ³ See §7e, second table.
 
 ### 7c. Two names that diverge from the PS2 verb
 
@@ -270,12 +297,23 @@ Those two PS2 methods sit in the matching position but are a pure recursive *cou
 children, capturing the `'OBJ_'` one into an out-parameter. The PC function prunes small
 subtrees and starts the 700 ms fade-in (§4). Only the `0x5f4a424f` magic is shared.
 
-### 7e. Suspected PC inlinings
+### 7e. The nine PS2 methods with no PC function
 
-Nine PS2 methods have no PC function in the unit, and equivalent code is visible inside
-`cache_base_block_activate_block` / `_deactivate_block` / `_open`. That is a **shape, not a
-measurement** — none of the nine PS2 bodies has been read — so no inlining is marked in the
-decomp (§9).
+Three are inlined into a CONFIRMED PC twin, read statement for statement against the PS2 body:
+
+| PS2 method | inlined into | what matches |
+|---|---|---|
+| `ShowModel` | `cache_base_block_activate_block` | the free-slot search over the pool, the create-and-name path when every slot is taken, the in-use byte set to 1. The PS2 tail (bound-volume test and fade-in) is `cache_base_block_walk_block_objects` on the PC (§7d) |
+| `HideModel` | `cache_base_block_deactivate_block` | both indices tested against `0xffff`, the in-use byte tested and cleared, the same frame call with `(0, 0)` |
+| `AssociateBaseBlocks` | `cache_base_block_open` | per block: find the frame by name in the scene, switch it off, collect its type-1 children into the `+0x0c` vector switching each off. The PS2 runs it as a separate pass after `Open` succeeds |
+
+Six are PS2-only, each a measurement over a closed set of callers:
+
+| PS2 method | why the PC has none |
+|---|---|
+| `IsModelOnlyObject`, `ShowObject`, `HideObject` | the PS2 has a second placement path for a model whose only visual is one `'OBJ_'` object, keyed on a model-set field the PC record does not have (PS2 model set `0x18` bytes, PC `0x14`). Their only PS2 callers are `Open`, `ActivateBlock` and `DeactivateBlock`; the PC twins of all three have the model path only |
+| `GetNumModelVisual`, `cbVisCount` | they feed that same decision; their only PS2 caller is `OpenModel`, and `cache_base_block_open_model` always pools the loaded model |
+| `ClearUnusedModels` | the PS2 frees every unused pooled instance after a block is deactivated; the PC frees one per frame from the tick's round-robin retire step (§4) |
 
 ## 8. Cross-references
 
@@ -285,10 +323,5 @@ model cache, decoded from the other side) · `structs/mission.md` (`mission_fade
 
 ## 9. Open items
 
-* **Nine PS2 methods not located** (§7b). Reading `ShowModel` (1228 B) and `ShowObject`
-  (840 B) against `cache_base_block_activate_block`'s body would turn §7e into a measurement.
-* **Does the PC ship a `C_cache_base_block_ex`?** Not searched.
-* **`wcol` / `LLwcol`** — `cache_base_block_prepare_scene_cb` folds every such frame onto
-  the first one and hides it. What those frames are *for* (walk collision?) is not decoded.
 * **In game:** the `0rek23.i3d` → `0rek17.i3d` substitution should be observable — the
   model that `0rek23` names never appears anywhere in the city.

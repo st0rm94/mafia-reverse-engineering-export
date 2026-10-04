@@ -1,6 +1,6 @@
 # `C_pumper` — the gas-station attendant
 
-**Created** 2026-07-13 11:46 +0200 · **Modified** 2026-09-17 17:58 +0200
+**Created** 2026-07-13 11:46 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 The NPC who stands at the fuel pump, walks out to a stopped car, refuels it, charges you
 for it, and smokes and fidgets in between. Czech *pumpa* = fuel pump.
@@ -75,9 +75,8 @@ callsites — instantiated here, owned by nobody.
 
 ## 2. `pumper_notify_callback` — the free function in the TU
 
-One PC start matches no `C_pumper` method: `pumper_notify_callback` is a **free** function (its
-PS2 symbol has no class tag, §7). It sits between `pumper_can_pump` and `pumper_start_pump_fuel`,
-the same rank on both builds.
+One PC start matches no `C_pumper` method: `pumper_notify_callback` is a **free** function (§7).
+It sits between `pumper_can_pump` and `pumper_start_pump_fuel`.
 
 It is the seam between the animation and the gameplay. `pumper_game_init` registers it on
 the attendant's `"notify"` child frame; the animation machine fires message ids out of the
@@ -108,7 +107,7 @@ clip reaches its notify frame.
   a turn clip), `pumper_advance_to_next_node` picks the next.
 * **Refuel.** The clip's notify events do the work (§2). `pumper_end_pump_fuel` calls
   `vehicle_set_fuel` and **`game_freeride_score_set(score − 500)`** — the tank is filled
-  and you are charged **500**, identically on both builds.
+  and you are charged **500** (§7).
 * **Panic.** Hit him, or run into him with anything other than the car he is serving, and
   `pumper_panic` sets action `0x11`, kills the props and particles, and hands him to a
   driver object of type 9. `pumper_is_in_panic` is the query; `pumper_script_can_pump`
@@ -139,7 +138,7 @@ Only offsets a body actually reads are listed.
 | `+0x78` | the **pump** node id (designer) | ctor `= 0x29a`; `pumper_choose_next_action` |
 | `+0x7c` | the **post** node id (designer) | ctor `= 0x29b`; `pumper_choose_next_action` |
 | `+0x80` | the attendant's **script id** | ctor `= 0`; `pumper_script_can_pump`, `pumper_game_init`'s name formatting |
-| `+0x84` | a designer dword | ctor `= 0x497cc`; saved and duplicated, **no reader traced** |
+| `+0x84` | a designer dword | ctor `= 0x497cc`; saved and duplicated (§9) |
 | `+0x88..+0x9c` | six **sound-name ids** | ctor writes `0x78..0x7d`, first overwritten with `0x1e`; read by `pumper_init_sound` |
 | `+0xa0`/`+0xa4`/`+0xa8` | three particle handles, `-1` = none | ctor, `pumper_game_done`, `pumper_panic` |
 | `+0xb4..+0xcc` | six `I3D_sound*` slots | `pumper_init_sound` / `_play_sound` / `_release_sounds`. **Slot 3 = the pump loop** |
@@ -196,7 +195,9 @@ Other cross-build notes:
 * `IdePoliciePoPlayeroviBoPumper__10C_shvestky` (*"are the police after the player, for the
   pumper"*) is the PS2 name of `police_manager_are_cops_after_player`.
 * `pumper_notify_callback`'s PS2 symbol is
-  `pumper_notify_callback__FP9I3D_frame21LS3D_CALLBACK_MESSAGEUiUi` — `__F`, no class tag.
+  `pumper_notify_callback__FP9I3D_frame21LS3D_CALLBACK_MESSAGEUiUi` — `__F`, no class tag — and
+  it sits at the same rank (between `CanPump` and `StartPumpFuel`) on both builds.
+* The refuel charge of **500** in `pumper_end_pump_fuel` is identical on PS2.
 * PS2 `Do_AB_OwnerCar__8C_player` calls `Start__8C_pumperFP5C_car`; its PC twin
   `pumper_start_refuel` is correspondingly a callee of `player_do_action_button_in_car`.
 * `Init` and `Death` are real 44 B / 8 B PS2 methods whose PC realisations are **shared**

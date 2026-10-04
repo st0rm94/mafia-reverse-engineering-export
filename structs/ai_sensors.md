@@ -1,6 +1,6 @@
 # `ai_sensors` — the three-sense contact system (sight / sound / smell)
 
-**Created** 2026-07-16 10:28 +0200 · **Modified** 2026-09-17 17:58 +0200
+**Created** 2026-07-16 10:28 +0200 · **Modified** 2026-09-29 14:03 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c` + `Game.exe` disassembly, cross-checked against the
 non-stripped PS2 ELF (`SLUS_206.71`). This documents the PC build; the PS2 symbol table supplies
@@ -15,7 +15,7 @@ strength/intensity that decays and expires. Three parallel senses, each with the
 |---|---|---|
 | **VISUAL** | `ai_visual_contact` | fed by `ai_vis_logs_tick` (LOS + sight range) |
 | **SOUND** | `ai_sound_contact` | fed by `sound_arena_update_entity_sound_contacts` (loudness vs hearing) |
-| **SMELL** | `ai_smell_contact` | fed by `ai_sensors_get_smelled_target_info` / `ai_sensors_build_smell_contact_from_blob` + `ai_blob`. Almost certainly the **`C_dog`** sense |
+| **SMELL** | `ai_smell_contact` | fed by `ai_sensors_build_smell_contact_from_blob` + `ai_blob`; blobs come from `ai_blob_log_add_blob` (trails) and `ai_group_send_sniff_event` (on demand); read by `ai_sensors_can_smell` and `ai_sensors_get_smelled_target_info` (§4e) |
 
 | | |
 |---|---|
@@ -33,9 +33,8 @@ The three contact arrays, all twelve extrema scalars (§4b) and the sound-contac
 ```c
 typedef struct ai_sensors {                 // embedded at C_entity+0xbb4
     // ---- THREE PARALLEL CONTACT ARRAYS, 8 slots each (proven by ai_sensors_init/_destroy) ----
-    /* +0x000 */ visual_contact visual[8];  // [H] stride 0x18. slot: +0x8 state, +0xc actor,
-                                            //     +0x10 strength, +0x14 smoothed (EMA)
-    /* +0x0c0 */ sound_contact  sound[8];   // [H] stride 0x20, from the disassembly (§1b). Per slot:
+    /* +0x000 */ ai_visual_contact visual[8]; // [H] stride 0x18 (§1c)
+    /* +0x0c0 */ ai_sound_contact sound[8]; // [H] stride 0x20, from the disassembly (§1b, §1c):
                                             //       +0x00 timestamp   (= C_entity+0xc74 for slot 0)
                                             //       +0x04 TYPE        (**2 = GUNFIRE**; zeroed to kill
                                             //             the slot by ai_sensors_cancel_sound_contact)
@@ -43,10 +42,8 @@ typedef struct ai_sensors {                 // embedded at C_entity+0xbb4
                                             //       +0x14 source actor
                                             //       +0x18 intensity
                                             //       +0x1c smoothed    (the 3.0/0.25 EMA)
-    /* +0x1c0 */ smell_contact  smell[8];   // [H] stride 0x1c. slot: +0x4 timestamp, +0x8 state,
-                                            //     +0xc ai_blob* (OWNED heap ptr), +0x10 actor,
-                                            //     +0x14 strength, +0x18 smoothed (EMA).
-                                            //     Base pinned by `(idx+0x10)*0x1c` in new_smell_contact.
+    /* +0x1c0 */ ai_smell_contact smell[8]; // [H] stride 0x1c (§1c). Base pinned by
+                                            //     `(idx+0x10)*0x1c` in new_smell_contact.
     // ---- OWNER + THE 12 EXTREMA SCALARS (all proven by ai_sensors_destroy — see §4b) ----
     /* +0x2a0 */ C_entity *owner;           // [H] owning entity; stored by ai_sensors_init
     /* +0x2a4 */ float min_value[3];        // [H] visual / sound / smell   (+0x2a4 / +0x2a8 / +0x2ac)
@@ -88,7 +85,48 @@ piVar2[1]` — i.e. actor at +0xc8. The disassembly says otherwise:
 ```
 
 Derivations of this record from decompiler output alone contradict each other; the disassembly
-settles it. The record is the one in §1.
+settles it. The record is the one in §1c.
+
+### 1c. The three contact records
+
+The type names are the PS2 signatures' (`NewVisualCon__10ai_sensorsFP17ai_visual_contact` and its
+siblings). A contact's stamps are the mission clock (`*(g_act_mission+0x24)+0x2b0c`); state is
+1 on insert, 2 after an update, 0 once cancelled. The smoothed value is the shared EMA
+`(old*3.0 + (new - prev)) * 0.25`.
+
+```c
+typedef struct ai_visual_contact {          // 0x18; built by ai_vis_logs_tick
+    /* +0x00 */ uint32_t first_ms;          // [H] = last_ms when the contact is inserted
+    /* +0x04 */ uint32_t last_ms;           // [H] refreshed by every update
+    /* +0x08 */ uint32_t state;             // [H] 0 / 1 / 2
+    /* +0x0c */ C_actor *actor;             // [H] the seen actor; the scan key
+    /* +0x10 */ float    strength;          // [H] 0..1, gated by 1.05 - sight
+    /* +0x14 */ float    smoothed;          // [H] the EMA
+} ai_visual_contact;
+
+typedef struct ai_sound_contact {           // 0x20; built by sound_arena_update_entity_sound_contacts
+    /* +0x00 */ uint32_t time_ms;           // [H]
+    /* +0x04 */ uint32_t type;              // [H] 2 = gunfire; zeroed to kill the slot
+    /* +0x08 */ float    pos[3];            // [H] where the sound was
+    /* +0x14 */ C_actor *source;            // [H] the scan key
+    /* +0x18 */ float    intensity;         // [H]
+    /* +0x1c */ float    smoothed;          // [H] the EMA
+} ai_sound_contact;
+
+typedef struct ai_smell_contact {           // 0x1c; built by ai_sensors_build_smell_contact_from_blob
+    /* +0x00 */ uint32_t first_ms;          // [H] = last_ms when the contact is inserted
+    /* +0x04 */ uint32_t last_ms;           // [H]
+    /* +0x08 */ uint32_t state;             // [H] 0 / 1 / 2
+    /* +0x0c */ ai_blob *blob;              // [H] OWNED; moved, never copied (§2)
+    /* +0x10 */ C_actor *actor;             // [H] the blob's owner (ai_blob+0x20); the scan key
+    /* +0x14 */ float    strength;          // [H] 1.0 when built; gated by 1.0 - sight
+    /* +0x18 */ float    smoothed;          // [H] the EMA
+} ai_smell_contact;
+```
+
+`ai_blob` itself (0x24 bytes: position, movement direction, emission time, flags, owner) is laid out
+in `structs/ai_blob_log.md` §1a; `ai_sensors_get_smelled_target_info` copies its `+0x00` position,
+`+0x0c` direction, `+0x18` time and `+0x1c` flags.
 
 ## 2. Field evidence
 
@@ -212,6 +250,20 @@ The thresholds are not uniform either:
 The `1.05` vs `1.0` split is consistent on both builds: the **can-I-perceive predicates** use 1.05,
 the **where-is-it queries** use the slightly more permissive 1.0.
 
+### 4e. Who reads smell
+
+Two readers, both measured as `E8` callsite censuses:
+
+| reader | callers | what the caller gets |
+|---|---|---|
+| `ai_sensors_can_smell` | `ai_logs_tick` ×1 | yes / no for one target |
+| `ai_sensors_get_smelled_target_info` | `entity_action_tick` ×6, `ai_logs_reset_stale_logs`, `ai_action_new_hostile_coverage`, `police_board_update_sighting` | the target's position, heading, time and flags: live from its frame while the owner flag bit `0x4000` is set, otherwise the blob's `+0x00` position, `+0x0c` direction, `+0x18` time and `+0x1c` flags, while the contact weight exceeds `1.0 − sight` |
+
+In `entity_action_tick` the result drives the steer-to-target arms, a freshness test (under
+5000 ms) and the cop chase in case `0x21`. So a smell contact — from a trail blob or from a group's
+sniff event (`structs/ai_group.md` §3) — gives an NPC a last-known position and heading for a
+target it cannot see.
+
 ## 5. PC vs PS2
 
 - **Location:** PS2 `C_entity + 0xd00` (`NewSoundCon__10ai_sensors(entity + 0xd00, ...)`), delta
@@ -254,14 +306,14 @@ the **where-is-it queries** use the slightly more permissive 1.0.
 - `structs/entity.md` §4/§5 — the C_entity field band; the `+0xc74` heard-event ring.
 - `structs/ai_character.md` — the stat block at `C_entity+0xebc`; its **hearing** stat is the
   threshold operand for sound contacts, its **sight** stat feeds `entity_get_sight_range`.
-- `structs/dog.md` — the likely consumer of the smell sense.
+- `structs/ai_blob_log.md` §3 — the two producers of scent records: `ai_blob_log_add_blob` lays a
+  trail from `human_update`; `ai_group_send_sniff_event` delivers one blob to one entity through
+  entity event `0xb` and `ai_sensors_new_smell_contact`.
+- `structs/dog.md` §2 — `C_dog` derives from `C_actor`, carries no `ai_sensors`, and is not a smell
+  consumer.
 
 ## 7. Open items
 
 | item | state |
 |---|---|
-| `ai_visual_contact` / `ai_sound_contact` / `ai_smell_contact` as named structs | layouts known (§1); not yet declared as separate structs |
-| `ai_blob` (2 methods) | the scent blob — allocated by `ai_sensors_build_smell_contact_from_blob`, owned by the smell slot; fields `+0x00`/`+0x10`/`+0x20`/`+0x24` (what `Sniff` copies out) unread. `ai_blob_log` has 3 named PC methods |
-| who consumes smell | the callers of `ai_sensors_can_smell` / `ai_sensors_get_smelled_target_info` / the `ai_blob` producers; `C_dog` is the prime suspect |
-| who emits scent blobs | `sound_arena_emit_sound` is the sound producer; the smell producer (what creates `ai_blob`s in the world) is not located |
 | PS2 crowded-fight tracking | in game: PS2 NPCs should be measurably worse at tracking multiple visible targets (§5) |

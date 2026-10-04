@@ -1,6 +1,6 @@
 # `ai_group` / `ai_groups` — NPC groups and the group registry
 
-**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-22 13:55 +0200
+**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-29 12:39 +0200
 
 Two classes, one subsystem:
 
@@ -46,19 +46,23 @@ typedef struct ai_group_member {             // 8 bytes on PC
 The element type comes from the PS2 template argument
 `erase__Q23std70__vector_imp<>F**P15ai_group_member**Ui`; the PC decomp shows only stride-8 rows.
 
-**The `role` field** [H] — its meaning is derived from the only two functions that read it, which
-between them exclude two different values:
+**The `role` field** [H] — read by exactly two functions, which between them exclude two
+different values, and named by the script keywords that set it:
 
-| role | `ai_group_can_cast` (`!= 1`) | `ai_group_can_receive` (`!= 2`) | reading |
-|---|---|---|---|
-| 0 | may cast | may receive | full participant |
-| 1 | - | may receive | **receive-only** — fed group events, may not originate them |
-| 2 | may cast | - | **cast-only** — may broadcast, is not sent events itself |
-| other | may cast | may receive | **[U]** — no code distinguishes further |
+| role | script keyword | `ai_group_can_cast` (`!= 1`) | `ai_group_can_receive` (`!= 2`) | reading |
+|---|---|---|---|---|
+| 0 | - (default) | may cast | may receive | full participant |
+| 1 | `RECEIVE` | - | may receive | **receive-only** — fed group events, may not originate them |
+| 2 | `CAST` | may cast | - | **cast-only** — may broadcast, is not sent events itself |
 
-The role names are **[M]**, inferred from which predicate excludes which value. The byte-level facts
-— that the field is at element `+0x04` and that exactly the constants 1 and 2 are tested — are
-**[H]**.
+**The writers are a closed set.** `ai_group_add_member` stores its third argument as the role,
+and its five callsites pass either the script value or a literal 0:
+`entity_process_command` case `0x102b` (the AI instruction `enemy_group_add <group>, <actor>
+[, RECEIVE | CAST]`, decoded by `entity_script_decode_params` case `0x102b`: default 0,
+`RECEIVE` → 1, `CAST` → 2), `police_board_create_and_engage` ×2 and
+`traffic_car_spawn_mafia_pursuit_car` ×2 (both 0). A savegame load restores saved values, so no
+role outside 0..2 ever exists. In the shipped scripts `CAST` is used by MISE08-HOTEL `recep` and
+MISE18-PRISTAV `City_Guard3`, `City_Guard5` and `Guard_bouda`; `RECEIVE` by MISE07-SARA `Billy`.
 
 ### 1b. `ai_group` — the group record (0x60 bytes) and its five containers
 
@@ -82,9 +86,10 @@ The role names are **[M]**, inferred from which predicate excludes which value. 
 and `ai_groups_dtor` frees five per element. `ai_group_dtor` releases them in reverse order
 (`+0x54`, `+0x44`, `+0x34`, `+0x24`, `+0x14`).
 
-`ai_group_add_member` additionally stamps a back-reference into the member entity at `npc+0x11ac`,
-pointing at the group record's `+0x00` — so an entity can find its own group without a registry
-scan.
+`ai_group_add_member` additionally writes the group's **id** (the record's first dword) into the
+member entity at `entity+0x11ac`; every reader resolves it with `ai_groups_get_group(id)`, so an
+entity names its group rather than pointing at it. It also empties the group's event queue
+(`+0x38 = +0x34`) on every successful append.
 
 The car pair is indexed together: `ai_group_add_car` (`0x0042dcb0`) push-backs into both;
 `ai_group_get_car_factor` finds a car in the first and returns the float at the same index in the
@@ -108,9 +113,17 @@ into ECX, 29 call an `ai_groups_*` method; and the MSVC unwind funclet
     /* +0x04 */ uint32_t  next_id;          // [H] pre-incremented by ai_groups_new_group
     /* +0x0c */ ai_group *entries_begin;    // [H] stride 0x60 per group record (head at +0x08)
     /* +0x10 */ ai_group *entries_end;      // [H] count = (end - begin) / 0x60
-    /* +0x1c */ void    **tracked_begin;    // [H] stride-4 pointer vector, distance-culled by
-    /* +0x20 */ void    **tracked_end;      //     ai_groups_tick beyond 150 units (22500.0)
+    /* +0x1c */ C_actor **tracked_begin;    // [H] the release list: stride-4 pointer vector,
+    /* +0x20 */ C_actor **tracked_end;      //     distance-culled by ai_groups_tick beyond 150
+                                            //     units (22500.0)
 ```
+
+**The tracked vector is a release list for disbanded groups.** Its only producer is
+`ai_groups_add_tracked_actor`, called three times by `program_process_command` case `0x17b`
+(`GROUP_DISBAND`): once for each disbanded member, once for the group's car and once for each of
+the car's occupants. `ai_groups_tick` sets act state 2 on any of them further than 150 units
+from the player; a car (kind 4) is also hidden, has its dynamic collisions turned off and is
+deactivated through its vtable. So a disbanded group is released once the player has left it.
 
 `ai_groups_dtor` (`0x00443910`) corroborates all four: it frees the tracked vector (head `+0x18`,
 begin `+0x1c`), then walks the group vector (head `+0x08`, begin `+0x0c`, stride 0x60) freeing all
@@ -224,7 +237,7 @@ them):
 | `0x0043ca60` | `ai_groups_invalidate_actor` | `InvalidateActor__9ai_groupsFP7C_actor` | CONFIRMED | yes | Three containers scrubbed in the same order with the same geometry (stride 8 keyed on element `+0x00`; stride 4; stride **0x14** matched on element `+0x0c` **OR** `+0x10`), same remember-the-emptied-group-then-splice, same trailing pass over the registry's tracked vector. The structural twin of `ai_fight_manager_invalidate_actor` |
 | `0x0043cd70` | `ai_groups_group_has_car` | `hasCarGroup__9ai_groupsFUi` | CONFIRMED | yes | Same `id != 0` guard, same entry scan keyed on element `+0x00`, same "container non-empty" return read from **`+0x44`/`+0x48`** — independently re-confirming §1b's candidate-car vector from a second consumer |
 | `0x00443910` | `ai_groups_dtor` | - | STRUCTURAL | no | The class destructor (§1c); PS2 inlines every sub-manager teardown into `__dt__10ai_managerFv` |
-| `0x005c8dc0` | `ai_groups_add_tracked_actor` | - | STRUCTURAL | no | Receiver byte-proven: 3 callsites, all in `program_process_command`, load `0x006552dc` into ECX. Feeds the registry's tracked vector (§6) |
+| `0x005c8dc0` | `ai_groups_add_tracked_actor` | - | STRUCTURAL | yes (callsites) | The tracked vector's push_back (begin `+0x1c`, end `+0x20`, cap `+0x24`), emitted out of line with the singleton itself as receiver: all 3 callsites load `0x006552dc` into ECX, all in `program_process_command`'s `GROUP_DISBAND` arm (§1c). PS2 counterpart at callsite level (§5) |
 | - | *no PC function* | `MemWrite__9ai_groupsFPPvPvUiUi` · `MemRead__9ai_groupsFPPvPvUiUi` | STRUCTURAL | yes (callsites) | **Factoring, not absence.** PS2 wraps the savegame stream primitive in a 72-byte per-class method; PC calls `entity_mem_write` / `entity_mem_read` **directly** at every site. The identical pair exists on `ai_follow_manager` |
 
 ¹ (1) Expires the player control lock at `+0x00` → `player_lock_controls(0)`; (2) drains each
@@ -256,7 +269,17 @@ weight = 1.0f `+0x14` — and upserts it into the target-observation table throu
 | `ai_group_send_sniff_event` | on demand, one blob per call | **one specific entity's smell-contact table**, via event `0xb` |
 
 The second is a *communication* mechanism, not a trail: a group hands one member a scent lead
-directly.
+directly. Its caller is `entity_action_tick`, which sends it only while the entity's group id
+at `+0x11ac` resolves.
+
+**What the receiver does with it.** The smell contact is read back by
+`ai_sensors_get_smelled_target_info`, which returns the blob's position (`+0x00`), direction
+(`+0x0c`), time (`+0x18`) and flags (`+0x1c`) while the contact's weight exceeds `1.0 − sight`
+(`structs/ai_sensors.md` §4d). It has nine callers: `entity_action_tick` ×6 (the
+steer-to-target arms, a freshness test of under 5000 ms, and the cop chase in case `0x21`),
+`ai_logs_reset_stale_logs`, `ai_action_new_hostile_coverage` and `police_board_update_sighting`.
+So the lead is a last-known position and heading for the target, used when the member cannot
+see it.
 
 ## 4. Related
 
@@ -291,12 +314,11 @@ directly.
   `erase__…<ai_group_member>` and `Normalize__8S_vector` out of line where MSVC inlines both, so the
   PC bodies that touch a vector or normalise a vector are the bigger ones.
 - **No PS2-only methods** in either class; `ai_groups_dtor` and `ai_groups_add_tracked_actor` are
-  PC-only, the first because PS2 inlines the teardown.
-
-## 6. Open items
-
-| item | state |
-|---|---|
-| the `role` semantics (§1a) | [M]. Confirming them needs a WRITER: what sets `member+0x04` at `ai_group_add_member`'s callsites — the `Ui` second parameter of `Add__8ai_groupFP8C_entityUi` is almost certainly the role |
-| where the `0xb` blob goes on the receiving side | `ai_sensors_new_smell_contact` is named and the smell band is 23/23, but nothing is traced from the contact table to a behaviour; `structs/dog.md` §2 rules `C_dog` out as the consumer |
-| `ai_groups_add_tracked_actor`'s body | receiver is byte-proven, but the body is unread and it has no PS2 candidate; with the class at 12/12 accounted, either one of those accountings is wrong or this is a PC-only helper |
+  PC-only functions, the first because PS2 inlines the teardown.
+- **`ai_groups_add_tracked_actor` has a callsite-level counterpart.** The `GROUP_DISBAND` arm of
+  PS2 `Process__9C_programFUi` runs `LeaveParty__16ai_fight_manager` and then
+  `push_back__Q23gif19vector<P7C_actor,8>(0x509170)` three times, at the same three points as
+  the PC calls. `0x509170` is `ai_groups` (`0x50915c`) + `0x14`, the vector `Tick__9ai_groupsFv`
+  culls. The PS2 symbol is the generic template, so it is no twin of the PC function, and
+  `ai_groups` stays 12/12 accounted.
+- **`ai_group_add_member`'s `Ui` parameter** (`Add__8ai_groupFP8C_entityUi`) is the role.

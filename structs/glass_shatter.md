@@ -1,6 +1,6 @@
 # `C_Break_plain_glass` — the glass shatter engine
 
-**Created** 2026-09-04 13:25 +0200 · **Modified** 2026-09-17 17:55 +0200
+**Created** 2026-09-04 13:25 +0200 · **Modified** 2026-10-04 19:19 +0200
 
 PC prefix **`glass_shatter_`**. Its own translation unit, `[0x0061e0d0, 0x00622230)`
 (`VE_BreakageGlass.cpp`, §6).
@@ -118,6 +118,13 @@ game_tick ->  glass_shatter_tick(dt)
 **The ring is why old debris disappears.** Only `pool_slots` (5) panes can be broken at once;
 breaking the next one silently retires the oldest. Confirmed in game.
 
+**The fourth argument restores the pane at scene end.** `glass_shatter_break_frame` always
+switches the original pane frame off (frame vtable `+0x24`, `SetOn(0)`). With the fourth argument
+set it also bumps the frame's reference count and keeps it in the `+0x04` list;
+`glass_shatter_done`, whose only caller is `game_done`, switches every kept frame back on
+(`SetOn(1)`) and releases it. Six of the seven callers (§4) pass 1; `crash_obj_ai` passes 0, and
+the frame it breaks is the crash object's own frame at `+0x68`.
+
 ---
 
 ## 3. PC coverage — 7 functions, all twinned
@@ -207,10 +214,13 @@ The nearest piece of shipped vocabulary is the literal **`"[DEFORM GLASS]"`**
 not-deform kind"* the most plausible reading — plausible, not measured, and
 `rail_window_hit` shatters through this class anyway.
 
+No shipped file contains the word either — no PC string, no table, no DLL — so what the
+developers meant by it cannot be recovered from the game.
+
 Both words the prefix keeps are backed: every caller is a glass pane and the default sound is
 `lustr1.wav` (Czech *lustr* = chandelier), and the body cuts a mesh into shards that fall,
-settle and merge — shattering, which is precisely what `DeformGlass` (`structs/vehicle.md`)
-does not do.
+settle and merge — shattering, which is precisely what `vehicle_deform_glass`
+(`structs/vehicle.md`) does not do.
 
 ---
 
@@ -246,8 +256,10 @@ on the PC is a counted loop over a folded identity stub inside
 the direction is a toolchain difference and no image-wide census of MSVC's POD-ctor out-lining
 exists.
 
-**Init.** `glass_shatter_init` allocates the ring pool; the PS2 `Init` only stores the count and
-clears.
+**Init.** `glass_shatter_init` allocates the ring pool. The PS2 has no pool at all: its `Init`
+zeroes the pool pointer `+0x28`, the cursor `+0x2c` and the slot count `+0x30` and never reads its
+count argument (`C_game::Init` passes 5), and no other PS2 function stores to `+0x28` or `+0x30`.
+The PS2 `Tick` still indexes `+0x28` when a pane retires.
 
 **Element type names** come from the PS2 template arguments. The PC decomp can give a stride
 but never a type, so `I3D_triface` (6 B) and `I3D_vertex` (0x20 B) are PS2-supplied facts about
@@ -265,16 +277,11 @@ this TU is an outlier.
   consecutive object files and share the `'OBJ_'` spawn machinery.
 * `structs/i3d_frame.md` §3 — the `+0x110` / `+0x1d4` model gate this class uses.
 * `structs/car.md` — `car_break_glass` and the window list at `C_car + 0x308`.
-* `structs/vehicle.md` — `C_Vehicle::DeformGlass`, the *other* glass effect: it cracks
+* `structs/vehicle.md` — `vehicle_deform_glass`, the *other* glass effect: it cracks
   a windshield in place and never spawns a shard.
 
 ---
 
 ## 8. Open items
 
-* **What "plain" meant to the developers** (§5). Probably not recoverable from the binaries.
-* **`glass_shatter_break_frame`'s 4th parameter.** All seven callers pass it; it controls
-  whether the original pane frame is kept in the `+0x04` restore list after its refcount is
-  bumped. `glass_shatter_done` releases that list, but no reader of it is traced, so what
-  "restore" means in play is undecoded.
-* **Where the PS2 allocates the ring pool** (§6, Init).
+Nothing is open.

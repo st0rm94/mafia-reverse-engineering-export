@@ -1,17 +1,12 @@
 # The input manager — `g_input` @ `0x006f92e0`
 
-**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-09-24 21:20 +0200
+**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`input_`**. Translation unit `[0x005d14a0, 0x005d3a60)`: 21 starts, all named.
 
 The PC's keyboard / mouse / joystick binding layer. It owns the 60 rebindable **actions**
 the Controls screen exposes, resolves them into two per-action float tables once a frame,
 and hands those tables to the player controller, the camera, the script VM and the GUI.
-
-> **`G_ConsoleControls` is a false friend.** That PS2 struct's "Console" means *the games
-> console*, i.e. the pad — not the on-screen text console documented in `structs/console.md`,
-> which lives in the very next translation unit (§6). Do not let that word pull this class toward a
-> `console_` prefix.
 
 ---
 
@@ -250,10 +245,13 @@ role on different input hardware, so **no method-level twin is expected** and no
 
 The PS2 reads its pad through `scePadRead` and `C_vid::ReadKey`/`TestKey`, and ships no
 keyboard-scancode name table at all — the PC needs this code because it has a keyboard, a mouse
-and DirectInput joysticks. Whether the PC-side code partly lives in a DLL is only half-excluded:
-`ijoy.dll` supplies the DEVICE objects while this game-side wrapper *holds* them.
+and DirectInput joysticks. `ijoy.dll` supplies the DEVICE objects while this game-side wrapper
+*holds* them (§8).
 
-**`G_ConsoleControls`** has no methods and appears only as the parameter type of
+**`G_ConsoleControls` is a false friend.** That PS2 struct's "Console" means *the games
+console*, i.e. the pad — not the on-screen text console documented in `structs/console.md`, which
+lives in the very next translation unit. Do not let that word pull this class toward a `console_`
+prefix. `G_ConsoleControls` has no methods and appears only as the parameter type of
 `C_player::AI_walk`, `AI_drive`, `AI_car_fire` and `GoToCar_Process`. On PC those four take the two
 value-table pointers directly — a factoring difference, not a missing function.
 
@@ -273,6 +271,7 @@ value-table pointers directly — a factoring difference, not a missing function
 | item | state |
 |---|---|
 | last `0xc` bytes of `S_joy_block` (`+0x38`..`+0x43`) | undecoded; only `0x38` of `0x44` bytes accounted for |
+| whether part of the PC-side input code lives in a DLL | only half-excluded: `ijoy.dll` supplies the DEVICE objects while this game-side wrapper holds them (§6) |
 | `input_capture_binding`'s `param_2` | unused by the body; Ghidra shows three parameters and only `param_3` (the poll flag) is read |
 | in game: binding conflicts | `loadsave_binding_find_conflict` walks only the band a slot belongs to (`0..0x20` on foot, `0x21..0x3b` in car), so binding the same key to one on-foot and one in-car action should be allowed; untested |
 | in game: slot `0x20` | textdb id **0** — the last on-foot slot is unused; nothing should appear for it on the Controls screen; untested |

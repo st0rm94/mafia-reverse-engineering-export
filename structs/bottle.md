@@ -1,6 +1,6 @@
 # `C_bottle` — the small thrown-physics-prop base class
 
-**Created** 2026-08-05 12:38 +0200 · **Modified** 2026-09-17 17:55 +0200
+**Created** 2026-08-05 12:38 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 A `C_actor` subclass: a small prop that flies a ballistic arc, tumbles, bounces off people,
 reacts to being shot, and is replicated to other machines. Its own twenty functions are the
@@ -55,27 +55,25 @@ typedef struct C_bottle {                /* extends C_actor */
     /* +0x7c  */ float      flight_speed;    // [H] |impulse|. saved
     /* +0x80  */ float      fall_accum;      // [H] flight ends when this passes 50.0. saved
     /* +0x84  */ char       landed_sets_state;// [H] chooses act-state 1 vs 2 at flight end. saved
-    /* +0x88  */ float      unk_88;          // [M] GameInit = 0.4f; cartridge_set_type halves it
-                                             //     to 0.2f for the type-B casing. No reader.
-    /* +0x8c  */ S_vector   tumble_angle;    // [M] cleared by GameInit. saved
+    /* +0x88  */ float      restitution;     // [H] speed kept per bounce. GameInit = 0.4f;
+                                             //     cartridge_set_type halves it for type B
+    /* +0x8c  */ S_vector   contact_normal;  // [H] ground normal of the last bounce. saved
     /* +0x98  */ S_vector   tumble_rate;     // [H] 3x rand_float; re-rolled on every hit
     /* +0xa4  */ float      radius;          // [H] half the bound-volume diagonal. saved
-    /* +0xa8  */ S_vector   unk_a8;          // [U] saved, no consumer traced
+    /* +0xa8  */ S_vector   frame_axis;      // [H] second axis for SetDir3, tumbled each tick. saved
     /* +0xb4  */ tDynamicCollObject coll;    // [H] 0x48 bytes, zeroed by the ctor
     /* +0xc4  */ S_vector   coll_pos;        // [H] the proxy's position mirror
     /* +0xfc  */ char       coll_registered; // [H] ctor = 1; gates insert/update/erase
-    /* +0x100 */ int        unk_100;         // [M] saved. A COUNTER: cartridge_ai_tick retires
-                                             //     a casing once it passes 15. What it counts
-                                             //     is open.
-    /* +0x104 */ char       unk_104;         // [U] saved
+    /* +0x100 */ int        bounce_count;    // [H] +1 per ground contact. saved
+    /* +0x104 */ char       on_ground;       // [H] the ground ray hit this tick. saved
     /* +0x108 */ S_vector   net_pos;         // [H] last received authoritative position
     /* +0x114 */ S_vector   net_vel;         // [H] its velocity
     /* +0x120 */ float      net_gravity;     // [H] the fall term applied while extrapolating
     /* +0x124 */ int        send_pending;    // [M] cleared after a broadcast
     /* +0x128 */ char       broadcast_on;    // [H] ctor = 1; gates the state broadcast
-    /* +0x12c */ int        unk_12c;         // [U] saved
-    /* +0x130 */ int        unk_130;         // [U] cleared by GameInit
-    /* +0x134 */ char       unk_134;         // [U] cleared by GameInit
+    /* +0x12c */ int        ground_material; // [H] surface material of the ground hit. saved
+    /* +0x130 */ void      *ground_dyn_obj;  // [M] dynamic object the ground ray hit, else 0
+    /* +0x134 */ char       ray_all_layers;  // [H] ground-ray mask: 0 = mask 2, 1 = every layer
 } C_bottle;
 ```
 
@@ -84,8 +82,13 @@ typedef struct C_bottle {                /* extends C_actor */
 | +0x10 | kind | H | `bottle_ctor` (= 0xa) | `folded_get_dword_0x10` (its `C_actor::GetKind` role), `bottle_on_collision` | the engine's stand-in for RTTI |
 | +0x20 | is_remote | H | C_actor base | `bottle_on_collision`, `bottle_hit` | when set, both handlers stop simulating and report upstream instead |
 | +0x70 / +0x7c / +0x80 | the flight triple | H | `bottle_set_flight_impulse`, `bottle_apply_net_event_msg` | `bottle_ai_tick`, `bottle_on_collision`, `bottle_hit` | direction (normalised), speed, fall accumulator. **The flight ends when `+0x80` passes 50.0** |
+| +0x88 | restitution | H | `bottle_game_init` (0.4), `cartridge_set_type` (0.2 for type B) | `bottle_ai_tick` | on a bounce the new speed `+0x7c` is the old speed × `+0x88` |
+| +0x8c | contact_normal | H | `bottle_ai_tick` (each bounce), `bottle_game_init` (clear) | `bottle_on_collision`, `bottle_hit`, the savegame pair | sent in the type-`0x15` collision message and added ×0.01 as a push-off |
 | +0x98 | tumble_rate | H | `bottle_game_init`, `bottle_on_collision`, `bottle_hit` (3× `rand_float` each) | the render transform | re-rolled on *every* impact, which is why a bottle never tumbles the same way twice |
 | +0xa4 | radius | H | `bottle_game_init` | collision | half the diagonal of the frame's hierarchical bound volume, after world scale |
+| +0xa8 | frame_axis | H | `bottle_ai_tick` (rotated by the tumble each tick), `cartridge_game_init` (= (0, 1, 0)) | `bottle_update`, the savegame pair | passed to `S_matrix::SetDir3` together with `+0x30` |
+| +0x100 / +0x104 / +0x12c / +0x130 | the ground-contact band | H | `bottle_ai_tick` (each ground ray); `grenade_on_collision` / `grenade_hit` also bump `+0x100` | `cartridge_ai_tick` (`+0x100` > 15 retires a casing; `+0x104` and `+0x12c` pick the landing sound), the savegame pair | bounce count, ray hit this tick, the hit's surface material, the dynamic object hit (else 0); `+0x104` clears when the flight ends at speed < 3.0 on a surface within 0.5 rad of level |
+| +0x134 | ray_all_layers | H | `cartridge_game_init` (= 1), `bottle_game_init` (clear) | `bottle_ai_tick` | selects the ground-ray mask: 2 when clear, every layer when set |
 | +0xb4 / +0xfc | dyn-coll proxy + its flag | H | `bottle_ctor` (flag = 1), `bottle_update` | `bottle_game_done` (`collision_dyn_erase`) | the proxy position is mirrored from `+0x24` every frame |
 | +0x108 / +0x114 / +0x120 | the dead-reckoning band | H | `bottle_apply_net_event_msg` (type 0x16) **only** | `bottle_net_apply_remote_state` **only** | one writer, one reader — which is what identifies both |
 | +0x128 | broadcast_on | H | `bottle_ctor` (= 1), `bottle_ai_tick` (clear at flight end) | `bottle_post_state_net_event_msg` | a landed bottle stops being broadcast |
@@ -148,6 +151,9 @@ The position quantise/dequantise pair the senders and the receiver use is
 `net_session_encode_position` (`0x0059a8c0`) / `net_session_decode_position` (`0x0059a810`), members
 of `g_net_session` (`structs/net_session.md`).
 
+The receiver's third type, **`0x13`**, is the generic act-state change that `actor_set_act_state`
+posts for every actor in the host role (`g_event_msg_vt_actor_act_state`, `structs/box.md` §4).
+
 ### 2b. The two bottle event messages
 
 | type | descriptor | serialize / deserialize | payload |
@@ -157,8 +163,7 @@ of `g_net_session` (`structs/net_session.md`).
 
 Both extend the shared **actor-state base payload** — `{vec3 quantised to i16, 3x i16, u32
 guid, u8 flags}` — which `event_msg_actor_state_serialize` writes and four derived classes
-chain to. Neither has a PS2 counterpart, for the reason in §3a. Full write-up:
-`structs/net_event_msg.md`.
+chain to. Full write-up: `structs/net_event_msg.md`.
 
 ---
 
@@ -184,12 +189,12 @@ directly:
 | +0x7c | +0xe0 | flight speed |
 | +0x80 | +0xe4 | fall accumulator |
 | +0x84 | +0xe8 | landed-state selector |
-| +0x8c | +0x90 | tumble angle |
+| +0x8c | +0x90 | contact normal |
 | +0xa4 | +0xf0 | radius |
-| +0xa8 | +0xb0 | unknown vector |
+| +0xa8 | +0xb0 | frame axis |
 | +0xb4 | +0x100 | dynamic collision proxy |
 | +0xfc | +0x160 | proxy-registered flag |
-| +0x100 / +0x104 / +0x12c | +0x164 / +0x168 / +0x178 | the saved tail |
+| +0x100 / +0x104 / +0x12c | +0x164 / +0x168 / +0x178 | bounce count, on-ground flag, ground material |
 
 The savegame record is **0x53 bytes on the PC and 0x58 on PS2**: the PC packs the payload
 byte-wise (store offsets 1, 5, 9, …) while PS2 writes dword-aligned slots.
@@ -207,8 +212,8 @@ Networking is **not** PC-only — PS2 has `GM_NetPlayer` with a full `G_Factory<
 | 68 bytes | `C_door` |
 
 So `C_bottle`'s PC vtable slot 15 holds **2112 bytes** of dead reckoning while
-`NetDirect__8C_bottleFUi` is an 8-byte stub, and the PC's message receiver and two senders
-have **no PS2 symbol at all**. The same shape holds for `C_PhThing`, whose slot 15 holds a
+`NetDirect__8C_bottleFUi` is an 8-byte stub, and the PC's message receiver, its two senders and
+the two event messages of §2b have **no PS2 symbol at all**. The same shape holds for `C_PhThing`, whose slot 15 holds a
 **1696-byte** dead-reckoning body (`physical_object_net_apply_remote_state`) against the same
 8-byte PS2 stub, plus five further PC-only replication members
 (`structs/physical_object.md` §5), and for `C_box`.
@@ -246,6 +251,13 @@ documented ICF fold (`structs/airplane.md` §3a).
 |---|---|---|
 | `chunk_read` | `Read__7C_chunkFPvi` | its own diff — the `max(0, remaining) < size` idiom |
 
+### 3d. The subclass set on the PS2
+
+`__ct__9C_grenadeFv` and `__ct__13C_smoke_trailFv` both chain `__ct__8C_bottleFv`, which
+corroborates the §5 subclass shape independently. The shared slot-18 `Init` of §5 is three
+separate 44-byte bodies on the PS2, identical to one another — which is why `/OPT:ICF` merged them
+into `bottle_subclass_init_require_frame` on the PC.
+
 ---
 
 ## 5. The subclass set, and the slot-18 `Init` fold
@@ -258,16 +270,14 @@ documented ICF fold (`structs/airplane.md` §3a).
 | `0xf` | `C_smoke_trail` | `smoke_trail_ctor` `0x004f60e0` | `structs/smoke_trail.md` |
 | `0x10` | `C_cartridge` | `cartridge_ctor` `0x00476f40` | `structs/cartridge.md` |
 
-A census of `bottle_ctor`'s callers finds exactly these three plus the two casing pools; PS2
-corroborates the shape independently, since `__ct__9C_grenadeFv` and `__ct__13C_smoke_trailFv`
-both chain `__ct__8C_bottleFv`.
+A census of `bottle_ctor`'s callers finds exactly these three plus the two casing pools (PS2
+corroboration: §3d).
 
 **All three share ONE `Init` implementation**, `bottle_subclass_init_require_frame`
 (`0x0048af90`), and that is a measurement: a scan of `.rdata` for the address as a pointer returns
 exactly three datarefs — `0x0063be18` slot 18, `0x0063c3c0` slot 18, `0x0063cd80` slot 18. The body
-is `frame ? bottle_init(frame) : false`; the PS2 side has three separate 44-byte bodies identical
-to one another, which is precisely why `/OPT:ICF` merged them. The PC symbol is therefore named for
-the FAMILY and carries **no `PS2 twin:` line**: a body shared by three classes has no single owner,
+is `frame ? bottle_init(frame) : false` — an `/OPT:ICF` merge of three identical bodies (§3d).
+The PC symbol is therefore named for the FAMILY and carries **no `PS2 twin:` line**: a body shared by three classes has no single owner,
 and naming it `grenade_init` would assert one (`structs/actor_track.md` §2c).
 
 ---
@@ -333,8 +343,8 @@ shot are plain meshes. And **`C_bottle` never plays a sound**: there is not one 
 of its twenty functions. The metal *cing* is the shared bullet-impact material sound, which a
 static mesh produces too — identical audio is exactly what the code predicts, for all four.
 
-**The other half is an open hunt** (§7): `bottle_hit` demonstrably writes the flight band and sets
-act-state 0, so a shot can should visibly move, and it was not observed to.
+**The other half is not:** `bottle_hit` writes the flight band and sets act-state 0, so a shot can
+should visibly move, and the tester did not observe it move (§7).
 
 ⇒ **`C_bottle` is used, but its shipped presence is two tin cans whose extra behaviour no player
 is likely to notice.** That is a different statement from `seagull_flock` and `bendable_plant`,
@@ -346,11 +356,7 @@ which have **zero** scene instances and no located construction path at all.
 
 | item | state |
 |---|---|
-| `+0x8c` tumble angle, `+0xa8`, `+0x104`, `+0x12c`, `+0x130`, `+0x134` | [M]/[U] — serialised or seeded, but no consumer traced. The savegame pair proves they are *state*, not padding |
-| `+0x88` (= 0.4f) | two writers (`bottle_game_init`, `cartridge_set_type`), no reader on either build; a `.text` byte scan for the displacement is the next lever |
-| `+0x100` | a counter — `cartridge_ai_tick` retires a casing once it passes 15 — but what it counts is unknown |
-| message type `0x13` | `bottle_apply_net_event_msg` handles it and no sender exists in this TU; `box_apply_net_event_msg` (`structs/box.md`) handles `0x13` too and likewise only sends its own type (`0x1b`). Two receivers, no sender ⇒ the sender is a third actor class in this family |
-| `C_blood` / `C_blood_manager` | 10 PS2 methods, sitting in this alphabetical slot, with no PC vtable in the band. Non-polymorphic on the PC, or elsewhere |
+| `+0x130` reader | `bottle_ai_tick` stores the dynamic object its ground ray hit; no reader is traced in the `C_bottle`, `C_grenade`, `C_cartridge` or `C_smoke_trail` code |
 | in game: do the two dynamic cans move when shot? | shoot the four cans in `MISE18-SALIERY` one at a time and watch only for movement: `xplechovka3`/`xplechovka4` are the dynamic pair, `xplechovka`, `xplechovka2`, `xplechovka5`, `xplechovka6` are static. Candidates if they do not move: the launch is too small to read (the ×15 scale acts on an unmeasured hit vector); the dynamic pair was not the pair shot; the `Hit` never reaches them; or a degenerate bound volume leaves the collision proxy unhittable while `+0xa4` looks correct |
 
 **Related:** `structs/actor.md` (base class) · `structs/airplane.md` (the preceding class in

@@ -1,6 +1,6 @@
-# `C_smoke_trail` — entity kind `0xf`, the damage smoke plume
+# `C_smoke_trail` — entity kind `0xf`, the explosion smoke streak
 
-**Created** 2026-08-17 11:24 +0200 · **Modified** 2026-09-18 05:40 +0200
+**Created** 2026-08-17 11:24 +0200 · **Modified** 2026-10-04 11:51 +0200
 
 PC prefix **`smoke_trail_`**.
 
@@ -25,7 +25,7 @@ stubs or folds and are listed in §3 with the reason.
 
 | Fact | Value | How we know |
 |---|---|---|
-| Entity kind | **`0xf`** | `smoke_trail_ctor` writes `0xf` to `+0x10`; the PS2 constructor writes the same to `+0x50`, the proven kind pair (`structs/entity.md` §1) |
+| Entity kind | **`0xf`** | `smoke_trail_ctor` writes `0xf` to `+0x10`, the kind field (`structs/entity.md` §1); the other build agrees (§5) |
 | Vtable | `0x0063cd80` | installed by the constructor and re-installed by the destructor |
 | Base class | `C_bottle` | every method chains its `bottle_*` counterpart first |
 | PC translation unit | `[0x004f60e0, 0x004f6270)` | bounded by the CRT static-init/atexit pairs `0x004f60b0`/`0x004f60d0` and `0x004f6270`/`0x004f6290`, which is where the compiler emits one TU's boundary |
@@ -39,20 +39,21 @@ Only the fields this class's own methods touch are listed; everything below `+0x
 | PC offset | PS2 offset | Field | Conf | Evidence |
 |---|---|---|---|---|
 | `+0x10` | `+0x50` | entity kind = `0xf` | H | both constructors |
-| `+0x65` | `+0x69` | alive byte, set to 1 by `GameInit` | H | `smoke_trail_game_init` and its twin |
+| `+0x65` | `+0x69` | `C_actor` save_excluded, set to 1 by `GameInit` | H | `smoke_trail_game_init` and its twin |
 | `+0x68` | `+0x70` | **the particle-effect object** | H | `smoke_trail_update` dispatches one virtual on it; `smoke_trail_game_done` calls three |
-| `+0x6d` | `+0x75` | cleared by the constructor | U | ctor only; no reader located |
-| `+0x7c` | `+0xe0` | fade term A | H | `smoke_trail_ai_tick` retires when it and `+0x80` are both `<= 1e-08` |
-| `+0x80` | `+0xe4` | fade/age term B | H | same test, plus the independent `> 50.0` retire gate |
-| `+0x84` | `+0xe8` | cleared by `GameInit` | U | no reader located |
+| `+0x6d` | `+0x75` | inherited `may_broadcast`, cleared by the constructor | H | read by the host-role guard of the chained `bottle_ai_tick`, so a smoke trail never broadcasts |
+| `+0x7c` | `+0xe0` | inherited `flight_speed` | H | `smoke_trail_ai_tick` retires when it and `+0x80` are both `<= 1e-08` |
+| `+0x80` | `+0xe4` | inherited `fall_accum` | H | same test, plus the independent `> 50.0` retire gate |
+| `+0x84` | `+0xe8` | inherited `landed_sets_state`, cleared by `GameInit` | H | read at flight end by the chained `bottle_ai_tick` |
 | `+0xa4` | `+0xf0` | `0.1f` seed | M | `GameInit`; shared constant `0x3dcccccd` on both builds |
-| `+0xa8` | `+0xb0` | cleared by `GameInit` | U | - |
-| `+0xac` | `+0xb4` | `1.0f` seed | M | `GameInit`; shared constant `0x3f800000` |
-| `+0xb0` | `+0xb8` | cleared by `GameInit` | U | - |
-| `+0xfc` | `+0x160` | cleared by the constructor | U | ctor only |
+| `+0xa8` | `+0xb0` | inherited `frame_axis` x, cleared by `GameInit` | H | the chained `bottle_ai_tick` tumbles the axis and `bottle_update` passes it to `SetDir3` |
+| `+0xac` | `+0xb4` | inherited `frame_axis` y, `1.0f` seed | H | `GameInit`; shared constant `0x3f800000`; same readers |
+| `+0xb0` | `+0xb8` | inherited `frame_axis` z, cleared by `GameInit` | H | same readers |
+| `+0xfc` | `+0x160` | inherited `coll_registered`, cleared by the constructor | H | the chained `bottle_update` skips the proxy update while it is clear, so a smoke trail registers no dynamic-collision proxy |
 
-Confidence: **[H]** measured on both builds · **[M]** measured, meaning open · **[U]** written,
-no reader located.
+Confidence: **[H]** measured on both builds · **[M]** measured, meaning open. The inherited
+fields are read by `bottle_ai_tick` and `bottle_update`, which `smoke_trail_ai_tick` and
+`smoke_trail_update` chain first (`structs/bottle.md` §1).
 
 The PC↔PS2 delta is **not uniform** across the class (`+0x10`→`+0x50` is `+0x40`,
 `+0x7c`→`+0xe0` is `+0x64`, `+0xa4`→`+0xf0` is `+0x4c`). Do not rebase band-wise. Each row above
@@ -84,13 +85,19 @@ many-to-one mapping belongs in this table.
 
 ## 4. Behaviour
 
+**Where they come from.** `smoke_trail_ctor` has exactly one caller, `game_init`, which builds 32
+smoke trails into a ring at `C_game+0x324` (cursor `+0x3a4`); the entity factory has no `0xf` arm.
+`game_new_smoke_trail` re-arms the next one in the ring with a random direction and length, and its
+only caller is `game_new_explosion`, which fires 8 + a random number of them per explosion when the
+detail level is above 1 (`structs/game.md` §1).
+
 **Construction.** `smoke_trail_ctor` chains `bottle_ctor`, installs vtable `0x0063cd80`,
 stamps entity kind `0xf` and clears two fields. `Init` (the shared fold) refuses a null
 frame and otherwise delegates to the `C_bottle` initialiser — so a smoke trail is always
 parented to a model frame.
 
 **Arming.** `smoke_trail_game_init` chains `bottle_game_init`, then seeds the fade band:
-`+0xa4 = 0.1f`, `+0xac = 1.0f`, three cleared words, and the alive byte `+0x65 = 1`.
+`+0xa4 = 0.1f`, `+0xac = 1.0f`, three cleared words, and the save-exclusion byte `+0x65 = 1` (`structs/actor.md` §1b).
 
 **Per frame.** `smoke_trail_update` advances the `C_bottle` half and then ticks the
 particle-effect object at `+0x68` through its own vtable. `smoke_trail_ai_tick` chains
@@ -103,10 +110,9 @@ if ((+0x7c <= 1e-08 && +0x80 <= 1e-08) || 50.0 < +0x80) {
 }
 ```
 
-— i.e. *the plume has faded to nothing*, **or** *it has simply aged out*. Both constants
-are byte-shared with the PS2 body. `game_remove_temporary_actor` is the deferred retire
-queue (`structs/game.md`), so the actor disappears at the end of the frame rather than
-mid-tick.
+— i.e. *the plume has faded to nothing*, **or** *it has simply aged out*.
+`game_remove_temporary_actor` is the deferred retire queue (`structs/game.md`), so the actor
+disappears at the end of the frame rather than mid-tick.
 
 **Teardown.** `smoke_trail_game_done` chains `bottle_game_done` and then releases the
 effect object with three virtual calls in a fixed order (PC slots `0x24`, `0x2c(0,0)`,
@@ -115,6 +121,10 @@ effect object with three virtual calls in a fixed order (PC slots `0x24`, `0x2c(
 ## 5. PC vs PS2
 
 * **Field deltas are not uniform** — see the note under §2.
+* **Kind stamp.** The PS2 constructor writes `0xf` to `+0x50`, the proven PS2 counterpart of the
+  PC kind field `+0x10` (`structs/entity.md` §1).
+* **Retire constants.** Both constants of the §4 retire test, `1e-08` and `50.0`, are byte-shared
+  with the PS2 `AI` body.
 * **Vtable slot numbering differs**: PC slot `0x14` ↔ PS2 slot `0x28` for the effect
   object's per-frame call, and PC `0x24`/`0x2c`/`0x00` ↔ PS2 `0x38`/`0x40`/`0x08` for the
   teardown triple. The ORDER is identical on both builds, which is what makes the mapping
@@ -139,8 +149,5 @@ effect object with three virtual calls in a fixed order (PC slots `0x24`, `0x2c(
 
 | item | state |
 |---|---|
-| what CREATES a smoke trail | the constructor's only located callsite is the entity factory, and nothing traced so far passes kind `0xf` to it, so the producer — presumably the car damage path, which is what a smoke plume is for — is not located |
 | the particle-effect object's class | `+0x68` holds an object with at least vtable slots `0x14`, `0x24`, `0x2c`, `0x00`; not identified, likely the same effect type the `game_new_*` factories return (`structs/grenade.md` §5) |
-| `+0x6d`, `+0x84`, `+0xa8`, `+0xb0`, `+0xfc` | written by the ctor or `GameInit`, no reader located on either build |
-| what `+0x7c` and `+0x80` measure | the retire gate is certain (`1e-08` fade, `50.0` age); the physical quantities are inherited from `C_bottle` and are `[U]` there too (`structs/bottle.md` §1, the `+0x80` row) |
-| in game | a badly damaged car should trail smoke that fades and stops after ~50 units of `+0x80`; one observation would confirm the class is live at all and pin the producer |
+| a damaged car's smoke | in game a damaged car smokes, white first and then black (gameplay observation; the Mafia Script Data Reference's `car_switchshowenergy` selects among the car's damage types). That smoke is not this class, whose only producer is `game_new_explosion`; which code draws it is not traced |

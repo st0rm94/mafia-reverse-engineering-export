@@ -1,6 +1,6 @@
 # The PC multiplayer front end — `gui_mp_*`
 
-**Created** 2026-08-24 11:05 +0200 · **Modified** 2026-09-17 17:54 +0200
+**Created** 2026-08-24 11:05 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC translation units `[0x00563b30, 0x00566250)` (the menus) and the second class inside
 `[0x00561b70, 0x00563b00)` (the driver-appearance picker), plus six `inet.dll` helpers around
@@ -100,7 +100,7 @@ host and join item greyed out.
 
 ## 3. The driver-appearance picker — design `0x2c`, vtable `0x0063d398`
 
-This is the class that sat unnamed inside the `GM_Carcyclopedia` translation unit. It is
+This class lives inside the `GM_Carcyclopedia` translation unit. It is
 **not** a car viewer: it selects the **character model your driver wears**, out of
 `tables\playerindex.def`.
 

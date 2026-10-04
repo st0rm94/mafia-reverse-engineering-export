@@ -1,6 +1,6 @@
 # `game_menus` — the in-game and front-end SCREEN translation unit
 
-**Created** 2026-08-25 17:18 +0200 · **Modified** 2026-09-23 15:58 +0200
+**Created** 2026-08-25 17:18 +0200 · **Modified** 2026-10-04 16:37 +0200
 
 PC range **`[0x00575c50, 0x0057d6e0)`**, closed at both ends by a CRT static-init pair
 (`crt_static_init_guard_00575c20` / `_0057d6e0`). It is the translation unit that immediately
@@ -39,6 +39,14 @@ file therefore hands you a screen's component ids, its widget classes, its geome
 Decoding `menu.def` by walking those group records yields **72 groups**, ids `0x00`..`0x47` (the
 last 16 empty), **809 records of `0x24` bytes**:
 `{u32 id, FourCC tag, f32 x, y, w, h, u32 text_id, u32 flags, u32 colour}`.
+
+**Seven non-empty shipped designs are never built.** The builder has 58 `E8` callers in the whole
+binary, no `E9` referrer, and every one of the 58 pushes a literal design id; the design table's
+only other reference is its loader. None of the 58 pushes `0x11` (*Your inventory is full*),
+`0x12` (a *Pickup/Use* list), `0x15` (three unlabelled items), `0x24` (*You have won a bonus
+car*), `0x29` (a *Multiplayer:* name field), `0x2d` (a name field, a combo box and two buttons)
+or `0x31` (*Exit to Main Menu* / *Retry*: the game-over design `0x30` with the two rows in the
+other order).
 
 ### 1a. The design map of this TU
 
@@ -136,14 +144,10 @@ nothing.
 | **question box** | `1` | frame `0x82`, message `0x83`, **item `0x8a` "Yes"**, **item `0x8b` "No"** | Yes → `0xb`, No/ESC → `0xc` | `gui_question_box_ctor` `0x005764c0`, `gui_question_box_tick` `0x00576560` |
 | **message box** | `2` | frame `1`, message `0x82`, `butt` `0x83` "OK" | any click, ESC or ENTER | `gui_message_box_ctor` `0x00576620`, `gui_message_box_tick` `0x005767a0` |
 
-The PS2 `GM_QuestionBox` dispatches components `0x8a`/`0x8b` and returns `0xb`/`0xc`; those ids
-live in design **1**, so that class is the design-1 question box. The design-**0** notice panel's
-PS2 counterpart is not located (§11).
-
 The notice panel is used for plain game messages: script-dispatcher cases `0x100f`/`0x1010`,
 and the inventory pair *"You do not have enough room."* / *"You must drop an item."*
 `gui_notice_panel_present_once` (`0x0056e3f0`, in the `g_menu.cpp` TU) drives one for exactly
-one frame — a splash, not an interactive modal.
+one frame — a splash, not an interactive modal. The notice panel is PC-only (§10c).
 
 ### 3a. The combo drop-down
 
@@ -154,7 +158,7 @@ option vector at `+0x4c`; the picked row id is written through the out-pointer a
 **Component id 2 is the dismiss target.** Design `0x13` ships exactly three records — a `wind`
 frame (1), a `rect` background (2) and an `orez` clipper (3) — and the tick hit-tests component
 2 on every mouse button, closing with `-1` when the click landed outside it. That is the PC's
-click-away dismissal; the PS2 `GM_ComboMenu` has no such arm because it has no mouse.
+click-away dismissal (§10c).
 
 ---
 
@@ -208,6 +212,15 @@ Three details pin that join:
 
 * **Gamma is component `0x50`**, not one of the `0x6e`/`0x6f` sliders — it writes a different
   global entirely.
+* **Every global the screen writes has a consumer outside it.** `g_gamma` is settings block
+  `+0x4fc` of `g_loadsave_singleton`, the input of the 256-entry gamma ramp that
+  `loadsave_apply_settings` builds for mask 4 and hands to engine slot `+0x110`; `g_cars_volume`
+  is `+0x4ec`, divided by the sounds volume and passed to `vehicle_set_global_sound_volume` for
+  mask `0x21`; `g_speech_volume` scales `speech_channel_speak_line` and the scream volumes of
+  `human_new_scream`, `human_game_init`, `human_do_throw_occupant_from_car` and
+  `pedestrian_manager_play_pedestrian_scream`; `g_blood_level` gates `hud_push_blood_splat` at
+  0.9; `g_freeride_unlock_level` is read by `gui_main_menu_ctor`, `gui_free_ride_ctor` and
+  `gui_free_ride_mode_ctor`.
 * **The Shadows tier has six labels**, textdb 281..286 *Very Low … Highest*, matching its
   six-entry map exactly.
 * `mission_update_settings` (`0x00604f70`) corroborates the first two rows independently: it
@@ -228,10 +241,11 @@ only when the screen has no parent, i.e. when it was opened from the main menu.
 | `gui_key_conflict_ctor` | `0x005786e0` | design `0x35` "Control already used"; carries the captured triple |
 | `gui_key_conflict_tick` | `0x005787c0` | slot 5; Yes commits, No/ESC abandons |
 
-A committed binding is three dwords at **`g_key_binding_table + slot*0xc`**. Both screens normalise the
+A committed binding is three dwords at **`g_key_binding_table + slot*0xc`**; the input side
+reads it through `input_set_binding`, `input_update` and `input_binding_get_label`
+(`structs/loadsave.md` §7). Both screens normalise the
 paired axis codes the same way (5/7, `0x26`/`0x28` swap; `0x12`/`0x13` clear), which is what
-pairs them. Both are PC-only: `GM_OptionsControls::OnKey` on the PS2 merely cycles a 0..3 control
-PRESET, and the closed `GM_*` roster has no capture or conflict class.
+pairs them. Both are PC-only (§10c).
 
 ### 4c. The inventory screen — design `0xf` *(PC-only as a screen)*
 
@@ -246,14 +260,9 @@ Fixed rows: `0x100` Hands, `0x102`..`0x106` the five weapon slots, `0x107` Coat,
 then one cloned `'seli'` row per carried item in the `0x200+` band. The `G_Inventory` is at
 `+0x848` and the owning actor at `+0x84c`. Drop is key `0xe`/`0x2d`; selecting a row calls
 `inventory_select_slot(index, kind, actor)` with kind 0 Hands / 1 weapon / 2 Coat / 3 item /
-4 Car.
+4 Car. The console counterpart is not a screen (§10c).
 
-**The feature is not missing on the PS2 — it is somewhere else.** That build draws the
-inventory in the HUD (`G_IndicatorsClass::_InventorySet`, `::InventoryScroll`,
-`::DrawInventory`, all taking a `G_Inventory *`), not as a `GM_Menu` screen. Measured against
-the closed roster plus a named alternative location.
-
-### 4d. The action menu — design `0x10` (PS2 `GM_ItemPickUp`)
+### 4d. The action menu — design `0x10`
 
 | function | VA | role |
 |---|---|---|
@@ -269,16 +278,12 @@ open-door, enter-car and the other context actions, which is why the prefix is
 `gui_action_menu_` rather than the PS2 class's `GM_ItemPickUp`.
 `basic/artifacts/player-interactions.md` §4 is the behavioural write-up.
 
-**The field map is 1:1 with the PS2 at a constant `+0x101c` delta:** PC `+0x1048` the
-`G_Inventory`, `+0x104c` the NPC vector, `+0x1050` the world-item vector, `+0x1054`/`+0x1058`
-the two taken-lists, `+0x1060` the gathered options — PS2 `+0x2c`/`+0x30`/`+0x34`/`+0x38`/
-`+0x3c`/`+0x40`.
+**The field map:** `+0x1048` the `G_Inventory`, `+0x104c` the NPC vector, `+0x1050` the
+world-item vector, `+0x1054`/`+0x1058` the two taken-lists, `+0x1060` the gathered options.
 
-**One behaviour is RELOCATED, not folded.** The PS2 auto-takes a lone option inside `OnCreate`;
-the PC runs the same test — same `& 2` flag on the same mission field — in the tick instead.
-Both builds have both functions, so this is not an inlining.
+**The tick auto-takes a lone option**, gated by an `& 2` flag on a mission field (§10a).
 
-### 4e. The gun shop — design `0x14` (PS2 `GM_GunShop`)
+### 4e. The gun shop — design `0x14`
 
 | function | VA | role |
 |---|---|---|
@@ -287,14 +292,14 @@ Both builds have both functions, so this is not an inlining.
 | `gui_gun_shop_refresh_slots` | `0x0057b600` | re-render the player's slots after every trade |
 | `gui_gun_shop_tick` | `0x0057b700` | slot 5; drop a slot, or take from the catalogue |
 
-**This is the weapon shop, and three independent artifacts say so.**
+**This is the weapon shop.** Two independent artifacts say so here, and the twin class name is a
+third (§10a).
 
-1. The PS2 class is `GM_GunShop`.
-2. The shipped scripts call it: `gunshop_menu` appears twice in mission `MISE19-MESTO`, script
+1. The shipped scripts call it: `gunshop_menu` appears twice in mission `MISE19-MESTO`, script
    `1ProdZ`, and once in mission `MISE20-MESTO`, script `1ProdZ` — `1ProdZ` = *prodavač zbraní*,
    the weapons dealer — each time directly after `dialog_end` with him and directly before
    `inventory_push` / `inventory_clear`.
-3. The opcode: `GUNSHOP_MENU` is parser raw `0x060`, so dispatcher **case `0x61`**, whose body
+2. The opcode: `GUNSHOP_MENU` is parser raw `0x060`, so dispatcher **case `0x61`**, whose body
    opens this design as a modal and then calls `human_change_weapon_model`. Documented in
    `script-mapping/artifacts/opcodes-verified.md`.
 
@@ -341,7 +346,7 @@ adds the two City rows, 2 and above enables all five.
 | `gui_racing_game_menu_tick` | `0x0057cb40` | ids `0x3e9`..`0x3ec` |
 
 In **free ride** the game-over screen disables *Retry* and focuses *Exit to Main Menu* — there
-is no mission to retry. That two-statement tail is identical on both builds.
+is no mission to retry (§10a).
 
 ---
 
@@ -364,13 +369,19 @@ row 100 is the newest save, and the click handler undoes it with `(count - id) +
 save-file record is **`0x18` bytes** on the PC.
 
 **The scroll range is `'swnd'` + `0x28`.** `gui_load_game_ctor` computes it from the last row's
-geometry and writes it directly — the same place the PS2 calls the widget's `SetRangeFloat`.
-That answers the `gui_widget_window_scroll_by` question in `structs/gui_widget.md` §7.
+geometry and writes it directly (§10a).
+`structs/gui_widget.md` §6f documents the scroll window this range feeds.
 
 **The progress bar has two phases split at `+0x48`**: mission-open fills `[0, base]` and
 game-init fills `[base, 1]`. In a network session each update is also broadcast as a **type
 `0x36`** event message so the other players' bars advance; that is why those two functions touch
 the message vtable `0x0063e0bc` — the vtable belongs to the message they construct, not to them.
+
+**The save-slot widget's slot 8, `gui_widget_save_slot_set_text`, discards three lookups.** It
+asks the text database for textdb `0xae`, `0xaf` and `0xb0` and drops all three results before
+forwarding to its child at `+0x170`. The lookup is a pure binary search with no side effect;
+`0xaf` is formatted by `gui_load_game_tick`, and `0xae` and `0xb0` are referenced nowhere else in
+the binary.
 
 **`tables\load.def`** is read into an 8000-byte buffer and walked as **`0x44`-byte** records:
 the mission name at `+0x00`, the loading caption at `+0x20`, and an optional textdb id at
@@ -443,9 +454,8 @@ as a verbatim copy of its host's tail, reading `unaff_EBX` / `unaff_EDI` / `in_s
 live on entry, which a real function start cannot have. The discriminator here is the **vtable
 order in `.rdata`**: it appears in none of the eleven screen vtables of this TU while every one
 of its neighbours does, and a screen-TU function in no vtable, with no `E8` caller and no
-dataref, cannot be reached at all. This split had truncated its host from 608 bytes to 96 — a
-sixth of the function — so any size ratio taken against the PS2 `GM_GarageSelect` methods must be
-taken against 608.
+dataref, cannot be reached at all. The split sits 96 bytes into its host, a 608-byte function
+(§10a).
 
 ---
 
@@ -475,8 +485,27 @@ These are what make the twins measurements rather than positional guesses.
 | `gui_question_box_tick` | `OnClick__14GM_QuestionBoxFUi` | results **`0xb`**/**`0xc`** and the root-vs-child fork |
 | `gui_free_ride_ctor` | `OnCreate__11GM_FreeRideFv` | car-name fallback textdb **`0x2bf`** under the same range test |
 | `gui_main_menu_exit_box_tick` | `OnClick__15GM_MainMenuExitFUi` | result **`0x18`** |
-| `gui_action_menu_pick_up` (`0x005794d0`) | `PickUp__13GM_ItemPickUpFv` | a statement-level diff of both bodies matches statement for statement |
-| `gui_gun_shop_refresh_slots` (`0x0057b600`) | `RefreshInventory__10GM_GunShopFv` | STRUCTURAL: the PS2 body is a 16-byte stub, pinned by two identical call positions |
+| `gui_action_menu_pick_up` | `PickUp__13GM_ItemPickUpFv` | a statement-level diff of both bodies matches statement for statement |
+| `gui_gun_shop_refresh_slots` | `RefreshInventory__10GM_GunShopFv` | STRUCTURAL: the PS2 body is a 16-byte stub, pinned by two identical call positions |
+
+Further correspondences, keyed to the PC sections they concern:
+
+* **Question box (§3).** `GM_QuestionBox` dispatches components `0x8a`/`0x8b` and returns
+  `0xb`/`0xc`; those ids live in design **1**, so that class is the design-1 question box. Its
+  constructor flag only picks the console layout `psx_questionbox`; the Yes/No pair is always
+  there. The design-**0** notice panel has no PS2 counterpart (§10c).
+* **Action menu (§4d).** The field map is 1:1 with `GM_ItemPickUp` at a constant `+0x101c` delta:
+  PC `+0x1048`/`+0x104c`/`+0x1050`/`+0x1054`/`+0x1058`/`+0x1060` ↔ PS2
+  `+0x2c`/`+0x30`/`+0x34`/`+0x38`/`+0x3c`/`+0x40`. One behaviour is RELOCATED, not folded: the PS2
+  auto-takes a lone option inside `OnCreate`; the PC runs the same test — same `& 2` flag on the
+  same mission field — in the tick. Both builds have both functions, so this is not an inlining.
+* **Gun shop (§4e).** The twin class is `GM_GunShop`.
+* **Game over (§5).** The free-ride tail — disable *Retry*, focus *Exit to Main Menu* — is
+  identical on both builds.
+* **Load game (§6).** `gui_load_game_ctor` writes the `'swnd'` + `0x28` scroll range directly at
+  the place where `OnCreate__11GM_LoadGameFv` calls the widget's `SetRangeFloat`.
+* **Garage select (§9).** A size ratio taken against the `GM_GarageSelect` methods uses the full
+  608 bytes of `gui_garage_select_tick`, not the 96 bytes before the mid-body split.
 
 ### 10b. Folds — PC inlines what the PS2 calls
 
@@ -502,19 +531,20 @@ Each of these carries a `// PS2-INLINED HERE:` banner at the fold site in the an
 * **The 15-row loading roster** — `GM_LoadProgress` has no network roster; its `OnTick` is an
   8-byte stub.
 * **The five `freerideN.bmp` previews** and the free-ride location pickers.
-
-### 10d. PS2 methods with no PC counterpart located
-
-* `GM_LoadGame::{IsTexturePreloaded, PreloadTextures, ReleasePreloadedTextures}` — the PC binds
-  `shot%03d.bmp` by name instead of pre-loading `ITexture`s.
-* `GM_LoadProgress::Destroy`.
-* Every `GM_PressStart` / `GM_GameMap` / `GM_TutorialMessage` / `GM_HotRodMessage` method — the
-  four console-shell screens.
-* `GM_GarageGarage` (4 methods) and `GM_GarageComplete` (2), the PS2 garage root menu and its
-  completion notice. They sit at `0x0048f000`, in the GARAGE translation unit, not here —
-  `structs/garage.md` §4.
-
-None of these is tagged terminal; they have not been searched.
+* **The design-0 notice panel** (§3). At every call position of its constructors the PS2 builds
+  nothing: its `C_entity::Process` arms for the two entity-script commands `0x100f` / `0x1010`
+  only advance the script, its `GM_GunShop` is gutted (`OnKey` and `RefreshInventory` are
+  stubs), and the remaining callers are the multiplayer front end.
+* **`GM_GarageGarage` and `GM_GarageComplete`** — PS2-only: they are reached only through PS2
+  script commands the PC lacks (`structs/garage.md` §4c).
+* **The combo drop-down's click-away dismissal** (§3a) — `GM_ComboMenu` has no such arm; the
+  console build has no mouse.
+* **The key-capture and key-conflict screens** (§4b) — `GM_OptionsControls::OnKey` merely cycles
+  a 0..3 control PRESET, and the closed `GM_*` roster has no capture or conflict class.
+* **The inventory as a `GM_Menu` screen** (§4c) — the feature exists on the PS2, but that build
+  draws the inventory in the HUD (`G_IndicatorsClass::_InventorySet`, `::InventoryScroll`,
+  `::DrawInventory`, all taking a `G_Inventory *`). Measured against the closed roster plus a
+  named alternative location.
 
 ---
 
@@ -522,10 +552,6 @@ None of these is tagged terminal; they have not been searched.
 
 | item | state |
 |---|---|
-| the design-0 notice panel's PS2 twin (§3) | not located and not searched; the promising approach is to hunt the SHAPE — a class with two message rows and no buttons — rather than a name |
-| design `0x31` (*"Exit to Main Menu"*, `winc list wind item`) | ships in `menu.def`, but no constructor in this TU pushes it; which TU builds it is unknown |
-| `GM_GarageGarage` / `GM_GarageComplete` | no PC counterpart located (§10d). Their PS2 drivers are `G_GarageClass::DoGarageMenu` and `::DoFreerideMenu`; the PC equivalents of those two are unread |
-| the PS2 `G_TextDatabase` band | never swept, so none of the six functions named at this TU's tail has a located twin — `structs/textdb.md` §6 |
-| five globals the design-8 join identifies but leaves `DAT_` | `g_cars_volume` Cars, `g_speech_volume` Speech, `g_gamma` Gamma, `g_blood_level` Level of Blood, `g_freeride_unlock_level` the free-ride unlock level. Each wants a consumer census outside that one screen |
-| `g_loadsave_singleton` / `g_key_binding_table` | the `0xc`-byte input binding table `gui_key_capture_tick` and `gui_key_conflict_tick` write. The record layout is certain (three dwords, stride `0xc`, indexed by the binding slot); the WRITER on the input-subsystem side is unread |
-| `gui_widget_save_slot_set_text` | evaluates textdb `0xae`/`0xaf`/`0xb0` and discards all three. Verified by disassembly, unexplained |
+| `GM_LoadGame::{IsTexturePreloaded, PreloadTextures, ReleasePreloadedTextures}` | no PC counterpart located, not searched. The PC binds `shot%03d.bmp` by name instead of pre-loading `ITexture`s |
+| `GM_LoadProgress::Destroy` | no PC counterpart located, not searched |
+| every `GM_PressStart` / `GM_GameMap` / `GM_TutorialMessage` / `GM_HotRodMessage` method | the four console-shell screens; no PC counterpart located, not searched |

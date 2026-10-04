@@ -1,6 +1,6 @@
 # The statically-linked runtime tail — `[0x006243b7, 0x00633d75)`
 
-**Created** 2026-09-04 18:07 +0200 · **Modified** 2026-09-28 19:40 +0200
+**Created** 2026-09-04 18:07 +0200 · **Modified** 2026-10-04 20:16 +0200
 
 This is a **linker region, not a translation unit and not a class** — the tail of `.text` where
 the linker parked the objects that came out of `.lib` files rather than out of Mafia's own
@@ -102,19 +102,12 @@ returns. `logic_error` is the base; `length_error` and `out_of_range` add nothin
 Slot 1 is **one function filling three slots**. That is ordinary vtable inheritance, not an
 ICF fold: all 3 datarefs belong to one hierarchy and neither derived class overrides it.
 
-### 2d. Two destructors per class, and where the twin goes
+### 2d. Two destructors per class
 
 The PC emits **two** destructors per class — a plain one, reachable only through the
-`_ThrowInfo`'s `pmfnUnwind` field, and a scalar-**deleting** one in vtable slot 0. GCC folds
-both into a single flagged destructor, so the PS2 twin belongs on the **deleting** one:
-
-```
-PC   std_logic_error_scalar_deleting_dtor(this, byte flag)   if (flag & 1) operator delete
-PS2  __dt__Q23std11logic_errorFv(long, short)                if (0 < flag) __dl__FPv
-```
-
-Settled by **signature, before either body was read** — a mangled symbol spells its whole
-signature.
+`_ThrowInfo`'s `pmfnUnwind` field, and a scalar-**deleting** one in vtable slot 0,
+`std_logic_error_scalar_deleting_dtor(this, byte flag)`, which runs `if (flag & 1) operator
+delete`. The cross-build pairing is in §6a.
 
 ### 2e. `_Xlen` and `_Xran` inline their own derived constructors
 
@@ -197,7 +190,13 @@ Band 1, `[0x006243b7, 0x00625021)` — five sub-groups:
 * **Floating-point init.** `crt_fp_init` is reached ONLY through the `.data` hook
   `g_crt_fp_init_hook` (`0x00651ba8`), which `_cinit` reads at `0x00626cfd` and calls before
   either initializer table runs. It fills `g_crt_cfltcvt_tab` through `crt_cfltcvt_init` and
-  sets `g_crt_adjust_fdiv`.
+  sets `g_crt_adjust_fdiv`. The `.data` run around the hook is MSVC's FP-init object: `_fltused`
+  (`0x9875`) at `0x00651ba0`, `_ldused` (`0x9873`), `_FPinit` (`g_crt_fp_init_hook`), then the
+  per-thread hooks `_FPmtinit` / `_FPmtterm` (`g_crt_fp_mt_init_hook` / `g_crt_fp_mt_term_hook`).
+  Both per-thread hooks hold `crt_fpclear`, MSVC's empty `_fpclear` — the one-byte `ret` right
+  after `crt_fp_init`'s own `ret` — and an image-wide scan finds no reader for either: only the
+  multithreaded CRT calls them, and it is not linked. The shipped `LS3DF.dll` and `IJoy.dll`
+  carry the same unread triple.
 * **Exit handlers.** `crt_onexit_init` (reached only through the `.CRT$XI` slot `0x00646314`)
   allocates the 0x80-byte table; `crt_onexit` appends and grows it; `crt_atexit` wraps that in
   C's 0/-1 contract. **167 callers**, essentially all of them per-translation-unit registrar
@@ -217,37 +216,40 @@ Band 1, `[0x006243b7, 0x00625021)` — five sub-groups:
 
 Band 2, `[0x00625021, 0x00627686]`:
 
-| sub-band | group | n |
+| sub-band | group | starts |
 |---|---|---|
-| `[625021, 625071)` | `_vsnprintf` | 1 |
-| `[625071, 6251d1)` | C++ EH array helpers — `__ehvec_dtor` / `__ehvec_ctor`, their two unwind funclets, `__ArrayUnwind` | 5 |
-| `[6251d1, 625370)` | stdio — `fclose`, `fwrite`, `_fsopen`, `fopen` | 4 |
-| `[625370, 625397)` | `strrchr` | 1 |
-| `[625397, 6253bf)` | `srand` / `rand` | 2 |
-| `[6253bf, 62558d)` | **`qsort`** + `shortsort` + `swap` | 3 |
-| `[62558d, 625660)` | `_strupr`, `sscanf` | 2 |
-| `[625660, 625700)` | `strncmp`, `isalpha`, `isspace` | 3 |
-| `[625700, 625840)` | `strchr`, `strstr` | 2 |
-| `[625840, 625b75)` | **`memmove`** (821 B) | 1 |
-| `[625b75, 625cae)` | `fprintf`, `strncpy` | 2 |
-| `[625cae, 625e4c)` | **`ceil` / `floor`** | 2 |
-| `[625e4c, 625f60)` | `fread`, `remove` | 2 |
-| `[625f60, 626180)` | **`pow`** — `_CIpow` entry, body, the is-integer helper | 3 |
-| `[626180, 6262ac)` | `strncat`, **`_purecall`** | 2 |
-| `[6262ac, 626443)` | `toupper` / `tolower` | 2 |
-| `[626443, 626800)` | **heap** — `realloc`, `malloc`, `_nh_malloc`, `_heap_alloc`, `free` | 5 |
-| `[626800, 626920)` | `__aulldiv`, `__allmul`, `vsprintf`, `__allshl` | 4 |
-| `[626920, 6269eb)` | **asin** — `_CIasin` entry + body | 2 |
-| `[6269eb, 626ac7)` | `time` | 1 |
-| `[626ac7, 626cfd)` | `strtol` / `strtoxl` / `strtoul` | 3 |
-| `[626cfd, 626dff)` | `crt0dat` — `_cinit`, `exit`, `_exit`, `doexit`, `_initterm` | 5 |
-| `[626dff, 626f1a)` | `_getcwd` / `_getdcwd` / drive validation | 3 |
-| `[626f1a, 627059)` | `WinMainCRTStartup`, `_amsg_exit`, `_fast_error_exit` | 3 |
-| `[627059, 627150)` | **the `exception` class** (5) + **`type_info`** (2) — §3 | 7 |
-| `[627150, 627230)` | `strlen`, `_SEH_prolog`, `_CxxThrowException` | 3 |
-| `[627230, 627565)` | **`memcpy`** (821 B) | 1 |
-| `[627565, 6275de)` | FP init — `_setdefaultprecision`, the FDIV-erratum query and self-test | 3 |
-| `[6275de, 6276a0)` | `cvt` — `_forcdecpt`, `_cropzeros`, `_positive`, and `_fassign` (`0x0062769e`, §5e) | 4 |
+| `[0x00625021, 0x00625071)` | `_vsnprintf` | 1 |
+| `[0x00625071, 0x006251d1)` | C++ EH array helpers — `__ehvec_dtor` / `__ehvec_ctor`, their two unwind funclets, `__ArrayUnwind` | 5 |
+| `[0x006251d1, 0x00625370)` | stdio — `fclose`, `fwrite`, `_fsopen`, `fopen` | 4 |
+| `[0x00625370, 0x00625397)` | `strrchr` | 1 |
+| `[0x00625397, 0x006253bf)` | `srand` / `rand` | 2 |
+| `[0x006253bf, 0x0062558d)` | **`qsort`** + `shortsort` + `swap` | 3 |
+| `[0x0062558d, 0x00625660)` | `_strupr`, `sscanf` | 2 |
+| `[0x00625660, 0x00625700)` | `strncmp`, `isalpha`, `isspace` | 3 |
+| `[0x00625700, 0x00625840)` | `strchr`, `strstr` | 2 |
+| `[0x00625840, 0x00625b75)` | **`memmove`** (821 B) | 1 |
+| `[0x00625b75, 0x00625cae)` | `fprintf`, `strncpy` | 2 |
+| `[0x00625cae, 0x00625e4c)` | **`ceil` / `floor`** | 2 |
+| `[0x00625e4c, 0x00625f60)` | `fread`, `remove` | 2 |
+| `[0x00625f60, 0x00626180)` | **`pow`** — `_CIpow` entry, body, the is-integer helper | 3 |
+| `[0x00626180, 0x006262ac)` | `strncat`, **`_purecall`** | 2 |
+| `[0x006262ac, 0x00626443)` | `toupper` / `tolower` | 2 |
+| `[0x00626443, 0x00626800)` | **heap** — `realloc`, `malloc`, `_nh_malloc`, `_heap_alloc`, `free` | 5 |
+| `[0x00626800, 0x00626920)` | `__aulldiv`, `__allmul`, `vsprintf`, `__allshl` | 4 |
+| `[0x00626920, 0x006269eb)` | **asin** — `_CIasin` entry + body | 2 |
+| `[0x006269eb, 0x00626ac7)` | `time` | 1 |
+| `[0x00626ac7, 0x00626cfd)` | `strtol` / `strtoxl` / `strtoul` | 3 |
+| `[0x00626cfd, 0x00626dff)` | `crt0dat` — `_cinit`, `exit`, `_exit`, `doexit`, `_initterm` | 5 |
+| `[0x00626dff, 0x00626f1a)` | `_getcwd` / `_getdcwd` / drive validation | 3 |
+| `[0x00626f1a, 0x00627059)` | `WinMainCRTStartup`, `_amsg_exit`, `_fast_error_exit` | 3 |
+| `[0x00627059, 0x00627150)` | **the `exception` class** (5) + **`type_info`** (2) — §3 | 7 |
+| `[0x00627150, 0x00627230)` | `strlen`, `_SEH_prolog`, `_CxxThrowException` | 3 |
+| `[0x00627230, 0x00627565)` | **`memcpy`** (821 B) | 1 |
+| `[0x00627565, 0x006275de)` | FP init — `_setdefaultprecision`, the FDIV-erratum query and self-test | 3 |
+| `[0x006275de, 0x006276a0)` | `cvt` — `_forcdecpt`, `_cropzeros`, `_positive`, and `_fassign` (`0x0062769e`, §5e) | 4 |
+
+`crt_strtoul`'s single caller is `game_collect_scream_area`, which parses the hexadecimal mask in
+an `enm_scrm_...(hex)` frame name with radix 16.
 
 Band 3, `[0x006276dc, 0x0062ad14]` — 86 Ghidra starts (85 functions + 1 thunk; `__except_handler3` is the one without a def) in ONE
 contiguous VA cluster, 22 distinguishable library object groups:
@@ -282,38 +284,38 @@ contiguous VA cluster, ~41 library object groups:
 
 | sub-band | group | starts |
 |---|---|---|
-| `[62ad26, 62ae6a)` | `frexp` and the double classifier | 3 |
-| `[62ae6a, 62af00)` | the x87 status/control primitives — `_statfp`, `_clrfp`, `_ctrlfp`, `_set_statfp` | 4 |
+| `[0x0062ad26, 0x0062ae6a)` | `frexp` and the double classifier | 3 |
+| `[0x0062ae6a, 0x0062af00)` | the x87 status/control primitives — `_statfp`, `_clrfp`, `_ctrlfp`, `_set_statfp` | 4 |
 | `0x0062af00` | `_filbuf` | 1 |
 | `0x0062afd9` | `_read` | 1 |
 | `0x0062b1cf` | `_dosmaperr` | 1 |
-| `[62b240, 62b447)` | 🔴 the **dead `exp` object**'s x87 dispatch arms, `math_x87_integer_parity` and `math_pow_special_case_x87_wrapper` — §5i | 5 + 1 thunk |
-| `[62b447, 62b5dc)` | the `pow` special-case helper and its parity test | 2 |
-| `[62b5dc, 62c123)` | 🥇 the **V6** small-block heap (§5b) | 7 |
-| `[62c123, 62c7f0)` | 🥇 the **V5** small-block heap (§5b) | 8 |
-| `[62c7f0, 62c9dd)` | `_callnewh`, the linker-version reader, `__heap_select`, `_heap_init` | 4 |
+| `[0x0062b240, 0x0062b447)` | 🔴 the **dead `exp` object**'s x87 dispatch arms, `math_x87_integer_parity` and `math_pow_special_case_x87_wrapper` — §5i | 5 + 1 thunk |
+| `[0x0062b447, 0x0062b5dc)` | the `pow` special-case helper and its parity test | 2 |
+| `[0x0062b5dc, 0x0062c123)` | 🥇 the **V6** small-block heap (§5b) | 7 |
+| `[0x0062c123, 0x0062c7f0)` | 🥇 the **V5** small-block heap (§5b) | 8 |
+| `[0x0062c7f0, 0x0062c9dd)` | `_callnewh`, the linker-version reader, `__heap_select`, `_heap_init` | 4 |
 | `0x0062c9dd` | `__loctotime_t` | 1 |
-| `[62ca9f, 62cc23)` | `winxfltr.c` — `_XcptFilter` and its table search | 2 |
-| `[62cc23, 62cf81)` | startup — `_wincmdln`, `_setenvp`, `_setargv`, `parse_cmdline` (§5g) | 4 |
+| `[0x0062ca9f, 0x0062cc23)` | `winxfltr.c` — `_XcptFilter` and its table search | 2 |
+| `[0x0062cc23, 0x0062cf81)` | startup — `_wincmdln`, `_setenvp`, `_setargv`, `parse_cmdline` (§5g) | 4 |
 | `0x0062cf81` | `__crtGetEnvironmentStringsA` | 1 |
 | `0x0062d0b3` | `_ioinit` | 1 |
-| `[62d25e, 62d3f0)` | `crt0msg.c` — the banner and the numbered message writer | 2 |
+| `[0x0062d25e, 0x0062d3f0)` | `crt0msg.c` — the banner and the numbered message writer | 2 |
 | `0x0062d3f0` | `strcmp.asm` | 1 |
-| `[62d474, 62d4d8)` | `unhandld.cpp` — the C++ unhandled filter, its installer and its restorer | 3 |
-| `[62d4d8, 62d63e)` | `ieee87.c` — `_control87`, `_controlfp` and the two translators | 4 |
-| `[62d63e, 62dbc0)` | the 12-byte long double: `_LDBL12` helpers, `_atodbl`/`_atoflt`, `_fptostr`, `_fltout`, `_dtold` | 15 |
+| `[0x0062d474, 0x0062d4d8)` | `unhandld.cpp` — the C++ unhandled filter, its installer and its restorer | 3 |
+| `[0x0062d4d8, 0x0062d63e)` | `ieee87.c` — `_control87`, `_controlfp` and the two translators | 4 |
+| `[0x0062d63e, 0x0062dbc0)` | the 12-byte long double: `_LDBL12` helpers, `_atodbl`/`_atoflt`, `_fptostr`, `_fltout`, `_dtold` | 15 |
 | `0x0062dbc0` | `memset.asm` | 1 |
 | `0x0062dc18` | `_fptrap` | 1 |
-| `[62dc21, 62dc71)` | the three `IsBad*Ptr` validators | 3 |
+| `[0x0062dc21, 0x0062dc71)` | the three `IsBad*Ptr` validators | 3 |
 | `0x0062dc71` | `abort` | 1 |
 | `0x0062dc88` | the type-driven math error reporter | 1 |
 | `0x0062dd58` | `__strgtold12` + its jump table | 1 |
-| `[62e229, 62e372)` | `a_str.c` — `__crtGetStringTypeA` | 1 |
-| `[62e372, 62e476)` | `_lseek`, `_getbuf`, `_isatty` | 3 |
-| `[62e476, 62e52f)` | `_file.c` — `__initstdio` and `__endstdio` (`crt_initstdio`, `crt_endstdio`) | 2 |
+| `[0x0062e229, 0x0062e372)` | `a_str.c` — `__crtGetStringTypeA` | 1 |
+| `[0x0062e372, 0x0062e476)` | `_lseek`, `_getbuf`, `_isatty` | 3 |
+| `[0x0062e476, 0x0062e52f)` | `_file.c` — `__initstdio` and `__endstdio` (`crt_initstdio`, `crt_endstdio`) | 2 |
 | `0x0062e52f` | `wctomb` | 1 |
 | `0x0062e5a0` | `llrem.asm` | 1 |
-| `[62e615, 62e82f)` | `osfinfo.c` + `commit.c` | 5 |
+| `[0x0062e615, 0x0062e82f)` | `osfinfo.c` + `commit.c` | 5 |
 | `0x0062e82f` | `_sopen` | 1 |
 | `0x0062eae8` | `mbtowc` | 1 |
 | `0x0062ebb0` | `ungetc` | 1 |
@@ -392,6 +394,13 @@ signature `(flag, ptr, string)`, which is `_fassign` (`0x0062769e`). That slot i
 from the other end too: `crt_atodbl` (`0x0062d9d0`) and `crt_atoflt` (`0x0062d9fd`) are
 `__fassign`'s only callees, selected by its flag argument. `0x0062769e` sits 24 bytes past
 the end of band 3 and belongs with the `cvt` group.
+
+One game-side caller formats through the UNBOUNDED `crt_vsprintf`: `std_string_ctor_formatted`
+writes into a 1000-byte stack buffer, where its sibling `string_format` uses
+`crt_vsnprintf(buf, 0x400, …)`. Its only caller, `random_morph_mission_start`, formats
+`missions\%s\rmorf.bin` — 19 characters plus the mission name, whose longest shipped value
+(`MISE03-SALIERYKONEC`) is 19 characters. `check_seg_clusters_load` formats the same name into a
+64-byte buffer.
 
 ### 5f. 🥇 The math function-NAME table decodes, and it separates the x87 entry points
 
@@ -539,6 +548,13 @@ runs the hardware instruction, and a denormal one scales both operands by 2^64
 (`g_crt_fprem_scale_2p64`) first. The `fprem1` body's zero-divisor arm at `0x0062f9a2` executes `fprem`
 (`D9 F8`), not `fprem1`; with a zero divisor both give an invalid operation.
 
+Both cores test the divisor the way the divide core does. They read its high mantissa word at
+`[esp+0x16]`, run the plain instruction unless bits 56..58 are all set (`xor eax,0x700;
+test eax,0x700`), and otherwise index `g_crt_fprem_flawed_divisor_nibbles` (`0x0065460c`)
+with bits 59..62, the top fraction nibble (`shr eax,0xb; and eax,0xf`). That table is a
+byte-identical second copy of `g_crt_fdiv_flawed_divisor_nibbles`: the same source array
+emitted twice.
+
 🔴 **The whole object is DEAD.** Its only external caller is `0x0062b27f`, inside
 `math_exp_finite_argument_arm`, arm 0 of the `exp` operand-class descriptor at
 `.data:0x006521c0`, which §5i measures as having zero references on all four channels. The game was not compiled with `/QIfdiv`. Every entry of
@@ -557,7 +573,7 @@ classes' vtable slots, which makes this address a **census tool for abstract cla
 
 ### 5l. `srand(time(NULL))`, located
 
-`game_init` runs `crt_time(0)` and feeds the result straight to `crt_srand`. `rand`'s seed
+`game_init` runs `crt_time(0)` and feeds the result straight to `crt_srand`. `crt_rand`'s seed
 `g_crt_rand_seed` ships as **1** — the C standard's initial value, i.e. the value an
 unseeded `rand` would have used — so that one pair is what makes every `rand_range` /
 `rand_float` draw in the game differ between runs.
@@ -625,8 +641,18 @@ evidence.
 |---|---|---|
 | `std_string_assign_buffer` | `assign__Q23std59basic_string<>FPCcUi` | same `(const char *, unsigned)` signature and the same three statements in the same order; the PC sets `_Len` and the NUL itself where the PS2's `change_size` does it internally |
 | `std_logic_error_what` | `what__Q23std11logic_errorCFv` | same method, different layout — the PC returns `[this+0x10]` with a nil fallback, the PS2 `[this+4]` with none |
-| `std_logic_error_scalar_deleting_dtor` | `__dt__Q23std11logic_errorFv` | paired on the flagged-delete signature (§2d) |
+| `std_logic_error_scalar_deleting_dtor` | `__dt__Q23std11logic_errorFv` | paired on the flagged-delete signature (below) |
 | `std_length_error_scalar_deleting_dtor` | `__dt__Q23std12length_errorFv` | same |
+
+GCC folds the plain and the deleting destructor of §2d into a single flagged destructor, so the
+PS2 twin belongs on the **deleting** one:
+
+```
+PC   std_logic_error_scalar_deleting_dtor(this, byte flag)   if (flag & 1) operator delete
+PS2  __dt__Q23std11logic_errorFv(long, short)                if (0 < flag) __dl__FPv
+```
+
+The pairing rests on the **signature** — a mangled symbol spells its whole signature.
 
 The cap is the precedent `std_string_dtor` already set: two different Standard Library
 implementations make a statement-level diff meaningless even when both bodies are read.
@@ -635,14 +661,15 @@ implementations make a statement-level diff meaningless even when both bodies ar
 
 ## 7. Naming policy for this region
 
-**Names that Ghidra assigned in its default analysis are KEPT** and given docblocks and
-registry rows instead — user decision. That covers `operator_new`, `__ftol`,
+**Names that Ghidra assigned in its default analysis are kept** and given docblocks and
+registry rows. That covers `operator_new`, `__ftol`,
 `__global_unwind2`, `__local_unwind2`, `__abnormal_termination`, `__NLG_Notify1`, `_strcmp`,
 `_memset`, `exception::~exception` and all ten import thunks.
 
-⚠️ The policy does not reach `crt_atexit` and `crt_onexit`: Ghidra's default analysis
-has **zero** hits for either MSVC spelling (`atexit`, `_onexit`), so neither name comes
-from Ghidra, and both follow the `crt_` convention of the rest of the region.
+⚠️ The policy does not reach `crt_atexit`, `crt_onexit` and `crt_rand`: Ghidra's default
+analysis has **zero** hits for the MSVC spellings `atexit` and `_onexit`, and it shows `rand`
+only as `FUN_006253a1`, so none of the three names comes from Ghidra, and all three follow the
+`crt_` convention of the rest of the region.
 
 ### 7a. Why the `ls3df.dll` thunks keep `S_vector::RotateByMatrix`
 
@@ -654,8 +681,7 @@ rename them:
    name could never be body-diffed, and any replacement would be a transliteration of the
    export name.
 2. It would **collide semantically with the 30-member in-exe `vec3_*` family**, which is
-   `Game.exe`'s *own* inlined LS3D math. One prefix for two different things is the
-   `C_car` / `C_Vehicle` failure again.
+   `Game.exe`'s *own* inlined LS3D math.
 3. The `::` spelling is already a working convention: exactly 30 of 6759 definitions carry
    `::`, and 29 of them are this population. The punctuation *is* the marker for "6-byte
    import thunk, body in a DLL".
@@ -681,10 +707,13 @@ rename them:
 | `0x00646328` / `0x00646330` | `g_crt_xp_a` / `_z` | MSVC `__xp_a` / `__xp_z`, the `.CRT$XP` bounds (pre-terminators); the first `_initterm` in `crt_doexit` |
 | `0x00646334` / `0x0064633c` | `g_crt_xt_a` / `_z` | MSVC `__xt_a` / `__xt_z`, the `.CRT$XT` bounds (terminators); the second `_initterm` in `crt_doexit` |
 | `0x00651ba8` | `g_crt_fp_init_hook` | holds `crt_fp_init`; read by `_cinit`. Row-only: no Ghidra symbol |
+| `0x00651bac` | `g_crt_fp_mt_init_hook` | MSVC `_FPmtinit`, holding `crt_fpclear`; no reader (§5a). Row-only: no Ghidra symbol |
+| `0x00651bb0` | `g_crt_fp_mt_term_hook` | MSVC `_FPmtterm`, holding `crt_fpclear`; no reader (§5a). Row-only: no Ghidra symbol |
 | `0x00651bb4` | `g_crt_nlg_destination` | MSVC `_NLG_Destination`; first dword is the signature **`0x19930520`**. Row-only |
-| `0x00651be0` | `g_crt_rand_seed` | the LCG state; written by `crt_srand`, advanced by `rand`. Ships as **1** |
+| `0x00651be0` | `g_crt_rand_seed` | the LCG state; written by `crt_srand`, advanced by `crt_rand`. Ships as **1** |
 | `0x00651bf0` | `g_crt_x87_cw_round_up` | `0x1b3f`, bits 11:10 = 10b = toward +∞. Read only by `crt_ceil` |
 | `0x00651bf4` | `g_crt_x87_cw_round_down` | `0x173f`, bits 11:10 = 01b = toward −∞. Read only by `crt_floor` |
+| `0x00651c18` | `g_crt_aexit_rtn` | MSVC `_aexit_rtn`; holds `__exit` (`0x00626d3b`). Its only reference is `__amsg_exit`'s `call [0x651c18]` with 0xff |
 | `0x00651c50` | `g_crt_cfltcvt_tab` | the 6-entry float→text conversion vector; Ghidra split it into six symbols, all renamed with index suffixes |
 | `0x00651c80` | `g_crt_math_indefinite_x87` | the value pre-loaded on every math domain error |
 | `0x00651c8a` | `g_crt_half_pi_x87` | 80-bit π/2 — the constant that separates the asin pair (§5f) |
@@ -695,8 +724,11 @@ rename them:
 | `0x00654208` | `g_crt_xcpt_action_table` | MSVC `_XcptActTab`, typed `S_crt_xcpt_action[10]`: ten `{exception code, signal, action}` records, bounded by `g_crt_xcpt_action_count` (= 10); searched by `crt_xcpt_action_lookup` / `_by_signal` |
 | `0x00654360` | `g_crt_iob_stdin` | `_iob[0]`, typed as one `FILE` (0x20); `crt_initstdio` resets the `_file` of it and the next two streams |
 | `0x006545f0` | `g_crt_fdiv_flawed_divisor_nibbles` | 16 bytes, non-zero only at 1, 4, 7, 0xa, 0xd: the five Pentium-FDIV-flaw divisor patterns (§5j) |
+| `0x0065460c` | `g_crt_fprem_flawed_divisor_nibbles` | the byte-identical copy the two `fprem` cores index with the divisor's top fraction nibble (§5j) |
 | `0x0065464e` | `g_crt_fdiv_register_form_dispatch_table` | the 64 targets of `math_x87_fdiv_erratum_register_divide_dispatch`, indexed `(st(i) << 3) \| form` (§5j). Row-only: the address is unaligned and only ever a `jmp` operand, so it has no Ghidra symbol |
 | `0x00654834` | `g_crt_days_before_month` | the base-minus-one-element pointer the code adds `month*4` to with a **1-based** month; see §8c |
+| `0x00654968` | `g_crt_pow10_positive` | MSVC `_pow10pos`, 29 twelve-byte powers of ten (§8d). Row-only: loaded only as an `imm32` |
+| `0x00654ac8` | `g_crt_pow10_negative` | MSVC `_pow10neg`, the 29 matching negative powers (§8d). Row-only: loaded only as an `imm32` |
 | `0x006f9750` | `g_crt_math_skip_error_handler` | see §8a |
 | `0x006f9754` | `g_crt_adjust_fdiv` | 🥇 MSVC `_adjust_fdiv`, the **Pentium FDIV-erratum flag** (§5j) |
 | `0x006f9758` | `g_crt_time_dstflag_cache` | `crt_time`'s cached daylight-saving flag (-1 / 1 / 0), reused while the cached minute matches |
@@ -708,11 +740,15 @@ rename them:
 | `0x006f9784` | `g_crt_winmajor` | MSVC `_winmajor` = `GetVersion() & 0xff` |
 | `0x006f9788` | `g_crt_winminor` | MSVC `_winminor` = `GetVersion() >> 8 & 0xff` |
 | `0x006f9798` | `g_crt_environ` | MSVC `_environ` — the argv-style array (§5g) |
+| `0x006f97b0` | `g_crt_exitflag` | MSVC `_exitflag`: written by `crt_doexit` from its `retcaller` argument; `crt_endstdio` closes all streams only when it is set |
+| `0x006f97b4` | `g_crt_c_termination_done` | MSVC `_C_Termination_Done`: set by `crt_doexit` before the exit-handler passes; no reader |
+| `0x006f97b8` | `g_crt_c_exit_done` | MSVC `_C_Exit_Done`: `crt_doexit` calls `TerminateProcess` when it is set and sets it before `ExitProcess` |
 | `0x006f97bc` | `g_crt_environment_block` | `_aenvptr` — the raw block (§5g) |
 | `0x006f97e0` | `g_crt_se_translator` | the `_set_se_translator` callback |
 | `0x006f981c` | `g_crt_lc_codepage` | the default code page `crt_lcmapstring_ansi` substitutes when the caller passes 0 |
 | `0x006f9834` | `g_crt_new_mode` | MSVC `_newmode`; gates the new-handler retry loop |
 | `0x006f9984` | `g_crt_buffered_stream_count` | MSVC `_cflush`, incremented by `crt_openfile`, `crt_setup_temp_buffer` and `crt_getbuf`, read nowhere |
+| `0x006f9988` | `g_crt_commode` | MSVC `_commode`, OR'd into every new stream's flags by `crt_openfile`, its only reference. In `.bss` with no writer, so always 0 |
 | `0x006fad40` | `g_crt_osfhandle_blocks` | MSVC `__pioinfo`, typed `pointer[64]`: block `fd >> 5`, record `(fd & 0x1f) * 8`; `crt_init_file_handles` clamps inherited handles at 0x800 = 64 blocks |
 | `0x006fae44` | `g_crt_heap_handle` | argument 1 of every `Heap*` call in the runtime |
 | `0x006fae48` | `g_crt_heap_mode` | the small-block-heap generation selector (2 / 3 / other) |
@@ -723,15 +759,15 @@ rename them:
 Further named in this region: `g_crt_app_type`, `g_crt_error_mode` (MSVC `__error_mode`: 0
 default, 1 stderr, 2 message box), `g_crt_old_sbh_threshold` (the mode-2 heap threshold at
 `0x006541fc`), `g_crt_prev_unhandled_exception_filter`, `g_crt_terminate_handler`,
-`g_crt_terminate_scope_table`, `g_crt_fdiv_exponent_class_table` (§13),
-`g_crt_mbcs_case_ranges` and its two index-suffixed
-siblings.
+`g_crt_terminate_scope_table` and `g_crt_mbcs_case_ranges` (§8d).
 
 ### 8a. `g_crt_math_skip_error_handler` is never written
 
 A little-endian scan of the whole image finds **six references and every one is
 `83 3d 50 97 6f 00` = `cmp dword [0x006f9750], imm8`** — reads only; through none of the four
-reference channels is there a writer. As shipped the flag is permanently 0, so the asin /
+reference channels is there a writer. The scan covers displacements, immediates and data pointers
+alike, and `Game.exe` has no export directory, so nothing outside the image can reach the flag
+either. As shipped the flag is permanently 0, so the asin /
 acos / pow error path **always** runs and the raw-result shortcut is dead. The name is a
 deliberate NARROWING of "fast mode", which would assert an intent nothing in the binary
 backs; "skip error handler" is exactly what the six branches do.
@@ -750,7 +786,7 @@ arrays themselves begin at `0x00654804` (leap) and `0x00654838` (common), and bo
 their own rows. The symbol Ghidra offers sits on element `[-1]` because that is where the
 reference arithmetic starts; `0x00654834` genuinely IS the base pointer the code uses.
 
-### 8d. 🥇 Four rows assigned by decoding data rather than by reading code
+### 8d. 🥇 Five rows assigned by decoding data rather than by reading code
 
 * **`math_fpclass_double`** matches all **ten** `_FPCLASS_*` values byte for byte — `0x200`
   PINF, `0x100` PN, `0x80` PD, `0x40` PZ, `0x20` NZ, `0x10` ND, `8` NN, `4` NINF, `2` QNAN,
@@ -765,7 +801,32 @@ reference arithmetic starts; `0x00654834` genuinely IS the base pointer the code
   CP932 `{0x8260, 0x8279}` delta `0x21` (Shift-JIS fullwidth `A`–`Z` → `a`–`z`), CP936/949
   `{0xa3c1, 0xa3da}` delta `0x20`, and CP950 `{0xa2cf, 0xa2e4}` delta `0x1a` **plus a second
   range** `{0xa2e5, 0xa2e8}` delta `0x5b` — which is what proves the field is an array of
-  `{lo, hi, delta}` word triples, i.e. MSVC's `__mbulinfo[6]`.
+  `{lo, hi, delta}` word triples, i.e. MSVC's `__mbulinfo[6]`. It is typed `ushort[6]`. The
+  image addresses it only as a whole: three `mov edi, 0x6f9af0` sites, a 3-dword copy in
+  `crt_setmbcp` and 3-dword zeroes in `crt_setmbcp` and `crt_mbcs_set_single_byte`. No
+  instruction reads a single word, so the decomp renders the copy in dword pieces.
+* **`g_crt_pow10_positive` / `g_crt_pow10_negative`** (`0x00654968` / `0x00654ac8`), MSVC
+  `_pow10pos` / `_pow10neg`, decode to 29 twelve-byte extended-precision powers of ten each:
+  10^±1..10^±7, then 10^±8..10^±56 in steps of 8, 10^±64..10^±448 in steps of 64,
+  10^±512..10^±3584 in steps of 512, then 10^±4096. Every entry equals the exact power to
+  within 1.1e-19. `crt_ld12_multiply_by_power_of_ten` loads the table base (`mov ebx,
+  0x654968` / `0x654ac8`), subtracts 0x60 and adds 0x54 (seven entries) per three-bit group
+  of the exponent, so the decomp shows only the biased constants `0x654908` / `0x654a68`. An
+  entry whose first, extra-precision word is `>= 0x8000` was rounded up; the function copies
+  it and decrements the copy's mantissa before multiplying.
+
+### 8e. One shared guard byte for 109 static initializers
+
+`g_crt_static_init_flags` (`0x006f9ae0`) has 218 references: 109 guards, each a read and a write
+of bit 0. Every guard is the same code — test bit 0, set it, then, outside the test, go to its
+translation unit's `atexit` registrar — with no constructor code in between, and the registrars
+pass the no-op destructor of §8b. That is one header-defined (COMDAT) static whose constructor
+and destructor bodies are empty: every translation unit that includes the header emits its own
+guarded initializer, and the shared bit lets only the first one run. Two adjacent `.CRT$XCU`
+slots guarding the same bit, as `crt_static_init_guard_006242b0` and
+`crt_static_init_guard_00624865` do, are two consecutive translation units. The object itself
+is never accessed, so it cannot be named. `crt_static_init_guard_00624865` also guards bit 0 of
+`g_crt_static_init_flags_1` (`0x006f9ae1`), a second object of the same kind.
 
 ---
 
@@ -785,9 +846,9 @@ are the only entry points of code with 46 and 8 dependents respectively.
 | `0x00628380` | `math_x87_dispatch_by_operand_class` | MSVC `_trandisp1`: `fxam` ST(0), fold the class through `0x00651c9d`, `jmp [edx+0x10+off]` into the caller's descriptor | 0 references on all four channels |
 | `0x006283e7` | `math_x87_dispatch_by_operand_class_pair` | MSVC `_trandisp2`: the same for ST(0) and ST(1) | 0 references on all four channels |
 | `0x0062b3e1` | `math_x87_integer_parity` | 0 = not an integer, 1 = odd, 2 = even; the x87 sibling of `math_double_integer_parity` | **2 `E8` callers**, both inside arm 0 of the dead `exp` object (§5i) |
-| `0x0062b415` | `math_pow_special_case_x87_wrapper` | the x87 calling wrapper around `math_pow_special_case_result` ¹ | 0 references on all four channels |
+| `0x0062b415` | `math_pow_special_case_x87_wrapper` | the x87 calling wrapper around `math_pow_special_case_result` | 0 references on all four channels |
 | `0x0062d4cb` | `crt_cxx_restore_unhandled_exception_filter` | 13 bytes: `SetUnhandledExceptionFilter(g_crt_prev_unhandled_exception_filter)` — the un-install half of `crt_cxx_install_unhandled_exception_filter` | the `.CRT$XT` terminator slot `0x00646338` |
-| `0x0062e51b` | `crt_endstdio` | MSVC `__endstdio`: `crt_flushall()`, then, behind `0x006f97b0`, a tail jump to `crt_fcloseall` ² | the `.CRT$XP` pre-terminator slot `0x0064632c` |
+| `0x0062e51b` | `crt_endstdio` | MSVC `__endstdio`: `crt_flushall()`, then, behind `g_crt_exitflag`, a tail jump to `crt_fcloseall` ¹ | the `.CRT$XP` pre-terminator slot `0x0064632c` |
 | `0x0062ed47` | `math_x87_fdiv_erratum_register_divide_dispatch` | MSVC `_adj_fdiv_r`, the 64-arm register-form dispatcher (§5j) | 0 references on all four channels; the byte before it is a `ret` |
 | `0x0062f1f9` | `math_x87_fdiv_erratum_reverse_divide` | the internal reversed divide, the mirror of `math_x87_fdiv_erratum_divide` | **8 `E8` callers**, two in each `fdivr` memory-operand stand-in |
 | `0x0062f2a4` | `math_x87_fdiv_erratum_divide_by_int16` | safe `fdiv` by a 16-bit integer memory operand (`fild word`, `ret 4`) | 0 references on all four channels |
@@ -804,11 +865,7 @@ are the only entry points of code with 46 and 8 dependents respectively.
 | `0x0062f9b5` | `math_x87_fdiv_erratum_fpatan` | `_adj_fpatan` — `fpatan; ret`, a pass-through | 0 references on all four channels |
 | `0x0062f9b8` | `math_x87_fdiv_erratum_fptan` | `_adj_fptan` — `fptan; ret`, a pass-through | 0 references on all four channels |
 
-¹ Its earlier start `0x0062b416` was an Aggressive-Instruction-Finder phantom one byte in,
-which made every frame offset in the rendered body 4 too small; it is recorded in the phantom
-register.
-
-² `crt_flushall`'s caller is `crt_endstdio`, **not** `crt_initstdio`
+¹ `crt_flushall`'s caller is `crt_endstdio`, **not** `crt_initstdio`
 (`0x0062e476`). The two are separated by a fact neither body shows: one address sits in the
 `.CRT$XI` initializer table and the other in `.CRT$XP`. A VA-to-containing-function lookup
 attributes the call to the previous start, which is not the caller here.
@@ -825,20 +882,16 @@ A grade implies a name, so these are listed rather than graded.
 | `0x00627e39`, `0x00627fa2`, `0x00627fb0` | `__except` continuations that run on their CALLER's frame | no def anywhere, and they are not entry points of their own |
 | `0x006521b4` | the counted string `"exp"` | no Ghidra symbol and zero references on all four channels |
 | `0x006521c0` | the `exp` operand-class dispatch descriptor (§5i) | same |
-| `0x006f9988` | OR'd into every new stream's `_flag` (MSVC `_commode`) | proposed `g_crt_commit_mode`, CANDIDATE — only one consumer was read |
-| `0x006f97b0` | the flag `crt_endstdio` tests before its tail jump; also written by `crt_doexit` as its `retcaller` argument | one of three `crt_doexit` state flags (`0x006f97b0` / `_b4` / `_b8`), read from ONE side only, so naming the trio would rest on a third of a measurement |
-| `0x00651c18` | `PTR___exit_00651c18`, the pointer beside the initializer tables | left under its Ghidra name; it was not examined when the four `.CRT` bound pairs were named (§8) |
 | `0x006f9a80` | the `ios` state word of `g_crashreport_map_file`, reached as `(&this)[*(int *)(obj + 4)]` through the virtual-base table | a FIELD of an object that already has a row, not a symbol of its own |
 | `0x00654644` | the 80-bit constant whose last two bytes the operand-class jump table overlaps (`00 00 00 00 00 00 ff ff fe 7f`, the largest finite long double) | read only by the `fprem` cores through a `sub eax, 0x654644` index computation, so it has no Ghidra symbol and no consumer that names it |
-| `0x00654908`, `0x00654a68` | the two 0x54-stride tables of pre-computed powers of ten that `crt_ld12_multiply_by_power_of_ten` walks (positive and negative exponents) | reached only as `base + n*0x54` index computations, so neither has a symbol; their extent and stride are measured, their contents are not decoded |
 
 ---
 
-## 11. Phantoms — three shapes, and the blind spots
+## 11. Phantoms — fall-through points that are not function starts
 
-Nine Aggressive-Instruction-Finder phantoms were purged from this region: **two** of one
-shape and **seven** of another. Both shapes are a def whose RENDERED BODY duplicates its
-neighbour's, because Ghidra put the start somewhere only a fall-through reaches.
+Nine addresses in this region are points inside other code that only a fall-through reaches.
+A def placed at any of them (a phantom start, as Ghidra's Aggressive Instruction Finder
+proposes) renders a body that duplicates its neighbour's, so none of them is a function start.
 
 | phantom | real host start | what the rendered body dropped |
 |---|---|---|
@@ -853,31 +906,14 @@ neighbour's, because Ghidra put the start somewhere only a fall-through reaches.
 | `0x0062f998` | `0x0062f8f4` | ditto (the far arm) |
 
 All nine: **0 `E8`, 0 `E9`, 0 datarefs, 0 immediate-operand references** — every channel
-measured in `Game.exe`. Nothing live was lost: the entire FDIV-erratum object is unreachable
+measured in `Game.exe`. None of them is live: the entire FDIV-erratum object is unreachable
 in the shipped binary (§5j).
 
-**Three standing detection methods all report these ranges clean**, and each misses them for
-its own reason:
-
-| method | why it misses them |
-|---|---|
-| the `unaff_*` / `in_EAX` signature of a truncated body | every live value in the FDIV object is on the x87 stack, so no register artefact appears |
-| the unreachable-*epilogue* prover | it requires something to branch to the address; these are plain fall-through |
-| the duplicate-body hash | every one of these bodies contains a `call rel32`, which makes the hash meaningless for them |
-
-What found them was reading the bytes AT the VA after a four-channel reference census came
-back zero.
-
-**The epilogue prover's other hits in this region are FALSE POSITIVES, all of one kind.**
+**Four genuine functions here are entered only by tail jump.**
 `math_x87_restore_control_word` (`0x0062864e`), `__math_exit` (`0x0062865b`),
 `math_x87_check_result_range` (`0x00628699`) and `crt_abort` (`0x0062dc71`) are reached by
 **tail jump** (`E9`), never by `call` — from the acos, asin and pow continuations, and from
-`crt_terminate` at `0x0062831d`. A BRANCHED_INTO criterion cannot tell an inter-function tail
-call from an intra-function branch. The registry itself already said so for `crt_abort`:
-`crt_terminate`'s cell reads *"calls `g_crt_terminate_handler` then abort"*. A second blind
-spot surfaces with `__math_exit`: its decomp state is reported ABSENT when it is plainly
-present, because the state probe keys on a `FUN_` name and this function carries a Ghidra
-Function-ID name.
+`crt_terminate` at `0x0062831d`. They are real function starts, not fall-through points.
 
 ---
 
@@ -886,24 +922,6 @@ Function-ID name.
 `basic/artifacts/dll.md` · `structs/app_bootstrap.md` (the other region-shaped doc) ·
 `structs/crash_report.md` (the game translation unit inside band 5) ·
 `structs/string.md` (the game's own refcounted string class, a different one) ·
-`structs/i3d_cache.md` (the three `crt_getcwd` callers) · `structs/check_seg.md` §7 and
+`structs/i3d_cache.md` (the three `crt_getcwd` callers) · `structs/check_seg.md` §2 and
 `structs/chunk.md` §6 (the `folded_vector_ctor_at_0x04_0044a120` fold) ·
 `ghidra/Game-ghidra.exe.functions.md` (the registry rows for everything here).
-
----
-
-## 13. Open items
-
-| item | state |
-|---|---|
-| `0x00651bac` and `0x00651bb0` | two CRT float hooks pre-set to `stub_noop_cdecl_006248fb`. An image-wide little-endian scan for **both slot addresses returns zero reads**, so what they would have done cannot be decided from this binary. NAMING-DEFERRED |
-| the shared guard byte `0x006f9ae0` | 109 static-init guards all test bit 0 of one byte, and `crt_static_init_guard_006242b0` and `crt_static_init_guard_00624865` sit in adjacent `.CRT$XCU` slots guarding the same bit. Recorded, not chased |
-| `crt_strtoul`'s only caller is `game_collect_scream_area` | a function named for an audio/AI concern has no obvious reason to parse an unsigned number; that caller is a misnomer suspect and its body was not read |
-| `std_string_ctor_formatted` formats through the UNBOUNDED `crt_vsprintf` into a 1000-byte stack buffer | its sibling `string_format` uses the capped `crt_vsnprintf(buf, 0x400, …)`. Measured, not chased: whether any caller can overflow it was not traced |
-| `crt_startup`'s docblock records only where the name came from | the same holds for `rand`'s neighbourhood in band 2. A documentation gap, not a rename |
-| `g_crt_math_skip_error_handler` has no writer (§8a) | if it matters, the next lever is a displacement byte-scan |
-| `rand` (`0x006253a1`) is the one `crt_`-less member of its band | its name and docblock are correct, and moving it would touch 101 callsites for cosmetics — recorded, not done |
-| `0x006f97b0` is read from one side only | the other two flags of the `crt_doexit` trio were not read, so the group is still unnamed (§10) |
-| `g_crt_fdiv_exponent_class_table` (`0x0065460c`) is byte-identical to `g_crt_fdiv_flawed_divisor_nibbles` | the two `fprem` cores index it with `(high word & 0x7800) >> 11`. Whether that field is the exponent, as the name says, or the divisor's top fraction nibble — which would make it the same flawed-divisor test and the name wrong — was not measured |
-| `0x00654908` / `0x00654a68` are undecoded (§10) | decoding them would let `crt_ld12_multiply_by_power_of_ten` be verified against a shipped value rather than read |
-| `g_crt_mbcs_case_ranges_dw1` / `_dw2` carry index suffixes, not field names | Ghidra split the six-WORD `__mbulinfo` array on dword boundaries that cut across its fields. A Ghidra retype of that address to `ushort[6]` would let all three take real field names |

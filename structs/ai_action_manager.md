@@ -1,6 +1,6 @@
 # `ai_action_manager` — the NPC action queue (what an AI person can be told to do)
 
-**Created** 2026-07-16 21:10 +0200 · **Modified** 2026-09-18 05:52 +0200
+**Created** 2026-07-16 21:10 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 `ai_action_manager` owns an NPC's **action queue**. It is the largest AI class in the game
 (**58 PS2 methods**) and it is the class the whole `ai_action` vocabulary hangs off: 35 factories
@@ -13,7 +13,7 @@ action's type id to execute it.
 | PC prefix | `ai_action_manager_*` for the manager · `ai_action_new_*` for the factories · `ai_action_*` for operations on one action |
 | PC object | **embedded** at `C_entity + 0x1164`, `0x34` bytes |
 | PS2 class | `ai_action_manager`, 58 methods = **35 factories + 23 members** |
-| Coverage | 58/58 accounted — 23 members CONFIRMED by body-diff (§3b), 35 factories joined 1:1 by type id and individually twinned (§3a) |
+| Coverage | 58/58 accounted — 23 members CONFIRMED by body-diff (§3b), 35 factories joined 1:1 by type id, read from every one of the 35 bodies on both builds (§3a) |
 | Field layout | fully resolved (§1) |
 
 **Confidence tags:** **[H]** body-read + writer + reader · **[M]** inferred · **[U]** not observed.
@@ -42,14 +42,16 @@ typedef struct ai_action_manager {            // embedded at C_entity+0x1164; si
                                                //     path in ai_action_manager_add_job writes it.
     /* ---- list 2: IDLES — std::vector<ai_action*> --------------------------------- */
     /* +0x10 */ allocator_t   idles_alloc;     // [H]
-    /* +0x14 */ ai_action  **idles_begin;      // [H] PS2 AddIdle / NewIdle / AdoptIdles / NextIdle /
-                                               //     hasIdle all target this list.
+    /* +0x14 */ ai_action  **idles_begin;      // [H] ai_action_manager_add_idle / _new_idle /
+                                               //     _adopt_idles / _retire_top_idle /
+                                               //     _has_idle_linked_to all target this list.
     /* +0x18 */ ai_action  **idles_end;        // [H]
     /* +0x1c */ ai_action  **idles_cap_end;    // [H]
     /* ---- list 3: MODIFIERS — std::vector<ai_action*> ----------------------------- */
     /* +0x20 */ allocator_t   modifiers_alloc; // [H]
-    /* +0x24 */ ai_action  **modifiers_begin;  // [H] PS2 AddModifier / NewModifier / AdoptModifiers /
-                                               //     NextModifier all target this list.
+    /* +0x24 */ ai_action  **modifiers_begin;  // [H] ai_action_manager_add_modifier / _new_modifier /
+                                               //     _adopt_modifiers / _retire_top_modifier all
+                                               //     target this list.
     /* +0x28 */ ai_action  **modifiers_end;    // [H]
     /* +0x2c */ ai_action  **modifiers_cap_end;// [H]
     /* ---- tail ---------------------------------------------------------------------- */
@@ -75,8 +77,8 @@ declaration order is **jobs, idles, modifiers**.
 | +0x04 / +0x08 / +0x0c | jobs begin/end/cap | H | `ai_action_manager_clear_all`, `ai_action_manager_new_job`, `ai_action_manager_add_job`, `ai_action_manager_derive_job` | `ai_action_manager_has_action`, `ai_action_manager_get_base_job`, `ai_action_manager_get_top_job`, `ai_action_manager_get_job_by_type`, `ai_action_manager_retire_top_job`, `entity_get_action_man_size` | `+0x04` = `C_entity+0x1168` |
 | +0x14 / +0x18 / +0x1c | idles begin/end/cap | H | `ai_action_manager_clear_all`, `ai_action_manager_new_idle`, `ai_action_manager_add_idle`, `ai_action_manager_adopt_idles`, `ai_action_manager_retire_top_idle` | `ai_action_manager_has_action`, `ai_action_manager_has_idle_linked_to`, `ai_action_manager_retire_top_job`, `ai_action_manager_signal_children` | stride 4 |
 | +0x24 / +0x28 / +0x2c | modifiers begin/end/cap | H | `ai_action_manager_clear_all`, `ai_action_manager_new_modifier`, `ai_action_manager_add_modifier`, `ai_action_manager_adopt_modifiers`, `ai_action_manager_retire_top_modifier` | `ai_action_manager_has_action`, `ai_action_manager_retire_top_job`, `ai_action_manager_signal_children` | stride 4 |
-| +0x30 | uid_counter | H | `ai_action_generate_UID` (post-increment), `ai_action_manager_clear_all` (zeroed only when arg2 ≠ 0) | every `ai_action_new_*` factory (stores the result at `action+0x04`) | PS2 `+0x24` |
-| +0x34 | *(nothing — end of object)* | H | - | - | the claimed 4th list is refuted, see §1b |
+| +0x30 | uid_counter | H | `ai_action_generate_UID` (post-increment), `ai_action_manager_clear_all` (zeroed only when arg2 ≠ 0) | every `ai_action_new_*` factory (stores the result at `action+0x04`) | the action-UID source; never decremented |
+| +0x34 | *(end of object)* | H | - | - | the object is `0x34` bytes (§1b) |
 
 **Element type:** each slot holds an `ai_action*` — a heap-allocated, polymorphic record whose **type
 id sits at offset 0** of a **0x24-byte header** (proven by `entity_get_action_size` switching on it).
@@ -127,8 +129,10 @@ system** is 0x18–0x1c.
 
 Every PS2 `New*__17ai_action_manager` has a PC `ai_action_new_*` counterpart, joined on the action's
 type id (`structs/entity.md` §6b): the factory stamps the id at `*outer`, the id set equals the case
-set of `entity_action_tick`, and the join is 1:1 with no leftovers on either side. The join is by
-type id and inner-payload size rather than 35 separate body-diffs (§6).
+set of `entity_action_tick`, and the join is 1:1 with no leftovers on either side. The id was read
+from each of the 35 PC bodies — the 19 the decompiler renders and, for the 16 it does not, from the
+disassembly (`mov [outer], id` after the two `operator_new` calls) — and from each PS2 body; all 35
+agree. The inner payload sizes agree, or the PS2 one is larger by its 16-byte `S_vector`s (§4).
 
 PS2 factories, in emission order: `NewMove`, `NewFollow`, `NewTurnTo`, `NewFire`, `NewFollowLink`,
 `NewBlockedWay`, `NewRunawayDist`, `NewSideLook`, `NewBackLook`, `NewUnLink`, `NewRunCloserTo`,
@@ -216,9 +220,3 @@ Two forced 1:1 order-align gaps carry the table, and the `GetJob(FUi)` anchor la
 - `structs/ai_path.md` — the path object the movement actions carry.
 - `structs/check_seg.md` — `ai_seg_corner` and `ai_corner_hide_info`, the cover-system payloads the
   corner factories take.
-
-## 6. Open items
-
-| item | state |
-|---|---|
-| the 35 factory twins | joined as a closed 1:1 set by type id and inner-payload size, not by 35 individual body-diffs; no row contradicts the join, and 16 of the 35 have no decompiled body available to diff |

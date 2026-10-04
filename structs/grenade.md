@@ -1,6 +1,6 @@
 # `C_grenade` — the thrown grenade AND the Molotov (kind `0xe`)
 
-**Created** 2026-08-13 20:11 +0200 · **Modified** 2026-09-17 13:45 +0200
+**Created** 2026-08-13 20:11 +0200 · **Modified** 2026-10-04 19:19 +0200
 
 PC prefix **`grenade_`**.
 
@@ -28,12 +28,30 @@ arms and they are independent flags, not an enum:
 | flag | payload | parameters |
 |---|---|---|
 | `+0x141` | `game_new_explosion` | radius `+0x144`, damage `+0x148` |
-| `+0x14c` | `game_new_small_fires` + particle 8 + `game_new_fire` | the triple `+0x150` / `+0x154` / `+0x158` |
+| `+0x14c` | `game_new_small_fires` + particle 8 + `game_new_fire` | the fire's lifetime `+0x150`, radius `+0x154` and damage rate `+0x158` |
 
-That matches the creator exactly. `game_new_grenade` (= `NewGrenade__6C_game`, CONFIRMED) loads
-**`2grenade.i3d` for types 0/1 and `2mol.i3d` for types 2/3** — one class, one code path, and the
-designer flags in the savegame record decide whether the thing that lands is a fragmentation grenade
-or a Molotov cocktail.
+That matches the creator exactly. `game_new_grenade` loads **`2grenade.i3d` for types 0/1 and `2mol.i3d` for types 2/3** — one class, one code path, and the
+creator's type argument sets the flags that decide whether the thing that lands is a fragmentation
+grenade or a Molotov cocktail (§1b).
+
+### 1b. The four creator types
+
+`game_new_grenade` writes the fuse and the payload itself whenever its fourth argument is set:
+
+| type | model | fuse | payload |
+|---|---|---|---|
+| 0 | `2grenade.i3d` | timed, 5000 ms | explosion, radius 15.0, damage 400.0 |
+| 1 | `2grenade.i3d` | on impact | explosion, radius 15.0, damage 400.0 |
+| 2 | `2mol.i3d` | timed, 5000 ms | fire, lifetime 5000 ms, radius 2.5, damage rate 50.0 |
+| 3 | `2mol.i3d` | on impact | fire, lifetime 5000 ms, radius 2.5, damage rate 50.0 |
+
+No type sets both payload flags. Its three callers:
+
+| caller | type | when |
+|---|---|---|
+| `human_notify_callback` | 0 when the thrown item is the grenade (`predmety.def` id 15), else 3 | a human's throw |
+| `human_shooting` | 1 | the S&W model 27 Magnum (id 7) fires while `C_game+0x2f14` bit `0x4` is set |
+| `net_session_handle_event_msg` | from the message | a remote spawn; the fourth argument is 0, so no payload is set locally |
 
 The prefix records the developers' class name, read off the mangled tag (the prefix map is
 per-class). It is **not** a claim that every instance is a grenade.
@@ -41,8 +59,7 @@ per-class). It is **not** a claim that every instance is a grenade.
 ### 1a. How the class is identified — four independent levers
 
 1. **The vtable order in `.rdata`.** Between `C_DropOut` (`0x0063c320`) and `C_human` (`0x0063c468`)
-   there is exactly one vtable: `0x0063c3c0`, kind `0xe`. §6 explains why `C_ff_manager`, which sits
-   between them in the PS2 file order, cannot appear in a vtable run at all.
+   there is exactly one vtable: `0x0063c3c0`, kind `0xe` (§6).
 2. **The kind byte** — an independent check against `structs/entity.md` §1.
 3. **The creator carries a CONFIRMED twin.** `game_new_grenade` is the ctor's only caller, so the
    class name is read off a confirmed twin, not inferred from link order.
@@ -67,25 +84,25 @@ typedef struct C_grenade {          /* size 0x160, base C_bottle */
     /* +0x144 */ float explosion_radius;    // [H] arg 4 of game_new_explosion
     /* +0x148 */ float explosion_damage;    // [H] arg 5 of game_new_explosion
     /* +0x14c */ char  do_fire;             // [H] selects the game_new_fire arm
-    /* +0x150 */ int   fire_kind;           // [M] arg 4 of game_new_fire
-    /* +0x154 */ float fire_param_a;        // [M] arg 5 of game_new_fire
-    /* +0x158 */ float fire_param_b;        // [M] arg 6 of game_new_fire
+    /* +0x150 */ int   fire_lifetime_ms;    // [H] arg 4 of game_new_fire = C_fire +0x10
+    /* +0x154 */ float fire_radius;         // [H] arg 5 of game_new_fire, squared into +0x14
+    /* +0x158 */ float fire_damage_rate;    // [H] arg 6 of game_new_fire = C_fire +0x18
     /* +0x15c */ char  net_direct_enabled;  // [H] ctor sets 1; the NetDirect gate
 } C_grenade;                        /* 0x160 */
 ```
 
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
-| +0x138 | `fuse_timed_armed` | H | `grenade_game_init`, `grenade_save_game_load` | `grenade_ai_tick`, `grenade_save_game_save` | byte 1 of the save record |
-| +0x13c | `fuse_ms_remaining` | H | `grenade_ai_tick`, `grenade_save_game_load` | `grenade_ai_tick` | counts down by the frame delta |
-| +0x140 | `fuse_on_impact` | H | `grenade_game_init`, `grenade_save_game_load` | `grenade_ai_tick`, `grenade_on_collision`, `grenade_hit` | gates the `+0x100` counter |
-| +0x141 | `do_explosion` | H | `grenade_game_init`, `grenade_save_game_load` | `grenade_ai_tick` | - |
-| +0x144 | `explosion_radius` | H | `grenade_save_game_load` | `grenade_ai_tick` | designer-set; no other PC writer located |
-| +0x148 | `explosion_damage` | H | `grenade_save_game_load` | `grenade_ai_tick` | designer-set; no other PC writer located |
-| +0x14c | `do_fire` | H | `grenade_game_init`, `grenade_save_game_load` | `grenade_ai_tick` | - |
-| +0x150 | `fire_kind` | M | `grenade_save_game_load` | `grenade_ai_tick` | forwarded to `game_new_fire` un-inspected |
-| +0x154 | `fire_param_a` | M | `grenade_save_game_load` | `grenade_ai_tick` | forwarded to `game_new_fire` un-inspected |
-| +0x158 | `fire_param_b` | M | `grenade_save_game_load` | `grenade_ai_tick` | forwarded to `game_new_fire` un-inspected |
+| +0x138 | `fuse_timed_armed` | H | `game_new_grenade`, `grenade_game_init`, `grenade_save_game_load` | `grenade_ai_tick`, `grenade_save_game_save` | byte 1 of the save record |
+| +0x13c | `fuse_ms_remaining` | H | `game_new_grenade` (5000), `grenade_ai_tick`, `grenade_save_game_load` | `grenade_ai_tick` | counts down by the frame delta |
+| +0x140 | `fuse_on_impact` | H | `game_new_grenade`, `grenade_game_init`, `grenade_save_game_load` | `grenade_ai_tick`, `grenade_on_collision`, `grenade_hit` | gates the `+0x100` counter |
+| +0x141 | `do_explosion` | H | `game_new_grenade`, `grenade_game_init`, `grenade_save_game_load` | `grenade_ai_tick` | - |
+| +0x144 | `explosion_radius` | H | `game_new_grenade` (15.0), `grenade_save_game_load` | `grenade_ai_tick` | §1b |
+| +0x148 | `explosion_damage` | H | `game_new_grenade` (400.0), `grenade_save_game_load` | `grenade_ai_tick` | §1b |
+| +0x14c | `do_fire` | H | `game_new_grenade`, `grenade_game_init`, `grenade_save_game_load` | `grenade_ai_tick` | - |
+| +0x150 | `fire_lifetime_ms` | H | `game_new_grenade` (5000), `grenade_save_game_load` | `grenade_ai_tick` | the fire's lifetime; 2000 ms or more gives it a looping sound (`structs/fire.md` §1) |
+| +0x154 | `fire_radius` | H | `game_new_grenade` (2.5), `grenade_save_game_load` | `grenade_ai_tick` | the radius inside which the fire hurts (`structs/fire.md` §1) |
+| +0x158 | `fire_damage_rate` | H | `game_new_grenade` (50.0), `grenade_save_game_load` | `grenade_ai_tick` | damage per second of the fire's remaining lifetime (`structs/fire.md` §1) |
 | +0x15c | `net_direct_enabled` | H | `grenade_ctor`, `grenade_apply_net_event_msg` | `grenade_net_apply_remote_state` | the ctor sets it; the type-`0x16` message clears/sets it |
 
 **Base fields this class drives** (in `C_bottle`/`C_actor` territory, listed because the class's
@@ -94,7 +111,7 @@ behaviour is unreadable without them):
 | offset | role here |
 |---|---|
 | `+0x1c` | act-state — **2 = spent**, tested by both `grenade_on_collision` and `grenade_hit` |
-| `+0x80` | the float compared against `50.0` to decide the projectile retires instead of firing |
+| `+0x80` | `fall_accum`, the downward speed (`structs/bottle.md` §1): each airborne tick adds `dt_ms * 0.01`, a ground contact zeroes it. Above `50.0` — more than 5 s of free fall — the grenade retires without firing its payload |
 | `+0x100` | the impact counter the `+0x140` fuse mode reads |
 | `+0x104` | the impact-sound enable |
 | `+0x12c` | the surface-material id indexing `g_surface_material_table` |
@@ -126,7 +143,7 @@ Ordered by PC VA.
 | - | - | 19 | `SaveData__9C_grenadeFP7C_chunk` | 8 | shared ⁴ |
 | - | - | 20 | `LoadData__9C_grenadeFP7C_chunk` | 8 | shared ⁴ |
 
-¹ MSVC construct. ² §3a. ³ §4 — the PS2 `NetDirect` body is empty. ⁴ No PC function of its own:
+¹ MSVC construct. ² §3a. ³ §4, §6 — the PS2 `NetDirect` body is empty. ⁴ No PC function of its own:
 PC slot 14 = `thunk_bottle_update` (PS2 `Update` is a tail jump); slots 19 and 20 =
 `stub_rettrue_args4_00477710` (PS2 `return 1;`).
 
@@ -143,9 +160,8 @@ A scan of `.rdata` for `0x0048af90` as a pointer finds **three** references, all
 | `0x0063c3c0` | **`C_grenade`** |
 | `0x0063cd80` | `C_smoke_trail`, kind `0xf`, ctor `smoke_trail_ctor` @ `0x004f60e0` (`structs/smoke_trail.md`) |
 
-All three are `C_bottle` subclasses, the body is `frame ? bottle_init(frame) : false`, and the PS2
-side has three separate 44-byte bodies that are identical to each other — which is precisely why
-`/OPT:ICF` merged them. So the function belongs to **no single class** and is named for the family:
+All three are `C_bottle` subclasses, the body is `frame ? bottle_init(frame) : false`, and
+`/OPT:ICF` merged them (§6). So the function belongs to **no single class** and is named for the family:
 `bottle_subclass_init_require_frame`. The name `grenade_init` would assert one owner out of three —
 the ICF-fold trap `structs/actor_track.md` §2b describes.
 
@@ -153,10 +169,8 @@ the ICF-fold trap `structs/actor_track.md` §2b describes.
 
 ## 4. The network path
 
-`grenade_apply_net_event_msg` (slot 38) has **no PS2 symbol at all**, and
-`grenade_net_apply_remote_state` (slot 15) maps to an **empty 8-byte** PS2 body. The PS2 port emptied
-the per-class replication bodies (`structs/bottle.md` §3a), so here the PS2 method count is a
-**lower** bound and the PC code is real.
+The class's network code is `grenade_apply_net_event_msg` (slot 38) and
+`grenade_net_apply_remote_state` (slot 15), both real PC code (§6).
 
 The two are wired to each other through `+0x15c`: the ctor sets it, the type-`0x16` message clears it
 while a remote pose snap is being applied and restores it afterwards, and
@@ -215,6 +229,12 @@ classes calling it in the same PS2-mirrored position is what makes the twin firm
   to skip a class. It does not: `__vt__12C_ff_manager` occurs **0 times in the PS2 decomp**, i.e. the
   class is non-polymorphic on *both* builds and can never appear in a vtable run — the same holds for
   `C_driver` and `C_animations_machine_de_luxe`. See `structs/force_feedback.md` for the class.
+* **Slot 18 (§3a).** The PS2 side has three separate 44-byte bodies that are identical to each
+  other — which is precisely why `/OPT:ICF` merged them on the PC.
+* **The network path (§4).** `grenade_apply_net_event_msg` (slot 38) has **no PS2 symbol at all**,
+  and `grenade_net_apply_remote_state` (slot 15) maps to an **empty 8-byte** PS2 body. The PS2 port
+  emptied the per-class replication bodies (`structs/bottle.md` §3a), so here the PS2 method count
+  is a **lower** bound and the PC code is real.
 * **PS2 `Update` is a tail jump, not a stub.** 8 bytes on MIPS is either `jr ra; nop` or a tail
   call, and Ghidra renders the tail call as its TARGET's body. The PC mirrors it exactly, with a
   5-byte `jmp` thunk in slot 14.
@@ -234,8 +254,4 @@ slot-18 fold) · `structs/entity.md` §1 (the kind map) · `structs/game.md` (th
 
 | Item | State |
 |---|---|
-| `+0x150` / `+0x154` / `+0x158` | forwarded to `game_new_fire` un-inspected on both builds; their meanings come from `C_fire`, not from here |
-| `+0x144` / `+0x148` | designer-set; no writer other than the savegame loader is located, so where the radius and damage come from is untraced |
-| what `+0x80 <= 50.0` measures | a `C_bottle` base float. The retire gate is certain; the quantity is not |
-| where `C_ff_manager`'s PC code lives | not settled by this class's evidence; nothing here supports a PS2-port-only tag either |
-| in-game, untested | a Molotov and a grenade should differ ONLY in these flags. Throwing each near a wall and watching whether fire and blast can ever co-occur would settle whether the two arms are exclusive in the data |
+| in-game, untested | a Molotov and a grenade should differ ONLY in these flags. No creator type sets both (§1b); throwing each near a wall and watching whether fire and blast can ever co-occur would settle whether the two arms are exclusive in play |

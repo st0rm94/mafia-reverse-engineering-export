@@ -1,13 +1,13 @@
 # `G_GarageClass` — the player's car garage and its three screens
 
-**Created** 2026-08-25 22:28 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-08-25 22:28 +0200 · **Modified** 2026-10-04 19:17 +0200
 
 | | |
 |---|---|
 | PC prefix | `garage_` for the manager, one `gui_garage_*_` per screen class |
 | Manager (garage logic) | **`[0x0055d9e0, 0x0055ff70]`** |
 | Screens | in the `game_menus` TU, **`[0x0057b930, 0x0057c880]`** |
-| Related | `structs/game_menus.md` (the screen TU) · `structs/car_database.md` (car name/variant lookups every screen uses) · `structs/loadsave.md` (the garage's savegame block) |
+| Related | `structs/game_menus.md` (the screen TU) · `structs/car_database.md` (car name and colour-name lookups every screen uses) · `structs/loadsave.md` (the garage's savegame block) |
 
 This document is the join between the manager and its screens. Docblocks in the decomp cite
 sections of this file as `SS<n>`; read that as `§<n>`.
@@ -18,9 +18,14 @@ The garage is where the player's owned cars are kept between missions. It has a 
 and when a mission ends with more cars than the cap the game forces the player to discard some —
 that is what two of the three screens are for. The third is the post-mission report.
 
-The manager is a singleton with a **stride-`0xc` car record** (`{u32 packed_car_id, C_car *live,
-u32 flags}`) held in a `std::vector`, plus side vectors of car ids used as "ticked for discard" and
-"already discarded" sets.
+The manager keeps a **25-slot parked-car table** at `+0xa0` (`{u32 packed_car_id, C_car *live}`,
+stride 8). `garage_game_done` and `garage_run_car_select_menu` build a working `std::vector` of
+**stride-`0xc` records** (`{u32 packed_car_id, C_car *live, int parked_slot}`) from that table and
+the cars standing in the garage area, plus two side vectors of car ids: the cars ticked for discard
+and the cars discarded. `parked_slot` is the car's index in the table (0..24), or `-1` for a car
+found in the garage area or banked this mission. `garage_destroy_car` clears the slot it names, and
+the tail of `garage_game_done` frees the slots of discarded cars and gives each `-1` car the first
+free slot. The discard screens never read it.
 
 **The capacity is 16 on the PC**, carried as the literal `0x10` in `garage_game_done`'s over-cap
 loop (§3a). It is not read from a table.
@@ -45,7 +50,7 @@ loop (§3a). It is not read from a table.
 | `garage_enable_steal_for_letter` | `0x0055fec0` | per-letter steal permission |
 | `garage_can_steal_car_model` | `0x0055ff00` | steal permission query |
 | `garage_is_car_parked` | `0x0055ff40` | membership query |
-| `garage_enable_start_for_letter` | `0x0055ff70` | per-letter start permission |
+| `loadsave_freeride_enable_car_group` | `0x0055ff70` | unlocks one Free Ride car group (§2b); a `G_LoadSaveClass` method |
 
 ¹ Neither spawns nor despawns anything; see §2a.
 
@@ -60,8 +65,8 @@ store:
 
 | function | writes | reached from |
 |---|---|---|
-| `garage_generate_cars` (`GenerateCars__13G_GarageClass`) | `G_GarageClass+0x1cd = 1` | script command `garage_addlaststolen`, dispatcher case `0xc8` |
-| `garage_release_cars` (`ReleaseCars__13G_GarageClass`) | `G_GarageClass+0x1cc = 1` | script command `garage_show`, dispatcher case `0xc9` |
+| `garage_generate_cars` | `G_GarageClass+0x1cd = 1` | script command `garage_addlaststolen`, dispatcher case `0xc8` |
+| `garage_release_cars` | `G_GarageClass+0x1cc = 1` | script command `garage_show`, dispatcher case `0xc9` |
 
 Both are cleared by `garage_game_init`, and **`garage_game_done` tests `+0x1cc` OR `+0x1cd` in one
 condition**, so the two commands arm the same behaviour: bank the car the garage is tracking at
@@ -70,12 +75,41 @@ condition**, so the two commands arm the same behaviour: bank the car the garage
 `loadsave_race_cars_enable`. **Four model pack ids are excluded outright — `0x2b`, `0x39`, `0x3a`
 and `0x3d`** — so those cars can never be banked however the mission ends.
 
-The PC names follow the developers' own PS2 names (`GenerateCars`, `ReleaseCars`); those names
-record an intent the bodies do not carry out.
+The two names record an intent the bodies do not carry out (§4).
 
 Do not confuse these with the script commands `garage_generatecars` (case `0x5b`) and
 `garage_releasecars` (case `0x5c`), which are a dead pair — both are one call to a shared
 do-nothing stub and reach neither function above.
+
+### 2b. The two car-group letter masks
+
+`garage_enable_steal_for_letter` and `loadsave_freeride_enable_car_group` decode a letter the same
+way — `A`..`Z` or `a`..`z` to bit `letter - 'A'`, any other byte to bit 0 — and OR the bit into one
+mask of the singleton:
+
+| mask | setter | script command | tested against |
+|---|---|---|---|
+| `+0x98` steal | `garage_enable_steal_for_letter` | `garage_enablesteal` | `carindex.def +0x8c`, by `garage_can_steal_car_model` (`structs/car_database.md` §3) |
+| `+0x9c` Free Ride | `loadsave_freeride_enable_car_group` | `freeride_enablecar` (case `0x176`) | `carindex.def +0xa0` (`car_database_is_enabled_for_freeride`) or the Carcyclopedia mask |
+
+The Free Ride mask is read back by `loadsave_freeride_get_enabled_cars`, whose three callers — the
+Carcyclopedia list builder, `gui_race_car_maker_ctor` and `gui_race_car_model_ctor` — OR in
+`0x2000000`, bit `Z`, before testing. Every production car in the shipped `carindex.def` carries
+only `Z`, so production cars are always available; each of `A`..`T` unlocks exactly one bonus car:
+
+| letter | car (`carindex.def` entry) |
+|---|---|
+| `A` | `thunderbird` (60) |
+| `B` | `fordhot` (62) |
+| `C` .. `Q` | entries 66 .. 80, `blackdragon` .. `hotrodp6`, one letter each |
+| `R` | `phantom` (41) |
+| `S` | the four racers `bugatti`, `miller`, `duesenberg`, `alfa8c` (43 .. 46) |
+| `T` | `phantomtaxi` (81) |
+
+`lowgas` (65) carries an empty mask and is never available in Free Ride. All 40 shipped
+`freeride_enablecar` calls are in the mission `EXTREME`: each letter is granted once by the script
+that rewards it (`ulicka_unlockcar` grants `C`, `zeppelin_end` grants `N`, ...) and once by the
+script `cheat_bonuscars`, which grants `A`..`T` in one run.
 
 ## 3. The three screens
 
@@ -98,8 +132,8 @@ row-building code, which they share almost line for line:
 * design `0x26` is a **single pick**. Its tick appends `(id - 1000)` to the discarded set and
   returns `0x4f8`. There is no Close — the caller reopens it until the garage is under its cap.
 
-Both compose each row label as *name + variant* from `car_database_get_car_name` and
-`car_database_get_car_variant_name_id`, and append textdb `0x45d` / `0x45e` for the colour count.
+Both compose each row label as *name + colour name* from `car_database_get_car_name` and
+`car_database_get_color_name_id`, and append textdb `0x45d` / `0x45e` for the colour count.
 Both bracket the build with `car_database_load_details` / `..._unload_details`.
 
 ### 3a. The over-cap loop
@@ -114,16 +148,15 @@ while (surviving_cars > (discarded - flag) + 0x10) {
 }
 ```
 
-This loop is the watch-the-count method inlined (§4). It identifies the design-`0x26` screen as
-`GM_GarageFull`: the shared car-name composition would fit either discard screen, but only one of
-them is constructed inside this loop.
+This loop is the watch-the-count method inlined (§4). Only one of the two discard screens is
+constructed inside it.
 
 ### 3b. The summary screen's two bands
 
 Design `0x27` takes a **gate**: `1` = cars gained only, `2` = cars lost only, `4` = both (the `4`
 variant adds a separator `line`). The constructor builds one `'mtxt'` row per gained car from base
 id **1000** and one per lost car from base id **2000**, in lockstep — a shape no sibling screen
-has, which is why its twin is CONFIRMED rather than positional. Its tick dismisses on **any** key
+has (§4a). Its tick dismisses on **any** key
 or on the shipped *Close* button (id 100).
 
 ## 4. PC vs PS2
@@ -135,7 +168,12 @@ table by VA range, ignoring the class column, finds all of them.
 **The over-cap loop is an inline.** MSVC inlined the PS2 method `HlidejPocetVect__13G_GarageClassF…`
 (Czech *"hlídej počet"* = *watch the count*) into `garage_game_done`; on the PS2 `GameDone` calls it
 out of line. The site carries a `// ===== PS2-INLINED HERE: … =====` banner in the annotated
-decomp.
+decomp. The loop also identifies the design-`0x26` screen as `GM_GarageFull`: the shared car-name
+composition would fit either discard screen, but only one of them is constructed inside this loop.
+
+`garage_generate_cars` and `garage_release_cars` follow the developers' own PS2 names
+(`GenerateCars__13G_GarageClass`, `ReleaseCars__13G_GarageClass`); those names record an intent
+the bodies do not carry out (§2a).
 
 ### 4a. Twins
 
@@ -144,16 +182,22 @@ decomp.
 | `garage_game_done` | `0x0055e6e0` | `GameDone__13G_GarageClassF…` | CONFIRMED | absorbs `HlidejPocetVect` |
 | `garage_run_car_select_menu` | `0x0055f510` | `CarManager__13G_GarageClassFv` | CONFIRMED | 1 → 1 |
 | `garage_show_results` | `0x0055fcb0` | `GarageShowResultsProc__13G_GarageClassFv` | CONFIRMED | 1 → 1 |
+| `loadsave_freeride_enable_car_group` | `0x0055ff70` | `FreerideEnableCar__15G_LoadSaveClassFUc` | CONFIRMED | 1 → 1 ³ |
 | `gui_garage_select_ctor` | `0x0057b930` | `OnCreate__15GM_GarageSelectFv` | CONFIRMED | 3 → 1 ¹ |
 | `gui_garage_select_tick` | `0x0057bd10` | `OnClick__15GM_GarageSelectFUi` | CONFIRMED | 2 → 1 (+`OnKey`) |
 | `gui_garage_full_ctor` | `0x0057bfa0` | `OnCreate__13GM_GarageFullFv` | CONFIRMED | 3 → 1 ¹ |
 | `gui_garage_full_tick` | `0x0057c340` | `OnClick__13GM_GarageFullFUi` | STRUCTURAL | 2 → 1 (+`OnKey`) |
 | `gui_garage_summary_ctor` | `0x0057c540` | `OnCreate__16GM_GarageSummaryFv` | CONFIRMED | 1 → 1 |
 | `gui_garage_summary_tick` | `0x0057c880` | `OnKey__16GM_GarageSummaryFUcUi` | CONFIRMED | 2 → 1 ² |
-| - | - | `GM_GarageGarage` (4 methods) | not located | - |
-| - | - | `GM_GarageComplete` (2 methods) | not located | - |
 
 ¹ Absorbs `OnTick` and `OnClose`'s `UnloadDetails`. ² Absorbs `OnClick`, an 8-byte stub.
+³ The same letter decode into the same mask: PC `+0x9c` and PS2 `+0x2b8` are joined by the
+CONFIRMED accessor pair `loadsave_freeride_get_enabled_cars` / `FreerideGetEnabledCars`. The PS2
+body also maps the digits `0`..`6` to bits 26..32, remaps `U` to `0`, and ORs
+`G_CarDatabase::EnableCarsForFree` into `+0x2b4`.
+
+`gui_garage_summary_ctor` is CONFIRMED rather than positional because its lockstep gained/lost row
+build (§3b) is a shape no sibling screen has. `GM_GarageGarage` and `GM_GarageComplete`: §4c.
 
 ### 4b. The presentation differs, the roles do not
 
@@ -171,10 +215,14 @@ The PS2 also shows a *"n/N"* counter (component 299) that the PC design does not
 overrides are console-side memory management with no PC equivalent — the PC keeps the whole car
 database detail block loaded for the life of the screen instead.
 
+**`GM_GarageGarage` and `GM_GarageComplete` are PS2-only.** `GM_GarageGarage` is a root menu —
+change car (opens `GM_GarageSelect`), park car (`ParkCar`), back — and `GM_GarageComplete` the
+end-of-mission notice that leads into it. Only `G_GarageClass::DoGarageMenu` builds them, and
+`GM_GarageComplete` opens `GM_GarageGarage`. `DoGarageMenu`'s one caller is the PS2 `C_game::Tick`, gated on a byte that only the
+PS2-only script command `GARAGE_VRATA` sets; `DoFreerideMenu`, reached only from the PS2-only
+`GARAGE_FREERIDE`, opens `GM_GarageSelect`. Both commands are absent from the PC's command table
+(`basic/artifacts/script-opcode-dispatch.md` §7).
+
 ## 5. Open items
 
-| item | state |
-|---|---|
-| PC counterparts of `GM_GarageGarage` / `GM_GarageComplete` | not searched; on the PS2 they are the garage root menu and its completion notice, opened by `G_GarageClass::DoGarageMenu` / `::DoFreerideMenu`, whose PC equivalents are also unread |
-| car record `+0x08` | read as a flag by both discard screens; no writer traced |
-| `garage_enable_steal_for_letter` / `garage_enable_start_for_letter` | the letter index's meaning (a mission-letter gate?) is undocumented |
+Nothing is open.

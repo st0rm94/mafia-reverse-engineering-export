@@ -1,6 +1,6 @@
 # The screen-fade object — a cinematic letterbox that is never started
 
-**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-09-24 21:23 +0200
+**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 A `0x14`-byte file-scope object at `0x006f9278`, constructed in the `Main.cpp` initializer block
 (`[0x005f79a0, 0x005f8370]`), with a two-method class: a per-frame tick and a destructor. It
@@ -57,8 +57,9 @@ other registrar in this translation unit passes.
 
 A measurement over a closed set:
 
-1. **The object's whole method set is two functions.** The PS2 class has exactly two symbols (§4),
-   so there is no `Start(direction, speed)` member on either build to have been inlined away.
+1. **The object's whole method set is two functions**, `screen_fade_tick` and
+   `screen_fade_static_dtor` (§2); no `Start(direction, speed)` member exists to have been inlined
+   away (§4).
 2. **A byte scan of `.text` for the object base `0x006f9278` returns five sites**, all accounted
    for: the constructor, and four `test byte [0x6f9278]; jz …; mov ecx, 0x6f9278; call
    screen_fade_tick` sequences in `engine_main`, `race_run` and `net_multiplayer_run`. Any starter
@@ -106,8 +107,10 @@ PS2 writes `silver_screen = 0`, `[0x50a9a4] = 0x3f800000`, `[0x50a9a8] = 0`,
 `[0x50a9b0] = 0x3f0a60dd`. **Four constants, four matching offsets, including the non-round
 `0x3f0a60dd`.**
 
-On the PS2 the same two-symbol limit applies, so if a starter exists there it is inlined into a
-caller.
+**The method set.** The PS2 class has exactly two symbols, `__dt__15C_silver_screenFv` and
+`Tick__15C_silver_screenFUi`, so there is no `Start(direction, speed)` member on either build to
+have been inlined away. On the PS2 the same two-symbol limit applies, so if a starter exists there
+it is inlined into a caller.
 
 ---
 

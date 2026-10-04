@@ -1,11 +1,9 @@
 # The racing classes — `C_racing` and the five objects it owns
 
-**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-18 10:32 +0200
+**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 One translation unit, **`[0x0060b770, 0x00617a60)`**, **131 starts**, holding **six classes** plus
-the free comparators. **131 of 131 PC starts are named — the translation unit is CLOSED.** Twelve
-off-family functions were named alongside it (4 `G_Camera`, 5 `G_CarDatabase`, 3 `C_game`, 1
-`C_Vehicle`).
+the free comparators. **131 of 131 PC starts are named — the translation unit is CLOSED.**
 
 Subsystem write-up — what shipped, what was cut, the file formats, the mod:
 `basic/artifacts/racing.md` · the entity class that goes with these: `structs/racecam.md`.
@@ -27,7 +25,7 @@ Subsystem write-up — what shipped, what was cut, the file formats, the mod:
 ## 1. The object graph
 
 ```
-g_racing  (0x006f958c)  ->  C_racing                     the singleton; NULL in retail
+g_racing  (0x006f958c)  ->  C_racing                     the singleton; in retail built by mission 6 only
                              |
                              +-- vector<C_circuit*>       +0x0c   one per track   (11 ship)
                              |     |
@@ -54,34 +52,35 @@ g_racing  (0x006f958c)  ->  C_racing                     the singleton; NULL in 
 ## 2. `C_racing` — the singleton
 
 The root object of the whole mode. `g_racing` (`0x006f958c`, PS2 `CRacing`) is the only
-pointer to it, and **in the retail PC build it is permanently NULL** — nothing constructs
-one, because the only construction path is the `Racing` main-menu item the shipped
-executable deletes (`basic/artifacts/racing.md`). That is why ~310 references to it in
-ordinary gameplay code are `== 0` tests: they are all "are we in a race?" gates that
-always answer no.
+pointer to it. **In the retail PC build it is constructed in mission 6 only**: the mission's
+`GameInitStart` script runs `racing_mission6_init`, and `race_mission6_init` builds the object,
+writes `+0x28 = 2` and `+0x2c = 3`, and selects circuit 0 (`basic/artifacts/racing.md` §8a,
+`structs/race_session.md` §4). In every other mission it is NULL, which is why ~310 references to
+it in ordinary gameplay code are `== 0` tests: they are "are we in a race?" gates.
 
-The front end that would construct it is `race_menu_run` (`0x00595d90`, PS2
-`ExecuteRacingMenu`): it builds the design-`0x16` Racing menu and dispatches championship
-(`g_racing+0x2c` = 1), single race (= 2), a third mode (= 3), replay load, multiplayer and exit.
-Its sole caller is `engine_main` case `0x15`, immediately after `racing_ctor`.
+The menu front end is `race_menu_run` (`0x00595d90`, PS2 `ExecuteRacingMenu`): it builds the
+design-`0x16` Racing menu and dispatches championship (`g_racing+0x2c` = 1), single race (= 2), a
+third mode (= 3, the value the mission 6 race also uses), replay load, multiplayer and exit. Its
+sole caller is `engine_main` case `0x15`, immediately after `racing_ctor`; that path is reached
+only through the `Racing` main-menu item the shipped executable deletes.
 
 ### 2a. Known fields
 
 | Offset | Field | Conf | Witness |
 |---|---|---|---|
-| +0x0c / +0x10 / +0x14 | `vector<C_circuit*>` | H | `racing_load_circuits` fills it, `racing_get_circuit` indexes it, `racing_dtor` frees it (PS2 `+0x5f0`) |
-| +0x1c / +0x20 / +0x24 | `vector<C_championship*>` | H | `racing_load_champs` fills it, `racing_dtor` frees it (PS2 `+0x5fc`) |
+| +0x0c / +0x10 / +0x14 | `vector<C_circuit*>` | H | `racing_load_circuits` fills it, `racing_get_circuit` indexes it, `racing_dtor` frees it |
+| +0x1c / +0x20 / +0x24 | `vector<C_championship*>` | H | `racing_load_champs` fills it, `racing_dtor` frees it |
 | +0x28 vs +0x2c | menu mode vs race mode — two different fields | H | distinguished by `racing_can_run_race`; `racing_tick` branches on race mode `== 2` to tick a single racer instead of all of them |
-| +0x30 | current `C_circuit` | H | `racing_get_current_circuit` returns it; `racing_do_gates` and `racing_get_distance_by_gates` index its gate vector through it (PS2 `+0xa54`) |
-| +0x34 | current `C_champ_circuit` (the round being raced) | H | `racing_fill_champ_results` stops summing points at it; `racing_tick` reads its `+0x04` (PS2 `+0xa58`) |
-| +0x38 | current `C_championship` | H | written by `racing_set_current_champ`; read by `racing_fill_champ_results` and `race_compare_champ_points` (PS2 `+0xa5c`) |
-| +0x3c | difficulty level, 0-4 | H | the switch selector in `racing_get_power_coeff_by_difficulty`; copied from championship `+0xd0` (PS2 `+0xab0`, **4 levels not 5**) |
-| +0x40 | an embedded `C_opponent` — **the player's entrant** | H | `racing_tick` ticks it alone in race mode 2; `racing_fill_champ_results` appends it as the last result row; `racing_update_driver_power_coeff` measures every AI racer's distance from it (PS2 `+0x400`) |
-| +0x1d8 | entrant array (20 slots) | H | `racing_generate_qualification` walks it (PS2 `+0xa28`) |
-| +0x228 | live racer array (20 slots) | H | `racing_tick` and `opponent_set_death` walk it; the accessor is `racing_get_racer_array_ptr` (`0x005c8270`) (PS2 `+0xa3c`) |
-| +0x27c | the race's total lap count | H | `racing_do_gates` pushes it to the HUD with the current lap (PS2 `+0xab8`) |
-| +0x284 | entrant count | H | `racing_get_opponent_count` (`0x00610870`) reads it; it excludes the player entrant (PS2 `+0xac0`) |
-| +0x288 | live racer count | H | `racing_get_racer_count` (`0x005c8280`) reads it. Two adjacent counts, two accessors — `+0x284` and `+0x288` are not interchangeable (PS2 `+0xac4`) |
+| +0x30 | current `C_circuit` | H | `racing_get_current_circuit` returns it; `racing_do_gates` and `racing_get_distance_by_gates` index its gate vector through it |
+| +0x34 | current `C_champ_circuit` (the round being raced) | H | `racing_fill_champ_results` stops summing points at it; `racing_tick` reads its `+0x04` |
+| +0x38 | current `C_championship` | H | written by `racing_set_current_champ`; read by `racing_fill_champ_results` and `race_compare_champ_points` |
+| +0x3c | difficulty level, 0-4 | H | the switch selector in `racing_get_power_coeff_by_difficulty`; copied from championship `+0xd0` |
+| +0x40 | an embedded `C_opponent` — **the player's entrant** | H | `racing_tick` ticks it alone in race mode 2; `racing_fill_champ_results` appends it as the last result row; `racing_update_driver_power_coeff` measures every AI racer's distance from it |
+| +0x1d8 | entrant array (20 slots) | H | `racing_generate_qualification` walks it |
+| +0x228 | live racer array (20 slots) | H | `racing_tick` and `opponent_set_death` walk it; the accessor is `racing_get_racer_array_ptr` (`0x005c8270`) |
+| +0x27c | the race's total lap count | H | `racing_do_gates` pushes it to the HUD with the current lap |
+| +0x284 | entrant count | H | `racing_get_opponent_count` (`0x00610870`) reads it; it excludes the player entrant |
+| +0x288 | live racer count | H | `racing_get_racer_count` (`0x005c8280`) reads it. Two adjacent counts, two accessors — `+0x284` and `+0x288` are not interchangeable |
 | +0x290 | elapsed race time | H | `racing_tick` computes `now - +0x298` and feeds `hud_set_race_time_text` |
 | +0x294 | pause-clock stamp | H | the two `racing_pause_clock_*` helpers |
 | +0x298 | race start timestamp | H | `racing_tick` stamps it with `timeGetTime()` when the countdown ends |
@@ -91,20 +90,17 @@ Its sole caller is `engine_main` case `0x15`, immediately after `racing_ctor`.
 | +0x2ac | wrong-way timer | M | `racing_tick` stamps it when the player faces backwards and raises HUD bit `0x800000` after 5001 ms |
 | +0x2b4 | segment-file variant selector | H | picks `mrseg%i.sav` vs `mrsegm%i.sav` (§10c); also posted as type-`0x31` selector 4 (§8) |
 | +0x2b6 | segment learn flag | H | gates the commit in `racing_finish_segment_and_advance` (§10b) |
-| +0x2b7 | damage enabled | M | `racing_ctor` seeds it to 1 (PS2 `+0xb07`, which PS2 copies into `zmisse6damage`) |
-| +0x2b8 | **race-camera racer index** | H | `racing_set_race_camera_index` clamps into it. Not a lap count (PS2 `+0xaf0`) |
-| +0x2bc / +0x2c0 | race-camera cycle timer / dwell period | H | 10000 ms for a running racer, 1000 ms for a retired one (PS2 `+0xaa0`/`+0xaa4`, 50000 ms) |
+| +0x2b7 | damage enabled | M | `racing_ctor` seeds it to 1 |
+| +0x2b8 | **race-camera racer index** | H | `racing_set_race_camera_index` clamps into it. Not a lap count |
+| +0x2bc / +0x2c0 | race-camera cycle timer / dwell period | H | 10000 ms for a running racer, 1000 ms for a retired one |
 | +0x2c4 | 7 × 0x10 segment banks | H | `racing_ctor` builds them with `crt_ehvec_ctor(…, 0x10, 7, …)`; one bank per car performance class (§10) |
 | +0x334 | an embedded `C_racing_optimal_segment` — the scratch record (§10a) | H | byte-proven by `lea ecx,[esi+0x334]` in `racing_ctor` calling `racing_optimal_segment_ctor` |
 | +0x3ac / +0x3d4 | the live position trail: 10 × tag, capacity | H | `racing_game_init` copies a 42-dword record out of a bank into it |
 | +0x3dc / +0x3e0 / +0x3e4 | segment recorder cursors: segment index, point write cursor, last sampled car position | H | `racing_record_segment_points` |
 | +0x3f0[6] / +0x408[6] | the winners' scene actors and their I3D models | H | `racing_spawn_winners_scene` / `racing_release_winners_scene` |
-| +0x420 / +0x424 | driver-power update accumulator / period (1000 ms) | H | `racing_tick` drives `racing_update_driver_power_coeff` off it (PS2 `+0xa90`/`+0xa94`, 500 ms) |
+| +0x420 / +0x424 | driver-power update accumulator / period (1000 ms) | H | `racing_tick` drives `racing_update_driver_power_coeff` off it |
 
-**The PC↔PS2 delta is NOT uniform** — `+0x228`↔`+0xa3c` is `0x814`, `+0x288`↔`+0xac4` is
-`0x83c`, `+0x2b7`↔`+0xb07` is `0x850`. Do not rebase band-wise; the two builds are different
-revisions of the class, not a shifted copy. This is the documented trap
-(`structs/detector.md` §7, `structs/pumper.md` §8).
+The PS2 offsets of these fields are in §7a.
 
 ### 2b. Named methods — **69 `racing_*` functions for 63 PS2 methods**
 
@@ -126,35 +122,35 @@ notes are not reproducible from the registry.
 | 0x0060f6c0 | `racing_set_race_camera_index` | `SetRCamIndex__8C_racingFUi` | CONFIRMED |
 | 0x006139c0 | `racing_tick` | `Tick__8C_racingFUi` | CONFIRMED |
 | 0x00614dd0 | `racing_generate_qualification` | `GenerateQualification__8C_racingFv` | CONFIRMED |
-| 0x00614ee0 | `racing_get_difficulty_scale` | `GetDifficulty2__8C_racingFv` | CONFIRMED — 80 B against 124 B, ratio 0.65 ¹ |
+| 0x00614ee0 | `racing_get_difficulty_scale` | `GetDifficulty2__8C_racingFv` | CONFIRMED ¹ |
 | 0x00614f30 | `racing_get_power_coeff_by_difficulty` | `GetPowerCoeffByDifficulty__8C_racingFRfRf` | CONFIRMED |
 | 0x00616510 | `racing_do_gates` | `DoGates__8C_racingFP10C_opponent` | CONFIRMED |
 | 0x00616d30 | `racing_update_driver_power_coeff` | `UpdateDriverPowerC__8C_racingFv` | CONFIRMED |
 | 0x00616e10 | `racing_get_distance_by_gates` | `GetDistanceByGates__8C_racingFP10C_opponentP10C_opponent` | CONFIRMED |
-| - | `racing_activate_racers` | `ActivateRacers__8C_racingFv` | CONFIRMED — statement-for-statement, and **exactly one callsite**, in `racing_game_init` |
+| 0x00611430 | `racing_activate_racers` | `ActivateRacers__8C_racingFv` | CONFIRMED ² |
 
-¹ The row only reads as a ratio objection if the gap is mis-measured: two PC-only helpers sit
-between `racing_tick` and this function, and placed correctly the rank matches. A bad ratio in a
-gap that still contains unplaced PC-only functions is evidence about the gap, not about the row.
+¹ 80 B against 124 B, ratio 0.65. Two PC-only helpers sit between `racing_tick` and this
+function; with them placed, the rank matches.
+² Statement-for-statement, and **exactly one callsite**, in `racing_game_init`.
 
 ---
 
 ## 3. `C_circuit` — one race track
 
-Instance **0xdc B** on PC (PS2 0xc8). Constructed one per record of
+Instance **0xdc B**. Constructed one per record of
 `tables/circuits.def`.
 
 | Offset | Field | Conf | Notes |
 |---|---|---|---|
-| +0x40.. | `vector<C_racing_gate*>` gates | H | PS2 `+0x4c`. `circuit_get_first_gate` returns element 0 = the start/finish line |
-| +0x50 | lock state | M | written by `champ_circuit_set_lock_state` — this is the track-unlock mechanism (PS2 mirrors it at circuit `+0x00`) |
-| +0x54.. | `vector<C_best_time*>` — the best-lap table, cap 12 | H | PS2 `+0x58`. Serialised by `circuit_save_best_times` |
+| +0x40.. | `vector<C_racing_gate*>` gates | H | `circuit_get_first_gate` returns element 0 = the start/finish line |
+| +0x50 | lock state | M | written by `champ_circuit_set_lock_state` — this is the track-unlock mechanism |
+| +0x54.. | `vector<C_best_time*>` — the best-lap table, cap 12 | H | Serialised by `circuit_save_best_times` |
 | +0x68 | lap count | H | copied from record `+0x40` by `racing_load_circuits`; 7 for every shipped circuit except `trat12`/`trat13` (5) in the mod pack |
 | +0x6c[7] | per-car-class qualifying time MIN | H | from record `+0x48`; read by `circuit_get_class_qualify_time_min`. Order proven by the lerp `t*(max-min)+min` in `racing_generate_qualification` |
 | +0x8c[7] | per-car-class qualifying time MAX | H | from record `+0x68`; read by `circuit_get_class_qualify_time_max` |
-| +0xac.. | `vector<C_web_node*>` **left** racing line | H | PS2 `+0x64`; loaded as web-path type 2. The side is pinned by `RadarSetLeftEdge` taking `circuit+0x64` on PS2 and `+0xac` on PC |
-| +0xbc.. | `vector<C_web_node*>` **right** racing line | H | PS2 `+0x70`; web-path type 3, pinned by `RadarSetRightEdge` |
-| +0xcc.. | `vector<race_cam*>` | H | PS2 `+0x7c`; 12-byte records `{C_web_node* node, C_racing_gate* a, C_racing_gate* b}` |
+| +0xac.. | `vector<C_web_node*>` **left** racing line | H | loaded as web-path type 2; the side is pinned in §7a |
+| +0xbc.. | `vector<C_web_node*>` **right** racing line | H | web-path type 3; the side is pinned in §7a |
+| +0xcc.. | `vector<race_cam*>` | H | 12-byte records `{C_web_node* node, C_racing_gate* a, C_racing_gate* b}` |
 
 ### 3a. Named methods
 
@@ -170,8 +166,10 @@ Instance **0xdc B** on PC (PS2 0xc8). Constructed one per record of
 | 0x0060bed0 | `circuit_load_path` | `LoadPaths__9C_circuitFUiP…vector<P10C_web_node…>` | CONFIRMED |
 | 0x0060bfb0 | `circuit_determine_race_cams` | `DetermineRaceCams__9C_circuitFv` | CONFIRMED |
 | 0x0060c0a0 | `circuit_save_best_times` | `SaveBestTimes__9C_circuitFR8G_Stream` | CONFIRMED |
-| 0x0060c360 | `circuit_get_class_qualify_time_min` | - | PC-only accessor; the PS2 inlines it |
-| 0x0060c380 | `circuit_get_class_qualify_time_max` | - | PC-only accessor; the PS2 inlines it |
+| 0x0060c360 | `circuit_get_class_qualify_time_min` | - | PC-only ¹ |
+| 0x0060c380 | `circuit_get_class_qualify_time_max` | - | PC-only ¹ |
+
+¹ An accessor the PS2 inlines.
 
 PS2 methods with no PC counterpart in this class: `LoadBestTimes`, `LoadBestTimesDta`,
 `GetLeftPath`, `GetRightPath`. The two path getters are 8-byte `return this + N` inlines;
@@ -181,7 +179,7 @@ PS2 methods with no PC counterpart in this class: `LoadBestTimes`, `LoadBestTime
 
 ## 4. `C_championship` and `C_champ_circuit`
 
-`C_championship` is 0xe0 B on PC (PS2 0x5c); `C_champ_circuit` is 0x74 B (PS2 0x50). One
+`C_championship` is 0xe0 B; `C_champ_circuit` is 0x74 B (§7). One
 championship per record of `tables/championship.def`; one `C_champ_circuit` per round.
 
 | PC VA | PC name | PS2 twin | Status |
@@ -197,9 +195,8 @@ championship per record of `tables/championship.def`; one `C_champ_circuit` per 
 | 0x0060c520 | `champ_circuit_set_lock_state` | `SetLockState__15C_champ_circuitF13ER_lock_state` | CONFIRMED |
 
 **`C_championship+0x00` is the standings table**: `{C_opponent*, points}` pairs, stride 8,
-**21 slots on PC and 6 on PS2**, scanned by `championship_get_results` and rebuilt by
-`racing_fill_champ_results`. That is a 20-entrants-plus-player field on PC against
-5-plus-player on PS2, measured twice independently (§7). `+0xd0` holds the championship's
+**21 slots**, scanned by `championship_get_results` and rebuilt by
+`racing_fill_champ_results`. That is a 20-entrants-plus-player field (§7). `+0xd0` holds the championship's
 difficulty, which `racing_set_current_champ` copies into `C_racing+0x3c`.
 
 `C_champ_circuit+0x04` is the positions-valid flag, `+0x0c[21]` the final positions, `+0x68`
@@ -223,51 +220,55 @@ The heaviest class of the family: 30 PS2 methods, of which the overtaking AI
 
 | Offset | Field | Conf | Witness |
 |---|---|---|---|
-| +0x00 | `char name[0x20]` — the driver's display name | H | `opponent_ctor` copies **"Tommy Angelo"** in; the id-taking overload copies a different default (PS2 `+0x15c`) |
-| +0x20 | `0x3a` seed | U | both constructors write it; no reader located |
-| +0x24 | entrant id (`-1` = unassigned) | H | `opponent_ctor_with_id` stores it; indexes the opponent name/model roster (PS2 `+0x180`) |
-| +0x28 | `C_car*` | H | `opponent_tick`, `opponent_game_init`, `opponent_create_driver` (PS2 `+0x134`) |
-| +0x2c | `C_player*` — set only for the player entrant | H | `opponent_game_init` stores it, `opponent_game_done` clears it (PS2 `+0x140`) |
-| +0x30 / +0x34 | the two `I3D_model`s: the car model and the driver-man rig | H | both released by `opponent_game_done` (PS2 `+0x148` / `+0x14c`) |
-| +0x38 | qualification time (`-1` = no time) | H | `racing_generate_qualification` writes it, `race_compare_qualification_time` reads it (PS2 `+0x188`) |
-| +0x44 | retired-once / place-settled guard | H | `opponent_set_death` (PS2 `+0x1df`) |
+| +0x00 | `char name[0x20]` — the driver's display name | H | `opponent_ctor` copies **"Tommy Angelo"** in; the id-taking overload copies a different default |
+| +0x20 | `0x3a` seed | U | both constructors write it (§11) |
+| +0x24 | entrant id (`-1` = unassigned) | H | `opponent_ctor_with_id` stores it; indexes the opponent name/model roster |
+| +0x28 | `C_car*` | H | `opponent_tick`, `opponent_game_init`, `opponent_create_driver` |
+| +0x2c | `C_player*` — set only for the player entrant | H | `opponent_game_init` stores it, `opponent_game_done` clears it |
+| +0x30 / +0x34 | the two `I3D_model`s: the car model and the driver-man rig | H | both released by `opponent_game_done` |
+| +0x38 | qualification time (`-1` = no time) | H | `racing_generate_qualification` writes it, `race_compare_qualification_time` reads it |
+| +0x44 | retired-once / place-settled guard | H | `opponent_set_death` |
 | +0x45 | a flag in the standings order | M | read by both comparators |
-| +0x48 | `C_driver*` | H | `opponent_tick` deletes it when the car dies (PS2 `+0x144`) |
+| +0x48 | `C_driver*` | H | `opponent_tick` deletes it when the car dies |
 | +0x4c | distance to next gate | M | the final tie-break in `race_compare_position` |
 | +0x50 | back-pointer to a **human player's session record** | H | **PC-only.** Written by `racing_add_racer_for_player`; read by `racing_activate_racers`, `racing_find_opponent_by_player` and `race_compare_participant_slot`, which orders on the id byte at `player+0x2c` (`structs/net_session.md`) |
 | +0x54 | back-pointer to an **AI opponent slot** | H | **PC-only.** Written by `racing_add_racer_for_ai_slot`; `race_compare_participant_slot` orders on the slot index at `slot+0x28` |
 | +0x5c | gate/progress record | M | both comparators dereference it and read `+0x1c` |
-| +0x68 | finishing place | H | `opponent_set_death` (PS2 `+0x198`) |
-| +0x6c | lap counter | H | `race_compare_position` (PS2 `+0x19c`) |
-| +0x7c | current lap / finish time | H | zeroed by `opponent_set_death` (PS2 `+0x1a4`) |
-| +0x80 | retired flag | H | `opponent_set_death` writes it, both comparators sort on it (PS2 `+0x1e4`) |
-| +0x84 | stuck timer | H | `opponent_tick` accumulates it while `car_is_usable(2)` is false (PS2 `+0x1a8`) |
-| +0x88 / +0x8c | `0` / `200` constructor seeds | U | written by both constructors; no reader located (PS2 `+0x154` / `+0x158`) |
+| +0x68 | finishing place | H | `opponent_set_death` |
+| +0x6c | lap counter | H | `race_compare_position` |
+| +0x7c | current lap / finish time | H | zeroed by `opponent_set_death` |
+| +0x80 | retired flag | H | `opponent_set_death` writes it, both comparators sort on it |
+| +0x84 | stuck timer | H | `opponent_tick` accumulates it while `car_is_usable(2)` is false |
+| +0x88 / +0x8c | `0` / `200` constructor seeds | U | written by both constructors (§11) |
 | +0x178 / +0x17c | current overtaking direction bit; accumulated rejection mask | M | the overtaking AI |
-| +0x194 | the grid start frame (`"start%i"`) | H | `opponent_game_init` resolves it by name and copies its transform onto the car (PS2 `+0x150`) |
+| +0x194 | the grid start frame (`"start%i"`) | H | `opponent_game_init` resolves it by name and copies its transform onto the car |
 
 | PC VA | PC name | PS2 twin | Status |
 |---|---|---|---|
 | 0x0060cda0 | `opponent_ctor` | `__ct__10C_opponentFv` | CONFIRMED |
 | 0x0060ce50 | `opponent_ctor_with_id` | `__ct__10C_opponentFUi` | CONFIRMED |
-| 0x0060cf00 | `opponent_dtor` | `__dt__10C_opponentFv` | STRUCTURAL — the PS2's is the empty GCC delete-flag dtor |
-| 0x0060cf10 | `opponent_game_done` | `GameDone__10C_opponentFv` | CONFIRMED — statement-identical |
+| 0x0060cf00 | `opponent_dtor` | `__dt__10C_opponentFv` | STRUCTURAL ¹ |
+| 0x0060cf10 | `opponent_game_done` | `GameDone__10C_opponentFv` | CONFIRMED ² |
 | 0x0060cfa0 | `opponent_game_init` | `GameInit__10C_opponentFP17I3D_animation_setUi` | CONFIRMED |
 | 0x0060e000 | `opponent_create_driver` | `CreateDriver__10C_opponentFb` | CONFIRMED |
 | 0x0060e0d0 | `opponent_recover` | `Recover__10C_opponentFv` | CONFIRMED |
 | 0x0060eb40 | `opponent_do_recover` | `DoRecover__10C_opponentFv` | CONFIRMED |
-| 0x0060ed10 | `opponent_tick_recover` | `TickRecover__10C_opponentFUi` | CONFIRMED — ratio 0.32 |
+| 0x0060ed10 | `opponent_tick_recover` | `TickRecover__10C_opponentFUi` | CONFIRMED ³ |
 | 0x0060ee40 | `opponent_create_driver_path` | `CreateDriverPath__10C_opponentFb` | CONFIRMED |
-| 0x0060f750 | `opponent_get_race_points` | `GetRacePoints__10C_opponentFv` | CONFIRMED — takes no place; reads the racer's own `+0x68` |
-| 0x0060f7c0 | `opponent_get_race_points_for_place` | `GetRacePoints__10C_opponentFUi` | CONFIRMED — takes the place as an argument |
+| 0x0060f750 | `opponent_get_race_points` | `GetRacePoints__10C_opponentFv` | CONFIRMED ⁴ |
+| 0x0060f7c0 | `opponent_get_race_points_for_place` | `GetRacePoints__10C_opponentFUi` | CONFIRMED ⁵ |
 | 0x0060f830 | `opponent_set_death` | `SetDeath__10C_opponentFb` | CONFIRMED |
 | 0x00611630 | `opponent_play_death` | `PlayDeath__10C_opponentFv` | CONFIRMED |
 | 0x00611700 | `opponent_tick` | `Tick__10C_opponentFUi` | CONFIRMED |
 | 0x006117e0 | `opponent_tick_overtake` | `TickObjizdecka__10C_opponentFUi` | CONFIRMED |
 
-**`opponent_set_death` is where the PC and PS2 revisions visibly diverge**: the PS2 goes on
-to write the championship final position and refill the champ results; the PC body stops
-after clearing the lap time.
+¹ The PS2's is the empty GCC delete-flag dtor.
+² Statement-identical.
+³ Size ratio 0.32.
+⁴ Takes no place; reads the racer's own `+0x68`.
+⁵ Takes the place as an argument.
+
+`opponent_set_death` stops after clearing the lap time (§7).
 
 ---
 
@@ -291,10 +292,8 @@ Three of the comparators are **taken by address only** — `crt_qsort(…, 4, &L
 no `E8` caller at all; every reference to them is a label operand.
 `race_compare_participant_slot` is the exception: `race_compare_champ_points` calls it normally.
 
-The two qsort-only comparators were also **bisected by decompiler artifact starts**: 12 proven
-mid-body splits inside this TU were removed first, taking `race_compare_position` from an apparent
-61 B to its true **272 B** and `race_compare_qualification_time` from 54 B to **112 B**. At the
-artifact sizes both read as "cannot be the twin" of a 328 B / 184 B PS2 method.
+The two qsort-only comparators are `race_compare_position` (**272 B**) and
+`race_compare_qualification_time` (**112 B**), against 328 B / 184 B PS2 methods.
 
 ### 6a. Five comparators on PC, three on PS2
 
@@ -353,6 +352,56 @@ the PS2 later extended in some places and the PC extended in others", not as a s
 
 **Do not write "the PC inlined it" for the segment methods.** There is positive PC-side evidence
 of a *different placement* — a second translation unit (§10) — not of absence.
+
+### 7a. Field pairs
+
+| class | PC | PS2 | field |
+|---|---|---|---|
+| `C_racing` | `+0x0c` | `+0x5f0` | `vector<C_circuit*>` |
+| `C_racing` | `+0x1c` | `+0x5fc` | `vector<C_championship*>` |
+| `C_racing` | `+0x30` | `+0xa54` | current `C_circuit` |
+| `C_racing` | `+0x34` | `+0xa58` | current `C_champ_circuit` |
+| `C_racing` | `+0x38` | `+0xa5c` | current `C_championship` |
+| `C_racing` | `+0x3c` | `+0xab0` | difficulty level (5 levels on PC, 4 on PS2) |
+| `C_racing` | `+0x40` | `+0x400` | the player's embedded entrant |
+| `C_racing` | `+0x1d8` | `+0xa28` | entrant array |
+| `C_racing` | `+0x228` | `+0xa3c` | live racer array |
+| `C_racing` | `+0x27c` | `+0xab8` | total lap count |
+| `C_racing` | `+0x284` | `+0xac0` | entrant count |
+| `C_racing` | `+0x288` | `+0xac4` | live racer count |
+| `C_racing` | `+0x2b7` | `+0xb07` | damage enabled (PS2 copies it into `zmisse6damage`) |
+| `C_racing` | `+0x2b8` | `+0xaf0` | race-camera racer index |
+| `C_racing` | `+0x2bc` / `+0x2c0` | `+0xaa0` / `+0xaa4` | race-camera cycle timer / dwell period (PS2 50000 ms) |
+| `C_racing` | `+0x420` / `+0x424` | `+0xa90` / `+0xa94` | driver-power update accumulator / period (PS2 500 ms) |
+| `C_circuit` | `+0x40` | `+0x4c` | gate vector |
+| `C_circuit` | `+0x50` | `+0x00` | lock state (PS2 mirrors it at circuit `+0x00`) |
+| `C_circuit` | `+0x54` | `+0x58` | best-lap table |
+| `C_circuit` | `+0xac` | `+0x64` | left racing line ¹ |
+| `C_circuit` | `+0xbc` | `+0x70` | right racing line ¹ |
+| `C_circuit` | `+0xcc` | `+0x7c` | race-camera nodes |
+| `C_opponent` | `+0x00` | `+0x15c` | driver name |
+| `C_opponent` | `+0x24` | `+0x180` | entrant id |
+| `C_opponent` | `+0x28` | `+0x134` | `C_car*` |
+| `C_opponent` | `+0x2c` | `+0x140` | `C_player*` |
+| `C_opponent` | `+0x30` / `+0x34` | `+0x148` / `+0x14c` | car model / driver rig |
+| `C_opponent` | `+0x38` | `+0x188` | qualification time |
+| `C_opponent` | `+0x44` | `+0x1df` | place-settled guard |
+| `C_opponent` | `+0x48` | `+0x144` | `C_driver*` |
+| `C_opponent` | `+0x68` | `+0x198` | finishing place |
+| `C_opponent` | `+0x6c` | `+0x19c` | lap counter |
+| `C_opponent` | `+0x7c` | `+0x1a4` | current lap / finish time |
+| `C_opponent` | `+0x80` | `+0x1e4` | retired flag |
+| `C_opponent` | `+0x84` | `+0x1a8` | stuck timer |
+| `C_opponent` | `+0x88` / `+0x8c` | `+0x154` / `+0x158` | constructor seeds |
+| `C_opponent` | `+0x194` | `+0x150` | grid start frame |
+
+¹ The sides are pinned by `RadarSetLeftEdge` taking `circuit+0x64` on PS2 and `+0xac` on PC, and
+by `RadarSetRightEdge` for the right line.
+
+**The PC↔PS2 delta is NOT uniform** — `+0x228`↔`+0xa3c` is `0x814`, `+0x288`↔`+0xac4` is
+`0x83c`, `+0x2b7`↔`+0xb07` is `0x850`. Do not rebase band-wise; the two builds are different
+revisions of the class, not a shifted copy (the same holds for `structs/detector.md` §7 and
+`structs/pumper.md` §7).
 
 ---
 
@@ -432,8 +481,8 @@ the `"FMVZavod0%i"` / `"FMVcar0%i"` frames), `racing_next_finish_place`,
 Three PC-side facts place it:
 
 1. **`racing_get_segment_id_for_car`** (`0x00615230`) is `GetSegmentIdFromCarIdG__FUi`, at the
-   exact matching rank — one of the three free functions in the PS2 gap at `0x003a3080` that no
-   earlier pass had accounted for. It returns 0..6.
+   exact matching rank — one of the three free functions in the PS2 gap at `0x003a3080`. It
+   returns 0..6.
 2. **`C_racing+0x2c4` is an array of seven segment banks.** `racing_ctor` builds them with
    `crt_ehvec_ctor(this+0x2c4, 0x10, 7, gif_vector_ctor, vector_dispose_at_0x04)`,
    `racing_game_done` frees all seven element by element, and `racing_game_init` copies a
@@ -448,9 +497,7 @@ The full write-up of that cluster is §10.
 ### 9d. PS2 methods with no PC start in this TU
 
 `CreateBestTimes`, `compSegID`, `GetOpponentFromCar`, `GetRecoverTime`, `PreloadWrecks`, and the
-six `C_championship` / `C_champ_circuit` best-time streamers. None is tagged terminal.
-`CreateBestTimes` sorts with `compSegID`, i.e. by segment id, so the segment cluster (§10) is
-where to look first.
+six `C_championship` / `C_champ_circuit` best-time streamers (§11).
 
 Genuinely inlined, and marked in the PC decomp with `//` banners at the exact statement:
 `GetLeftPath` / `GetRightPath` (in `racing_game_init` and `racing_activate_racers`),
@@ -548,9 +595,11 @@ points, the speeds.
 | 0x005c9c90 | `racing_save_segments` | - | PC-only |
 | 0x005c9e30 | `racing_load_segments` | `LoadSegments__8C_racingFbPcUi` | CONFIRMED |
 | 0x005ca040 | `racing_clear_segments` | `ClearSegments__8C_racingFUi` | CONFIRMED |
-| 0x005ca0a0 | `racing_get_segment_bank_for_car` | - | PC-only wrapper |
-| 0x005ca0f0 | `racing_finish_segment_and_advance` | - | PC-only; absorbs `GetSegments` |
-| 0x00615230 | `racing_get_segment_id_for_car` | `GetSegmentIdFromCarIdG__FUi` | CONFIRMED — free function |
+| 0x005ca0a0 | `racing_get_segment_bank_for_car` | - | PC-only ¹ |
+| 0x005ca0f0 | `racing_finish_segment_and_advance` | - | PC-only ² |
+| 0x00615230 | `racing_get_segment_id_for_car` | `GetSegmentIdFromCarIdG__FUi` | CONFIRMED ³ |
+
+¹ A wrapper. ² Absorbs `GetSegments`. ³ A free function.
 
 **`racing_optimal_segment_` is a proper extension of the `racing_` class prefix.** Anything that
 selects `C_racing`'s methods by `startswith("racing_")` pulls `racing_optimal_segment_ctor` in
@@ -567,6 +616,7 @@ create for `car_`.
 | `GetSegmentTotalTime__8C_racingFUiUi` | no located PC site. The PS2 sums each segment's time over a bank and returns 0 if any is still `-1`; nothing in the PC racing code was found doing that. Deliberately NOT tagged inlined |
 | the PS2 class name's leading "o" in `C_racing_osegment` | not established on either build. *optimální* (optimal) fits the best-time gate and is why the PC prefix reads `racing_optimal_segment_`; *opponent* fits the consumers. Neither is proven, so the letter is recorded only in the twin cell |
 | the consumer of the stored racing line | the banks are indexed per car class and the per-point speeds are obviously a driving target, but which AI reads them has not been traced |
-| whether the PC applies a car colour / skin per entrant | `opponent_game_init` allocates the car and sets its model level, but the fields once read as a colour record and a player-model record (`C_opponent+0x50`/`+0x54`) are the session back-pointers (§5). Which field, if any, carries a skin is unresolved |
-| the PS2 methods of §9d | not searched; no terminal tag is being written for any of them |
+| whether the PC applies a car colour / skin per entrant | `opponent_game_init` allocates the car and sets its model level; `C_opponent+0x50`/`+0x54` are the session back-pointers (§5). Which field, if any, carries a skin is unresolved |
+| the PS2 methods of §9d | not searched; none is tagged terminal. `CreateBestTimes` sorts with `compSegID`, i.e. by segment id, so the segment cluster (§10) is where to look first |
+| `C_opponent+0x20` and `+0x88` / `+0x8c` | constructor seeds (`0x3a`; `0` / `200`) written by both constructors; no reader located (§5) |
 | in game (needs the racing mod) | drive a circuit twice, improving on one stretch, and check that `savegame\mrseg<circuit>.sav` grows or changes — that would confirm the learner runs in the shipped build rather than only in a developer configuration |

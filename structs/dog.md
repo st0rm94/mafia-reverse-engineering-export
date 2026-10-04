@@ -1,6 +1,6 @@
 # `C_dog` — the guard dog (kind `0x15`)
 
-**Created** 2026-08-13 12:57 +0200 · **Modified** 2026-09-17 13:45 +0200
+**Created** 2026-08-13 12:57 +0200 · **Modified** 2026-10-01 14:22 +0200
 
 PC prefix **`dog_`**.
 
@@ -19,8 +19,9 @@ PC prefix **`dog_`**.
 
 A patrolling guard dog. It walks a route of `C_web_node`s, remembers which connections
 it has found blocked, re-plans through `ai_wayfind` when it gets stuck, and switches to
-an attack state when the player comes close enough. It bleeds a ten-drop trail after
-being hurt, can be decapitated, and a vehicle at speed kills it in one hit.
+an attack state when the player comes close enough. Hurt, it leaves blood stains; after
+stepping into blood it leaves ten fading bloody paw prints (§6). It can be decapitated, and a
+vehicle at speed kills it in one hit.
 
 Its whole behaviour hangs off one field — the **state at `+0xb4`**, written only by
 `dog_enter_state`, which also picks the animation that goes with the state. Every other
@@ -63,6 +64,11 @@ The PC decomp shows only a stride-`0x10` array; the type name comes from the PS2
 Each record is `{node_a, node_b, [U], expiry}`, and `dog_is_segment_blocked` compares the
 node pair in **both orders**, so a blocked connection is undirected.
 
+`dog_follow_path` writes the records, when the `ai_path` reports state 3 (`structs/ai_path.md`):
+two of its appends copy the path's embedded `blocked_con` (`ai_path+0x30`), and the third
+builds one per matching connection of the current node with the expiry set to the mission
+clock + 3000 ms. Each append is followed by `dog_replan_path`.
+
 The list is handed to the planner through the singleton field
 `g_ai_wayfind_checkpoint_container` (= `ai_wayfind + 0x5c`), set immediately before the
 search and cleared immediately after — the same install/plan/release shape
@@ -81,6 +87,17 @@ identifies the class on its own:
 | 3 | `Dsit` | 8 | `Dbark1` | | |
 | 4 | `Dstand` | 9 | `DturnL` | | |
 
+The clips carry the events `dog_frame_notify_callback` reacts to, on the frame named `notify`.
+In the shipped `.5DS` files a notes block is the flag dword `0x10`, a 16-bit count, the 16-bit
+frame numbers and the 16-bit values:
+
+| clip | note frames | values | what the callback does |
+|---|---|---|---|
+| `Dbark1.5DS` (id 8) | 3, 15, 24, 33 | `0x5a` ×4 | re-creates and plays sound slot 2 |
+| `Dbark3.5DS` | 3, 15, 24, 33 | `0x5a` ×4 | the same; `dog_enter_state` loads this clip as a random overlay in state `0x10` |
+| `Dwalk.5DS` (id 1) | 1, 5, 12, 16 | 1, 5, 2, 4 | footstep: sound slot 0, and a bloody paw print (§6) |
+| `Drun.5DS` (id 2) | 4, 6, 9, 12 | 2, 1, 4, 5 | the same |
+
 The severed head is a separate model, `hlavapsa.I3D` (Czech *hlava psa*), spawned by
 `dog_spawn_severed_head`. `dog_load_tracks` loads three `.tck` keyframe tracks at start.
 
@@ -96,30 +113,46 @@ Five slots, two parallel arrays: ids at `+0x8c[5]`, live objects at `+0xa0[5]`.
 | `dog_stop_sound` | stop one |
 | `dog_release_all_sounds` | release all five |
 
-Slot 0 is the footstep, slot 2 the bark/growl re-triggered on event `0x5a`, slot 3 the
-yelp played by `dog_on_collision`. Slots 1 and 4 have no traced consumer.
+The constructor's default ids are `0x7f`, `0x7f`, `0x7e`, `0x81`, `0x80`. Slot 0 is the footstep,
+slot 2 the bark re-triggered on the `0x5a` notes of the bark clips (§4), slot 3 the yelp played
+by `dog_hit` and `dog_on_collision`, and slot 4 the attack sound `dog_ai` plays in state 8 (clip
+`Datack`) and in state 7. Slot 1 is created by `dog_create_all_sounds` and stopped by
+`dog_enter_state`, but nothing fetches or plays it; its default id is slot 0's.
 
-## 6. The blood trail
+## 6. Bloody paw prints
 
-A small closed loop worth reading as a unit, because three functions and two fields make
+A small closed loop worth reading as a unit, because four functions and three fields make
 the whole feature:
 
-1. `dog_arm_bleeding` (vtable slot 36, the collision-tester callback) sets the drop
-   counter `+0x30e` to **10** and raises the bleeding flag `+0x89`;
-2. `dog_frame_notify_callback` — installed by `dog_game_init` on the frame named
-   `notify` — fires on animation events 1/2/4/5 and, while `+0x89` is set, calls
-3. `dog_spawn_blood_drop`, which places one decal under the named body frame and
-   decrements `+0x30e`, clearing `+0x89` when it reaches zero.
+1. `dog_snap_to_ground` casts the dog's ground ray every 200 ms with
+   `g_collision_next_query_actor` set to the dog. When that ray crosses the collision sphere a
+   blood decal carries, `collision_line_in_dynamics` (`case 0x48`) calls the dog's vtable
+   slot 36 (`structs/collision.md` §1d, `structs/blood.md` §5e).
+2. `dog_arm_bloody_paw_prints` (slot 36): when the print counter `+0x30e` is 0 it arms ten
+   prints (`+0x30e` = `+0x30d` = 10); otherwise it re-syncs `+0x30d` to `+0x30e` and raises
+   the print flag `+0x89`.
+3. `dog_frame_notify_callback` — installed by `dog_game_init` on the frame named
+   `notify` — fires on the footstep events 1/2/4/5 and, at effects quality above 1
+   (`g_act_mission+0x9c`) while `+0x89` is set, calls
+4. `dog_place_bloody_paw_print`, which places one decal of texture 8 (`2dogfoot.bmp`) under
+   the paw frame the event names (`v`, `p`, `n`, `j`), with alpha `(+0x30e + 2) / +0x30d`,
+   and decrements `+0x30e`, clearing `+0x89` when it reaches zero.
+
+The dog's own bleeding is a different path: `dog_hit`, `dog_enter_state` and `dog_update`
+spawn blood drops (`structs/blood.md` §4).
 
 ## 7. Field layout
 
 ```c
 typedef struct C_dog {                    /* 0x310 bytes */
     /* +0x000 */ C_actor  base;           // [H] kind 0x15 at +0x10, frame at +0x68
-    /* +0x070 */ float    tunable[4];     // [H] 1.0 / 5.5 / 4.0 / — ; saved + duplicated
-    /* +0x080 */ int      cfg_a, cfg_b;   // [M] saved + duplicated, meaning untraced
-    /* +0x088 */ bool     cfg_flag;       // [M] saved + duplicated
-    /* +0x089 */ bool     bleeding;       // [H] set by dog_arm_bleeding, cleared at 0 drops
+    /* +0x070 */ float    tunable[4];     // [H] 1.0 / 5.5 / 4.0 / 100.0 ; saved + duplicated
+    /* +0x080 */ float    bite_damage;    // [H] 40.0; the damage dog_ai passes to the target's
+                                         //     Hit (slot 31) in attack state 8
+    /* +0x084 */ float    acquire_range;  // [H] 20.0; dog_acquire_player_target chases a
+                                         //     player closer than this with a clear line
+    /* +0x088 */ bool     starts_hostile; // [H] 1; dog_game_init copies it into +0x30f
+    /* +0x089 */ bool     print_flag;     // [H] set by dog_arm_bloody_paw_prints, cleared at 0 prints
     /* +0x08c */ int      sound_id[5];    // [H] designer-set; saved + duplicated
     /* +0x0a0 */ I3D_sound *sound[5];     // [H] live objects, lazily created
     /* +0x0b4 */ int      state;          // [H] 0xe = hurt, 0xf = dead; dog_enter_state
@@ -141,9 +174,10 @@ typedef struct C_dog {                    /* 0x310 bytes */
     /* +0x2f4 */ C_actor *enemy;          // [H] the acquired player; cleared on return
     /* +0x2f8 */ ai_path *path;           // [H] owned; destroyed on every re-plan
     /* +0x2fc */ vector<blocked_con> blocked;  // [H] alloc/begin/end at +0x2fc/+0x300/+0x304
-    /* +0x30d */ char     blood_working;  // [H] working copy of the drop counter
-    /* +0x30e */ char     blood_drops;    // [H] armed to 10
-    /* +0x30f */ bool     was_hit;        // [H] set by dog_hit
+    /* +0x30d */ char     print_total;    // [H] the alpha denominator, synced from +0x30e
+    /* +0x30e */ char     prints_left;    // [H] armed to 10, one per placed print
+    /* +0x30f */ bool     hostile;        // [H] gates dog_update's 2000 ms target test;
+                                         //     from +0x088 at GameInit, set by dog_hit
 } C_dog;
 ```
 
@@ -177,8 +211,8 @@ Confidence: **[H]** measured on both builds · **[M]** measured on PC, meaning o
 | `0x0047e480` | `dog_choose_next_web_node` | `ChooseNextCheckPoint__5C_dogFb` | - | CONFIRMED |
 | `0x0047e740` | `dog_is_segment_blocked` | `IsBlocked__5C_dogFUi` | - | CONFIRMED |
 | `0x0047e7f0` | `dog_snap_to_ground` | `ground__5C_dogFUi` | - | CONFIRMED |
-| `0x0047e900` | `dog_frame_notify_callback` | `dog_notify_callback__FP9I3D_frame21LS3D_CALLBACK_MESSAGEUiUi` | — | CONFIRMED ² |
-| `0x0047eaf0` | `dog_spawn_blood_drop` | `BloodStep__5C_dogFUi` | - | CONFIRMED |
+| `0x0047e900` | `dog_frame_notify_callback` | `dog_notify_callback__FP9I3D_frame21LS3D_CALLBACK_MESSAGEUiUi` | - | CONFIRMED ² |
+| `0x0047eaf0` | `dog_place_bloody_paw_print` | `BloodStep__5C_dogFUi` | - | CONFIRMED |
 | `0x0047eda0` | `dog_create_all_sounds` | `InitSounds__5C_dogFv` | - | CONFIRMED |
 | `0x0047ee10` | `dog_create_sound_slot` | `InitSound__5C_dogFUi` | - | CONFIRMED |
 | `0x0047eeb0` | `dog_release_all_sounds` | `ReleaseSounds__5C_dogFv` | - | CONFIRMED |
@@ -192,7 +226,7 @@ Confidence: **[H]** measured on both builds · **[M]** measured on PC, meaning o
 | `0x0047f4a0` | `dog_save_game_save` | `SaveGameSave__5C_dogFPPv` | 23 | CONFIRMED |
 | `0x0047f680` | `dog_save_game_load` | `SaveGameLoad__5C_dogFPPv` | 24 | CONFIRMED |
 | `0x0047f950` | `dog_on_collision` | `Collision__5C_dogF…` | 30 | CONFIRMED |
-| `0x0047f9e0` | `dog_arm_bleeding` | `cbCollTester__5C_dogFP18tDynamicCollObject` | 36 | CONFIRMED |
+| `0x0047f9e0` | `dog_arm_bloody_paw_prints` | `cbCollTester__5C_dogFP18tDynamicCollObject` | 36 | CONFIRMED |
 
 ¹ MSVC-only. ² A free function on both builds (§10).
 
@@ -213,7 +247,7 @@ is a role, not a twin.
 | `0x0047ab10`–`0x0047ab50` | **five `C_detector` functions**, COMDAT-placed after the CRT pair that closes the detector TU — four `sub ecx,0x70; jmp` adjustor thunks plus `detector_get_program`. See `structs/detector.md` §2 |
 | `0x0047fa10` | `i3d_cache_anim_create` — a method of the model/animation cache singleton at `0x006f93c8`, 12 callsites across `human_*`, `npc_*`, `anim_machine_set_anim`, `program_process_command` (`structs/i3d_cache.md`) |
 | `0x0047fe40` | `i3d_open_notify_forward_cb` — an `I3D_frame` enumeration callback taken by address at 3 sites; 0 direct callsites |
-| `0x0047fe60` / `0x0047ffe0` / `0x00480040` | `std_vector8_insert_one` / `array_copy_refcounted8` / `array_copy_backward_refcounted8` — shared container helpers for a refcounted 8-byte element type (65 / 30 / 1 references) |
+| `0x0047fe60` / `0x0047ffe0` / `0x00480040` | `std_vector8_insert_one` / `array_copy_refcounted8` / `array_copy_backward_refcounted8` — shared container helpers for `C_I3D_cache<T>::S_itm` `{T *object, C_string name}`, the model / sound / animation cache record (`structs/i3d_cache.md`; 65 / 30 / 1 references) |
 | `0x004800a0` | `refcounted8_scalar_deleting_dtor` — the scalar deleting destructor of that element type; 2 callers, both outside this TU |
 
 ## 10. PC vs PS2
@@ -225,7 +259,9 @@ is a role, not a twin.
 * **The class-band field delta is a flat `+0x11c`** on the designer band (PC `+0x70` ↔
   PS2 `+0x18c`) but it does **not** hold across the whole object — the sound arrays sit
   at PC `+0x8c`/`+0xa0` against PS2 `+0x14c`, and the blocked-connection vector at PC
-  `+0x2fc` against PS2 `+0x33c`. Do not rebase band-wise.
+  `+0x2fc` against PS2 `+0x33c`. Do not rebase band-wise. The designer fields agree: the PS2
+  constructor writes 40.0 at `+0x19c` and 20.0 at `+0x1a0` (PC `+0x80` / `+0x84`), and the
+  designer byte with default 1 sits at `+0x1b0` and is copied by `DuplicateFrom`.
 * **The `C_web_node` record differs in size across builds** (PC `0x1e`, PS2 `0x20`) and
   every node-pointer computation in this class reflects it. Field offsets inside the
   record are identical — `structs/web_node.md`.
@@ -245,10 +281,5 @@ previous TU) · `structs/door.md` (the next TU).
 
 | item | state |
 |---|---|
-| the two unused sound slots | slots 1 and 4 are created and released but never played by any traced path |
-| `+0x080` / `+0x084` / `+0x088` | saved, loaded and duplicated, so they are designer-set — but nothing read reveals what they configure |
-| `blocked_con` field 3 | `dog_is_segment_blocked` compares `rec[3]` against the mission clock, so it is an expiry; **who writes a record** is not traced in this class |
-| the element class of the refcounted 8-byte helpers | unidentified |
-| the `0x5a` animation event | `dog_frame_notify_callback` re-creates and plays sound slot 2 on it; which clip emits the event is not identified |
 | `dog_death` vs `dog_on_collision` | both can reach state `0xf`; whether the corpse-fade path runs for a road kill is not tested in game |
 

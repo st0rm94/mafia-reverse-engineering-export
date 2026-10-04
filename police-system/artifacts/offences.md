@@ -1,6 +1,6 @@
 # Police Offences — storage, bit mapping, and on-screen text
 
-**Created** 2026-06-03 16:00 +0200 · **Modified** 2026-09-18 10:32 +0200
+**Created** 2026-06-03 16:00 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 This document covers: how an offence is recorded, how `get_pm_state` reads it, how the police
 come to *notice* it, and how the offence text reaches the HUD. It is built from static analysis
@@ -31,7 +31,7 @@ police-state 1 (fine).
 ## 2. Storage: `bit = 1 << offence_type`
 
 Each pursued target owns a heap `pursuit_record` (0x80 bytes; see `structs/police_manager.md`
-§4). Offences are stored as **two adjacent `uint16_t` bitfields**:
+§3). Offences are stored as **two adjacent `uint16_t` bitfields**:
 
 - `offense_bits_a` at `pursuit_record + 0x08`
 - `offense_bits_b` at `pursuit_record + 0x0a`
@@ -68,14 +68,15 @@ All bits are **in-game confirmed** with `get_pm_state` plus live memory reads.
 | 10 | `0x0400` | `+0x09` | running a red light | `police_manager_tick` red-light block (`+9 \|= 4`) | `police_manager_tick` (`+9 &= 0xEB` on `+0x24` expiry — shared w/ bit 12) | decay `+0x24` (≤10 s) | not an offence type in the Mafia Script Data Reference |
 | 11 | `0x0800` | `+0x09` | car theft | `police_manager_set_car_theft_offence_for_target` (`+9 \|= 8`) | `police_manager_tick` (`+9 &= 0xF7` on `+0x0c` expiry) | decay `+0x0c` (car-theft window) | — |
 | 12 | `0x1000` | `+0x09` | traffic sign damaged | `police_manager_register_traffic_sign_offence_for_target` (`+9 \|= 0x10`) | `police_manager_tick` (`+9 &= 0xEB` on `+0x24` expiry — shared w/ bit 10) | decay `+0x24` (≤20 s) | car-hit or gunfire both set it |
-| 13 | `0x2000` | `+0x09` | assault on a police officer | `police_manager_register_assault_on_police_officer_for_target` (`+9 \|= 0x20`) | `police_manager_record_clear_pursuit_state` (full record reset; survives dormant reset) | **no decay** — persists until record reset | `get_pm_state zz=13` reads spurious (§9) |
+| 13 | `0x2000` | `+0x09` | assault on a police officer | `police_manager_register_assault_on_police_officer_for_target` (`+9 \|= 0x20`) | `police_manager_record_clear_pursuit_state` (full record reset; survives dormant reset) | **no decay** — persists until record reset | `get_pm_state zz=13` reads bit 12 instead (§4) |
 | 14 | `0x4000` | `+0x09` | force handcuffs | `police_manager_escalate_handcuffs_with_optional_wanted` (`+9 \|= 0x40`) | `police_manager_record_clear_pursuit_state` (full record reset; survives dormant reset) | **no decay** — persists until record reset | script-only (`POLICEMANAGER_FORCEARREST`) |
 | 15 | `0x8000` | `+0x09` | assault on a police car | `police_manager_register_assault_on_police_car_for_target` (`+9 \|= 0x80`) | `police_manager_try_dispatch_pursuit_for_target` (`+9 &= 0x7f`) | **transient** — consumed on the next dispatch pass (same frame) | also sets `+0x6c` severe-impact flag (severity > 9.7) |
 
 Notes:
 - **The `+0x09` high byte is one field**, shared between the get_pm_state bits (9/11/12) and the
   escalation-only bits (13/14/15) — not two separate fields.
-- **Bits 7, 8 have no writer** — in-game `get_pm_state zz=7`/`zz=8` never returned 1 (confirms unused).
+- **Bits 7, 8 have no writer** — in-game `get_pm_state zz=7`/`zz=8` never returned 1, and every OR or
+  store into `+0x08`/`+0x09` in `Game.exe` uses one of the masks in this table.
 - `+0x6c` (set by `police_manager_register_assault_on_police_car_for_target`) is the **severe-impact** flag
   (`impact-severity > 9.7`)
 - **Bit 15 is a transient "alert-pending / needs-dispatch" bit, not a persistent offence.** The
@@ -154,7 +155,7 @@ Notes:
 | 2 speeding (heavy) | 2 "Speeding!" | handcuffs (2) | speeding bit + live target; speed > arrest threshold; pending < 2 | `police_manager_tick` |
 | 3 contact — destroyable prop (light) | 3 "Crash!" | fine (1) | struck a destroyable prop (DEFAULT branch); severity > 8.3 (≤ 19.4); pending 0 | `police_manager_register_collision_offence_for_target` |
 | 3 contact — destroyable prop (hard) | 3 "Crash!" | handcuffs (2) | destroyable prop; severity > 19.4; pending < 2 | `police_manager_register_collision_offence_for_target` |
-| 3 contact — static world | — | — (none) | NULL / no struck entity (road edges, tram tracks, scenery) → **SILENT** branches: bit set, no escalation | — (bit only — `police_manager_register_collision_offence_for_target`) |
+| 3 contact — static world | — | — | NULL / no struck entity (road edges, tram tracks, scenery) → **SILENT** branches: bit set, no escalation | — |
 | 4 car crash (light) | 3 "Crash!" | fine (1) | struck a vehicle (type 4); severity > 4.2 (≤ 13.9); pending 0 | `police_manager_register_collision_offence_for_target` |
 | 4 car crash (hard) | 3 "Crash!" | handcuffs (2) | struck a vehicle; severity > 13.9; pending < 2 | `police_manager_register_collision_offence_for_target` |
 | 5 run-over (light) | 3 "Crash!" | fine (1) | struck a character/NPC (type 2/0x13/0x1b); severity > 2.8 and < 8.3; run_over_count < 6; pending < 3 | `police_manager_register_collision_offence_for_target` |
@@ -163,14 +164,16 @@ Notes:
 | 6 sidewalk | 4 "Driving on sidewalk!" | fine (1) | sidewalk bit + on-sidewalk timer `+0x14` > 5800 ms; pending 0. **UNREACHABLE** — timer hard-clamped to 5000 (§8) | `police_manager_tick` |
 | 9 violence | 5 "Violence seen!" | handcuffs (2) | melee / punch hits a pedestrian; pending < 2 | `police_manager_register_violence_offence_for_target` |
 | 10 running a red light | 6 "Running red lights!" | fine (1) | crosses a controlled road-edge while signal `g_traffic_light_states[idx] == 1` (first sighting); pending 0 | `police_manager_tick` (red-light / road-edge block) |
-| 11 car theft | 7 "Car theft!" | handcuffs (2) | car-theft (arrest-assist) bit `0x08@+9` set; pending < 2 | `police_manager_tick` (bit set by `police_manager_set_car_theft_offence_for_target`) |
+| 11 car theft | 7 "Car theft!" | handcuffs (2) | car-theft bit `0x08@+9` set; pending < 2 | `police_manager_tick` (bit set by `police_manager_set_car_theft_offence_for_target`) |
 | 12 traffic-sign damage | 8 "Traffic sign damaged!" | fine (1) | traffic-sign damage (car-hit **or** gunfire); pending 0 | `police_manager_register_traffic_sign_offence_for_target` |
 | 13 assault on a police officer | 9 "Assault on Police!" | gun (3) | assault-on-officer bit `0x20@+9` set; pending < 3 | `police_manager_tick` (bit set by `police_manager_register_assault_on_police_officer_for_target`) |
 | 14 force handcuffs | — | handcuffs (2) | force-handcuffs bit `0x40@+9` set (script `POLICEMANAGER_FORCEARREST`); pending < 2 | `police_manager_tick` (bit set by `police_manager_escalate_handcuffs_with_optional_wanted`) — no action_code |
 | 15 assault on a police car (light) | 10 "Assault on Police car!" | fine (1) | assault-on-car bit `0x80@+9` set; **not** severe (`+0x6c` == 0); pending 0 | `police_manager_tick` (bit set by `police_manager_register_assault_on_police_car_for_target`) |
 | 15 assault on a police car (severe) | 10 "Assault on Police car!" | handcuffs (2) | assault-on-car bit set; **severe** (`+0x6c` set, severity > 9.7); pending < 2 | `police_manager_tick` (bit set by `police_manager_register_assault_on_police_car_for_target`) |
 
-(Bits 7 and 8 are unused — no writer, no escalation.) The `action_code` arbitration when several
+The static-world contact bit is set by `police_manager_register_collision_offence_for_target` on its
+SILENT branches, which write no `action_code` and no pending state. (Bits 7 and 8 are unused — no
+writer, no escalation.) The `action_code` arbitration when several
 offences land together (which string wins) is the monotonic pending gate — see §5.3.
 
 ### 2.4 Bit 0 — weapon equipped
@@ -196,7 +199,7 @@ cases differ only in a side effect, gated on the suspect's linked-vehicle pointe
 
 - **On foot** (`+0x98 == 0`): besides setting the bit, `police_manager_tick` calls
   `pedestrian_manager_make_pedestrian_watch_player_on_weapon_drawn` — a proximity marker on enabled
-  NPC zones within ~25 units of the player; the downstream effect is unconfirmed.
+  NPC zones within ~25 units of the player.
 - **In a car / window-aim** (`+0x98 != 0`): the bit is set, but the NPC-zone marker is **not** placed.
 
 **Guns and throwables only — not melee.** A **melee** weapon (e.g. baseball bat, id 4) has a
@@ -242,11 +245,11 @@ Each timer is decremented by the frame dt; when it reaches 0 the listed bit(s) c
 
 | Bit(s) cleared | When | Timer field | Window length / how it is set |
 |---|---|---|---|
-| `bits_a` `0x02` — shooting (bit 1) | `+0x10` reaches 0 | `last_fire_time` | **+5000 ms per shot, clamp ≤ 60000 ms** — `police_manager_register_gunfire_offence_for_target` (sustained fire builds up to 60 s) |
+| `bits_a` `0x02` — shooting (bit 1) | `+0x10` reaches 0 | `last_fire_time_ms` | **+5000 ms per shot, clamp ≤ 60000 ms** — `police_manager_register_gunfire_offence_for_target` (sustained fire builds up to 60 s) |
 | `bits_a` `0x08`/`0x10`/`0x20` — contact 3 / crash 4 / run-over 5 | `+0x18` reaches 0 | `collision_short_timer` | **≤ 4000 ms** — `police_manager_register_collision_offence_for_target` raises it to a severity-scaled value, clamped to 4000 (short collision window) |
-| `bits_b` `0x08`/`0x10`/`0x20` — 3 / 4 / 5 (long-decay mirror) | `+0x1c` reaches 0 | `last_crash_time` | **≤ 20000 ms** — same registrar, clamp 20000 (long collision window) |
+| `bits_b` `0x08`/`0x10`/`0x20` — 3 / 4 / 5 (long-decay mirror) | `+0x1c` reaches 0 | `last_crash_time_ms` | **≤ 20000 ms** — same registrar, clamp 20000 (long collision window) |
 | `bits_a` `0x0200` — violence (bit 9) | `+0x20` reaches 0 | `violence_event_timer` | **+5000 ms per hit, NO clamp — accumulates** — `police_manager_register_violence_offence_for_target`. A single punch = 5 s; sustained melee keeps extending it by 5 s per landed hit. The **only** offence timer without a ceiling. |
-| `bits_a` `0x0400` + `0x1000` — red light (bit 10) **and** traffic sign (bit 12) | `+0x24` reaches 0 | `running_red_timer` | **+4000 ms per event** — the red-light block clamps to 10000 ms, `police_manager_register_traffic_sign_offence_for_target` clamps to 20000 ms. **Shared timer:** the `& 0xEB` expiry clears **both** bits at once |
+| `bits_a` `0x0400` + `0x1000` — red light (bit 10) **and** traffic sign (bit 12) | `+0x24` reaches 0 | `running_red_or_sign_damage_timer` | **+4000 ms per event** — the red-light block clamps to 10000 ms, `police_manager_register_traffic_sign_offence_for_target` clamps to 20000 ms. **Shared timer:** the `& 0xEB` expiry clears **both** bits at once |
 | `bits_a` `0x0800` — car theft (bit 11) | `+0x0c` reaches 0 | `car_theft_timer` | **fixed 5000 ms** — `police_manager_set_car_theft_offence_for_target` sets it to the constant 5000 (NOT per-car). The different *steal times* per car are the steal **animation/process** re-arming the bit each tick while you break in; this 5 s is only the post-steal decay |
 
 Each sticky bit auto-expires after its window, so `get_pm_state` reflects **recent** offences.
@@ -284,9 +287,9 @@ get_pm_state xx, yy, zz
 
 `xx` = actor index (0 = player), `yy` = destination `flt[]` slot, `zz` = the offence type of the
 Mafia Script Data Reference. The case-0xae decomp ANDs `argv[2]` with the bits directly; the
-operand reaching the AND is **already the mask `1 << zz`** (the shift is produced before this
-point — see §9 for the one unresolved mechanism detail). The bit↔offence map is in §2.1
-(byte-traced).
+operand reaching the AND is **already the mask `1 << zz`**: the shift happens at script load, where
+`program_decode_params` case `0xae` (VA `0x005b0428`..`0x005b043d`) stores `1 << min(zz, 12)`, and
+a negative `zz` gives mask 1. The bit↔offence map is in §2.1 (byte-traced).
 
 **The mask is `1 << zz`, not a raw bitmask.** Reading the literal `argv[2] & bits` as "`zz` is a
 raw bitmask" (so `zz`=6 → mask `0x06`) contradicts the only shipped consumer: mission
@@ -294,11 +297,10 @@ raw bitmask" (so `zz`=6 → mask `0x06`) contradicts the only shipped consumer: 
 driving, which only `(1<<zz) & bits` (zz=6 → `0x40`) produces. Every observed call fits that model.
 
 **In-game `get_pm_state` sweep.** Bits 0–12 were verified one-by-one in normal play with a
-purpose-written test script that prints each result. **`zz ≥ 13` is unreliable** — once the traffic
-sign damage bit (12) is set, `get_pm_state zz=13/14/15/16` *also* return 1, so the command is only
-trustworthy for `zz = 1..12`. The command was evidently not intended to be used past bit 12; this is
-also why the Mafia Script Data Reference documents bit 13 as a duplicate "traffic sign" type — it is
-reading spurious state, not a distinct offence. See §9.
+purpose-written test script that prints each result. **`zz ≥ 13` reads bit 12**: because the loader
+clamps `zz` to 12, `get_pm_state zz=13/14/15/16` all query the traffic sign damaged bit and return 1
+exactly when it is set, so the command is trustworthy for `zz = 0..12` only. This is also why the
+Mafia Script Data Reference documents bit 13 as a duplicate "traffic sign" type.
 
 ### 4.1 Real script usage — mission `MISE02A-TAXI` is the only mission that uses `get_pm_state`
 
@@ -386,7 +388,7 @@ edge, straddling it, with signal `g_traffic_light_states[idx] == 1`.
 | 4 | 2104 | Driving on sidewalk! | `police_manager_tick` escalation | sidewalk timer `+0x14 > 5800` — **unreachable (§8)** |
 | 5 | 2105 | Violence seen! | `police_manager_register_violence_offence_for_target` | violence/punch (also bit `0x200`, zz 9) |
 | 6 | 2106 | Running red lights! | `police_manager_tick` escalation | player crosses a controlled road-edge while signal `g_traffic_light_states[idx] == 1` |
-| 7 | 2107 | Car theft! | `police_manager_tick` escalation | bit `1<<11` (`set_arrest_assist`) → pending handcuffs |
+| 7 | 2107 | Car theft! | `police_manager_tick` escalation | bit `1<<11` (writer `police_manager_set_car_theft_offence_for_target`) → pending handcuffs |
 | 8 | 2108 | Traffic sign damaged! | `police_manager_register_traffic_sign_offence_for_target` | fine offence (also bit `0x1000`, zz 12) |
 | 9 | 2109 | Assault on Police! | `police_manager_tick` escalation | escalation bit 13 (`+9 & 0x20`, writer `police_manager_register_assault_on_police_officer_for_target`) |
 | 10 | 2110 | Assault on Police car! | `police_manager_tick` escalation | escalation bit 15 (`+9 & 0x80`, writer `police_manager_register_assault_on_police_car_for_target`) |
@@ -549,7 +551,7 @@ sight. The sidewalk line shares this gate too; it is additionally blocked by a s
   Because gun-tier noticing is omnidirectional (above), any cop within the gun radius then notices
   regardless of facing or sight, so the shooter can be far away and out of view. (Assault on a police
   officer also reaches gun, but is inherently close-range: you must be next to the officer to commit
-  it.) The exact code site that drops the LOS raycast at gun is not fully traced — §9.
+  it.)
 - **Speeding** prints through the normal dispatch like every other offence (`police_manager_tick`
   sets `action_code` 2 → `police_manager_try_dispatch_pursuit_for_target` prints 2102 foot / 2152 car).
   A *separate* hard-coded 2102 print exists in `pedestrian_advance_to_next_node`, but it is **dead code** (§5.4).
@@ -558,7 +560,7 @@ sight. The sidewalk line shares this gate too; it is additionally blocked by a s
 
 ## 7. Cross-references
 
-- `structs/police_manager.md` §4 — `pursuit_record` field layout.
+- `structs/police_manager.md` §3 — `pursuit_record` field layout.
 - `police-system/artifacts/police-system.md` — runtime behaviour, textdb string list, call chain.
 - `police-system/artifacts/police-manager.md` — the pursuit state machine and dispatch sequence.
 - `script-mapping/artifacts/opcodes-verified.md` — `get_pm_state` (case 0xae) + the `get_pm_*` cluster.
@@ -604,17 +606,23 @@ alternate-mode selector (0 → normal strings 2100–2110 / 2150–2160; non-0 �
 
 ## 9. Open items
 
-1. **The `1 << zz` shift site.** Case 0xae ANDs `argv[2]` directly, so the operand is the
-   pre-shifted mask. Whether the script compiler emits `1<<zz` into the `.klz`/`.def` or the VM
-   argument-decode shifts it is **not determinable from `Game.exe` alone** (it needs the offline
-   compiler or the raw dispatch asm). The storage model and bit map are solid regardless.
-   In game, the `(1<<zz) & bits` model is confirmed for `zz = 1..12`; for `zz ≥ 13` the read is
-   corrupted — querying 13/14/15/16 returns 1 as soon as the traffic sign damaged bit (12) is set.
-   This is consistent with an as-yet-unidentified mask layer on `argv[2]` that only behaves for the
-   designed `zz` range.
-2. **The code site that drops the LOS raycast at gun** is not fully traced (§6). The behaviour is
-   in-game confirmed and the below-gun flag is byte-confirmed; the exact raycast bypass is not.
-3. **Identity retention after an in-car assault on an officer.** Committing the offence while in a
+1. **The code site that drops the LOS raycast at gun** is not fully traced (§6). The behaviour is
+   in-game confirmed and the below-gun flag is byte-confirmed. At gun both activation paths drop
+   only their facing gate and still run their occlusion raycast:
+   `pedestrian_manager_spawn_cop_from_pedestrian` skips it only for a cop within 1 m (layer mask
+   `0x100000`), and `traffic_car_activate_or_spawn_pursuit_vehicles` always runs its static-geometry
+   line test. The through-occlusion noticing therefore comes from what those two raycasts treat as
+   an obstacle, or from another site; which one is open.
+2. **Identity retention after an in-car assault on an officer.** Committing the offence while in a
    car and then leaving that car unseen (transparent gun state) leaves the identity known — no
    searching icon appears. Stealing another car after that does make the searching icon appear
-   (identity pending). The mechanism is not traced; pending in-game testing.
+   (identity pending). Two traced paths produce exactly this; both set the face-known flag of the
+   squads chasing the player (`police_action+0x68`) while leaving their known vehicle at the old car
+   or at "none" (`structs/police_manager.md` §3.2): **(a)** `entity_hit` — the car striking a police
+   officer whose squad targets the driver forces `police_board_update_sighting(driver, 0, 1)`, which
+   records the current car and the face on every squad; **(b)** the no-decay bit 13 re-derives
+   pending gun every inner tick, so `police_manager_try_dispatch_pursuit_for_target` keeps
+   activating cops omnidirectionally, and the first squad created after the player leaves the car
+   refreshes every squad to "on foot, face known". Which path fires in a given assault is open. Path
+   (b) reprints "Assault on Police!" at the moment of re-identification and makes the original car
+   read as unknown on re-entry; path (a) does neither.

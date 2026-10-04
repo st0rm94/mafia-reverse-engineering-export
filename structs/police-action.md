@@ -1,6 +1,6 @@
 # `police_action` — Pursuit-Squad Struct (0x6C bytes)
 
-**Created** 2026-07-08 22:08 +0200 · **Modified** 2026-09-17 17:54 +0200
+**Created** 2026-07-08 22:08 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Type `ai_police_action`. One `police_action` is one officer squad chasing one suspect.
 Reconstructed from `Game.exe` disassembly and static analysis of the annotated decomp; no runtime
@@ -30,13 +30,13 @@ partly inferred; **[L]** weak/preliminary; **[U]** never observed.
 
 ```c
 typedef struct police_action {              // 0x6C bytes; element of the police_board's stride-0x6c vector at board+0x10
-    /* +0x00 */ uint32_t  _unk_00;              // [U] not observed (session-id slot +0x30 is the stamped ID; this is separate)
+    /* +0x00 */ uint32_t  officers_alloc;       // [H] allocator word of the roster std::vector object that starts here; never accessed
     /* +0x04 */ officer** officers_begin;       // [H] std::vector<officer*> — the squad roster pursuing target_npc
     /* +0x08 */ officer** officers_end;         // [H]
     /* +0x0C */ officer** officers_cap;         // [M]
     /* +0x10 */ float     anchor_pos[3];        // [H] +0x10..+0x18 last-sighting world position (the "go to point" anchor)
-    /* +0x1C */ float     anchor_dir[3];        // [M] +0x1C..+0x24 last-sighting direction (normalised)
-    /* +0x28 */ uint32_t  last_sighting_ts_ms;  // [M] last-sighting timestamp; 0 = never sighted (disband guard pre-on-foot)
+    /* +0x1C */ float     anchor_dir[3];        // [H] +0x1C..+0x24 last-sighting direction (normalised)
+    /* +0x28 */ uint32_t  last_sighting_ts_ms;  // [H] last-sighting timestamp; 0 = never sighted (disband guard pre-on-foot)
     /* +0x2C */ uint32_t  tier;                 // [H] the RESPONSE TIER, not a phase: 0/1 gun, 2/3 fine, 4/5 handcuffs, 6 roadblock, 7 disbanded (§3)
     /* +0x30 */ uint32_t  session_id;           // [M] pursuit-session ID stamped from police_board+0x20; propagates to officers' +0xf54
     /* +0x34 */ uint32_t  on_foot_phase_flag;   // [H] 0 = vehicle phase, 1 = on-foot (exit-vehicle / arrest) phase entered. ALSO the disband tier stash — §3a
@@ -48,7 +48,7 @@ typedef struct police_action {              // 0x6C bytes; element of the police
     /* +0x4C */ uint32_t  cancel_order_timer_ms;// [H] accumulates frame dt while the chase vehicle is stuck; >10000 ⇒ cancel order / advance FSM
     /* +0x50 */ uint32_t  flags;                // [H] bit0 = active (recomputed each tick); bit1 = redispatch-orders request; bits 0x20|0x40 backup re-request; bit2 = vehicle lost
     /* +0x54 */ uint32_t  backup_rerequest_deadline;// [H] game-time deadline; on pass, re-arms backup request (sets +0x50 0x20|0x40) and pushes +3000ms
-    /* +0x58 */ uint32_t  _unk_58;              // [U]
+    /* +0x58 */ uint32_t  _unk_58;              // [H] set to 0 at creation, copied by the element helpers, never read
     /* +0x5C */ vehicle*  group_vehicle;        // [H] the squad's chase vehicle (0 when on foot / lost)
     /* +0x60 */ npc*      target_npc;           // [H] the suspect this squad pursues (match key for all _by_target ops)
     /* +0x64 */ vehicle*  tracked_target_vehicle;// [H] the vehicle the target was last seen in (compared to target+0x98)
@@ -63,10 +63,11 @@ The squad's own per-frame driver is `police_action_tick`; the sighting helper is
 
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
+| +0x00 | officers_alloc | H | - | - | Allocator word of the `std::vector<officer*>` object that starts here; the MSVC vector code never touches it. |
 | +0x04/08/0C | officers_begin/end/cap | H | `police_board_create_and_engage` (bind roster); `police_action_tick` (pop dead officer ¹); `police_board_invalidate_actor` (remove dead npc); `police_action_disband` (`end = begin`) | `police_action_tick`; `police_action_find_officer_index`; `police_action_dispatch_officer_commands`; `police_action_tick_sighting_timers`; `police_board_is_actor_in_pursuit` | `std::vector<officer*>`, stride 4. Officers non-owning. |
-| +0x10..0x18 | anchor_pos[3] | H | `police_board_update_sighting` (writes target frame pos) | `police_action_tick` (offset arg of the "go to point" pursuit event in states 1/3) | Last-sighting world position. |
-| +0x1C..0x24 | anchor_dir[3] | M | `police_board_update_sighting` (normalised direction) | - | Last-sighting facing; no in-tick reader located. |
-| +0x28 | last_sighting_ts_ms | M | `police_board_update_sighting` (bumps timestamp) | `police_action_tick` (`== 0` ⇒ never sighted ⇒ disband when target leaves the tracked vehicle before on-foot) | Timestamp, ms game time. |
+| +0x10..0x18 | anchor_pos[3] | H | `police_board_update_sighting` ⁴ | `police_action_tick` (offset arg of the "go to point" pursuit event in states 1/3); `entity_action_tick` cases `0x1e`/`0x21` (copied into the task's cached target position when the officer's vehicle state differs from the squad's) | Last-sighting world position. |
+| +0x1C..0x24 | anchor_dir[3] | H | `police_board_update_sighting` ⁴ (normalised direction) | `entity_action_tick` cases `0x1e`/`0x21` (copied into the task's cached forward vector, same gate as `anchor_pos`) | Last-sighting facing; `police_action_tick` does not read it. |
+| +0x28 | last_sighting_ts_ms | H | `police_board_update_sighting` ⁴ (cleared to 0, then set to the game clock or to the newest officer report) | `police_action_tick` (`== 0` ⇒ never sighted ⇒ disband when target leaves the tracked vehicle before on-foot); `entity_action_tick` cases `0x1e`/`0x21` (copied into task slot `[0xb]`, the same sighting-time slot `ai_sensors_get_smelled_target_info` fills; `!= 0` gates the position copy, and a scent blob is accepted only when its `emitted_ms` is newer) | Timestamp, ms game time. |
 | +0x2C | tier | H | see ² | `police_action_tick` (both switches); `police_action_tick_sighting_timers`; `police_action_dispatch_officer_commands` | **Response TIER, not a chase phase** — §3 table. |
 | +0x30 | session_id | M | `police_board_create_and_engage` (from `police_board_increment_counter`) | `police_board_find_group_by_session_id`; `entity_spawn_police_response` (stamps officers' +0xf54) | Unique per chase. |
 | +0x34 | on_foot_phase_flag | H | see ³ | `police_action_tick` (phase branch in every tier case); `police_action_tick_sighting_timers` (`==0` fast path); `police_action_dispatch_officer_commands` (tier 7 reads the stash back) | 0 = vehicle phase, 1 = on-foot phase — **except on the disband path, §3a**. |
@@ -78,6 +79,7 @@ The squad's own per-frame driver is `police_action_tick`; the sighting helper is
 | +0x4C | cancel_order_timer_ms | H | `police_action_tick` (`+= dt` when `car_is_usable(2)` false; `= 0` when true; `= 20000` when channel-1 false) | `police_action_tick` (`>10000` ⇒ cancel vehicle order + advance FSM) | Stuck-vehicle watchdog. |
 | +0x50 | flags | H | `police_action_tick` (bit0 recompute via `ai_action_manager_has_action(0x23)`; clear bit1 after dispatch; set `0x20\|0x40` on backup re-request); `police_action_on_vehicle_lost` (set bit2) | `police_action_tick`; `police_board_has_active_group_for_target` (bit0); `police_board_target_matches` | bit0 = active, bit1 = redispatch request, bit2 = vehicle lost. |
 | +0x54 | backup_rerequest_deadline | H | `police_action_tick` (`= game_time + 3000` on pass) | `police_action_tick` (`+0x54 < game_time` ⇒ re-arm backup, set flags `0x20\|0x40`) | Game-time deadline. |
+| +0x58 | _unk_58 | H | `police_board_create_and_engage` (0, once) | - | Copied by the four element helpers (§6); no reader in the `police_action` code or among the 21 consumers of `police_board_find_group_by_*`. |
 | +0x5C | group_vehicle | H | `police_action_tick` (`= 0` on drop); `police_action_on_vehicle_lost` (clear); `police_board_invalidate_actor` (clear if vehicle == npc) | `police_action_tick` (chase-order logic); `police_action_disband` (`!= 0` ⇒ transfer ownership); `police_board_release_all_group_vehicles` | `vehicle*`; 0 = on foot / lost. |
 | +0x60 | target_npc | H | `police_board_create_and_engage` | `police_action_tick`; `police_board_target_matches`; `police_board_is_actor_in_pursuit`; `police_board_invalidate_actor`; `police_board_has_active_group_for_target`; `police_board_broadcast_for_target`; `police_board_disband_by_target` | The pursued suspect. |
 | +0x64 | tracked_target_vehicle | H | `police_board_refresh_target_vehicle` (`= target+0x98`); `police_board_update_sighting` (force branch) | `police_action_tick` (`== target+0x98` keeps the chase live); `police_action_tick_sighting_timers`; `police_board_target_matches` | Vehicle the target was seen in. |
@@ -95,6 +97,13 @@ The squad's own per-frame driver is `police_action_tick`; the sighting helper is
 ³ `police_action_tick` (1 on entering the exit-vehicle/arrest phase; 0 when re-issuing the vehicle
 order); `police_action_on_vehicle_lost` (1); `police_action_dispatch_officer_commands` (1);
 `police_action_disband` (with-car path: stashes the pre-disband TIER here, §3a).
+
+⁴ `police_board_update_sighting`'s batch walk, per squad whose target matches: it first clears
+`+0x28` to 0. In the in-car tiers 0/2/4 with `+0x34 == 0` it then copies the target's own frame
+position and normalised forward vector into `+0x10`/`+0x1c` and sets `+0x28` to the game clock
+(`C_game+0x2b0c`). In every other case it walks the roster and, for each `C_entity` officer (kind
+`0x1b`) whose `ai_sensors_get_smelled_target_info` report is newer than `+0x28`, copies that
+report's position, direction and time. With no such report `+0x28` stays 0.
 
 ## 3. Squad tiers (`+0x2c`)
 
@@ -270,14 +279,18 @@ as a method. Only `police_action_copy_ctor` and `police_action_assign` are real 
   | `police_action_on_vehicle_lost` | `ZbavSeAutaSmrdi__16ai_police_action` | CONFIRMED |
   | `police_board_create_and_engage` | `MamProVasAkciHosi__18ai_police_nastenka` | CONFIRMED |
   | `police_board_end_pursuit` | `AkceDokoncenaPlukovniku__18ai_police_nastenka` | CONFIRMED |
-  | `police_action_copy_ctor` | `__ct__16ai_police_actionFRC16ai_police_action` | CONFIRMED (ratio 1.33) |
+  | `police_action_copy_ctor` | `__ct__16ai_police_actionFRC16ai_police_action` | CONFIRMED ² |
   | `police_action_assign` | `__as__16ai_police_actionFRC16ai_police_action` | CONFIRMED |
   | `police_action_vector_insert_at` | `reserve__Q23gif28vector<16ai_police_action,8>Fi` | STRUCTURAL ¹ |
-  | `ai_action_new_police_call` | `NewPoliceCall__17ai_action_manager` | see `structs/entity.md` §6b |
+  | `ai_action_new_police_call` | `NewPoliceCall__17ai_action_manager` | CONFIRMED ³ |
 
   ¹ PS2's `reserve(n)` is only the grow-and-move core, while PC's function is
   `insert(pos, n, val)` — it *contains* that core plus the position split and the fill. Same
   algorithm, different API boundary, which is also why the size ratio reads 2.35.
+
+  ² Size ratio 1.33.
+
+  ³ Paired 1:1 on the `ai_action` type id `0x28` (`structs/entity.md` §6b).
 - **`police_action_assign`'s ratio 2.18** has the same cause in reverse: PS2 delegates the grow
   to `gif::vector::reserve`; MSVC inlines it.
 - **The other five vector helpers have no PS2 twin.** Metrowerks inlined the equivalent loops
@@ -314,5 +327,3 @@ as a method. Only `police_action_copy_ctor` and `police_action_assign` are real 
 ## 10. Open items
 
 - **Runtime validation.** The layout is static-analysis only; no field has been watched live.
-- `+0x00` and `+0x58` are never observed.
-- `+0x1c..+0x24` (`anchor_dir`) has no located reader in the tick.

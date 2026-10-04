@@ -1,6 +1,6 @@
 # `police_manager` & `pursuit_record` — struct layout
 
-**Created** 2026-07-20 19:59 +0200 · **Modified** 2026-09-28 19:34 +0200
+**Created** 2026-07-20 19:59 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Two C++ structs (unnamed in the binary) reconstructed from static analysis of
 `Game-ghidra.exe.annotated.c`. **`police_manager`** is the police tracker embedded as a **SINGLE
@@ -8,7 +8,7 @@ instance** in the C_game game-world singleton at `C_game + 0x2DA0` (reached as
 `*(g_act_mission+0x24)+0x2DA0`, `g_act_mission` = `0x0065115c`) — **not per-actor** (byte-proven,
 §1). **`pursuit_record`** is one heap record per tracked suspect, owned by the manager's records
 vector. Field names match the rest of the police docs. This file is the spec; the `Conf` columns flag
-how solid each field is, and runtime validation with Cheat Engine / ReClass is still pending.
+how solid each field is (§9).
 
 ---
 
@@ -23,7 +23,7 @@ C_game object  (the game-world singleton, *(g_act_mission+0x24))
 |   +0x50  police_vehicles[]     reserve pool (cars)       |
 |   +0x60  spike_strips[]        reserve pool (barriers)   |
 |   +0x70  foot_cops[]           reserve pool (npc*)       |
-|   +0x80  npc_list[]            vector<npc*> (tracked)    |
+|   +0x80  npc_list[]            despawn list (actor*)     |
 |   +0x90  tracked_police_cars[] cars the manager owns      |
 |   +0xA0  rndr_arr_b[]          vector<uint16_t>          |
 +----------------------------------------------------------+
@@ -61,7 +61,7 @@ pursuit_record   (heap, 0x80 bytes, one per tracked suspect)
   `+0x00 target`. `police_manager_*` / `*_for_target` in the tables below therefore denote that whole
   defined family (not one function); the **authoritative enumerated list is the function registry**,
   and the specific members that touch each field are the named readers/writers cited in §2.1 / §3.1.
-  The separate `pursuit_group_*` / `pursuit_group_manager_*` officer-squad system operates on its own
+  The separate `police_board_*` / `police_action_*` officer-squad system operates on its own
   objects (§4).
 
 ---
@@ -106,13 +106,13 @@ typedef struct police_manager {
     /* +0x74 */ void*     foot_cops_end;
     /* +0x78 */ void*     foot_cops_cap;
     /* +0x7C */ uint8_t   _unk_7c[0x04];
-    /* +0x80 */ npc**     npc_list_begin;           // std::vector<npc*> — NPCs this manager tracks
-    /* +0x84 */ npc**     npc_list_end;
-    /* +0x88 */ npc**     npc_list_cap;
+    /* +0x80 */ actor**   npc_list_begin;           // std::vector<actor*> — temporary cars and NPCs to despawn out of range (§2.3)
+    /* +0x84 */ actor**   npc_list_end;
+    /* +0x88 */ actor**   npc_list_cap;
     /* +0x8C */ uint8_t   _unk_8c[0x04];
-    /* +0x90 */ C_car**   tracked_cars_begin;       // cars the manager must clean up
-    /* +0x94 */ C_car**   tracked_cars_end;
-    /* +0x98 */ C_car**   tracked_cars_cap;
+    /* +0x90 */ C_car**   tracked_police_cars_begin; // cars the manager must clean up
+    /* +0x94 */ C_car**   tracked_police_cars_end;
+    /* +0x98 */ C_car**   tracked_police_cars_cap;
     /* +0x9C */ uint8_t   _unk_9c[0x04];
     /* +0xA0 */ uint16_t* rndr_arr_b_begin;         // std::vector<uint16_t> — visibility-cell indices
     /* +0xA4 */ uint16_t* rndr_arr_b_end;
@@ -138,14 +138,14 @@ typedef struct police_manager {
 | +0x28 | tick_period_vestigial | M-vest | `police_manager_ctor` (200); `police_manager_game_init` (4013) | none | ~0.25 Hz if it were read. |
 | +0x2C / +0x30 | _unk_2c / _unk_30 | U-vest | `police_manager_ctor` (→0); `police_manager_game_init` (→0) | none | Zeroed pair, no period, no readers. |
 | +0x34 | _unused_xx | H | `police_manager_apply_state` | none | `policemanager_on xx` cache; never read. |
-| +0x38 | busted_cutscene_lock | H | `police_manager_set_busted_cutscene_lock` (→1 set / →0 clear, in `entity_action_tick` case 0x21 player capture — arrest OR fine); `police_manager_apply_state` (→0 on activate) | `police_manager_target_identity_pending`; `police_manager_tick`; `police_manager_try_dispatch_pursuit_for_target`; `police_manager_record_clear_pursuit_state` | **LIVE** (not dead): 1 while the player is in a busted cutscene → suppresses the searching HUD icon, identity-pending and pursuit re-dispatch; else 0. §2.4. |
+| +0x38 | busted_cutscene_lock | H | `police_manager_set_busted_cutscene_lock` (→1 set / →0 clear, in `entity_action_tick` case 0x21 player capture — arrest OR fine); `police_manager_apply_state` (→0 on activate) | `police_manager_target_identity_pending`; `police_manager_tick`; `police_manager_try_dispatch_pursuit_for_target`; `police_manager_record_clear_pursuit_state` | 1 while the player is in a busted cutscene → suppresses the searching HUD icon, identity-pending and pursuit re-dispatch; else 0. §2.4. |
 | +0x39 | vehicle_tier | H | `police_manager_apply_state` | `police_manager_apply_state` (model-pool select) | Backup-vehicle pool selector. |
 | +0x40/44/48 | records_begin/end/cap | H | `police_manager_register_actor` | the `police_manager_*_for_target` record-lookup family (§1; enumerated in the function registry) | `std::vector<pursuit_record*>`. |
 | +0x50/54/58 | police_vehicles | H | `std_vector8_insert_at` (via `police_manager_apply_state`); `police_manager_dtor` (free) | `police_manager_apply_state`; `police_manager_deploy_vehicle_from_pool`; `police_manager_vehicle_pool_pop_random` | Stride-8 `(vehicle_controller*, meta)`. |
 | +0x60/64/68 | spike_strips | H | `std_vector8_insert_at` (via `police_manager_apply_state`); `police_manager_dtor` | `police_manager_apply_state`; `police_manager_deploy_temp_spike_strip`; `police_manager_spike_strip_pool_pop` | Stride-8 `(spike_strip*, meta)`. spike_strip = PS2 `C_irenka` (kind 0x1f). |
 | +0x70/74/78 | foot_cops | H | `std_vector8_insert_at` (via `police_manager_apply_state`); `police_manager_dtor` | `police_manager_apply_state`; `police_manager_deploy_npc_from_pool`; `police_manager_officer_pool_pop_random` | Stride-8 `(npc*, meta)`. **Not** cleared by `police_manager_game_init`. |
-| +0x80/84/88 | npc_list | H | `police_manager_npc_list_push`; `police_manager_npc_list_erase`; `police_manager_game_init` (clear) | `police_manager_npc_list_push`; `police_manager_npc_list_erase`; `police_manager_npc_list_tick` | `std::vector<npc*>`; elements non-owning. |
-| +0x90/94/98 | tracked_police_cars | H | `police_manager_add_tracked_police_car`; `police_manager_dtor` | `police_manager_apply_state`; `police_manager_game_done`; `police_manager_dtor` | The manager's **tracked police cars**, not a renderer cache: `police_manager_game_done` walks it calling `hud_radar_remove_car` + `game_remove_temporary_actor` on each entry, and the PS2 twin of its writer is `DezoSebralGumyIRadio__10C_shvestkyFP5C_car`, whose parameter is typed `P5C_car`. §7. |
+| +0x80/84/88 | npc_list | H | `police_manager_npc_list_push`; `police_manager_npc_list_erase`; `police_manager_game_init` (clear) | `police_manager_npc_list_push`; `police_manager_npc_list_erase`; `police_manager_npc_list_tick` | `std::vector<actor*>` of cars (kind 4) and `C_entity` NPCs (kind `0x1b`); elements non-owning. §2.3. |
+| +0x90/94/98 | tracked_police_cars | H | `police_manager_add_tracked_police_car`; `police_manager_dtor` | `police_manager_apply_state`; `police_manager_game_done`; `police_manager_dtor` | The manager's **tracked police cars**: `police_manager_game_done` walks it calling `hud_radar_remove_car` + `game_remove_temporary_actor` on each entry. §7d. |
 | +0xA0/A4/A8 | rndr_arr_b | H | `police_manager_apply_state` + `police_manager_tick` visibility refresh (via `std_vector2_insert_at`); `police_manager_dtor` | `police_manager_apply_state`; `police_manager_tick` visibility refresh; `police_manager_dtor` | `std::vector<uint16_t>` (stride-2) — visibility-cell indices. |
 
 ### 2.2 Per-frame tick scheduler
@@ -169,7 +169,7 @@ nowhere. The four operational periods (330/913/217/4013) appear in the binary on
 `police_manager_game_init` — no reload-on-zero re-arm sites, confirming accumulator
 (not countdown) timers.
 
-### 2.3 Reserve pools, npc_list, renderer arrays, lifecycle
+### 2.3 Reserve pools, npc_list, tracked cars and visibility cache, lifecycle
 
 `police_manager` owns seven `std::vector` triples. Three are **pre-loaded reserve pools** for
 pursuit assets — populated up-front by `police_manager_apply_state` (script `POLICEMANAGER_ON`)
@@ -188,12 +188,25 @@ All three are stride-8 `(object*, metadata)` pairs inserted by `std_vector8_inse
 `police_manager_game_init`) means after a soft reset, vehicle/spike-strip deploys
 return 0 until the script re-issues `POLICEMANAGER_ON`; foot-cop deploys stay available.
 
-- **npc_list** (`+0x80`, `std::vector<npc*>`) — NPCs the manager tracks: officers aggregated from each
-  record's officer vector (`record+0x74`), plus script-added slots (`program_process_command` cases
-  0x16b/0x171 = erase/push). Maintained by `police_manager_npc_list_push` / `police_manager_npc_list_erase`; distance-culled each
-  outer tick by `police_manager_npc_list_tick`. Elements are non-owning (`police_manager_dtor` frees
-  the array, not the NPCs).
-- **tracked_police_cars** (`+0x90`) — the police cars the manager must clean up (§2.1, §7).
+- **npc_list** (`+0x80`, `std::vector<actor*>`) — the **despawn list**: temporary cars (kind 4) and
+  `C_entity` NPCs (kind `0x1b`) that the engine spawned or released, deleted once they are out of
+  range. `police_manager_npc_list_tick` (outer tick, mode 0) removes a member more than 150 m from the
+  active camera — a car only when no human or `C_entity` occupies it, and a nearer car whose frame has
+  `+0xac` bit 0 clear; a living `C_entity` in state `+0x5fc == 4` goes when it is released
+  (`+0xf48` bit 3) instead of by distance — by pruning it from every record, invalidating it and
+  freeing it through `police_manager_free_temp_actor` or `game_remove_temporary_actor`; mode 1
+  empties the whole list. The closed set of adders (15 `police_manager_npc_list_push` callsites):
+  the crews and cars of `police_manager_try_dispatch_pursuit_for_target` and
+  `police_manager_spawn_patrol_car_reinforcements_at_radius`, cops promoted by
+  `pedestrian_manager_spawn_cop_from_pedestrian`, gangs from `pedestrian_spawn_gang_on_hit`, mafia
+  crews in `traffic_car_update`, cars `traffic_car_deactivate_element` could not free, exploded cars
+  (`car_explosion`), occupants thrown out (`human_do_throw_occupant_from_car`), officers released by
+  `police_manager_tick` or by `police_manager_unregister_actor`, and the script command
+  `ACTOR_ADDDORICI` (`program_process_command` case `0x171`). Removed without despawn (5
+  `police_manager_npc_list_erase` callsites): the car the player takes (`human_use_actor`), a car
+  `traffic_car_adopt_car_with_new_driver` takes over, and `HUMAN_RETURNTOTRAFF` (case `0x16b`).
+  Elements are non-owning (`police_manager_dtor` frees the array, not the actors).
+- **tracked_police_cars** (`+0x90`) — the police cars the manager must clean up (§2.1, §7d).
   **rndr_arr_b** (`+0xA0`, `std::vector<uint16_t>`) — the visibility cache; it receives
   visibility-cell indices from `police_manager_apply_state` and the `police_manager_tick` middle-tick
   refresh.
@@ -205,7 +218,7 @@ is byte-proven `C_game+0x2DA0` (§1).
 - `police_manager_ctor` — cold init (timer budgets 200; all triples zeroed).
 - `police_manager_game_init` — soft reset: clears records / police_vehicles /
   spike_strips / npc_list (`end = begin`, buffers kept), reseeds timer budgets to operational values;
-  does **not** touch foot_cops or the renderer arrays. Sole caller: `game_init`.
+  does **not** touch foot_cops, tracked_police_cars or rndr_arr_b. Sole caller: `game_init`.
 - `police_manager_dtor` — frees all seven triples, each by releasing the backing array and zeroing
   the three pointers. **No triple destroys its elements**: the records vector's only extra step is a
   call to `stub_noop_args8_00575c00`, whose whole body is `return;`, so the heap `pursuit_record`s
@@ -213,7 +226,7 @@ is byte-proven `C_game+0x2DA0` (§1).
 
 ### 2.4 `+0x38 busted_cutscene_lock` — the player-only suppression lock
 
-The field is **live**. The game sets it to **1** whenever the **player** is captured in a busted
+The game sets it to **1** whenever the **player** is captured in a busted
 cutscene — **both arrest and fine** — in `entity_action_tick` case 0x21 (via
 `police_manager_set_busted_cutscene_lock`, gated on `folded_get_dword_0x10() == 2`, the
 `C_actor::GetKind` role of that folded symbol, = player; callsite VA `0x420081` sets 1,
@@ -225,10 +238,9 @@ re-dispatch. An EXE-patch test that forces the byte to 1 reproduces exactly that
 the player and the searching HUD breaks.
 
 The writer in `entity_action_tick` reaches `+0x38` through
-`act_mission_get_game → game_get_police_block → set`, i.e. from outside the police files.
+`act_mission_get_game → game_get_police_manager → set`, i.e. from outside the police files.
 
-**Cross-platform:** the field exists at `C_shvestky+0x38` on PS2 and is read identically by
-`NeviDoKterePiceVlezl__10C_shvestky` (the same `record+0x51 && +0x38 == 0` gate).
+The PS2 build has the same field and gate (§7d).
 
 **Distinct from `police_board+0x2c`** (`busted_cutscene_active`, read by
 `police_board_is_busted_cutscene_active`): that is the **any-target** board-side "capture cutscene
@@ -256,7 +268,7 @@ typedef struct pursuit_record {
     /* +0x1C */ uint32_t  last_crash_time_ms;      // long (~20 s) collision-bit decay
     /* +0x20 */ uint32_t  violence_event_timer;    // violence-offence decay
     /* +0x24 */ uint32_t  running_red_or_sign_damage_timer; // shared decay for red-light + traffic-sign bits
-    /* +0x28 */ uint32_t  num_of_offences;         // vestigial on PC (never written; reads dead); PS2 PocetPrestupku
+    /* +0x28 */ uint32_t  num_of_offences;         // vestigial: only a rarely-hit gated bump writes it; reads dead (§7d)
     /* +0x2C */ uint8_t   roadblock_eligible_flag; // gun-tier roadblock-eligibility gate
     /* +0x2D */ uint8_t   _unk_2d[0x03];
     /* +0x30 */ uint8_t   _unk_30[0x04];
@@ -302,10 +314,10 @@ typedef struct pursuit_record {
 | +0x1C | last_crash_time_ms | H | `police_manager_register_collision_offence_for_target` (clamp 20000) | `police_manager_get_crashtime_for_target`; `police_manager_tick` | ~20 s long collision window. |
 | +0x20 | violence_event_timer | M | `police_manager_register_violence_offence_for_target` (+5000, no clamp) | `police_manager_tick` (clears bit 9 on expiry) | Accumulates. |
 | +0x24 | running_red_or_sign_damage_timer | M | `police_manager_register_traffic_sign_offence_for_target` (+4000, clamp 20000); `police_manager_tick` red-light block (clamp 10000) | `police_manager_tick` (clears bits 10 + 12 together) | Shared decay for red-light + sign bits. |
-| +0x28 | num_of_offences | U-vest | only the gated bump in `police_manager_record_clear_pursuit_state` (rarely hit) | `police_manager_get_num_of_offences`; `police_manager_tick` (`>2` gate) | Effectively always 0 → readers dead. PS2 `PocetPrestupku` returns it as a 1/2/3 severity tier. |
+| +0x28 | num_of_offences | U-vest | only the gated bump in `police_manager_record_clear_pursuit_state` (rarely hit) | `police_manager_get_num_of_offences`; `police_manager_tick` (`>2` gate) | Effectively always 0 → readers dead. §7d. |
 | +0x2C | roadblock_eligible_flag | H | `police_manager_enable_roadblock_flag_for_target` (1 when substate + state ≥ gun); `police_manager_record_clear_pursuit_state` (→0) | `police_manager_tick` (per-cell roadblock scan, sole reader) | Functional roadblock-eligibility gate. |
 | +0x34 | linked_vehicle_pos_x | H | `police_manager_link_target_to_vehicle` | (no reader located) | Linked vehicle world-X at link time. |
-| +0x38 | linked_vehicle_pos_y | H | `police_manager_link_target_to_vehicle` | (no reader located) | World-Y. Z capture exists but its slot isn't visible in the decomp. |
+| +0x38 | linked_vehicle_pos_y | H | `police_manager_link_target_to_vehicle` | (no reader located) | World-Y (§9). |
 | +0x3C | police_state | H | `police_manager_record_raise_police_state` (loud raisers); `police_manager_tick` (commit from +0x3e) | `police_manager_get_committed_police_state`; `police_manager_enable_roadblock_flag_for_target`; `police_manager_try_dispatch_pursuit_for_target` (radius select) | Committed icon level. Distinct from the wanted substate. |
 | +0x3E | police_state_pending | H | `police_manager_register_collision_offence_for_target`, `police_manager_register_gunfire_offence_for_target`, `police_manager_register_violence_offence_for_target`, `police_manager_register_traffic_sign_offence_for_target` (1/2/3, escalate-only); `police_manager_tick` escalation walk (then zeroed each pass) | `police_manager_tick` (commit + dispatch level); `police_manager_register_collision_offence_for_target` (escalate guard) | Re-derived from current offence bits each inner tick. |
 | +0x40 | collision_episode_timer | H | `police_manager_register_actor` (-1); `police_manager_register_collision_offence_for_target` (5000 on first hit) | `police_manager_register_collision_offence_for_target` (`<0` first-vs-repeat); `police_manager_tick` (countdown) | ~5 s collision grouping window. |
@@ -313,33 +325,81 @@ typedef struct pursuit_record {
 | +0x48 | wanted_bar_max | H | `police_manager_record_begin_wanted_substate`; `police_manager_tick` | `police_manager_tick` (bar denominator) | State-keyed 20000/40000/60000. |
 | +0x4C | collision_episode_count | M | `police_manager_register_collision_offence_for_target`; `police_manager_tick` (→0 on close) | (no reader located) | Written, never read ⇒ dead. |
 | +0x50 | wanted_substate_flag | H | `police_manager_register_actor` (0); `police_manager_record_begin_wanted_substate`; `police_manager_escalate_handcuffs_with_optional_wanted` | `police_manager_is_wanted_substate_active_for_target`; `police_manager_tick` (bar + HUD wrap); `police_manager_enable_roadblock_flag_for_target` | "All cops alerted." Not the icon level (+0x3c). |
-| +0x51 | identity_pending | H | `police_manager_register_actor` (0); `police_pursuit_group_per_frame_tick`; `police_manager_tick` (HUD-icon recompute, §3.2) | `police_manager_target_identity_pending`; `police_manager_tick` (searching override); `police_manager_try_dispatch_pursuit_for_target` | 1 = UNKNOWN/searching, 0 = KNOWN. |
-| +0x54 | identity_tracked_vehicle | H | `police_manager_record_set_tracked_vehicle_for_target` (= `police_action+0x64`) | `police_manager_tick` (in-car identity recompute) | Switching cars unseen → searching. §3.2. |
-| +0x58 | identity_on_foot_byte | H | `police_manager_record_set_tracked_vehicle_for_target` (= `police_action+0x68`, set-only) | `police_manager_tick` (on-foot identity recompute) | On-foot identity flag. §3.2. |
+| +0x51 | identity_pending | H | `police_manager_register_actor` (0); `police_manager_tick` (identity recompute, four store sites, §3.2); `police_manager_record_clear_pursuit_state` (0) | `police_manager_target_identity_pending`; `police_manager_tick` (searching override); `police_manager_try_dispatch_pursuit_for_target` | 1 = UNKNOWN/searching, 0 = KNOWN. The writer set is closed: a byte-store census of the whole binary finds exactly these six stores on a `pursuit_record`. |
+| +0x54 | identity_tracked_vehicle | H | `police_manager_record_set_tracked_vehicle_for_target` (= squad `police_action+0x64`, handed back when a squad ends: `police_board_end_pursuit`, `police_action_disband` with-car path) | `police_manager_tick` (in-car identity recompute) | Written only when the target's current vehicle differs from the stored `+0x54`. §3.2. |
+| +0x58 | identity_on_foot_byte | H | `police_manager_record_set_tracked_vehicle_for_target` (= squad `police_action+0x68`, 0 or 1, same guard and callers as `+0x54`) | `police_manager_tick` (on-foot identity recompute) | Face-known flag used while no living officer is assigned. §3.2. |
 | +0x5C | reinforcement_counter | H | `police_manager_register_actor` (0); `police_manager_tick` (1 at handcuffs+wanted, 2 at gun+wanted) | `police_manager_tick` (`<1`/`<2` spawn gates) | Backup-wave latch; gates `police_manager_spawn_patrol_car_reinforcements_at_radius`. |
 | +0x64 | action_code | H | `police_manager_register_gunfire_offence_for_target` (1); `police_manager_register_violence_offence_for_target` (5); `police_manager_register_traffic_sign_offence_for_target` (8); `police_manager_register_collision_offence_for_target` (3); `police_manager_tick` escalation (0/2/4/6/7/9/10) | `police_manager_try_dispatch_pursuit_for_target` (string = 2100+code) | `police-system/artifacts/offences.md` §5.2. |
 | +0x68 | run_over_count | M | `police_manager_increase_run_over_count_for_target` (+1 per NPC struck); `police_manager_record_clear_pursuit_state` (reset) | `police_manager_register_collision_offence_for_target` (`<6` gate) | `>=6` ⇒ straight to gun. |
 | +0x70 | identity_byte | L | `police_manager_register_actor` (= low byte of target ptr) | (no reader located) | Likely a cheap identity fingerprint. |
-| +0x74/78/7C | officers_begin/end/cap | H | `police_manager_register_actor` (0); `police_manager_record_add_officer` (dispatch) | `police_manager_count_predators_for_target`; `police_manager_count_officers_visible_for_target`; `police_manager_tick` (officer-count gate, via `vec_count_stride_0x4`) | `std::vector<officer*>` of cops chasing this target; cap inferred. |
+| +0x74/78/7C | officers_begin/end/cap | H | `police_manager_register_actor` (0); `police_manager_record_add_officer` (from `police_manager_try_dispatch_pursuit_for_target`, `police_manager_spawn_patrol_car_reinforcements_at_radius`, `police_manager_add_officer_to_target`); `police_manager_record_delete_officer` (via `police_manager_remove_officer_from_all_records`); `police_manager_tick` (prune of death-latched officers) | `police_manager_count_officers_for_target`; `police_manager_count_officers_alive_for_target`; `police_manager_tick` (officer-count gate, via `vec_count_stride_0x4`) | `std::vector<officer*>` of cops assigned to this target; cap inferred. A living cop leaves it only when it dies or is released (`+0xf48` bit 3) and culled by `police_manager_npc_list_tick`. |
 
 ### 3.2 Identity recompute — foot vs car (the "searching" swap)
 
 `identity_pending` (+0x51) is what the HUD reads to draw the **searching** icon (searching iff
-`identity_pending != 0 && police_manager+0x38 (busted_cutscene_lock) == 0`). `police_manager_tick` recomputes it every inner
-tick for the player record, branching on whether any officer currently sees the player
-(`police_manager_count_officers_visible_for_target`):
+`identity_pending != 0 && police_manager+0x38 (busted_cutscene_lock) == 0`). The icon's transparency
+is a separate test (`police_board_has_recent_sighting`: an assigned officer logged a sighting of the
+player within the last 2000 ms).
 
-- **An officer sees you** → identity from the pursuit group: `identity_pending = !police_board_target_matches(...)`
-  (0 when no group).
-- **No officer sees you** (the transparent-icon case) → from disguise, by stance:
-  - **On foot** (`actor+0x98 == 0`): `identity_pending = (identity_on_foot_byte == 0)`.
-  - **In a car**: `identity_pending = (identity_tracked_vehicle != actor+0x98 current car)`.
+**Where the identity is held.** Every squad (`police_action`, 0x6c bytes, `structs/police-action.md`)
+chasing the player keeps two identity fields: `+0x64` = the vehicle the police know him by, and
+`+0x68` = the face-known flag. `police_board_target_matches` reports the player as recognised when
+some squad targeting him has `+0x64 ==` his current vehicle (`actor+0x98`), or he is on foot and
+that squad has `+0x68` set. `record+0x54` / `+0x58` are copies of a squad's `+0x64` / `+0x68`,
+handed back by `police_manager_record_set_tracked_vehicle_for_target` when the squad ends.
 
-Both `+0x54` and `+0x58` are stamped by `police_manager_record_set_tracked_vehicle_for_target` from
-the group's `+0x64` / `+0x68`; the on-foot flag is set-only. So: seen-in-a-car then leaving the car
-unseen reads `+0x58` (= 0, never set) → searching; switching cars unseen → `+0x54 != current` →
-searching. The assault-on-officer exception (leaving the car keeps you KNOWN) is **not** explained by
-this recompute — §9.
+**The recompute.** `police_manager_tick` rewrites `+0x51` every inner tick for the player record
+(only while an icon is shown). The branch selector is `police_manager_count_officers_alive_for_target`
+= officers in `record+0x74` whose death latch (`actor+0x5e`) is clear — a count of living ASSIGNED
+officers, not a visibility test:
+
+| store VA | condition | `+0x51` |
+|---|---|---|
+| `0x005cc77b` | living officers, a squad targets the player | `!police_board_target_matches` |
+| `0x005cc786` | living officers, no squad targets the player | 0 (known) |
+| `0x005cc7a4` | no living officer, player in a car | `+0x54 != actor+0x98` |
+| `0x005cc7b1` | no living officer, player on foot | `+0x58 == 0` |
+
+A squad survives a short unseen spell (`police_action_tick` disbands it after more than 30 s without
+a sighting with its chase car more than 150 m away, or when all its officers are dead), so right
+after the player leaves a car the first row decides.
+
+**Writers of the squad identity fields** (the set is closed: every store to `+0x64` / `+0x68` in
+the `police_board` / `police_action` code band, plus the three squad copy routines):
+
+| writer | `+0x64` | `+0x68` | when |
+|---|---|---|---|
+| `police_board_create_and_engage` | player's current vehicle (`-1` when `force_flag` is clear and no squad recognises him) | 1 iff he is on foot | squad creation; the two dispatch creators (foot path through `pedestrian_manager_spawn_cop_from_pedestrian`, patrol-car path in `police_manager_try_dispatch_pursuit_for_target`) pass `force_flag = 1` in normal play |
+| `police_board_refresh_target_vehicle` | player's current vehicle, on every squad targeting him | set to 1 iff he is on foot, never cleared | from `police_board_create_and_engage` (force path, or a recognised player), and from `police_manager_tick` when a pending state is re-derived while identity is unknown and the player was sighted in the last 2000 ms |
+| `police_board_update_sighting` identity batch | player's current vehicle, on every squad targeting him | **1 unconditionally, even in a car** | forced (`force = 1`) by `entity_hit` and `police_manager_report_police_car_stealing_sighting`; otherwise only on a vehicle entry/exit that an assigned officer witnessed (sighting within 2000 ms, or clear line within 10 m) and that matches the squad's `+0x64` |
+
+**What this produces.** Seen only in a car, then leaving it unseen: every squad has `+0x64` = that
+car and `+0x68` = 0, so the player is unknown on foot (searching) and known again on re-entering the
+same car. Seen on foot, then entering a car unseen: `+0x64` = 0 and `+0x68` = 1, so the car is
+unknown (searching) and leaving it restores the state. A witnessed exit or entry runs the identity
+batch and keeps the player known.
+
+**The assault-on-officer case.** Two paths set `+0x68` without a witnessed transition, and both are
+reached by an in-car assault on an officer:
+
+- **`entity_hit`** (C_entity::Hit). When a car hits a police officer (`+0xf4c == 2`, i.e.
+  `human_type` 4) whose squad (looked up through the officer's `+0xf54` session id) targets the car's
+  driver, it calls `police_board_update_sighting(driver, 0, 1)` (VA `0x00412388`–`0x00412392`), so
+  every squad chasing the player records the car he is in AND his face. The on-foot arm
+  (VA `0x004122c9`) does the same when the player himself hits such an officer, including by
+  shooting from a car. No impact threshold gates the batch; `27.3` gates only the extra handcuffs
+  escalation. Ramming an ambient cop dummy promotes it, on the next inner tick, into exactly such an
+  officer beside the car (the promotion skips its line-of-sight test inside 1 m).
+- **The sticky assault bit.** Bit 13 has no decay, so pending is re-derived to gun on every inner
+  tick and `police_manager_try_dispatch_pursuit_for_target` runs every tick with the facing gate off.
+  The first cop activated after the player leaves the car creates a squad while he is on foot, and
+  `police_board_refresh_target_vehicle` rewrites every squad to `+0x64 = 0`, `+0x68 = 1`. Each such
+  activation reprints "Assault on Police!", because the action code is re-derived as 9 every tick.
+  The same bit makes any sighting while searching re-identify the player.
+
+Both leave the player known on foot and unknown in any other car. They differ on re-entering the
+original car: after the `entity_hit` batch that car is still known; after an on-foot refresh the
+squads hold `+0x64 = 0`, so the original car reads as unknown.
 
 ### 3.3 Raise ↔ clear inverse pair
 
@@ -355,12 +415,12 @@ are wiped in bulk on a reset event.
 
 ---
 
-## 4. `police_action` — moved
+## 4. `police_action` — see `structs/police-action.md`
 
 The per-pursuit officer-squad object (`police_action`, 0x6C bytes) is **not** part of `police_manager` —
 it belongs to the global `police_board` singleton (`0x006552A8`). Its full struct layout, the
-police_manager-style field-evidence table, the squad FSM (`+0x2c` states 0/2/4 vehicle-chase, 1/3/5
-on-foot search, 7 disband), the per-squad `police_action_*` function family, and the Cheat Engine table
+police_manager-style field-evidence table, the squad FSM (`+0x2c` tiers: 0/1 gun, 2/3 fine, 4/5 handcuffs,
+6 roadblock, 7 disbanded), the per-squad `police_action_*` function family, and the Cheat Engine table
 all live in `structs/police-action.md`.
 
 ---
@@ -436,7 +496,8 @@ PS2-only / not-yet-located methods (no PC twin) trail at the end. Cells with no 
 `-`. Status: **CONFIRMED** (body-diffed, shared fingerprint) · **STRUCTURAL** (role / call-tree /
 one-sided — PC and PS2 differ structurally, so many police methods match only at this level) ·
 **CANDIDATE** (plausible, unverified) · **PC-only** (a PC helper with no identified PS2 twin) ·
-**not located** (no PC twin found, or inlined / PS2-only). Pure lifecycle/STL boilerplate
+**INLINED** (body folded into a PC caller) · **not located** (no PC twin found, or PS2-only).
+Pure lifecycle/STL boilerplate
 (compressed_pair / __vector_deleter / insert / swap / clear / data) is omitted.
 
 | PC VA | PC name | PS2 twin (mangled) | PS2 VA | Status | Role |
@@ -448,7 +509,7 @@ one-sided — PC and PS2 differ structurally, so many police methods match only 
 | 0x005cad70 | `police_manager_ctor` | `__ct__10C_shvestkyFv` | 0x001f99b0 | CONFIRMED | ctor — scalar inits + 7 std::vector zero-inits |
 | 0x005cae30 | `police_manager_dtor` | `__dt__10C_shvestkyFv` | 0x001f9be0 | CONFIRMED | dtor — reverse teardown of the 7 vectors |
 | 0x005caf00 | `police_manager_game_init` | `ChangeSceneInit__10C_shvestkyFv` | 0x001fa3f0 | CANDIDATE | soft reset keeping buffers |
-| 0x005caff0 | `police_manager_game_done` | - | - | PC-only | heavy teardown — despawn records/officers, npc_list, renderer arrays, vehicle/spike-strip/foot-cop pools (counterpart to the soft reset) |
+| 0x005caff0 | `police_manager_game_done` | - | - | PC-only | heavy teardown — despawn records/officers, npc_list, tracked_police_cars, rndr_arr_b, vehicle/spike-strip/foot-cop pools (counterpart to the soft reset) |
 | 0x005cb330 | `police_manager_record_free_officers` | - | - | PC-only | dtor sub-step — free a pursuit_record's officer vector (rec+0x74) + zero the triple |
 | 0x005cb350 | `police_manager_add_tracked_police_car` | `DezoSebralGumyIRadio__10C_shvestkyFP5C_car` | 0x001fa940 | CONFIRMED | dedup-append of a police car to the manager's tracked-car vector (+0x90) |
 | 0x005cb510 | `police_manager_tick` | `Tick__10C_shvestkyFUi` | 0x001faa30 | STRUCTURAL | per-frame manager tick (PS2 SPLIT across Tick + ai_police_nastenka::Tick + ai_police_action::Tick; PC fuses) |
@@ -488,9 +549,9 @@ one-sided — PC and PS2 differ structurally, so many police methods match only 
 | 0x005cf960 | `police_manager_free_temp_actor` | `FreeMyTempActor__10C_shvestkyFP7C_actor` | 0x001ff970 | CONFIRMED | kind-dispatch 4/0x1b/0x1f -> the three FreeTemp* |
 | 0x005cf9a0 | `police_manager_npc_list_push` | `AddDoRiciActor__10C_shvestkyFP7C_actor` | 0x001ff9e0 | STRUCTURAL | unique-append writer for npc_list (+0x80); PS2 adds an actor to the DoRici squad (polymorphic on receiver) |
 | 0x005cfb60 | `police_manager_npc_list_erase` | `DelDoRiciActor__10C_shvestkyFP7C_actor` | 0x001ffa70 | STRUCTURAL | erase-swap helper on npc_list (+0x80); PS2 removes an actor from the DoRici squad (polymorphic on receiver) |
-| 0x005cfc00 | `police_manager_npc_list_tick` | `TickDoRiciActors__10C_shvestkyFb` | 0x001ffbf0 | STRUCTURAL | per-target assigned-squad maintenance (top-of-tick, mode 0) |
+| 0x005cfc00 | `police_manager_npc_list_tick` | `TickDoRiciActors__10C_shvestkyFb` | 0x001ffbf0 | STRUCTURAL | out-of-range despawn of `npc_list` members (outer tick, mode 0); mode 1 empties the list (§2.3) |
 | 0x005cff60 | `police_manager_invalidate_discarded_npcs` | `ZlikvidujVsechnyNasraneVyhozeneCuraky__10C_shvestkyFv` | 0x00200110 | CONFIRMED | purge flagged NPCs from npc_list |
-| 0x005d0060 | `police_manager_spawn_patrol_car_reinforcements_at_radius` | - | - | PC-only | spawn a backup patrol-car wave at radius; gated by reinforcement_counter (rec+0x5c) |
+| 0x005d0060 | `police_manager_spawn_patrol_car_reinforcements_at_radius` | - | - | PC-only | spawn one patrol car with two cops at a radius and engage it as a squad of the given tier (4 handcuffs / 0 gun); `police_manager_tick` gates it on reinforcement_counter (rec+0x5c) |
 | 0x005d06c0 | `police_manager_remove_officer_from_all_records` | `GlobalDelNasrany__10C_shvestkyFP7C_actor` | 0x002009f0 | CONFIRMED | remove the given officer from EVERY pursuit_record's officer list (rec+0x74) |
 | 0x005d0700 | `police_manager_add_officer_to_target` | - | - | STRUCTURAL | add a cop to a target's keyed record squad (rec+0x74); the receiver is the manager, and no distinct PS2 twin exists |
 | 0x005d0750 | `police_manager_record_add_officer` | `AddNasrany__Q210C_shvestky10S_shvestkyFP7C_actor` | 0x00200a60 | CONFIRMED | unique-append officer to rec+0x74 |
@@ -502,21 +563,19 @@ one-sided — PC and PS2 differ structurally, so many police methods match only 
 | 0x005d11c0 | `police_manager_register_assault_on_police_officer_for_target` | `DalJsemPochuzkariDoDrzky__10C_shvestkyFP7C_human` | 0x00201710 | CONFIRMED | assault-on-cop offence: bit 13 (`+9 \|= 0x20`) → pending GUN (3), action 9 |
 | 0x005d1220 | `police_manager_register_assault_on_police_car_for_target` | `StrcilJsemHoPoldumDoVyfuku__10C_shvestkyFP7C_actorP5C_carf` | 0x002017a0 | CONFIRMED | assault-on-cop-car: bit 0x8000, rec ring-rotate |
 | 0x005d12d0 | `police_manager_record_set_tracked_vehicle_for_target` | `ZalozSpisATahniDoRiti_Haleluja__10C_shvestkyFP7C_humanP7C_actorb` | 0x002018a0 | CONFIRMED | set rec+0x54 tracked vehicle + rec+0x58 on-foot byte |
+| 0x005d1340 | `police_manager_are_cops_after_player` | `IdePoliciePoPlayeroviBoPumper__10C_shvestkyFv` | 0x00201920 | CONFIRMED | the predicate `pumper_can_pump` asks |
 | - | - | `GameInit__10C_shvestkyFv` | 0x001f9cf0 | not located | per-scene init (≈ ChangeSceneInit region) |
 | - | - | `GameDone__10C_shvestkyFv` | 0x001f9d80 | not located | per-scene teardown |
 | - | - | `ChangeSceneDone__10C_shvestkyFv` | 0x001fa8d0 | not located | - |
 | - | - | `ChangeSceneVystrc__10C_shvestkyFv` | 0x001fa8e0 | not located | - |
-| - | - | `DezoSebralGumyIRadio__10C_shvestkyFP5C_car` | 0x001fa940 | not located | tracked-car ADD (Dezo pair) |
 | - | - | `DezoVratilGumyAleRadioSiNechal__10C_shvestkyFP5C_car` | 0x001fa9d0 | not located | tracked-car REMOVE (Dezo pair) |
-| - | INLINED | `CreateShvestkyTest__10C_shvestkyFv` | 0x001fb6e0 | not located | escalation-decision block — inlined into police_manager_tick |
-| - | INLINED | `TestOverRed__10C_shvestkyFv` | 0x001fc1c0 | not located | red-light DETECTOR — inlined into police_manager_tick; it detects, it does not register the offence |
+| - | - | `CreateShvestkyTest__10C_shvestkyFv` | 0x001fb6e0 | INLINED | escalation-decision block — inlined into police_manager_tick |
+| - | - | `TestOverRed__10C_shvestkyFv` | 0x001fc1c0 | INLINED | red-light DETECTOR — inlined into police_manager_tick; it detects, it does not register the offence |
 | - | - | `NextNaSrackySoudruh__10C_shvestkyFP7C_human` | 0x001fe980 | not located | (dev-joke helper) |
 | - | - | `CreateCar__10C_shvestkyFR8S_vectorR8S_vectorb` | 0x001feee0 | not located | spawn a pool car (PS2 pool region) |
 | - | - | `PocetPolicejnichPlechovekVRici__10C_shvestkyFv` | 0x001ffb40 | not located | count cops in the squad |
 | - | - | `DalsiChalpiDoPartie__10C_shvestkyFP7C_humanUif` | 0x00200240 | not located | add another guy to the squad |
 | - | - | `VasekSelChlastatNaOslavu__10C_shvestkyFP7C_humanRC8S_vectorfbb` | 0x00200df0 | not located | (dev-joke voice/event setter) |
-| - | - | `NabonzovalJsemHo__10C_shvestkyFP7C_human` | 0x00201600 | not located | 'I ratted him out' (voice/event setter) |
-| - | - | `IdePoliciePoPlayeroviBoPumper__10C_shvestkyFv` | 0x00201920 | not located | - |
 | - | - | `RenamePoliceCar__10C_shvestkyFP5C_car` | 0x002019f0 | not located | - |
 | - | - | `GetPolicePosForKokot__10C_shvestkyFP7C_humanR18S_police_interface` | 0x00201aa0 | not located | police-interface position query |
 | - | - | `BugZamrdanychTesteruZTepleDve_410__10C_shvestkyFP7C_humaniR18S_police_interface` | 0x00201d60 | not located | (named bug workaround) |
@@ -557,16 +616,23 @@ the callee's effect, so every word of the name is backed.
 
 ### 7c. Methods present on one build only
 
-**PS2 methods with no PC function at their rank:** `DezoVratilGumyAleRadioSiNechal` (the remove half
-of the tracked-car list) · `PocetPolicejnichPlechovekVRici` · `CreateShvestkyTest` · `TestOverRed` ·
-`GetPolicePosForKokot` · `BugZamrdanychTesteruZTepleDve_410` · `JeToDutolebecniAuto`. None of them is
-tagged terminal.
+**PS2 methods with no PC function at their rank:** seven (§9).
 
 **Terminal PS2-port-only:** `ChangeSceneInit` / `ChangeSceneDone` / `ChangeSceneVystrc` (InterCity).
 
 **PC has, PS2 does not:** `police_manager_deploy_temp_spike_strip`,
 `police_manager_deploy_npc_from_pool`, `police_manager_spawn_roadblock_in_neighbor_cells`,
 `police_manager_spike_strip_pool_pop`, `police_manager_add_officer_to_target`.
+
+### 7d. Field evidence from the PS2 build
+
+* **`+0x90` tracked police cars.** The PS2 twin of the writer
+  `police_manager_add_tracked_police_car` is `DezoSebralGumyIRadio__10C_shvestkyFP5C_car`, whose
+  parameter is typed `P5C_car`.
+* **`+0x38 busted_cutscene_lock`.** The field exists at `C_shvestky+0x38` on PS2 and is read
+  identically by `NeviDoKterePiceVlezl__10C_shvestky` (the same `record+0x51 && +0x38 == 0` gate).
+* **`pursuit_record+0x28 num_of_offences`.** PS2 `PocetPrestupku` returns it as a 1/2/3 severity
+  tier.
 
 ---
 
@@ -585,9 +651,11 @@ tagged terminal.
 
 | item | state |
 |---|---|
+| runtime validation | no field has been confirmed with Cheat Engine / ReClass |
 | `+0x38 busted_cutscene_lock` (§2.4) | the exact PS2 writer is not pinned, and no reader is known to distinguish arrest from fine |
-| assault-on-officer identity exception | leaving the car after assaulting an officer keeps the player KNOWN, unlike other in-car offences; the §3.2 recompute does not explain why `+0x58` stays set on that path. Needs a runtime field-watch |
+| assault-on-officer identity exception | the two mechanisms are traced (§3.2: the `entity_hit` identity batch and the sticky-bit re-dispatch); which one fires in a given in-car assault is not yet measured. Discriminators: a write breakpoint on squad `+0x68` names the writer (`0x00447e66` with return address `0x00412397` / `0x004122d8` = `entity_hit`; `0x00448210` or `0x00446cb9` / `0x00446cdf` = a squad created or refreshed on foot); a reprinted "Assault on Police!" on leaving the car; the state on re-entering the original car unseen |
 | `+0x70 identity_byte` | initialised from the low byte of the target pointer; real fingerprint field or constructor quirk is undecided |
+| `pursuit_record` linked-vehicle Z | `police_manager_link_target_to_vehicle` captures a Z coordinate beside `+0x34`/`+0x38`, but its slot is not visible in the decomp |
+| PS2 methods with no PC function at their rank (§7c) | `DezoVratilGumyAleRadioSiNechal` (the remove half of the tracked-car list) · `PocetPolicejnichPlechovekVRici` · `CreateShvestkyTest` · `TestOverRed` · `GetPolicePosForKokot` · `BugZamrdanychTesteruZTepleDve_410` · `JeToDutolebecniAuto`; none of them is tagged terminal |
 | reserve-pool metadata half | the second 4 bytes of each stride-8 pool element (slot id / pool index?) need a runtime breakpoint to confirm |
 | the owning-class constructor | the `police_manager_ctor` / `police_manager_dtor` callsites are tagged inside a ctor/dtor pair whose class identity is not yet pinned; the runtime receiver is byte-proven `C_game+0x2DA0` |
-| `police_action` (`structs/police-action.md`) | slots `+0x00`, `+0x3C`, `+0x58` unmapped; `anchor_dir (+0x1c)` has a writer but no located reader |

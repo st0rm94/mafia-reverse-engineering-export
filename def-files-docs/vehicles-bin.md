@@ -1,6 +1,6 @@
 # `tables\vehicles.bin` — per-car physics / CARINIT data (exhaustive field map)
 
-**Created** 2026-07-09 21:46 +0200 · **Modified** 2026-09-18 06:05 +0200
+**Created** 2026-07-09 21:46 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 The master **car parameter file**: one record per car model, each holding one or more **CARINIT
 levels** (tuning stat blocks). A car with **two** levels is *boostable* — level 0 is the normal
@@ -131,10 +131,8 @@ Every field of the `blackha` (Falconer) block is enumerated below. In each table
 
 ## 4b. Geometry / wheel / suspension / collision (0x134-0x7C8)
 
-Raw per-field dump, not exposed by RHAM or MCVE; the semantics of these fields are not established.
-RHAM rows 71-74 (Fuel consumption / Rear weigh / Rear suspension height / RWD & Roof flags) fall in
-this span but are not individually pinned — see §9. The `idx` column is the field's dword index from
-the start of the block.
+Raw per-field dump, not exposed by RHAM or MCVE; what the fields mean, and where RHAM rows 71-74
+sit, is open (§9). The `idx` column is the field's dword index from the start of the block.
 
 | off | idx | L0 | L1 | boost | note |
 |---|---|---|---|---|---|
@@ -562,9 +560,8 @@ the start of the block.
 
 ## 4c. Sound / string records (0x7C9-0x1121)
 
-Each sound is a **0x10-byte filename slot followed by about 8 float params**. The params read as
-volume / pitch / ranges / priority, which is a reading of the value shapes, not an established
-mapping — §9. Two clusters: **template/default** (0x7C9-0xC5F), then **car-specific**
+Each sound is a **0x10-byte filename slot followed by about 8 float params**, whose meaning is
+open (§9). Two clusters: **template/default** (0x7C9-0xC5F), then **car-specific**
 (0xC63-0x1121, the set RHAM rows 75-100 expose). Only plausible params (`|x|` between 1e-3 and 1e6)
 are printed; runs of sentinel/zero fill collapse into a single `padding` row.
 

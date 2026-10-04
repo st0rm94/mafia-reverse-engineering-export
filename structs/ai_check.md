@@ -1,6 +1,6 @@
 # `ai_check_builder` / `ai_check_desc` — the 8-direction space test and the descriptor unpackers
 
-**Created** 2026-07-30 13:41 +0200 · **Modified** 2026-09-28 19:40 +0200
+**Created** 2026-07-30 13:41 +0200 · **Modified** 2026-10-04 20:16 +0200
 
 Two small classes (PS2 class names) that both serve the navigation searches, and that both live in
 the translation unit immediately *below* the `ai_wayfind` / `ai_path` cluster:
@@ -25,11 +25,12 @@ the translation unit immediately *below* the `ai_wayfind` / `ai_path` cluster:
 ```
 
 - **PC prefixes:** `ai_check_builder_*` · `ai_check_desc_*`.
-- **Coverage:** 5 of 5 methods mapped, both classes complete, every row body-diffed (§5).
+- **Coverage:** 5 of 5 methods mapped, both classes complete, every row body-diffed (§4).
 - **PC cluster:** `[0x004022c0, 0x004035e0)`, interleaved with the `vec3_*` math helpers, two CRT
-  static-init bodies and the five `ai_wayfind` route-cost callbacks (§6).
-- **No singleton, no owner offset.** Every method is a free function or takes its receiver as an
-  out-parameter; neither class has instance state.
+  static-init bodies and the five `ai_wayfind` route-cost callbacks (§5).
+- **No instance state.** `ai_check_builder`'s object is the empty member at `ai_manager+0x00`
+  (`0x00655218`, `structs/ai_manager.md`): all six outside callsites load `mov ecx, 0x655218` first,
+  and no method reads `this`. `ai_check_desc` has no object; its methods take the descriptor word.
 
 The classes are identified through the **data** they touch: the two static direction tables (§3)
 carry named PS2 data symbols, and once a function is known to walk an 8-entry direction table, its
@@ -41,7 +42,8 @@ PS2 method names follow.
 
 ## 1. `ai_check_builder` — the 8-direction space test
 
-There is no object. The class is three free functions over the direction tables.
+The object has no state (see the top of this file); the class is three functions over the
+direction tables.
 
 ### 1a. What the space test does
 
@@ -51,7 +53,10 @@ There is no object. The class is three free functions over the direction tables.
 2. scale it by `radius` and cast a **vertical** collision line from `pos` along it, taking the
    distance to the hit — **or `radius` itself when the probe is clear**, so "no obstacle" and
    "obstacle exactly at the radius" produce the same value;
-3. re-rotate the ray by **`0.25`** and probe again; re-rotate by **`−0.5`** and probe a third time;
+3. re-rotate the ray by **`0.25`** and probe again; re-rotate by **`−0.5`** and probe a third time.
+   `vec3_rotate_by_angle_in_place` feeds its argument straight to `fsin` / `fcos` (radians) and
+   rotates the vector in place, so the three probes lie at the direction itself, **+0.25 rad** and
+   **−0.25 rad** — a ±14.3° fan;
 4. store `(probe1 + probe2 + probe3) × 0.3334` — the **mean of the three probes** — as that
    direction's clearance, in a **caller-invisible local array** (`local_20[]`).
 
@@ -85,7 +90,7 @@ orientation.
 **The PC decomp does not show the rounding arithmetic.** It runs on the x87 stack and Ghidra drops
 it, leaving only the trailing `__ftol` — the same FPU render artifact that makes `vec3_dist_sq`
 render as `return;` despite 91 callers. The PC body is not a mismatch (the rounding formula is in
-§5).
+§4).
 
 ### 1c. The third method keeps its own name
 
@@ -113,8 +118,17 @@ halves of the same descriptor word.
 **The `* 0.01` is the project's hundredths fixed-point convention** — the same one
 `ai_path_is_pos_in_connection_corridor` uses for web-connection widths, and the same one
 `ai_loc_update` passes through. So the `[15:0]` field is a **world-unit distance stored as
-hundredths**, and the two `* 0.25` fields are quarter-unit quantities. What the descriptor as a
-whole describes is open (§4).
+hundredths**, and the two `* 0.25` fields are quarter-unit quantities.
+
+### 2b. Both descriptor words are fields of a navigation-web node
+
+Both callers read the word out of a `C_web_node` (`structs/web_node.md`): the node array at
+`*(g_act_mission+0x2c)+4`, stride `0x1e`, indexed by the route's node index.
+
+| Unpacker | Node dword | Fields, and what reads them |
+|---|---|---|
+| `ai_check_desc_unpack_ranges` | `+0x10` | `[15:0]` = the node's `radius_cm`; `[31:24]` = node byte `+0x13`, which `ai_wayfind_plan_search_route` multiplies into its search range; `[23:16]` = node byte `+0x12`, not read by that caller |
+| `ai_check_desc_unpack_data` | `+0x14` | the two nibbles of node byte `+0x16` are the only fields `ai_wayfind_score_and_add_checkpoint` reads: each maps to a weight (0.25 / 1.0 / 1.5 / 3.0 / 4.0) and the product, randomised, is the checkpoint's desirability. Bytes `+0x14`, `+0x15` and `+0x17` are unpacked and not read |
 
 ### 2a. Why both mappings are confirmed
 
@@ -134,9 +148,9 @@ Each is 8 × vec3 = 24 floats, filled at start-up by its own C++ static initiali
 
 | PC base | PC symbol | Written by | Contents |
 |---|---|---|---|
-| `0x006550d8` | `g_dir8_table_normalized` | `crt_init_dir8_table_normalized_006550d8` | **unit** vectors, 45° apart, y = 0; diagonals `0x3f3504f3` = **0.70710677** |
-| `0x00655138` | `g_dir8_table` | `crt_init_dir8_table_unnormalized_00655138` | the same 8 compass directions with **±1.0** diagonals — length √2, deliberately **un-normalised**: a grid-step / neighbour-offset table |
-| `0x006551a8` | `g_dir8_table_normalized_006551a8` | `crt_init_dir8_table_normalized_006551a8` | a **byte-identical second copy** of the normalised table ¹ |
+| `0x006550d8` | `g_dir8_table_normalized` | `dir8_table_normalized_static_init` | **unit** vectors, 45° apart, y = 0; diagonals `0x3f3504f3` = **0.70710677** |
+| `0x00655138` | `g_dir8_table` | `dir8_table_static_init` | the same 8 compass directions with **±1.0** diagonals — length √2, **un-normalised**. Written and never read on the PC (§3a) |
+| `0x006551a8` | `g_dir8_table_normalized_006551a8` | `dir8_table_normalized_006551a8_static_init` | a **byte-identical second copy** of the normalised table ¹ |
 
 ¹ Same 24 floats, same order, same `0x3f3504f3` diagonals. `ai_check_builder_test_space_8dir` reads
 the `0x006550d8` copy and `ai_space_coverage_get_look_dir` reads the `0x006551a8` copy: MSVC emits
@@ -149,12 +163,12 @@ makes `ai_check_builder_get_dir8_index`'s "angle from entry 0" the angle from +Z
 **Initialisers.** All three live in writable data and are **zero in the file on disk**, so the
 initialiser bodies are the only static evidence of each table's contents. The first two are
 NOP-padded real function starts reached by a `jmp` from the static-init chain, with zero datarefs —
-the same shape as `crt_init_vec_up_00655198`, which initialises the `(0,1,0)` up-vector `0x220`
+the same shape as `vec_up_00655198_static_init`, which initialises the `(0,1,0)` up-vector `0x220`
 bytes further on (`structs/ai_wayfind.md` §1a); those up-vectors are **not** part of any table.
-`crt_init_dir8_table_normalized_006551a8` has 0 direct `E8` callers and 0 datarefs, and ONE `E9`
-jmp from the thunk `thunk_crt_init_dir8_table_normalized_006551a8` (`0x00425590`), whose address
-sits in the CRT `_initterm` table in `.data` **20 bytes from the entry pointing at
-`crt_init_dir8_table_normalized_006550d8`'s thunk**. Its VA inside the `C_game` code region is a
+`dir8_table_normalized_006551a8_static_init` has 0 direct `E8` callers and 0 datarefs, and ONE
+`E9` jmp from the thunk `thunk_dir8_table_normalized_006551a8_static_init` (`0x00425590`), whose
+address sits in the CRT `_initterm` table in `.data` **20 bytes from the entry pointing at
+`dir8_table_normalized_static_init`'s thunk**. Its VA inside the `C_game` code region is a
 linker artifact (MSVC emits a file-scope object's initialiser into the defining TU's .obj), not
 ownership.
 
@@ -163,23 +177,13 @@ ownership.
 Each table is one `S_vector[8]` symbol, so every access reads as `<table>[i].x` / `.y` / `.z`.
 Real code reads `g_dir8_table_normalized` in two places: `ai_check_builder_get_dir8_index`
 (entry 0's `x` and `z`) and `ai_check_builder_test_space_8dir` (a cursor that starts at
-`&g_dir8_table_normalized[0].z`). `g_dir8_table`'s base is referenced only by its own
-initialiser. `g_dir8_table_normalized_006551a8` is indexed by `ai_space_coverage_get_look_dir`.
+`&g_dir8_table_normalized[0].z`). **Nothing reads `g_dir8_table`:** every dword in every section
+of the image was checked for a value inside `0x00655138..0x00655197`, and the only ones are the 24
+stores of its own initialiser — the same scan finds every reader of the two normalised copies. `g_dir8_table_normalized_006551a8` is indexed by `ai_space_coverage_get_look_dir`.
 
 ---
 
-## 4. Open items
-
-| item | state |
-|---|---|
-| what the `ai_check_desc` descriptor word means (§2) | both methods are pure bit arithmetic; the meaning has to come from the `ai_check_search` structure that `ai_wayfind_plan_search_route` takes |
-| why 3 probes per direction, at `0.25` and `−0.5` | the net effect reads as samples at the direction itself, `+0.25` and `−0.25` — a ±0.25 rad fan; needs the rotation helper's angle convention from the disassembly |
-| where `g_dir8_table` (un-normalised) is read | no PC element symbol is read and its base is referenced only by its initialiser, so consumers reach it by computed addressing; the PS2 references (§5) are the way in |
-| `i3d_frame_get_bound_points_2d` call count | PC calls it ×4 per `ai_path_find_spec_node_*` search, PS2 ×5 (§6); the mismatch of one is unexplained |
-
----
-
-## 5. PC vs PS2
+## 4. PC vs PS2
 
 - **Method-for-method table** (PC VA order, PC name first):
 
@@ -195,8 +199,8 @@ initialiser. `g_dir8_table_normalized_006551a8` is indexed by `ai_space_coverage
   PS2 **`Dir8Table`** (99 refs). The tables are byte-identical in content and order across builds,
   which is what let the PS2 data symbols name the PC globals. On the PS2, `GetLook__17ai_space_coverage`
   and `TestSpace8RExt__16ai_check_builder` both read the single `Dir8TableN`; on the PC the two
-  readers use the two copies (§3). Enumerating the PS2 `Dir8Table` references would name the PC
-  readers of `g_dir8_table`.
+  readers use the two copies (§3). The PS2 `Dir8Table` references have no PC counterpart: the PC
+  never reads `g_dir8_table` (§3a).
 - **PS2 emission order matches PC exactly** in both classes (`TestSpace8RExt` < `RotateVect` <
   `GetOrientation`; `UNPACKDATA` < `UNPACKRANGES`), giving a forced 3↔3 and 2↔2.
 - **`GetOrientation` computes `(θ + π/8) / (π/4)` explicitly**; the PC's x87 block that does the same
@@ -206,23 +210,27 @@ initialiser. `g_dir8_table_normalized_006551a8` is indexed by `ai_space_coverage
 - **`TestSpace8RExt`'s 1.67** is a real factoring difference: PS2 *calls* `RotateVect` where PC
   inlines the rotation at two of its three probe sites.
 - **No PS2-only methods** in either class, and **no PC-only functions**; PS2 has no
-  `ai_check_builder` instance state either.
-- **`i3d_frame_get_bound_points_2d`** (§6) has a standalone PS2 counterpart with an empty `class`
+  `ai_check_builder` instance state either; its callers pass the `ai_manager` root `0x509080` as
+  `this`, as the PC's pass `0x00655218`.
+- **`i3d_frame_get_bound_points_2d`** (§5) has a standalone PS2 counterpart with an empty `class`
   column, next to five per-class `GetBoundPoints2D` overloads (`C_actor`, `C_human`, `C_door`,
-  `C_railway`, `C_don_ocas`). PS2 calls it ×5 per search where PC calls it ×4.
+  `C_railway`, `C_don_ocas`). PS2 calls it ×5 per search where PC calls it ×4, and the difference
+  is one merged block: PS2's `a == b` branch and its "a is nearer" branch each build the same
+  frame's bound points, and the PC emits that block once (`LAB_0040a7e5` in
+  `ai_path_find_spec_node_from_positions`) and jumps to it from the second branch.
 
 ---
 
-## 6. The rest of the VA range `[0x004022c0, 0x00403570]`
+## 5. The rest of the VA range `[0x004022c0, 0x00403570]`
 
 Besides the five class methods above, the range holds:
 
 | PC name | What it is |
 |---|---|
 | `i3d_frame_get_bound_points_2d` | a **free** geometry helper — the 4 world-space corners of an `I3D_frame`'s 2D bounding rectangle, inflated `0.7`, at mid-height. Used ×4 by each of the three `ai_path_find_spec_node_*` searches |
-| `crt_init_dir8_table_normalized_006550d8` · `crt_init_dir8_table_unnormalized_00655138` | the two static-init bodies (§3) |
+| `dir8_table_normalized_static_init` · `dir8_table_static_init` | the two static-init bodies (§3) |
 
-### 6a. `0x00403360` is not a function
+### 5a. `0x00403360` is not a function
 
 `0x00403360` is an **alternate exit block** of `ai_wayfind_cb_forward_edge_cost`
 (`0x004030a0`–`0x00403530`), not a function start:
@@ -238,7 +246,7 @@ It is absent from Ghidra's default analysis. Two other exit arms of the same fun
 
 ---
 
-## 7. Cross-references
+## 6. Cross-references
 
 - `structs/ai_wayfind.md` — the route planner; strategy 6 and the checkpoint scorer are
   `ai_check_desc`'s only consumers, and the five route-cost callbacks share this TU.

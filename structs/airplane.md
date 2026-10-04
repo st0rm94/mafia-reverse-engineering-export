@@ -1,11 +1,12 @@
 # `C_airplane` — the scripted aeroplane actor
 
-**Created** 2026-08-04 13:27 +0200 · **Modified** 2026-09-17 17:52 +0200
+**Created** 2026-08-04 13:27 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 A `C_actor` subclass: the aeroplane the player shoots
 down from a moving car in **MISE16-LETISTE** (Czech *letiště* = airport). It flies a route
 over the nav web, takes damage into a HUD gauge, carries six dynamic collision proxies and
-two particle effects, and is fully data-driven from the scene chunk.
+two particle effects, and is fully data-driven from the scene chunk. The same class also
+flies the planes of MISE10-LETISTE and the free-ride EXTREME scene (§1a).
 
 - **PC prefix:** `airplane_`.
 - **Base class:** `C_actor` (`structs/actor.md`). `airplane_ctor` → `actor_ctor`,
@@ -20,34 +21,36 @@ two particle effects, and is fully data-driven from the scene chunk.
 
 ## 1. Field layout — the tunable band
 
-Four independent sources agree on this band: the ctor seeds it, `airplane_duplicate_from`
-copies exactly these 16 values, `airplane_save_data` writes them in this order and
-`airplane_load_data` reads them back in the same order.
+Four sources agree on this band of 17 values: the ctor seeds all of them,
+`airplane_save_data` writes them in one order (`+0x7c` and `+0x80` last) and `airplane_load_data`
+reads them back in the same order, and `airplane_duplicate_from` copies 16 of them - it skips
+`+0x7c`.
 
 ```c
 typedef struct C_airplane {              /* extends C_actor */
     /* ...    */ C_actor    base;
     /* +0x10  */ int        kind;             // [H] = 0x16
-    /* +0x70  */ float      speed_cruise;     // [H] 5.0f
-    /* +0x74  */ float      speed_max;        // [M] 25.0f
-    /* +0x78  */ float      unk_78;           // [U] 0.0f
-    /* +0x7c  */ float      unk_7c;           // [U] 5.0f  (ctor only, not duplicated)
-    /* +0x80  */ float      unk_80;           // [U] 9.0f  — copied LAST by DuplicateFrom
+    /* +0x70  */ float      acceleration;     // [H] 5.0f - speed gained per second
+    /* +0x74  */ float      takeoff_speed;    // [H] 25.0f - the state-2 run accelerates to it
+    /* +0x78  */ float      initial_speed;    // [H] 0.0f  - airplane_game_init copies it to +0xb8
+    /* +0x7c  */ float      blur_swap_speed;  // [H] 5.0f  - above it the blades swap to the blur disc
+    /* +0x80  */ float      route_speed;      // [H] 9.0f  - the state-1 cruise speed
     /* +0x84  */ float      scale;            // [M] 1.0f
-    /* +0x88  */ float      ratio_a;          // [U] 0.8f
-    /* +0x8c  */ float      pitch_max;        // [H] 1.5f — engine-sound pitch, upper end
+    /* +0x88  */ float      pitch_min;        // [H] 0.8f - engine-sound pitch at standstill
+    /* +0x8c  */ float      pitch_max;        // [H] 1.5f - engine-sound pitch at takeoff speed
     /* +0x90  */ int        sound_id_engine;  // [H] 0x82 \_ the 12-byte block SaveData
     /* +0x94  */ int        sound_id_b;       // [H] 0x83  | writes in one dtaWrite
     /* +0x98  */ int        sound_id_c;       // [H] 0x84 _/  SOUND ids, not anim ids
-    /* +0x9c  */ float      rate_a;           // [U] 0.01f
+    /* +0x9c  */ float      initial_prop_speed; // [H] 0.01f - airplane_game_init copies it to +0x13c
     /* +0xa0  */ float      prop_speed_max;   // [H] 0.1f  — propeller angular-speed cap
     /* +0xa4  */ float      prop_speed_rate;  // [H] 0.015f — its ramp rate per ms
     /* +0xa8  */ float      damage_max;       // [H] 400.0f — the HUD gauge's denominator
     /* +0xac  */ int        particle_kind_lo; // [H] 9 — effect spawned below half damage
     /* +0xb0  */ int        particle_kind_hi; // [H] 6 — effect spawned at zero damage
     /* +0xb4  */ int        flight_state;     // [H] 0 idle · 1 route-follow · 2 takeoff run
-    /* +0xb8  */ float      route_progress;   // [H] 0..1 along the segment; also the speed
-                                              //     scalar TickSounds feeds to the emitters
+    /* +0xb8  */ float      speed;            // [H] current speed: velocity = heading x speed
+                                              //     (fly_along_route) and the emitters' velocity
+                                              //     (tick_sounds)
     /* +0xbc  */ float      segment_t;        // [H] zeroed by airplane_pick_next_web_node
     /* +0x110 */ C_web_node *node_cur;        // [H] saved/loaded as an INDEX (/0x1e)
     /* +0x114 */ C_web_node *node_next;       // [H] same
@@ -80,7 +83,11 @@ typedef struct C_airplane {              /* extends C_actor */
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
 | +0x10 | kind | H | `airplane_ctor` (= 0x16) | `folded_get_dword_0x10` (its `C_actor::GetKind` role) | the engine's stand-in for RTTI |
-| +0x70..+0xb0 | the tunable band | H/M/U | `airplane_ctor`, `airplane_duplicate_from`, `airplane_load_data` | `airplane_save_data`, the flight code | 16 values, identical set on both builds |
+| +0x70..+0xb0 | the tunable band | H/M | `airplane_ctor`, `airplane_duplicate_from`, `airplane_load_data` | `airplane_save_data`, the flight code | 17 values; shipped values in §1a |
+| +0x70 / +0x74 / +0x80 | acceleration / takeoff speed / route speed | H | the band writers | `airplane_ai_tick` | state 1 ramps `+0xb8` by `+0x70` x dt toward `+0x80` and, while the current node `+0x110` has id `+0x1c4 + 1`, sets it to `+0x80` x (distance to that node / segment length), both squared; state 2 ramps it toward `+0x74`, sets the pitch of sound slot 1 (`+0x150`) to `+0x88 + (+0x8c - +0x88) x speed / +0x74`, and calls `airplane_play_sound(2)` on every tick once `+0x74` is reached |
+| +0x78 / +0x9c | initial speed / initial propeller speed | H | the band writers | `airplane_game_init` | copied into `+0xb8` / `+0x13c` |
+| +0x7c | blur-swap speed | H | the band writers | `airplane_spin_propellers` | once `+0xb8` exceeds it while the blades are shown: `+0x169 = 0`, `+0x168 = 1`, angle reset |
+| +0xb8 | speed | H | `airplane_game_init`, `airplane_ai_tick` (and 0 at route end) | `airplane_fly_along_route`, `airplane_tick_sounds`, `airplane_spin_propellers` | the current speed |
 | +0x90/+0x94/+0x98 | **sound ids**, not anim ids | H | `airplane_ctor` (0x82/0x83/0x84) | `airplane_create_sounds` | passed straight to `sound_table_construct_sound` |
 | +0xb4 | flight_state | H | `airplane_start_ground_run` (=1), `airplane_begin_takeoff` (=2), `airplane_ai_tick` (→0 at route end) | `airplane_ai_tick`, `airplane_save_game_save` | 0 idle · 1 route-follow · 2 takeoff run |
 | +0x14c[3] / +0x158 / +0x15c / +0x160 / +0x164 | the sound band | H | `airplane_create_sounds`, `airplane_play_sound` | `airplane_tick_sounds`, `airplane_destroy_sounds` | prev/current slot + their crossfade volumes; the fade is 6000 ms on **both** builds |
@@ -92,6 +99,30 @@ typedef struct C_airplane {              /* extends C_actor */
 | +0x1c4 | node_id | H | `airplane_ctor` (= 0x29a) | `airplane_start_ground_run` (`web_path_find_node_id`) | `0x29a` = the project-wide "none/unset" sentinel |
 | +0x1c8 / +0x1cc | damage_a / damage_b | H | the flight/hit code | `airplane_hud_damage_toggle` | fill = `(a + b) / (max + max)` |
 | +0x1d0 / +0x1d4 | two particle handles | H | `airplane_game_init` | `airplane_game_done` | −1 = none |
+
+
+### 1a. Where instances come from
+
+Only from scene placement. `mission_open_bin` walks each actor-definition record (`0xAE21`) of a
+scene's `scene2.bin`: `0xAE23` names the frame, `0xAE22` gives the kind, and `mission_create_actor`
+case `0x16` allocates `0x3f0` bytes and runs `airplane_ctor`; the actor's vtable `Init` (slot 18)
+binds the frame, `actor_mark_scene_placed` and `mission_add_actor` register it, and `0xAE24` goes to
+its `LoadData` slot, `airplane_load_data` (a version byte, then the 17 band values in save order).
+`ACTOR_DUPLICATE` (`program_process_command` case `0xda`) could copy one, but in the extracted script corpus
+only MISE07B uses that command, and not on an airplane. A census of all 79 shipped `scene2.bin` files (13 631 definitions) finds
+four airplanes:
+
+| scene | frame | +0x70 | +0x74 | +0x78 | +0x7c | +0x80 | +0x84 | +0x88 / +0x8c | sound ids | +0x9c / +0xa0 / +0xa4 | +0xa8 | +0xac / +0xb0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| EXTREME | `Letadlo` | 5.0 | 25.0 | 13.89 | 5.0 | 9.0 | 1.0 | 0.8 / 1.5 | 0x82 0x83 0x84 | 0.01 / 0.1 / 0.015 | 400.0 | 9 / 6 |
+| EXTREME | `UfoTalir` | 17.0 | 27.78 | 0.0 | 5.0 | 27.78 | 0.3 | 0.8 / 1.5 | 0x148 x3 | 0.01 / 0.1 / 0.015 | 400.0 | 9 / 6 |
+| MISE10-LETISTE | `letadylko` | 10.0 | 33.33 | 25.0 | 5.0 | 20.0 | -1.0 | 1.0 / 10.0 | 0x84 x3 | 0.0 / 0.0 / 0.015 | 1.0 | 2 / 1 |
+| MISE16-LETISTE | `xletadlo17413` | 2.0 | 22.22 | 0.0 | 4.17 | 9.72 | 1.0 | 0.8 / 1.8 | 0x82 0x83 0x84 | 0.01 / 0.1 / 0.015 | 250.0 | 9 / 6 |
+
+The ctor's defaults equal `Letadlo`'s record except `+0x78` (ctor 0.0). Several speeds
+are round km/h figures divided by 3.6 (22.22 = 80, 9.72 = 35, 27.78 = 100, 13.89 = 50, 4.17 = 15).
+MISE16's scripts drive its plane with `airplane_start 0, 5, 0` (`airplane_start_ground_run`),
+`airplane_start2` (`airplane_begin_takeoff`) and `airplaneshowdamage` (`airplane_hud_damage_toggle`).
 
 ---
 
@@ -159,8 +190,9 @@ frame-local; PS2 calls the world-space `GetEnginesPos` there instead.
 
 ## 3. PC vs PS2
 
-**The class is a straight port.** The tunable band holds the same 16 values on both builds,
-and `SaveData`/`LoadData` walk it in the same order. The field rebase is **not a constant
+**The class is a straight port.** The tunable band holds the same 17 values on both builds,
+`SaveData`/`LoadData` walk it in the same order, and PS2 `DuplicateFrom` skips the `+0x7c`
+counterpart too. The field rebase is **not a constant
 delta** (PS2 `+0x33c` ↔ PC `+0x70`, but PS2 `+0x3f0` ↔ PC `+0x1c4`) because the C_actor base
 is larger on PS2 *and* the two vector members have different sizes — map by RANK, never by
 subtracting.
@@ -177,13 +209,13 @@ Each absence is proven, not assumed:
 
 | PS2 method | Size | Why there is no PC function |
 |---|---|---|
-| `Init__10C_airplaneFP9I3D_frame` | 44 | **Body read.** It is a bare forwarder — `if (!frame) return false; return C_actor::Init(frame);` — with no distinctive constant for MSVC to keep out of line. Inlined on the PC |
+| `Init__10C_airplaneFP9I3D_frame` | 44 | **Folded.** The body is the bare forwarder `if (!frame) return false; return C_actor::Init(frame);`; airplane vtable slot 18 holds the shared `actor_subclass_init_require_frame`, statement-identical to it and present in 6 vtables |
 | `NetDirect__10C_airplaneFUi` | 8 | **Byte-proven folded.** Airplane vtable slot 15 holds `stub_noop_args4_00461180`, whose whole body is `c2 04 00` (`ret 4` = exactly one 4-byte argument), and which sits in **30** vtables |
-| `Death__10C_airplaneFv` | 8 | Same ICF fold — an 8-byte void stub. Its slot was not isolated, so this row is the weakest of the three |
+| `Death__10C_airplaneFv` | 8 | Same ICF fold — an 8-byte void stub (§4) |
 
-💡 The general shape: **PS2's three 8-byte stubs collapse to one shared PC function each**,
-and `GetMaterialID` survives as its own PC function *only* because it returns a distinct
-constant (`0x13`) rather than nothing.
+💡 The general shape: **all three collapse onto shared PC functions** — `Init` onto a forwarder
+shared by 6 classes, `NetDirect` and `Death` onto stubs — and `GetMaterialID` survives as its own
+PC function *only* because it returns a distinct constant (`0x13`) rather than nothing.
 
 ### 3b. Corollary twins this class produced
 
@@ -215,12 +247,13 @@ leads `C_bottle`'s TU (`structs/bottle.md` §2).
 
 ---
 
-## 4. Open items
-
-| Item | Why it is open |
-|---|---|
-| `+0x78` / `+0x7c` / `+0x80` / `+0x9c` meaning | [U]. `airplane_ai_tick` reads `+0x80` as the route-progress scale (and `+0x70` as its ramp rate), and `airplane_spin_propellers` compares `+0x7c` against `route_progress`; `+0x78` and `+0x9c` have no traced consumer |
-| Where instances come from | placed in the scene file; no spawn path traced |
-
 **Related:** `structs/actor.md` (base class) · `structs/hud.md` (the `0x40000` damage-gauge
 bit) · `basic/artifacts/hud_elements.md`.
+
+---
+
+## 4. Open items
+
+| item | state |
+|---|---|
+| the PC vtable slot that holds `Death` (§3a) | not isolated, so that fold is the weakest of the three §3a rows |

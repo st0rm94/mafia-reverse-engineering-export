@@ -1,6 +1,6 @@
 # `ai_path` — one computed route, handed to an NPC action
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-17 17:54 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 An `ai_path` is a **route object**: the result `ai_wayfind` produces and the thing the movement
 `ai_action` factories carry. It sits one layer above the raw graph — `ai_path` consumes
@@ -20,25 +20,27 @@ Confidence: **[H]** body-read on both builds · **[M]** inferred · **[U]** not 
 
 ```c
 typedef struct ai_path {                     // 0x9c bytes
-    /* +0x00 */ uint32_t    _unk_00;         // [U]
-    /* +0x04 */ waypoint   *normal_begin;    // [H] NORMAL waypoint container, stride 0x3c.
+    /* +0x00 */ uint8_t     _alloc_normal;   // [H] allocator byte of the NORMAL vector
+    /* +0x04 */ ai_path_node *normal_begin;  // [H] NORMAL waypoint container, stride 0x3c.
     /* +0x08 */ waypoint   *normal_end;      //     The route proper - see §1a.
     /* +0x0c */ waypoint   *normal_cap;      // [H]
-    /* +0x10 */ uint32_t    _unk_10;         // [U]
-    /* +0x14 */ float      *spec_begin;      // [H] SPEC waypoint container, stride 0x18.
+    /* +0x10 */ uint8_t     _alloc_spec;     // [H] allocator byte of the SPEC vector
+    /* +0x14 */ ai_path_specnode *spec_begin; // [H] SPEC waypoint container, stride 0x18.
     /* +0x18 */ float      *spec_end;        //     Detour points; rebuilt by
     /* +0x1c */ float      *spec_cap;        // [H] ai_path_update_spec_waypoints.
-    /* +0x20 */ uint32_t    _unk_20;         // [U]
-    /* +0x24 */ passside   *side_begin;      // [H] PASS-SIDE container, stride 0x10.
-    /* +0x28 */ passside   *side_end;        //     Element +8 = the side selector;
-    /* +0x2c */ passside   *side_cap;        // [H] ai_path_force_pass_side_right sets them all
-                                             //     to 2.
+    /* +0x20 */ uint8_t     _alloc_side;     // [H] allocator byte of the PASS-SIDE vector
+    /* +0x24 */ ai_actor_evading *side_begin; // [H] PASS-SIDE container, stride 0x10: one
+    /* +0x28 */ ai_actor_evading *side_end;   //     record per blocker the searches went round,
+    /* +0x2c */ ai_actor_evading *side_cap;   // [H] with the side taken (§1d)
     /* +0x30 */ blocked_con blocked;         // [H] 0x10 bytes, see §1c
     /* +0x40 */ float       last_actor_pos[3]; // [H] the actor position cached at the end of the
                                              //     previous ai_path_revalidate_for_actor. A move
                                              //     of >4.0 units^2 since then = teleport =>
                                              //     state 4.
-    /* ...  */
+    /* +0x4c */ float       blocker_pos[3];  // [H] the world position of the blocker the last
+                                             //     spec-node search went round (its frame
+                                             //     +0x40..+0x48); written by the three searches,
+                                             //     read by no ai_path method
     /* +0x58 */ int32_t     normal_cursor;   // [H] index into the +0x04 container; -1 = reset
     /* +0x5c */ int32_t     spec_cursor;     // [H] index into the +0x14 container; -1 = reset
     /* +0x60 */ int32_t     delay_until;     // [H] mission_clock + 1000 ms, armed by
@@ -46,9 +48,18 @@ typedef struct ai_path {                     // 0x9c bytes
     /* +0x64 */ int32_t     no_progress;     // [H] the blocked/no-progress accumulator. +3 below
                                              //     speed 0.1, +1 up to 0.5, -1 above, reset to 0
                                              //     above 0.9. Gates at 4/10/15/25/50/100.
-    /* +0x68 */ C_actor    *owner;           // [H] cleared by ai_action_invalidate_path_for_actor
-                                             //     when it matches the actor being destroyed
-    /* ...  */
+    /* +0x68 */ C_door     *door_to_open;    // [H] a closed door (kind 6, door+0x70 == 1) a
+                                             //     spec-node search found within 3 units of the
+                                             //     route; ai_path_update_spec_waypoints opens it
+                                             //     for a C_entity walker and clears the slot.
+                                             //     Nulled by ai_action_invalidate_path_for_actor
+                                             //     when that door is the departing actor
+    /* +0x6c */ uint32_t    spec_corner;     // [H] which of the blocker's footprint corners the
+                                             //     last search chose; written, never read
+    /* +0x70 */ uint8_t     spec_inserted;   // [H] a search level inserted its spec waypoint;
+                                             //     cleared by ai_path_update_spec_waypoints before
+                                             //     each search, so of the recursion's levels only
+                                             //     the first to finish inserts
     /* +0x71 */ uint8_t     blocked_flag;    // [H] set when a blocker is standing in the way,
                                              //     cleared when no_progress falls back to 0
     /* +0x74 */ float       staged_point[3]; // [H] the current waypoint's own position
@@ -60,7 +71,8 @@ typedef struct ai_path {                     // 0x9c bytes
                                              //     2 = following a spec waypoint ·
                                              //     3 = invalidated · 4 = abandoned
     /* +0x90 */ float       tolerance_sq;    // [H] arrival radius^2 for staged_target
-    /* ...  */
+    /* +0x94 */ uint32_t    _unused_94;      // no access in any ai_path method, in the builder
+                                             //     or in entity_action_tick
     /* +0x98 */ void       *cached_blocker;  // [H] the TYPE-1 SPECIAL of the map segment
                                              //     covering the current node, cached by
                                              //     ai_path_find_segment_for_node - a piece of
@@ -69,15 +81,17 @@ typedef struct ai_path {                     // 0x9c bytes
 } ai_path;                                   // 0x9c
 ```
 
-### 1a. The NORMAL waypoint record (stride `0x3c`)
+### 1a. The NORMAL waypoint record — `ai_path_node` (stride `0x3c`)
 
-The route proper. Offsets are inside the element.
+The route proper. Offsets are inside the element. The three element type names come from the
+PS2 container symbols (§5).
 
 | offset | type | purpose | conf |
 |---|---|---|---|
 | `+0x00` | `float[3]` | gate point **A** | H |
 | `+0x0c` | `float[3]` | gate point **B** — the midpoint of A/B is the steering target for type 0 | H |
 | `+0x24` | `float[3]` | the waypoint's own position; `ai_path_get_destination` returns this field of the **last** element as the route destination | H |
+| `+0x30` | `float` | the corridor width at this end; `ai_path_is_pos_in_next_connection` uses it when either end has no web node, and the web node's `+0x10 & 0xffff` × `0.01` otherwise | H |
 | `+0x34` | `uint32` | **`C_web_node` index** — resolved against `*(g_act_mission+0x2c)+4` at stride `0x1e` | H |
 | `+0x38` | `uint32` | **type discriminator**: `0` = free midpoint between the gate pair · `1`/`2` = snap to the web node at `+0x34` | H |
 
@@ -86,16 +100,36 @@ The route proper. Offsets are inside the element.
 - **NORMAL waypoints** are the route: full records with a gate pair, a node reference and a type.
   Produced by `ai_wayfind`, consumed by `ai_path_advance_to_next_normal_waypoint` /
   `ai_path_load_normal_waypoint`, bounded by `ai_path_is_last_normal_waypoint`.
-- **SPEC waypoints** are *detours*: bare position triples, rebuilt on demand by
+- **SPEC waypoints** are *detours* around a blocker, rebuilt on demand by
   `ai_path_update_spec_waypoints` from the three `ai_path_find_spec_node_*` searches when the
-  direct line is blocked. Consumed by `ai_path_advance_to_next_spec_waypoint`.
+  direct line is blocked. Consumed by `ai_path_advance_to_next_spec_waypoint`. The `0x18`-byte
+  `ai_path_specnode` record, as the searches assemble it:
+
+  | offset | type | purpose | conf |
+  |---|---|---|---|
+  | `+0x00` | `float[3]` | the detour point | H |
+  | `+0x0c` | `uint32` | always 1 when written | H |
+  | `+0x10` | `C_actor *` | the blocker the detour goes round: the owner of the collider below (`collider+0x44`) | H |
+  | `+0x14` | `tDynamicCollObject *` | the blocker's collider, as `ai_path_find_blocking_dyn_object` reports it | H |
+
+  While the route follows a spec waypoint, `ai_path_tick` ghosts that blocker — a car, a door
+  or an entity — so the walker's movement collision ignores it for a short time
+  (`structs/ai_ghost.md` §3). `ai_action_invalidate_path_for_actor` invalidates the route (state
+  3) whenever any spec waypoint carries a blocker.
+- **Doors on the route.** When a search finds a closed door (kind 6, `door+0x70 == 1`) within 3
+  units, it stores the door at `+0x68`; a locked one (`door+0x125` set) also gets the 30 s
+  `blocked_con` of §1c, and for a `C_dog` walker every closed door does.
+  `ai_path_update_spec_waypoints` then calls `door_set_state(2, walker, 1, 1)` for a `C_entity`
+  walker, re-arms the delay `+0x60` to now + 200 ms and clears `+0x68`. `door_set_state` refuses a
+  locked door (`structs/door.md` §4c), so only an unlocked one opens.
 - `ai_path_update_spec_waypoints` returns **0 / 1 / 2**, and that return value is the switch
   between the two modes — both per-frame entry points use it to decide which getter to call next.
   `state` (`+0x8c`) records the answer as 1 or 2.
 
 The three spec-node searches test route candidates against scene objects' **footprints**:
 `i3d_frame_get_bound_points_2d` returns the 4 world-space corners of an `I3D_frame`'s 2D bounding
-rectangle, inflated `0.7`, at mid-height (`structs/ai_check.md`).
+rectangle, inflated `0.7`, at mid-height (`structs/ai_check.md`). Each search calls it four times
+(§5).
 
 ### 1c. `+0x30..+0x3f` — an embedded `blocked_con` record
 
@@ -124,6 +158,22 @@ state(+0x8c) = 3;                       // INVALIDATED
 `entity_add_blocked_con(path + 0x30)` before the route is torn down and replanned — so the NPC
 avoids that graph edge until the deadline passes. `entity_add_blocked_con` walks the entity's
 `+0x119c` list at **stride `0x10`**, exactly this record's size.
+
+### 1d. The pass-side record — `ai_actor_evading` (stride `0x10`)
+
+The three spec-node searches are **recursive**: each calls itself with its depth argument `+ 1`
+and the blocker just found. For every blocker the route goes round they keep one record:
+
+| offset | type | purpose | conf |
+|---|---|---|---|
+| `+0x00` | `uint32` | mission clock when the record was made | H |
+| `+0x04` | `uint32` | the search depth that made it | H |
+| `+0x08` | `uint32` | the side taken: 1 or 2 (`ai_path_force_pass_side_right` writes 2 into every record) | H |
+| `+0x0c` | `C_actor *` | the blocker | H |
+
+A search that meets a blocker it already has a record for, in the same frame and at a greater depth
+than the record's, flips the side 1 ↔ 2 — the route tries the other side of an obstacle it keeps
+running into. `ai_action_invalidate_path_for_actor` erases the records whose blocker is leaving.
 
 ## 2. Method family
 
@@ -160,10 +210,11 @@ Every row with a PS2 twin is body-diffed on both builds. Ratio = PS2 size / PC s
 | `0x004256d0` | `ai_path_get_state` | - | STRUCTURAL ⁴ | raw `state (+0x8c)` read; 30 references |
 | `0x004257e0` | `ai_path_scalar_deleting_dtor` | - | STRUCTURAL | MSVC-only: `{ ai_path_free_buffers(this); if (flags & 1) operator_delete(this); return this; }` |
 | `0x00425800` | `ai_path_free_buffers` | - | STRUCTURAL ⁴ | the `~ai_path` body: `operator_delete` on the three buffers in **reverse** order (`+0x24`, `+0x14`, `+0x04`), zeroing each triple |
+| `0x0043ac60` | `ai_path_normal_waypoint_at` | - | STRUCTURAL ⁴ | `*(this+4) + idx*0x3c`, the idx-th NORMAL waypoint; 2 callsites, both in `entity_action_tick`, both on the route just built (`[edi+0x1c]`), reading waypoint 0's node `+0x34` |
 
 ¹ PS2 also frees here; the PC splits the free into `ai_path_free_buffers`.
 ² "checkpoint" is backed by the consumers, not the body.
-³ It calls the corridor test ×1 on PC and ×2 on PS2 (§6).
+³ Same two arms on both builds; the PS2 calls the corridor test once per arm (§5).
 ⁴ Inline on PS2, so no symbol.
 
 `copy_elem_stride_0x18` (`0x0040f6e0`, 32 bytes) is the spec-waypoint element copy, not a class
@@ -247,14 +298,15 @@ by two independent measurements:
 - **The `GetSpecNode` siblings** share a 15-callee skeleton and are separated by exactly one callee
   each (`isInConnection` ×2 / neither / `isInCheckpoint` ×2); because those discriminators are
   themselves confirmed twins, the assignment needs no appeal to size or emission order.
-- **`GetBoundPoints2D`** is the free overload (its PS2 class column is empty).
+- **`GetBoundPoints2D`** is the free overload (its PS2 class column is empty). Each spec-node
+  search calls it five times in the PS2 source against four on the PC, because the PC emits two
+  identical call blocks as one shared block (`structs/ai_check.md` §4).
+- **Element type names.** The PS2 symbol table names the three containers' element types:
+  `ai_path_node` (normal), `ai_path_specnode` (spec) and `ai_actor_evading` (pass-side), matched by
+  their `reserve` bodies' element sizes (`0x50`, `0x20` at `0x0035fa90`, `0x10` at `0x0035fbc0`).
+- **`isInNextConn`** has the PC's two arms — gate positions and widths when either end has no web
+  node, web-node positions and widths otherwise — and calls `isInConnection` once in each; MSVC
+  routes both arms into one shared call at `0x0040eb90`.
+- **No `state` enum symbol exists.** The PS2 export carries no game enum types (only ELF-loader
+  ones); the value set 0..4 is closed by the 29 writes to `+0x8c`.
 
-## 6. Open items
-
-| item | state |
-|---|---|
-| `i3d_frame_get_bound_points_2d` call count in the three spec-node searches | ×4 on PC vs ×5 on PS2, unexplained. On PS2 `isInBound` consumes exactly the vector `GetBoundPoints2D` fills; if the PC merged one build-and-test pair inline, one call would vanish — search the three bodies for an inline point-in-quad test over the local vector right after each call |
-| pass-side element layout | only `+8` (the selector, values seen: 2) is known; stride `0x10` on both builds, the other 12 bytes are unread |
-| `state` enum | values 1/2/3/4 are proven; no enum symbol recovered |
-| `ai_path_is_pos_in_next_connection` | calls the corridor test ×1 on PC and ×2 on PS2, unexplained |
-| `_unk_00` / `_unk_10` / `_unk_20` and the gaps after `+0x40`, `+0x68`, `+0x90` | not read |

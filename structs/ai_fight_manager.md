@@ -1,6 +1,6 @@
 # `ai_fight_manager` / `ai_fight_followship` — fight parties and the party manager
 
-**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-28 19:40 +0200
+**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-10-04 20:16 +0200
 
 Two classes, one translation unit, one subsystem — **how NPCs fight as a group instead of
 individually**:
@@ -48,13 +48,15 @@ typedef struct ai_fight_followship {          // stride 0x48 on PC
                                                  //     new_car_party, += 10000 by adjust_form_time,
                                                  //     += 1000 by join_party
     /* +0x30 */ uint32_t  kind;                  // [H] 1 = CAR party (set by new_car_party);
-                                                 //     other values [U]
+                                                 //     0 = on-foot party (join_party's zero-filled
+                                                 //     new record). No other value is written
     /* +0x3c */ C_entity *key_holder;            // [H] a representative member; both join_party
                                                  //     and leave_party dereference it and compare
                                                  //     its +0xf4c group key against the joining /
                                                  //     leaving entity's, so a party only accepts
-                                                 //     members of the same group. The KEY ITSELF
-                                                 //     (entity+0xf4c) is [M] - no writer traced
+                                                 //     members of the same group. The key is the
+                                                 //     entity's type group (entity+0xf4c), set by
+                                                 //     entity_game_init from human_type
     /* +0x40 */ C_actor  *commander;             // [H] the party leader
     /* +0x44 */ C_car    *car;                   // [H] the party's vehicle (kind == 1)
 } ai_fight_followship;                           // 0x48
@@ -72,19 +74,24 @@ the stride claim itself made falsifiable. `+0x10` and `+0x28` are proven by the
   `< 0.5` before treating a car as boardable (nearly stopped) and `must_car_hunt` requires `> 2.0`
   before deciding a target's car must be chased by car (moving).
 * **`kind == 1` is read as "car party" [H]** because both functions that test it call the
-  **car**-removal path on the true branch (`pursuit_event_remove_vehicle(party+0x44)`). What the
-  other values mean is **[U]**.
+  **car**-removal path on the true branch (`pursuit_event_remove_vehicle(party+0x44)`).
 
 ### 1b. `ai_fight_member` — 0x14 bytes, the container lever
 
 ```c
 typedef struct ai_fight_member {              // 0x14 bytes, both builds
     /* +0x00 */ C_entity *entity;             // [H] the member; also the lookup key
-    /* ...    */                              // [U] 0x10 further bytes, no reader located
+    /* +0x04 */ uint32_t  _unk_04;            // [U] not written by join_party
+    /* +0x08 */ uint32_t  _unk_08;            // [U] not written by join_party
+    /* +0x0c */ uint32_t  state;              // [M] join_party: 1 if the entity belongs to an
+                                              //     ai_group (entity+0x11ac != 0), else 0;
+                                              //     take_car sets 2 on the members it seats
+    /* +0x10 */ uint32_t  _unk_10;            // [U] 0 when join_party creates the record
 } ai_fight_member;
 ```
 
-Only the key at `+0x00` has an identified reader; the remaining 16 bytes are **[U]** (§7). The
+`join_party` builds the record as `{entity, -, -, in_ai_group, 0}`; the two words it leaves unset
+and the readers of `+0x0c` are open (§7). The
 stride `0x14` is shared with `ai_group_event`, which is why the stride-0x14 container helpers are
 COMDAT-folded and must stay mechanical.
 
@@ -100,9 +107,9 @@ byte-proven by the unwind funclet `add ecx, 0x100 ; jmp ai_fight_manager_dtor`
 (`structs/ai_manager.md`). The singleton is also byte-proven directly: 24 callsites load
 `0x00655318` into ECX and every one calls a method in §2.
 
-**The class is ONE vector**, so `ai_fight_manager` ends at PC `+0x110`; the further vectors at
-`ai_manager+0x110` / `+0x120` belong to the root, not to this class, and that is why its
-destructor covers only one vector.
+**The class is ONE vector**, so `ai_fight_manager` ends at PC `+0x110`; the vectors at
+`ai_manager+0x110` / `+0x120` are the root's next member (`structs/ai_manager.md` §3b), not this
+class, and that is why its destructor covers only one vector.
 
 ## 2. Method families
 
@@ -225,6 +232,9 @@ container is matched on **two** actor fields rather than one — which is what s
   The **member vector is the exception** — PC keeps begin/end pointers (MSVC `std::vector`),
   PS2 keeps count + data (`std::__vector_imp`), so that field pair does not follow the +4 rule.
   Do not rebase a single offset; use the table.
+  **Where the `0x18` bytes go:** +4 inside the party centre (a 16-byte PS2 `S_vector` against 12 PC
+  bytes; PS2 `NewCarParty` zeroes the three centre floats at `+0x10`), plus `0x14` bytes after the
+  car pointer (PS2 `+0x4c..+0x5f`) that no PS2 party method reads or writes.
 - **`ai_fight_member` is `0x14` bytes on both builds.** The type name is a PS2 gift —
   `erase__Q23std70__vector_imp<>F**P15ai_fight_member**Ui` in `Invalidate`; the PC decomp shows
   only "stride-0x14 rows".
@@ -258,11 +268,15 @@ container is matched on **two** actor fields rather than one — which is what s
   | `ai_groups` | `+0xdc` | `0x50915c` | `0x006552dc` |
   | `ai_follow_manager` | `+0xfc` | `0x50917c` | `0x00655304` |
   | **`ai_fight_manager`** | **`+0x10c`** | **`0x50918c`** | **`0x00655318`** |
-  | `ai_sight_manager` | `+0x118` | `0x509198` | - (PS2-only) |
-  | `ai_panic_manager` | `+0x138` | `0x5091b8` | - (PS2-only) |
+  | `ai_sight_manager` | `+0x118` | `0x509198` | `0x00655328` [M] ¹ |
+  | `ai_panic_manager` | `+0x138` | `0x5091b8` | - |
   | `ai_framerater` | `+0x148` | `0x5091c8` | - |
-  | `ai_spageman` ×5 | `+0x14c…+0x20c` | - | - (PS2-only, proven) |
-  | `ai_unlock_manager` | `+0x23c` | `0x5092bc` | - (undetermined) |
+  | `ai_spageman` ×5 | `+0x14c…+0x20c` | - | - |
+  | `ai_unlock_manager` | `+0x23c` | `0x5092bc` | - ² |
+
+  `-` = no PC singleton; the sub-manager is PS2-only unless noted. ¹ Two vectors, no code
+  (`structs/ai_manager.md` §3b). ² No PC member: `structs/ai_manager.md` §4 maps it to the
+  `ai_groups+0x00` control-lock scalar (`structs/ai_group.md` §1c).
 
   The PS2 spacing `root+0x10c → +0x118` is `0xc` — exactly one `gif::vector` — which is how
   `ai_fight_manager` is known to be a single vector (§1c).
@@ -271,8 +285,10 @@ container is matched on **two** actor fields rather than one — which is what s
   `0x28` against PS2's `0x20`) because the PC sub-objects are larger — MSVC `std::vector` keeps
   begin/end/cap where PS2's `gif::vector` keeps count/data. **Do not derive one PC singleton from
   another by rebasing;** each is byte-proven independently by a census of the ECX immediate at its
-  callsites. The PC root **ends after `ai_fight_manager`** — the next referenced addresses
-  (`0x00655348`, `0x0065535c`) are the savegame static object lists, not managers.
+  callsites. The PC root holds **one more member after `ai_fight_manager`** — the code-less
+  two-vector member at `+0x110` — and ends at `+0x130`. The next referenced addresses are not
+  managers: `0x00655348` is the actor possible-collision table (`actor_posscoll_table_ctor`),
+  then `0x0065535c`.
 
 ## 6. Related
 
@@ -291,7 +307,4 @@ container is matched on **two** actor fields rather than one — which is what s
 
 | item | state |
 |---|---|
-| `ai_fight_member`'s 16 unknown bytes (§1b) | only the key at `+0x00` has a reader; the likely lever is `add_car_member` or `join_party`, whichever writes the record |
-| `ai_fight_followship+0x30` (`kind`) beyond the value 1 | [U] |
-| `entity+0xf4c` (the group key at `+0x3c`) | [M] — read by `join_party` / `leave_party`, no writer traced |
-| the `0x18`-byte party-record delta (PC `0x48` / PS2 `0x60`) | not localised to specific fields; the mapped fields all follow the flat +4 rule |
+| `ai_fight_member` `+0x04` / `+0x08` / `+0x0c` / `+0x10` (§1b) | `join_party` writes `+0x0c` (in an `ai_group` or not) and `+0x10` (0), `take_car` sets `+0x0c = 2`; `+0x04` / `+0x08` are not written on the join path, and the readers of all four are not traced |

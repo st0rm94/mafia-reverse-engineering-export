@@ -1,6 +1,6 @@
 # `C_web_node` — one navigation-web node
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 A `C_web_node` is one position in the navigation web, owning its own outgoing connection list. The
 nodes live in a flat array on `C_web_path` (`structs/web_path.md`), kept sorted by X so that
@@ -36,25 +36,30 @@ typedef struct C_web_node {              // 0x1e bytes; array base at C_web_path
                                          //     web_node_ctor seeds it to 0x32 (= 0.5 units) and
                                          //     the endpoint resolvers test
                                          //     dist^2 <= (field & 0xffff)^2 * 0.0001.
-    /* +0x12 */ uint16_t          flags; // [M] node filter mask, tested against the `ushort` filter
-                                         //     argument every web_path_find_* takes (§6)
-    /* +0x14 */ uint8_t           _unk_14[4]; // [U]
+                                         //     Also the low half of the RANGE descriptor (1b).
+    /* +0x12 */ uint8_t           range_b;   // [H] quarter units; unpacked, never read (1b)
+    /* +0x13 */ uint8_t           search_range_q; // [H] quarter units; the strategy-6 search
+                                         //     range factor (1b)
+    /* +0x14 */ uint8_t           data_0;    // [H] DATA descriptor byte 0; never read (1b)
+    /* +0x15 */ uint8_t           data_1;    // [H] DATA descriptor byte 1; never read (1b)
+    /* +0x16 */ uint8_t           weight_codes; // [H] two 4-bit checkpoint weighting codes (1b)
+    /* +0x17 */ uint8_t           data_3;    // [H] DATA descriptor byte 3; never read (1b)
     /* +0x18 */ C_web_connection *connections; // [H] this node's outgoing edge array, stride 8
-    /* +0x1c */ uint8_t           _unk_1c;     // [U]
+    /* +0x1c */ uint8_t           conn_cap;    // [H] connection-array capacity
     /* +0x1d */ uint8_t           conn_count;  // [H] a BYTE - so a node has at most 255 connections
 } C_web_node;                            // 0x1e
 ```
 
-Everything except `+0x12` is [H], byte-proven on both builds. The `+0x00`/`+0x0e`/`+0x18`/`+0x1d`
-group is the load-bearing part.
-
-`web_path_resize_node_array` / `web_node_resize_connection_array` also treat `+0x1c` as the
-connection-array **capacity** byte (§2), next to the live count at `+0x1d`.
+Every field is [H]. The `+0x00`/`+0x0e`/`+0x18`/`+0x1d` group is the load-bearing part.
+`web_path_resize_node_array` / `web_node_resize_connection_array` treat `+0x1c` as the
+connection-array **capacity** byte (§2), next to the live count at `+0x1d`. The filter argument every
+`web_path_find_*` takes is tested against the `+0x0c` category word (1a), not against any of the
+bytes at `+0x12..+0x17`.
 
 ### 1a. The `category` flag word at `+0x0c`
 
-Settled by a statement-level diff of `web_path_is_connection_legal` against PS2 `LegalConnect`, which
-reads this word on both endpoint nodes and decides legality from it.
+Settled by `web_path_is_connection_legal`, which reads this word on both endpoint nodes and decides
+legality from it; the cross-build diff that confirms it is in §4.
 
 | Bit | Meaning | Evidence |
 |---|---|---|
@@ -63,9 +68,8 @@ reads this word on both endpoint nodes and decides legality from it.
 | `0x0010` | a third node class; yields connection kind **0x10** | same function |
 | `0x4000` | **SELECTED** (node-level): set then cleared around every endpoint resolve so the search can exclude nodes it has already tried | `ai_wayfind_resolve_start_node` / `ai_wayfind_resolve_end_node` ² |
 
-¹ MSVC merges PS2's separate `&4`/`&8` tests into one `&0xc`.
-² They set `|0x40` on the **byte at `+0x0d`**, the high byte of this ushort; PS2 sets `|0x4000` on
-the ushort directly.
+¹ The PC tests bits 2 and 3 as one `&0xc` (§4).
+² They set `|0x40` on the **byte at `+0x0d`**, the high byte of this ushort (§4).
 
 **Two different SELECTED bits exist.** This one is on the **node** (`node+0x0c` bit `0x4000`, used
 by the route search as a visited marker). The other is on the **connection**
@@ -73,8 +77,31 @@ by the route search as a visited marker). The other is on the **connection**
 reading `*(byte *)(x + 0xd) |= 0x40` is the NODE one; `*(byte *)(x + 3) |= 0x40` is the CONNECTION
 one.
 
-The remaining bits of `+0x0c` are unidentified; the `0x13` mask (bits 0\|1\|4) implies at least bit
-`0x0001` is also meaningful.
+The `0x13` mask covers bits 0\|1\|4; the remaining bits of `+0x0c` are open (§6).
+
+### 1b. The two descriptor dwords at `+0x10` and `+0x14`
+
+`web_path_load_nodes` reads the records from `check.bin` byte for byte, `web_path_resize_node_array`
+copies `+0x10` and `+0x14` as two whole dwords, and `web_node_ctor` zeroes both except the 0.5-unit
+radius. No code reads the bytes `+0x12..+0x17` one by one: they are read only as two packed words,
+through the two `ai_check_desc` unpackers (`structs/ai_check.md` §2).
+
+| Byte | Unpacked by | Read by | Meaning |
+|---|---|---|---|
+| `+0x10..+0x11` | `ai_check_desc_unpack_ranges`, `[15:0]` × 0.01 | the endpoint resolvers, directly | the acceptance radius |
+| `+0x12` | `ai_check_desc_unpack_ranges`, `[23:16]` × 0.25 | nothing | a quarter-unit value |
+| `+0x13` | `ai_check_desc_unpack_ranges`, `[31:24]` × 0.25 | `ai_wayfind_plan_search_route` | multiplied into the strategy-6 search range, whose square it stores back |
+| `+0x14` | `ai_check_desc_unpack_data`, out[4] | nothing | - |
+| `+0x15` | `ai_check_desc_unpack_data`, out[3] | nothing | - |
+| `+0x16` | `ai_check_desc_unpack_data`, out[1] (high nibble) and out[2] (low nibble) | `ai_wayfind_score_and_add_checkpoint` | two codes 0..9, each mapped to a weight (0.25 / 1.0 / 1.5 / 3.0 / 4.0); their product, randomised, is the node's desirability as a search checkpoint |
+| `+0x17` | `ai_check_desc_unpack_data`, out[0] | nothing | - |
+
+**What the shipped maps carry.** A census of the node chunk of all 71 shipped `check.bin` files
+(494 611 nodes): 259 795 nodes (53 %) have all six bytes `+0x12..+0x17` zero. Where they are set,
+`+0x12` holds 0..7, `+0x13` holds `0x1a..0x28` (6.5–10.0 units), both nibbles of `+0x16` hold
+0..9, `+0x17` is almost always 0, and `+0x14` / `+0x15` hold mask-like values (`0xff`, `0xef`,
+`0xfb`, `0xfe`, …). What `+0x12`, `+0x14`, `+0x15` and `+0x17` were for is not recoverable from
+the binary: nothing reads them.
 
 **The connection record** (`C_web_connection`, 8 bytes: neighbour ID `+0x00`, flags `+0x02` with
 `0x40` = SELECTED and `0x80` = ONE-WAY, cost `+0x04`) is documented in `structs/web_path.md` §2,
@@ -120,6 +147,10 @@ function inside a cluster is not evidence for it. The receiver's field signature
   that *indexes* the array must use the right stride — that difference shows up in every scan loop
   (`* 0x1e` vs `* 0x20`, or `psVar + 0xf` shorts vs `pfVar[i * 8]` floats).
 - `C_web_connection` has **zero delta** — 8 bytes on both builds, same field offsets.
+- **The `category` word (§1a)** is settled by a statement-level diff of `web_path_is_connection_legal`
+  against PS2 `LegalConnect`. MSVC merges PS2's separate `&4`/`&8` tests into one `&0xc`; where the
+  PC endpoint resolvers set `|0x40` on the byte at `+0x0d`, the PS2 sets `|0x4000` on the ushort
+  directly.
 - The `conn_count` byte at `+0x1d` and the array pointer at `+0x18` are identical on both builds,
   which is what made `FindConnIdx` a zero-delta match.
 - PS2 confirms the array element type from `C_web_path::LoadNodes`, whose teardown passes
@@ -139,6 +170,6 @@ function inside a cluster is not evidence for it. The receiver's field signature
 
 | item | state |
 |---|---|
-| `+0x12` filter mask | [M]; not re-derived from a body read on either build |
 | PC twin of `ClearConn` | not located; expected outside the `web_node_*` cluster (§4) |
 | PC twin of `GetPos` | not located; low priority |
+| remaining bits of `+0x0c` | unidentified; the `0x13` mask (bits 0\|1\|4) implies at least bit `0x0001` is also meaningful (§1a) |

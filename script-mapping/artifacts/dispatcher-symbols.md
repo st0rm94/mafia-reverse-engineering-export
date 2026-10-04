@@ -1,6 +1,6 @@
 # Named locals, tail labels and accessors of `program_process_command`
 
-**Created** 2026-06-16 21:58 +0200 · **Modified** 2026-09-17 13:47 +0200
+**Created** 2026-06-16 21:58 +0200 · **Modified** 2026-09-29 00:13 +0200
 
 `program_process_command` (the script-VM dispatcher) reuses a handful of compiler scratch slots and
 jump targets across hundreds of case bodies. This document explains the role of each named symbol
@@ -94,21 +94,23 @@ chain at the callsites is byte-level:
 mov ecx,[0x65115c]            ; g_act_mission
 call act_mission_get_game     ; eax = C_game
 mov ecx,eax
-call game_get_player_actor / game_get_police_block
+call game_get_player_actor / game_get_police_manager
 ```
 
 | VA | Name | Body | Callsites | What it returns |
 |---|---|---|---|---|
 | `0x00425390` | `act_mission_get_game` | `return *(this + 0x24);` | 330+ | the `C_game` singleton; `this` is the act_mission framework root (`*g_act_mission`, `0x0065115c`) |
 | `0x00425530` | `game_get_player_actor` | `return *(this + 0xe4);` | 38 ¹ | the player's `C_actor *`, or 0 before the player exists |
-| `0x00425560` | `game_get_police_block` | `return this + 0x2da0;` | 26 | the address of the `police_manager` embedded at `C_game+0x2da0` (`structs/police_manager.md` §1) |
+| `0x00425560` | `game_get_police_manager` | `return this + 0x2da0;` | 24 ² | the address of the `police_manager` embedded at `C_game+0x2da0` (`structs/police_manager.md` §1) |
 
 ¹ 34 of the 38 share the exact receiver chain above, byte-read at `0x005bc438`.
+² A scan of `.text` for relative calls to `0x00425560` finds 24, and every one is preceded by
+`call act_mission_get_game; mov ecx,eax`, so its receiver is always the `C_game`.
 
 `game_get_player_actor` is the canonical "who is the player" read throughout the script VM and the
 AI dispatch, and the source of the `*(world+0xe4) == this` "am I the player?" gate several `C_human`
 methods use. In the reference cases a zero return takes the no-player tail.
 
-`game_get_police_block` is address-of, not a dereference: POLICEITCHFORPLAYER calls it to set up
+`game_get_police_manager` is address-of, not a dereference: POLICEITCHFORPLAYER calls it to set up
 ECX for `police_manager_count_officers_alive_for_target` and
 `police_manager_target_identity_pending`.

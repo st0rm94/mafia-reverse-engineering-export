@@ -1,6 +1,6 @@
 # Racing mode — the PC feature that was cut at the last minute
 
-**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-18 05:35 +0200
+**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Class layouts: `structs/racing.md`, `structs/racecam.md`, `structs/race_session.md`,
 `structs/racing_menus.md`.
@@ -10,9 +10,8 @@ Class layouts: `structs/racing.md`, `structs/racecam.md`, `structs/race_session.
 **The PC racing mode is not missing. It is in the retail binary, complete, and only the
 menu entry was taken out.**
 
-Mafia's PlayStation 2 release has a Racing mode on the main menu — championships, single
-races, best times, a track roster. The PC release does not, and the received story is that
-it was "nearly finished and cut". What that actually means is unusually specific:
+The PC release has no Racing item on its main menu, and the received story is that it was
+"nearly finished and cut". What that actually means is unusually specific:
 
 * **The whole engine ships.** One translation unit, `[0x0060b770, 0x00617a60)`, six classes
   (`C_racing`, `C_circuit`, `C_championship`, `C_champ_circuit`, `C_opponent`,
@@ -24,6 +23,9 @@ it was "nearly finished and cut". What that actually means is unusually specific
   **`Racing` / `Course` / `Rennen` / `Závody`** in all four shipped languages.
 * **What is missing is the ten track scenes and one menu item** — and the executable
   goes out of its way to delete that item at runtime.
+* **The engine also runs in the retail story.** Mission 6 ("Fair Play") builds `g_racing`
+  through the script command `racing_mission6_init` and races on circuit 0, the
+  `mise06-autodrom` scene (§8).
 
 ## 2. What retail ships vs what it lacks
 
@@ -36,7 +38,7 @@ it was "nearly finished and cut". What that actually means is unusually specific
 | the race HUD widgets (`hud_set_race_*`, 7 CONFIRMED twins in `structs/hud.md` §4) | - |
 | `racestart.bmp` / `racewrong.bmp` (loaded by `hud_create`), `records\recordrace.rep`, `difrace.chg` | - |
 | **`FormuleVolant.I3D`** — the open-wheel steering-wheel driver rig, selected by `game_add_driver_man`'s trailing bool against the ordinary `AutoRidicVolant.I3D`. Racing-only content, in the retail exe's string table | - |
-| the script commands `RACING_CHANGE_MODEL`, `RACING_AUTOINVISIBLE`, `RACING_MISSION6_START`, `RACING_MISSION6_INIT` | - |
+| the script commands `RACING_CHANGE_MODEL`, `RACING_AUTOINVISIBLE`, `RACING_MISSION6_START`, `RACING_MISSION6_INIT` — the last two used by mission 6 (§8) | - |
 
 ## 3. How the cut was done — two places, belt and braces
 
@@ -118,7 +120,7 @@ So the mod:
 2. ships a `menu.def` that is 36 bytes larger — **exactly one extra `meti` record**, id
    `0xf1b9b`, text id `0x6a` = "Racing", inserted into the main-menu window.
 
-It leaves `0xf1b9c` alone; whatever that second item was, nobody has put it back.
+It leaves `0xf1b9c` alone, so the Multiplayer main-menu item stays deleted in the modded build.
 
 That is the entire modification. Everything else the racing packs ship is content: the
 track scenes, models, preview maps and larger `circuits.def` / `championship.def` tables.
@@ -147,12 +149,12 @@ definition, `cd_scan_drives_for_disc`; that deliberate 4-byte divergence is list
 The two padding bytes `0x0040bc9d` and `0x0040c5bd` each sit in a 5-byte run of
 inter-function padding after a `ret`, are not 16-aligned function starts, and have **zero
 absolute references anywhere in the image**. They are not reachable code. Both change by
-exactly `-0x96`. The retail exe cannot settle them either — its `.text` is
-SafeDisc-encrypted. The byte-level context of both runs is in [`crack.md`](crack.md) §5f.
+exactly `-0x96`, and what they are is open (§9); the byte-level context of both runs is in
+[`crack.md`](crack.md) §5f.
 
 ## 5. The data files, decoded
 
-### 5a. `tables/circuits.def` — 0x88 bytes per circuit, identical on both builds
+### 5a. `tables/circuits.def` — 0x88 bytes per circuit
 
 ```c
 struct S_circuit_def {          /* 0x88 */
@@ -189,7 +191,7 @@ Retail circuit roster:
 
 Only record 0's scene exists in the retail install.
 
-### 5b. `tables/championship.def` — 0xb8 bytes per round on PC, 0xdc on PS2
+### 5b. `tables/championship.def` — 0xb8 bytes per round
 
 The retail file is 1288 B = **7 records exactly**, which is what pins the PC stride
 independently of the code. Decoded head:
@@ -206,13 +208,12 @@ independently of the code. Decoded head:
 
 Two 10-entry opponent id arrays follow at `+0x68` and `+0x90`.
 
-### 5c. `tables/carcyclopedia.def` — 200 bytes per car on PC, 204 on PS2
+### 5c. `tables/carcyclopedia.def` — 200 bytes per car
 
-Two different `G_CarDatabase` tables must not be conflated. This 200/204-byte record is the
+Two different `G_CarDatabase` tables must not be conflated. This 200-byte record is the
 DETAIL table. The car LIST that `car_database_get_car_model` and
-`car_database_get_car_params` index is a separate array whose stride is **0xa4 on PC and
-0xa8 on PS2**, and the player/driver-model table `car_database_get_player_model` indexes
-has 0x24-byte entries on both.
+`car_database_get_car_params` index is a separate array whose stride is **0xa4**, and the
+player/driver-model table `car_database_get_player_model` indexes has 0x24-byte entries.
 
 The detail table is loaded ref-counted by `car_database_load_details` and released by
 `car_database_unload_details`. `racing_generate_qualification` brackets its whole loop with
@@ -230,13 +231,11 @@ the pair, because it needs each car's class bitmask (`+0x88` of the entry).
 | the race HUD widgets | `structs/hud.md` §4 — 7 CONFIRMED twins |
 | multiplayer racing | 12 `C_racing` functions plus a session object with a human-player list and an AI-opponent list, and seven kinds of event message (`structs/net_session.md`) |
 
-**The racing classes are NOT where PS2 link order predicts.** PS2 emits `C_racecam.cpp` →
-`C_racing_osegment` → `C_racing` → `C_circuit` consecutively; the PC emits `C_racecam.cpp`
-right after `C_pumper.cpp` and then jumps to the rail family, and it splits the segment
-subsystem into the separate cluster listed above. The racing TU was located by `.text`
-cross-references to `tables\circuits.def` / `tables\championship.def` / `racing_car%u`, not
-by order. All six classes are non-polymorphic on both builds, so no vtable-sequence method
-can see them.
+The PC emits `C_racecam.cpp` right after `C_pumper.cpp` and then jumps to the rail family, and
+it splits the segment subsystem into the separate cluster listed above (§7 compares the order).
+The racing TU was located by `.text` cross-references to `tables\circuits.def` /
+`tables\championship.def` / `racing_car%u`, not by order. All six classes are
+non-polymorphic, so no vtable-sequence method can see them.
 
 ## 7. PC vs PS2
 
@@ -250,10 +249,30 @@ can see them.
   against 0xa8 on PS2, and the player/driver-model table is 0x24 on both.
 * **Two PS2 racing-menu classes have no PC counterpart:** `GM_DamageDifficulty` (the PC
   toggles damage inline) and `GM_GameMenuRacing`.
-* The PS2 main menu exposes Racing; the PC build removes the item in both the data and the
-  code (§3).
+* The PS2 main menu exposes a Racing mode — championships, single races, best times, a track
+  roster; the PC build removes the item in both the data and the code (§3).
+* **`circuits.def`** has the same 0x88-byte record on both builds.
+* **The racing classes are NOT where PS2 link order predicts.** PS2 emits `C_racecam.cpp` →
+  `C_racing_osegment` → `C_racing` → `C_circuit` consecutively; the PC order is in §6. All six
+  classes are non-polymorphic on both builds.
 
-## 8. How to reach it in a modded install
+## 8. How the engine is reached
+
+### 8a. In retail: the mission 6 race
+
+Mission 6's `GameInitStart` script (MISE06-AUTODROM) runs `racing_mission6_init 5, 12, 0, 44`.
+`race_mission6_init` constructs `g_racing` when it is NULL, selects circuit 0 (Racing Circuit
+Long, the `mise06-autodrom` scene), writes `g_racing+0x28 = 2` and `g_racing+0x2c = 3`, stores the
+lap count and the player's car model, generates the opponents and enables damage; `racing_mission6_start` then runs the race from
+`game_tick` (`structs/race_session.md` §4). The mission's `scene2.bin` carries 26 `C_racecam`
+actors, and they register with the camera because `g_racing` is set (`structs/camera.md` §3b).
+**Confirmed in game:** after the race finishes, the player watches the other racers from those
+trackside cameras.
+
+Every other mission leaves `g_racing` NULL, so there the ~310 `g_racing == 0` gates in ordinary
+gameplay code answer "no race is running".
+
+### 8b. In a modded install
 
 The mod's own readme describes the player-facing behaviour, and it matches the code:
 
@@ -263,13 +282,13 @@ The mod's own readme describes the player-facing behaviour, and it matches the c
 * `change_mission` in a scene script can start a track directly, because a circuit is
   just a scene named by `circuits.def`'s second field.
 
-**In retail, none of this is reachable**: `g_racing` is never constructed, so every one of
-its ~310 `== 0` gates through ordinary gameplay code answers "no race is running".
+The championship and single-race menus stay unreachable in retail: their only entry is the deleted
+main-menu item (§3).
 
 ## 9. Open items
 
 | item | state |
 |---|---|
 | the two padding bytes | `0x0040bc9d` / `0x0040c5bd`, both `-0x96`, both unreferenced. Measured, unexplained |
-| `C_racecam` in a modded race | do the cameras actually cut in, and which of the two `70.0f` floats is field-of-view and which is activation distance? One modded race answers both |
+| the two `C_racecam` `70.0f` floats | which one is the field of view and which the activation distance. The cameras do cut in (§8a) |
 | the race start lights | does `hud_set_race_start_flag` render as three lights plus GO, matching the four countdown steps `racing_tick` feeds it? Not observed |

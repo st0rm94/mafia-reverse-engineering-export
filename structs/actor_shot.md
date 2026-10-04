@@ -1,6 +1,6 @@
 # `C_actor_shot` — the timed weapon-fire actor
 
-**Created** 2026-08-04 12:05 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-08-04 12:05 +0200 · **Modified** 2026-10-04 11:53 +0200
 
 A `C_actor` subclass that **fires a weapon on a timer**: a placed scene object which, every N
 milliseconds, spawns a muzzle particle and issues a shot. N is not authored — it is read out of
@@ -20,6 +20,16 @@ knows about this subclass.
 ² One MSVC translation unit, bracketed by the CRT static-init pairs at `0x0044e970` (above) and
 `0x0044ef20` (below, which opens `C_airplane`).
 
+**Where instances come from.** The only constructor call is `mission_create_actor` case `0x21`
+(`operator_new(0x8c)`). Of that factory's eight callers, two take the kind from shipped content:
+`mission_open_bin` from a scene's `scene2.bin` object definition and `game_load_differences` from a
+`.chg` difference file (`structs/chunk.md` §4b); the savegame restore and the script's actor
+duplication copy the kind of an existing actor, and the garage and free-ride setups pass literal
+kinds. **No shipped scene places one** — all 79 `scene2.bin` files carry 13 631 object definitions
+(chunk `0x4c53` → `0xAE20` → `0xAE21` → kind in `0xAE22`) and none has kind `0x21` — **but 38 of
+the 92 `.chg` files do**: 77 actor records (chunk 200) and 45 frame bindings (chunk 400) of kind
+`0x21`, created when a script loads that difference file with `loaddifferences`.
+
 ---
 
 ## 1. Field layout
@@ -34,8 +44,8 @@ typedef struct C_actor_shot {          /* extends C_actor */
     /* +0x74 */ int          weapon_id;     // [H] index into g_game_item_table
     /* +0x78 */ int          interval_ms;   // [H] countdown to the next shot; -1 = re-arm now
     /* +0x7c */ char         enabled;       // [H] firing gate; update() returns early when 0
-    /* +0x84 */ char         use_frame_dir; // [M] aim along the frame forward vector
-    /* +0x88 */ int          zone_handle;   // [H] -1 = none; released by game_done
+    /* +0x84 */ char         use_frame_dir; // [H] aim along the frame forward vector
+    /* +0x88 */ int          particle_handle; // [H] muzzle particle, -1 = none
 } C_actor_shot;
 ```
 
@@ -44,10 +54,10 @@ typedef struct C_actor_shot {          /* extends C_actor */
 | +0x10 | kind | H | `actor_shot_ctor` (= 0x21) | `folded_get_dword_0x10` (its `C_actor::GetKind` role), `actor_game_init` | the engine's stand-in for RTTI, which the PC build lacks |
 | +0x70 | emitter | H | `actor_shot_game_init`, `actor_shot_game_done` | `actor_shot_update` | renderer factory type 4, parented to the frame at the origin |
 | +0x74 | weapon_id | H | `actor_shot_set_weapon` | `actor_shot_update` | indexes `g_game_item_table`, stride 0xbc |
-| +0x78 | interval_ms | H | `actor_shot_game_init` (=-1), `actor_shot_update` | `actor_shot_update` | re-armed from the weapon's phase table, not from an authored value |
-| +0x7c | enabled | H | `actor_shot_game_init` (=0) | `actor_shot_update` | - |
-| +0x84 | use_frame_dir | M | - | `actor_shot_update` | writer not located (§5); selects frame-forward aiming |
-| +0x88 | zone_handle | H | `actor_shot_init` (=-1) | `actor_shot_game_done` | passed to `particle_manager_destroy_particle` on teardown |
+| +0x78 | interval_ms | H | `actor_shot_game_init` (=-1), `actor_shot_update`, `actor_shot_track_apply_key_effects` (=-1) | `actor_shot_update` | re-armed from the weapon's phase table, not from an authored value |
+| +0x7c | enabled | H | `actor_shot_game_init` (=0), `actor_shot_track_apply_key_effects` (key flag bit 12) | `actor_shot_update` | - |
+| +0x84 | use_frame_dir | H | `actor_shot_track_apply_key_effects` (key flag bit 15) | `actor_shot_update` | selects frame-forward aiming. Its only writer is the replay of a recorded key (§2), so outside playback it keeps its initial value |
+| +0x88 | particle_handle | H | `actor_shot_init` (=-1), `actor_shot_track_apply_key_effects` | `actor_shot_track_apply_key_effects`, `actor_shot_game_done` | the muzzle particle: the key replay creates it with `particle_manager_create_particle` and every holder frees it with `particle_manager_destroy_particle` |
 
 ---
 
@@ -62,9 +72,9 @@ behaviour, so the class is **7 real methods + 5 stubs**, and the PC block is a *
 | 0x0044e9a0 | `actor_shot_ctor` | `__ct__12C_actor_shotFv` | 0x00118cc0 | 60 | CONFIRMED | `actor_ctor` + vtable `0x0063b720` + kind `0x21` |
 | 0x0044e9c0 | `actor_shot_scalar_deleting_dtor` | - | - | - | STRUCTURAL | MSVC scalar deleting dtor ¹ |
 | 0x0044e9e0 | `actor_shot_dtor` | `__dt__12C_actor_shotFv` | 0x00118d00 | 96 | CONFIRMED | tail-calls `actor_dtor`; the class owns no heap state of its own |
-| 0x0044e9f0 | `actor_shot_init` | `Init__12C_actor_shotFP9I3D_frame` | 0x00118d60 | 76 | CONFIRMED | `actor_init` then `zone_handle = -1`; 0 on a null/failed frame bind |
+| 0x0044e9f0 | `actor_shot_init` | `Init__12C_actor_shotFP9I3D_frame` | 0x00118d60 | 76 | CONFIRMED | `actor_init` then `particle_handle = -1`; 0 on a null/failed frame bind |
 | 0x0044ea30 | `actor_shot_update` | `Update__12C_actor_shotFUi` | 0x00118dc0 | 680 | CONFIRMED | the timed-fire tick — see §3 |
-| 0x0044ed90 | `actor_shot_game_init` | `GameInit__12C_actor_shotFv` | 0x00119080 | 224 | CONFIRMED | `actor_game_init`, create the emitter, `actor_shot_set_weapon(0)`, mark tickable |
+| 0x0044ed90 | `actor_shot_game_init` | `GameInit__12C_actor_shotFv` | 0x00119080 | 224 | CONFIRMED | `actor_game_init`, create the emitter, `actor_shot_set_weapon(0)`, exclude the actor from the savegame (`C_actor+0x65`) |
 | 0x0044ee50 | `actor_shot_game_done` | `GameDone__12C_actor_shotFv` | 0x00119160 | 88 | CONFIRMED | `actor_game_done`, release the emitter, `particle_manager_destroy_particle` |
 | 0x0044ee90 | `actor_shot_set_weapon` | `SetWeapon__12C_actor_shotFi` | 0x001191f0 | 204 | CONFIRMED | store `weapon_id`, build the fire sound from `g_game_item_table` |
 | - | *(C_actor base)* | `AI__12C_actor_shotFUi` | 0x00118db0 | 8 | base-stub | folded |
@@ -81,9 +91,10 @@ behaviour, so the class is **7 real methods + 5 stubs**, and the PC block is a *
 | PC VA | PC name | Slot | `.rdata` | Role |
 |---|---|---|---|---|
 | 0x0044a670 | `actor_shot_track_create` | 9 | 0x0063b744 | declares one `0x10`-byte key type (C_actor's default declares `0x5c`) |
-| 0x0044a690 | `actor_shot_track_apply_key_effects` | 1 | 0x0063b724 | key bit 0 ⇒ destroy + respawn the muzzle particle; bit `0x2000` ⇒ `actor_shot_set_weapon` ¹ |
+| 0x0044a690 | `actor_shot_track_apply_key_effects` | 1 | 0x0063b724 | key bit 0 ⇒ destroy + respawn the muzzle particle; bit 1 alone ⇒ destroy it; neither ⇒ bit `0x2000` calls `actor_shot_set_weapon`, the countdown re-arms, and bits 12 / 15 are copied into `enabled` / `use_frame_dir` ¹ |
 
-¹ So **an animation can change this actor's weapon mid-clip**.
+¹ So **a recorded clip can change this actor's weapon, and switch its firing and its aiming
+mode, mid-clip**.
 
 The band is the **`C_actor_track`** interface: the 13-virtual base (slots **0–12**) every
 `C_actor`-family class inherits, whose job is to be a client of the `C_recorder` keyframe-track
@@ -113,18 +124,20 @@ weapon**, which is why the class needs no authored rate.
 
 ## 4. PC vs PS2
 
-**Everything about this class is a straight port** — the algorithm above is byte-exact on
-both builds, including the terminator `3` and the skip-`type == 1` rule. Two mechanical
-differences:
+**The firing algorithm is a straight port** — it is byte-exact on both builds, including the
+terminator `3` and the skip-`type == 1` rule. The key-replay override of §2 is PC-only, because the
+PS2 has no `C_recorder`: PS2 `Update__12C_actor_shotFUi` reads the `use_frame_dir` twin at `+0x94`
+and nothing on the PS2 writes it. The mechanical differences:
 
 | | PS2 | PC |
 |---|---|---|
 | `g_game_item_table` record stride | 0xf0 | 0xbc |
 | phase-array offset inside the record | +0xc0 | +0x8c |
-| field band | `+0x70` frame · `+0x80` emitter · `+0x84` weapon · `+0x88` countdown · `+0x8c` enabled | the same five, each **0x10 lower** |
+| the class's own fields | `+0x80` emitter · `+0x84` weapon · `+0x88` countdown · `+0x8c` enabled · `+0x94` use_frame_dir | each **0x10 lower** |
+| the inherited frame pointer | `+0x70` | `+0x68` — **0x08** lower, the `C_actor` pair of `structs/actor.md` §6 |
 
-The 0x10 shift is the same C_actor base-size delta that shows up everywhere else in this
-family (PC's C_actor is smaller; PS2 keeps its C_actor vtable pointer at `+0x78`).
+The `C_actor` base itself has no single delta (`structs/actor.md` §6); the subclass's own fields
+simply start 0x10 lower on the PC.
 
 **The pair that identified the whole class** — and, in the same step, two `C_actor` methods:
 
@@ -142,14 +155,9 @@ different class.
 
 ---
 
-## 5. Open items
+## 5. Related
 
-| Item | Why it is open |
-|---|---|
-| `+0x84` (`use_frame_dir`) has no located writer | only `actor_shot_update` reads it; the setter is presumably script- or editor-side |
-| Where instances come from | no spawn path traced; the class is presumably placed in the scene file rather than constructed by script |
-
-**Related:** `structs/actor.md` (the derived root, the `S_posscoll_frame` table, the field
+ `structs/actor.md` (the derived root, the `S_posscoll_frame` table, the field
 pairs) · `structs/actor_track.md` (the base class and its 13 vtable slots) ·
 `structs/recorder.md` (the `C_recorder` keyframe system this class is a client of) ·
 `structs/def_tables.md` (`predmety.def`, the item table `weapon_id` indexes).

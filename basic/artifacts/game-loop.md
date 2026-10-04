@@ -1,6 +1,6 @@
 # Game loop — from the CRT entry point to player interaction
 
-**Created** 2026-07-19 11:24 +0200 · **Modified** 2026-09-18 05:41 +0200
+**Created** 2026-07-19 11:24 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Two nested loops run the whole game: `engine_main`, the outer menu / mission state machine, and
 `engine_game_loop`, the inner per-frame loop a mission runs inside. Every function named below has
@@ -41,7 +41,7 @@ value and calls `engine_shutdown`.
 | `0x19` | Carcyclopedia (`autosalon`) |
 | `0x1a` | leaves the menu loop |
 | `0x1b` | extreme |
-| `0x1c` – `0x20` | the five free-ride variants (`freeitaly`, `freeride`, `freeridenoc`, `freekrajina`, and one more) |
+| `0x1c` – `0x20` | the five free-ride variants, in order: `freeitaly`, `freeride`, `freeridenoc`, `freekrajina`, `freekrajinanoc` |
 
 ## 2. Mission startup
 
@@ -226,10 +226,10 @@ Per frame, `player_ai`:
 
 - decays a fade/hint timer (`actor+0xadc` / `+0xae0`);
 - lerps an animation-blend weight (`actor+0xab8` toward `+0xabc`);
-- decays the impact HUD-cue intensity `actor+0xad0` toward 0 and pushes `intensity * 3 + 1` to
-  `hud_set_player_accuracy` — the HUD element gated by `hud_state+0x90a4` bit `0x20`
-  (`basic/artifacts/hud_elements.md`). The in-vehicle collision handler at `0x004ccd20` spikes the
-  same `+0xad0` on a crash;
+- decays the accumulated shot spread `actor+0xad0` toward 0 and pushes `spread * 3 + 1` to
+  `hud_set_player_accuracy` — the aim crosshair, gated by `hud_state+0x90a4` bit `0x20`
+  (`basic/artifacts/hud_elements.md`). `player_add_shot_accuracy_penalty` (`0x004ccd20`, called from
+  `human_shooting`) raises the same `+0xad0` on every shot the player fires;
 - when the actor is on foot (`actor+0x98 == 0`), calls `player_do_action_button_on_foot`
   (`0x004cbd00`), the context-interaction handler. On a use/interact press it gathers the nearby
   options with `using_object_find_near_objects`; more than one available builds a modal choose-action
@@ -317,7 +317,7 @@ constructor `car_ctor` installs two vtable pointers:
 | object offset | vtable VA | role |
 |---|---|---|
 | `+0x00` | `0x0063bc08` | primary game-class vtable, 41 slots |
-| `+0x70` | `0x0063bcac` | engine `I3D_frame` sub-object, 1-slot adjustor to `0x0053b850` |
+| `+0x70` | `0x0063bcac` | the `C_Vehicle` second base; its one slot is an adjustor to `vehicle_open_sound` (`0x0053b850`) |
 
 The subclass `C_car_ex` uses `car_extended_ctor`, which installs the derived pair
 `0x0063bd68` / `0x0063bd64` and the flavour tag `+0x14 = 3`. Both tables are **41 slots,

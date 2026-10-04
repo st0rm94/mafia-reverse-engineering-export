@@ -1,6 +1,6 @@
 # `C_game` — the game-world manager singleton
 
-**Created** 2026-07-18 18:46 +0200 · **Modified** 2026-09-23 15:58 +0200
+**Created** 2026-07-18 18:46 +0200 · **Modified** 2026-10-04 16:35 +0200
 
 **PS2 class:** `C_game` (mangled tag `6C_game`). **PC prefix: `game_`.** It is the
 world-manager singleton that owns sound, the breakage and particle effects, the actor lists
@@ -12,18 +12,20 @@ and the per-frame tick of all of the above.
 * **PC:** the `C_game` object is `*(int *)(g_act_mission + 0x24)`, reached in code either
   through `act_mission_get_game` or as `*(g_display + 0x24)`. Any function taking that
   pointer as its `this` (ECX) is a `C_game` method.
-* **PS2:** `*(int *)(act_mission + 0x20)`.
 
 **Size:** `0x3698` (`mission_init` calls `operator_new(0x3698)`). The object is heap-allocated
 by `mission_init` and owned by `C_mission`; the back-pointer is `C_game + 0x44`.
 
+**No vtable.** `game_ctor` opens by storing the allocator byte of the frame-placement vector at
+`+0x00`, its only image-address constant is its exception handler, and every `C_game` method is
+called directly; the PS2 has no `__vt__6C_game` either (§6f).
+
 **PC cluster:** the `g_game.cpp` translation unit, `[0x005dc190, 0x005f79a0)`; the
-constructor and destructor sit in `Mission.cpp` instead (§5). PS2 code spans
-`0x002ea010`–`0x00306d70`.
+constructor and destructor sit in `Mission.cpp` instead (§5).
 
 **Coverage:** the PS2 symbol table holds **175 distinct `C_game` methods**. Matching that
 list against the PS2-twin column of `Game-ghidra.exe.functions.md` leaves **146 located**
-and **29 with no PC counterpart** — enumerated and classified in §6b. `C_game` also has
+and **29 without a PC function of their own** — enumerated and classified in §6b. `C_game` also has
 **39 PC functions with no PS2 twin at all**.
 
 Everything outside §6 is a PC fact; §6 is the one section that carries PS2 material.
@@ -44,14 +46,15 @@ list, including the rows whose evidence lives only in their docblocks, is
 | `0x005e3220` | `game_add_temporary_actor` | `AddTemporaryActor__6C_gameFP7C_actor` | `0x002f1d20` | CONFIRMED | Register a `C_actor` as a scene-lifetime temporary: dedup the master vector, actor-virtual, branch on `act_state` (0/1) into vector A or B, push into the master vector. |
 | `0x005e35d0` | `game_add_temporary_actor_intern` | `InternTempActAdd__6C_gameFP7C_actor` | `0x002f1ed0` | CONFIRMED | The same without the register-virtual: dedup master, branch on act-state into `+0xec` / `+0xfc`, push master. |
 | `0x005e3400` | `game_remove_temporary_actor` | `RemoveTemporaryActor__6C_gameFP7C_actor` | `0x002f1e30` | CONFIRMED | The DEFERRED retirement queue: return if already queued, `SetActState(2)` (spent), push onto `+0x134`. That act-state 2 is what `grenade_on_collision` and `grenade_hit` test. |
+| `0x005e37a0` | `game_remove_temporary_actor_intern` | `InternTempActDel__6C_gameFP7C_actor` | `0x002f1fd0` | CONFIRMED | The removal without the actor virtuals: returns if the actor is queued for retirement (`+0x134`), else swap-removes it from the master vector `+0x124` and the two act-state buckets `+0xec` / `+0xfc`. `police_manager_game_done` uses it for a police car carried into the next mission. |
 | `0x005e3920` | `game_remove_temporary_actor_now` | `_RemoveTemporaryActor__6C_gameFP7C_actor` | `0x002f2100` | CONFIRMED | The IMMEDIATE half: find in the master vector, swap-remove, `game_invalidate_actor(actor, 0)`, two actor virtuals. |
 | `0x005e39c0` | `game_clear_temporary_actors` | `ClearTemporaryActors__6C_gameFv` | `0x002f2280` | CONFIRMED | Empty the master temp-actor vector: loop, skip two sentinel globals, `game_invalidate_actor` plus two virtuals each, zero the count. |
 | `0x005e3a50` | `game_update_controls` | `UpdateControls__6C_gameFv` | `0x002f2340` | CONFIRMED | Per-frame: if `+0x40` is set, walk the world actor list (`g_act_mission + 0x38`) and call `player_update_controls` on every kind-2 entry. |
 | `0x005e3df0` | `game_new_shoot` | `NewShoot__6C_gameFP7C_actorRC8S_vectorRC8S_vectorfiP9I3D_framei` | `0x002f26a0` | CONFIRMED | Fire a weapon shot: normalise the direction, optional bullet-tracer actor (pool `+0x2ad8`, 12.0 / 100.0 gates), cast the ray (single below count 2, else a `count`-pellet spread on an orthonormal basis with 0.05 jitter), per-hit material record (`g_surface_material_table + 0x24`, stride `0x170`), impact effect, muzzle particle, gunshot sound (r = 50), NPC look-at broadcast. It is also the producer of the `+0x1d8` in-flight record vector (§4a). |
 | `0x005e6760` | `game_new_explosion` | `NewExplosion__6C_gameFP7C_actorR8S_vectorffbbbi` | `0x002f5580` | CONFIRMED | Both builds sweep the actor lists TWICE, backwards, splitting on entity kinds `0xc` / `0xb` (hit virtual, hit type 2, a three-float radius block) versus a squared-distance test into a shared `_explosion` helper. Callers `crash_obj_ai` and `grenade_ai_tick`. |
-| `0x005e72e0` | `game_new_smoke_trail` | `NewSmokeTrail__6C_gameFR8S_vectorff` | `0x002f6040` | CONFIRMED | Spawn a smoke-trail particle actor into the 32-slot ring at `+0x324` (cursor `+0x3a4`): dedup, random unit direction (`rand × 2 − 1` / `rand + 0.3`, `< 0.4 → +0.4`, normalise) scaled by a length lerped between the two float arguments, then `game_add_temporary_actor`. |
+| `0x005e72e0` | `game_new_smoke_trail` | `NewSmokeTrail__6C_gameFR8S_vectorff` | `0x002f6040` | CONFIRMED | Spawn a smoke-trail particle actor into the 32-slot ring at `+0x324` (cursor `+0x3a4`): dedup, random unit direction (`rand × 2 − 1` / `rand + 0.3`, `< 0.4 → +0.4`, normalise) scaled by a length lerped between the two float arguments, then `game_add_temporary_actor`. The ring's 32 `C_smoke_trail` actors are built by `game_init`; the only caller is `game_new_explosion`. |
 | `0x005e7580` | `game_new_small_fires` | `NewSmallFires__6C_gameFR8S_vectori` | `0x002f6380` | CONFIRMED | Spawn N small fires at random offsets around a position (`rx² + ry² + 0.25`, `rand × 2` per fire). |
-| `0x005e7800` | `game_new_fire` | `NewFire__6C_gameFR8S_vectorP9I3D_frameiffb` | `0x002f6660` | CONFIRMED | Spawn one `C_fire` (its `fire_ctor` / `fire_init` pair) and register it. |
+| `0x005e7800` | `game_new_fire` | `NewFire__6C_gameFR8S_vectorP9I3D_frameiffb` | `0x002f6660` | CONFIRMED | Spawn one `C_fire` (its `fire_ctor` / `fire_init` pair) and register it at `+0x318`; its three callers are in `structs/fire.md` §3. |
 | `0x005e7a40` | `game_new_cartridge` | `NewCartidge__6C_gameFRP9I3D_frameR8S_vectorbb` | `0x002f6860` | CONFIRMED | Eject a shell casing from one of the two pools (§4l). The PS2 twin is an 8-byte `{ return; }` stub, so no casing is ever ejected on that build. |
 | `0x005e8010` | `game_new_grenade` | `NewGrenade__6C_gameFiR8S_vectorR8S_vectorbP9I3D_frame` | `0x002f6870` | CONFIRMED | Spawn a grenade/molotov projectile actor: type 0/1 → `2grenade.i3d`, 2/3 → `2mol.i3d`; allocate renderer frame type 9, model-cache lookup/evict, spawn a temporary actor. |
 | `0x005e8790` | `game_stop_3d_sound` | `Stop3DSound__6C_gameFibf` | `0x002f7720` | CONFIRMED | Stop a 3D sound by handle: scan the `S_sound_play` vector at `+0x2f8`, match the id, stop and swap-remove. |
@@ -61,7 +64,7 @@ list, including the rows whose evidence lives only in their docblocks, is
 | `0x005e9950` | `game_load_traffic_signals` | `LoadSemaphores__6C_gameFv` | `0x002f90c0` | CONFIRMED | Clear the `+0x1a8` signal vector and re-enumerate the scene into it through `game_enum_traffic_signal_frames` (record stride `0x14`). |
 | `0x005e99b0` | `game_free_traffic_signals` | `FreeSemaphores__6C_gameFv` | `0x002f9120` | CONFIRMED | Release the three sub-light objects per signal (`elem+0x4/+0x8/+0xc`, vtable `+0x24`), then clear. |
 | `0x005e9a60` | `game_tick_traffic_signals` | `TickSemaphores__6C_gameFv` | `0x002f9200` | CONFIRMED | Drive the three sub-lights of each `+0x1a8` record from the phase table `g_game_semaphore_states` (PS2 `semaphore_states`). |
-| `0x005e9d70` | `game_city_music_off` | `CityMusicOff__6C_gameFv` | `0x002f9c90` | CANDIDATE | Stop the active city-music track, 5 s fade, promote the pending one (`+0x2fb4` / `+0x2fb8` / `+0x2fbc`). Role and call position match; the PC body is refactored to one handle against the PS2's two channels. |
+| `0x005e9d70` | `game_city_music_off` | `CityMusicOff__6C_gameFv` | `0x002f9c90` | STRUCTURAL | Silence the city music: clear the current track id `+0x2fb4`, destroy the outgoing track's media `+0x2fbc` at once, make the incoming track `+0x2fb8` the active one and fade it, unlooped, from its current volume to 0 over 5000 ms; `+0x2fb8 = -1`. Graded on call position (§6f). |
 | `0x005e9df0` | `game_city_music_set_paused` | `CityMusicPaused__6C_gameFb` | `0x002f9cf0` | CONFIRMED | Set the gate `+0x2fc0`; when set, call `game_city_music_off`. Byte-match with the PS2 (`+0x2fc0` ↔ `+0x13d0`). |
 | `0x005eba30` | `game_invalidate_coll` | `InvalidateColl__6C_gameFPUi` | `0x002fa5c0` | CONFIRMED | Invalidate collision for a set of ids; paired with `collision_dyn_erase` in the erase path. |
 | `0x005ebac0` | `game_invalidate_actor` | `InvalidateActor__6C_gameFP7C_actorb` | `0x002fa670` | CONFIRMED | Walk the global actor table, dispatch per kind, clear every reference to a dying actor. |
@@ -97,7 +100,7 @@ list, including the rows whose evidence lives only in their docblocks, is
 | `0x005f05a0` | `game_save_game_save` | `SaveGameSave__6C_gameFPPvb` | `0x002ff020` | CONFIRMED | Serialize: header (counts, score `[0x3e]` / `[0x3f]` from `+0x363e` / `+0x3640`, timer), `cursor += 0x43`, pursuit save, sub-objects. |
 | `0x005f0990` | `game_save_game_load` | `SaveGameLoad__6C_gameFPPv` | `0x002ff1f0` | CONFIRMED | Deserialize behind a tag-`0x0a` gate: header, score (through `game_freeride_score_set_on` / `_set`), timer, `cursor += 0x43`, pursuit load, stack clears, sub-objects. The score restore is byte-identical to the PS2. |
 | `0x005f1090` | `game_savegame_load_before` | `SaveGameLoadBefore__6C_gameFv` | `0x002ff4c0` | CONFIRMED | Pre-load hook; reads the mission-number pair on `C_mission`. |
-| `0x005f17c0` | `game_add_shoot_light` | `AddShootLight__6C_gameFR8S_vectorfiUs` | `0x002ff630` | CONFIRMED | Add a muzzle-flash light to the 10-slot pool at `+0x2a48`. The PS2 twin is an 8-byte stub, so the PC body is the only one that exists. |
+| `0x005f17c0` | `game_add_shoot_light` | `AddShootLight__6C_gameFR8S_vectorfiUs` | `0x002ff630` | CONFIRMED | Light a slot of the 10-slot shoot-light pool at `+0x2a48` for a given lifetime (§4a). The PS2 twin is an 8-byte stub, so the PC body is the only one that exists. |
 | `0x005f1b10` | `game_media_create` | `CreateIShow__6C_gameFUi` | `0x002ffc20` | CONFIRMED | Allocate a media entry: fresh id from the `+0x2f38` counter, engine create, push into `+0x2f1c`. |
 | `0x005f1d90` | `game_media_open` | `OpenIShow__6C_gameFPCci` | `0x002ffd20` | CONFIRMED | Open/load an in-game FMV clip by id into `+0x2f1c`, with a `.ext` → `.mp3` audio fallback. |
 | `0x005f1f40` | `game_media_destroy` | `DestroyIShow__6C_gameFi` | `0x002fff30` | CONFIRMED | Remove one entry by id: release, free the name, swap-remove. |
@@ -139,28 +142,31 @@ Confidence: **[H]** measured on both builds · **[M]** measured on PC, meaning p
 
 | PC offset | field | conf | PS2 | evidence |
 |---|---|---|---|---|
-| `+0x04` / `+0x08` | frame-placement registry — `0x34`-byte records, key (`I3D_frame *`) at record `+0x00` | H | `+0x00` / `+0x04`, `0x40`-byte records, key at `+0x30` | `game_del_frame_placement` |
-| `+0x18` .. `+0x20` | created-frame vector (script-created frames) | H | `+0x18` / `+0x1c` / `+0x20` | `game_add_created_frame` / `_del_created_frame` |
-| `+0x24` .. `+0x2c` | its sibling vector, the one the PC actually indexes | M | - | the same pair |
+| `+0x00` .. `+0x0c` | frame-placement registry, a vector (allocator `+0x00`, begin `+0x04`, end `+0x08`, cap `+0x0c`) of `0x34`-byte records, key (`I3D_frame *`) at record `+0x00` | H | `+0x00` / `+0x04`, `0x40`-byte records, key at `+0x30` | `game_ctor`, `game_del_frame_placement` |
+| `+0x10` .. `+0x1c` | the broken-scene-model vector (allocator `+0x10`, begin `+0x14`, end `+0x18`, cap `+0x1c`): `crash_obj_create_from_model` pushes each scene model it breaks into crash pieces and switches it off; `game_done` switches every frame in it back on (frame vtable `+0x24` with 1); `game_init` empties it | H | `+0x10` / `+0x14` | `crash_obj_create_from_model`, `game_ctor`, `game_init`, `game_done` |
+| `+0x20` .. `+0x2c` | created-frame vector (script-created frames): allocator `+0x20`, begin `+0x24`, end `+0x28`, cap `+0x2c` | H | `+0x18` / `+0x1c` / `+0x20` | `game_add_created_frame` / `_del_created_frame`; `game_done` releases each frame |
 | `+0x34` / `+0x38` / `+0x3c` | box saved-info vector, stride `0x20` (`{frame, node, saved pos/dir}`) | H | - | `game_box_save_info` / `_restore_info` / `_get_start_point` |
 | `+0x40` | the run guard — `game_done` returns unless it is set, `game_update_controls` gates on it | H | - | `game_done`, `game_update_controls` |
 | `+0x44` | the owning `C_mission` back-pointer, written by `mission_init` right after the allocation | H | `+0x5c` | `mission_init`, `game_ctor` |
 | `+0x48` | mission-end action (1/2/3) from the game-over screen | H | `+0x60` | `game_set_mission_end_action` |
 | `+0x4c` | embedded **`G_Camera`** sub-object | H | - | §3 |
-| `+0xe4` | **the player's `C_actor`** | H | `+0x150` | `game_get_player_actor` (`0x00425530`, 48 references). Also the source of the `*(world+0xe4) == this` "am I the player?" downcast gate several `C_human` methods use before touching `C_player` fields |
+| `+0xe4` | **the player's `C_actor`** | H | `+0x150` | read through `game_get_player_actor` (`0x00425530`, 48 references). Written by `game_init`, which clears it and then takes the last kind-2 actor of the mission actor list whose `+0x04` track bit `0x10` is clear; by `engine_new_mission`; and by `loadsave_savegame_load`, which takes the first kind-2 actor while it is unset. `game_done` clears it, and `game_invalidate_actor` clears it when the dying actor is the player. Also the source of the `*(world+0xe4) == this` "am I the player?" downcast gate several `C_human` methods use before touching `C_player` fields |
+| `+0xe8` | the human the camera follows | H | - | `game_set_human` (kinds 2 and `0x1b` only, then `camera_set_player`) and `racing_activate_racers`; `game_init` copies `+0xe4` into it, and `engine_new_mission` / `loadsave_savegame_load` set it together with `+0xe4` |
 | `+0xec` | temp-actor vector A (`act_state == 0`) | H | `+0x158` | `game_add_temporary_actor`; address accessor `game_get_temp_actor_list_a` (`0x00425520`) |
 | `+0xfc` | temp-actor vector B (`act_state == 1`) | H | `+0x164` | `game_add_temporary_actor` |
 | `+0x114` .. `+0x11c` | the dying-human list | H | - | `game_dying_human_add` / `_del` / `_tick` |
 | `+0x124` / `+0x128` / `+0x12c` | master temp-actor vector, `std::vector<C_actor *>` | H | `+0x180` / `+0x184` / `+0x188` | `game_add_temporary_actor` |
 | `+0x134` / `+0x138` / `+0x13c` | the temp-actor RETIREMENT queue (deferred removal) | H | - | `game_remove_temporary_actor` |
-| `+0x148` | the scene actor list carried actors are pushed back into after a mission change | M | - | `engine_new_mission` |
+| `+0x140` .. `+0x14c` | the carried-actor vector (allocator `+0x140`, begin `+0x144`, end `+0x148`, cap `+0x14c`): the player and the car carried over by the script command `change_mission` (`g_new_mission_actors`). `engine_new_mission` pushes them after `game_init`, sets `owns_frame` (`+0x6c`) on the one that is not a car and clears the frame parent `+0x58` of both; `game_done` first drops a car parked in the garage, then calls `mission_active_actor_drop` and `mission_del_actor` on every entry, clearing a car's `owns_frame`; `game_init` empties it; `loadsave_savegame_save` writes these actors into a mission save | H | - | `engine_new_mission`, `game_done`, `game_init`, `loadsave_savegame_save` |
 | `+0x154` .. `+0x160` | the lightness records and their round-robin cursor | H | - | `structs/lightness.md` §2b |
-| `+0x164` | actor-lightness flag, set by the script command `ACTORLIGHTNESSON` (opcode `0x143`) | M | `+0x1b4` | `game_set_actor_lightness_flag` writes it, `game_init` writes it, and `game_tick` READS it — gating `game_lightness_tick` behind it plus a non-empty `+0x154 .. +0x158` vector and `*(g_display + 0x9c) >= 2` (a detail-quality setting). Ghidra folds the displacement into a register, so the read is only visible in a disassembly scan for the displacement. The Mafia Script Data Reference says the effect of `actorlightnesson` is that *no* light affects the player, so the polarity is not asserted |
+| `+0x164` | the object-lightness enable byte: while it is set, `game_tick` runs `game_lightness_tick` (also gated on a non-empty lightness vector and a detail setting of 2 or more); while it is clear the pass is skipped. Set only by the script command `ACTORLIGHTNESSON` (opcode `0x143`), cleared by `game_init` | H | `+0x1b4` | writers `game_set_actor_lightness_flag`, `game_init`; reader `game_tick` ¹ |
 | `+0x16c` .. `+0x178` | the `I3D_light` cache and its `0x7e7` re-test countdown | H | - | `structs/lightness.md` |
 | `+0x180` .. `+0x188` | the invisible-actor list, 8-byte `{C_actor *, 0}` records | H | - | `game_add_invisible_actor` |
-| `+0x1a8` / `+0x1ac` | traffic-signal ("semaphore") vector `begin`/`end`, stride `0x14` (`{frame-key +0x0, three sub-lights +0x4/+0x8/+0xc, phase-idx ptr +0x10}`); phase states from `g_game_semaphore_states` | H | `+0x1f0` / `+0x1f4` (PS2 count/begin) | `game_load_traffic_signals`, `game_free_traffic_signals`, `game_tick_traffic_signals`, `game_del_traffic_signal`, `game_enum_traffic_signal_frames` |
+| `+0x18c` / `+0x190` | the traffic-generator pick timer and its period (6000 ms, set by `game_init`) | H | `+0x1d4` / `+0x1d8` | `game_tick`, `game_init` (§6a) |
+| `+0x194` .. `+0x1a0` | the traffic-light clock: `+0x194` elapsed ms, `+0x198` phase period (3000 ms), `+0x19c` / `+0x1a0` the phases of the two crossing axes, 0..9 | H | `+0x1dc` .. `+0x1e8` | `game_init` (period, phases 0 and 5), `game_tick` (advances both mod 10, then `game_tick_traffic_signals`); §4d, `structs/driver.md` §3a |
+| `+0x1a8` / `+0x1ac` | traffic-signal ("semaphore") vector `begin`/`end`, stride `0x14` (`{frame-key +0x0, three sub-lights RED +0x4 / ORANGE +0x8 / GREEN +0xc, phase-idx ptr +0x10}`); phase states from `g_game_semaphore_states` | H | `+0x1f0` / `+0x1f4` (PS2 count/begin) | `game_load_traffic_signals`, `game_free_traffic_signals`, `game_tick_traffic_signals`, `game_del_traffic_signal`, `game_enum_traffic_signal_frames` |
 | `+0x1b4` .. `+0x1bc` | the roadblock vector, stride `0x14`, elements owning their own dword vector | H | - | the roadblock family |
-| `+0x1c4` .. `+0x1cc` | callable-device ("telephone") list: `+0x1c4` is the container header, `+0x1c8` / `+0x1cc` its `begin` / `end`, stride `0xc` (`{frame +0x0, _ +0x4, type-byte +0x8}`). Type 0 = wall alarm box, type 1 = phone booth. Consumed by the cop "go to a phone and call HQ" task | H | `+0x208` / `+0x20c` (PS2 count/begin) | `game_load_telephones`, `game_telephone_list_contains_key`, `game_telephone_list_erase_by_key`; address accessor `game_get_telephone_list` (`0x00425570`), whose result is handed to `vec_count_stride_0xc`, which reads `obj+4` / `obj+8` — that is what pins the header to this pair |
+| `+0x1c4` .. `+0x1cc` | callable-device ("telephone") list: header `+0x1c4`, `begin` / `end` `+0x1c8` / `+0x1cc`, stride `0xc` (`{frame +0x0, _ +0x4, type-byte +0x8}`) ² | H | `+0x208` / `+0x20c` (PS2 count/begin) | `game_load_telephones`, `game_telephone_list_contains_key`, `game_telephone_list_erase_by_key`, `game_get_telephone_list` ² |
 | `+0x1d8` .. `+0x1e0` | the **`S_shoot`** in-flight bullet vector, stride `0x5c`: position `+0x00`, velocity `+0x0c`, range `+0x18`, previous position `+0x1c`, damage `+0x28`, owner `+0x2c` | H | `+0x210` / `+0x214`, stride `0x70` | producer `game_new_shoot`, consumer `game_tick_shoot` |
 | `+0x1e8` / `+0x1ec` | the traffic-signal phase model-id list (u16 ids of the `dopravni1B..8B.I3D` models in the scene table) | M | `+0x21c` (count `+0x220`) | producer `game_build_traffic_signal_model_idx`, consumer `game_destroy_control_signal` |
 | `+0x1f4` / `+0x1f8` / `+0x1fc` | taxi pick-up-point vector `base` / `begin` / `end` | M | `+0x228` | `game_load_taxi_points` (`taxi_point` scene objects) |
@@ -168,34 +174,38 @@ Confidence: **[H]** measured on both builds · **[M]** measured on PC, meaning p
 | `+0x208` | embedded **`C_Break_plain_glass`** glass-shatter engine | H | - | §3 |
 | `+0x240` | embedded **`C_Debris`** debris and spark effect | H | - | §3 |
 | `+0x26c` | embedded **`C_compass`** | H | - | §3 |
-| `+0x284` .. `+0x28c` | the `S_fake_shadow_buff` mesh/slot table, stride 8 | H | `+0x2c4` / `+0x2c8` | `game_add_frame_for_shadow`; `structs/fake_shadow.md` |
+| `+0x284` .. `+0x28c` | the `S_shadow_temp` mesh table, stride 8 | H | `+0x2c4` / `+0x2c8` | `game_add_frame_for_shadow`; `structs/fake_shadow.md` |
 | `+0x290` / `+0x2a0` | the two `S_shadow_item` shadow-caster frame vectors, selected by `E_shadow_type`, stride `0x1c` | H | `+0x2d0` / `+0x2dc` | `game_add_frame_for_shadow` / `game_del_frame_for_shadow` |
-| `+0x2b0` / `+0x2b4` / `+0x2b8` | the fake-shadow LOD timer, its period and the vector toggle | H | - | `game_tick` (inlined `TickFakeShadows`) |
-| `+0x2bc` | **not a field** — a decompiler artifact | - | - | The decomp renders one of `game_tick`'s real vtable calls as `(*(code *)**(game + 0x2bc))(dt)`. A write-scan of the image finds NO store to `C_game + 0x2bc` anywhere, and a disassembly dump of `game_tick` contains ZERO `[reg+0x2bc]` reads. There is no `+0x2bc` class; the tick's real effect work is the inlined vtable loop over `+0x2f8` |
+| `+0x2b0` / `+0x2b4` / `+0x2b8` | the fake-shadow LOD timer, its period and the vector toggle | H | - | `game_tick` (its own LOD pass, §6a) |
 | `+0x2c8` .. `+0x2d0` | the live level-effect registry, stride `0x18`: `{particle guid, covered flag, vec3 pos, I3D_sound *}` | H | - | §4d |
 | `+0x2d8` / `+0x2dc` | the paused-sound save vector, stride `0x14` | H | - | `game_pause_all_sounds` / `game_play_all_sounds` |
 | `+0x2e8` / `+0x2ec` | its media-id sibling, filled only for media that was playing | H | - | the same pair |
 | `+0x2f8` / `+0x2fc` / `+0x300` | `std::vector<C_game::S_sound_play>` — the active 3D sounds, stride `0x18` | H | `+0x320` / `+0x324` / `+0x328` | `game_play_3d_sound`, `game_stop_3d_sound`, `game_tick` (inlined `TickEffects`) |
+| `+0x304` / `+0x308` | the sound-list walk timer and its period | H | `+0x32c` / `+0x330` | `game_tick` (§6a) |
 | `+0x30c` | 3D-sound handle counter, returned as the play handle | H | `+0x334` | `game_play_3d_sound` |
+| `+0x310` | the number of `S_sound_play` records still fading; while it is non-zero the sound-list walk runs every frame | H | `+0x338` | `game_stop_3d_sound` (increment), `game_tick` (decrement) |
 | `+0x324` (cursor `+0x3a4`) | the 32-slot smoke-trail actor ring | H | - | `game_new_smoke_trail` |
 | `+0x3a8` / `+0x538` | cartridge pool A — **100** `C_cartridge *` (model `2nabojnice.i3d`) and its wrap cursor | H | `+0x36c`, **10** entries | §4l |
 | `+0x53c` / `+0x5b4` | cartridge pool B — **30** `C_cartridge *` (model `2nabojniceb.i3d`) and its wrap cursor | H | `+0x398`, **5** entries | §4l |
-| `+0x75c` .. `+0x29bc` | the decal projector pool — 100 records of `0x58` bytes; each record's `+0x04` is an active flag driving `collision_dyn_insert` / `_erase` | H | - | walked with `iVar6 = 100` in `game_init` and `game_done` |
+| `+0x75c` .. `+0x29bc` | the decal projector pool — 100 records of `0x58` bytes: projector `+0x00`, a type-`0x48` collision object `+0x04`, its registered flag `+0x4c`, grow flag `+0x4d`, grow scale `+0x50`, owner frame `+0x54` | H | - | `game_create_track_effect` / `_between`, the grow loop in `game_tick`, `game_clear_projectors_for_frame`; `structs/blood.md` §5a |
 | `+0x29bc` .. `+0x29e0` | ten decal textures, loaded by name in `game_init`: `2blood.bmp`, `2flek.bmp`, `2dirbet.bmp`, `2dirdre.bmp`, `2dirple.bmp`, `2dirsklo.bmp`, `2bfootprint.bmp`, `2blood3.bmp`, `2dogfoot.bmp`, `skrob.tga` | H | - | `game_init`; `structs/blood.md` §5 |
-| `+0x29e4` | the decal ring cursor, reset to 0 in `game_init` | H | - | `game_init` |
+| `+0x29e4` | the decal ring cursor, reset to 0 in `game_init` | H | - | `game_init`, `game_projector_advance_ring_cursor` |
+| `+0x29e8` | the number of decals still growing in; gates the grow loop | H | - | `game_create_track_effect` / `_between` (increment), `game_tick` (decrement), `game_init` (clear); `structs/blood.md` §5c |
 | `+0x29ec` | embedded **`C_using_object`** — the usable-object registry behind the player action menu | H | `+0xde0` | §3 |
-| `+0x2a48` .. `+0x2ac0` | the 10-slot shoot-light (muzzle-flash) pool, stride `0xc` (`{frame, timer_ms, flags}`) | H | - | `game_add_shoot_light`; `game_tick` (inlined `ShootLightTick`); `structs/lightness.md` §4a |
-| `+0x2ad8` | the bullet-tracer actor pool | M | - | `game_new_shoot` |
+| `+0x2a48` .. `+0x2ac0` | the 10-slot shoot-light pool, stride `0xc` (`{I3D_light *, int lifetime_ms, u16 flags}`); flag bit 0 = flicker, then fade over the last 500 ms (§4a) | H | - | `game_add_shoot_light`; `game_tick` (inlined `ShootLightTick`); `structs/lightness.md` §4a |
+| `+0x2ac0` .. `+0x2ad7` | the bullet-tracer pool, three 8-byte records | M | - | `game_new_shoot` walks them downwards from `+0x2ad0` |
+| `+0x2ad8` | "the player touched a death-collision volume" (byte), material 40 (`def-files-docs/materialy.md`) | H | - | set to 1 by `human_movement_intern` (the player on foot) and `car_on_body_surface_contact` (a car the player drives), each also raising the water-fall script event; cleared by `game_init`; `game_tick` then opens the game-over screen, and `race_game_loop` / `race_game_loop_net` read it |
 | `+0x2ad9` | one-shot "drop the difference data" request byte | H | - | `game_request_clear_differences`; sole reader `game_tick`. PC-only: the PS2 `CLEARDIFFERENCES` arm is an empty stub |
 | `+0x2ae0` / `+0x2af0` | the removed-frame and removed-actor **difference** vectors | H | - | `game_load_differences` / `game_clear_differences` |
 | `+0x2b00` | the global-program vector, scanned by name | H | - | `game_global_program_run` |
 | `+0x2b0c` | current frame timestamp in ms — the global game clock | H | - | `game_get_frame_time_ms` (`0x00425540`, 148 callsites); the cooldown and duration math throughout the police-task scheduler |
 | `+0x2b14` | **frame counter** — `game_init` zeroes it, `game_tick` increments and switches on it | H | `+0xe5c` | `game_get_frame_count` |
 | `+0x2b3c` | the **`soundArena`** sub-object (mission sound ring) | H | `+0xe80` | address accessor `game_get_sound_arena` (`0x00425550`); `structs/soundArena.md` |
-| `+0x2d44` | **night-mission flag** (byte; 0 = day, 1 = night) | H | - | `game_set_night_mission` (`0x005c8b60`), the engine side of the script command `game_nightmission nn`, which the Mafia Script Data Reference describes as *"sets the mission to day or night; **affects car lights** and shooting effects"*. Two readers: `car_update`, whose automatic-headlight block (`C_Vehicle+0x19c` bit `0x10000`, `structs/vehicle.md` §1b) runs only while this is non-zero, and `car_deactivate`, which clears a car's script light-override bits only while it is ZERO |
+| `+0x2d44` | **night-mission flag** (byte; 0 = day, 1 = night) | H | - | writer `game_set_night_mission` (`0x005c8b60`); readers `car_update`, `car_deactivate` ³ |
 | `+0x2d48` .. `+0x2d67` | **four `(C_program *, event id)` script-event slots**, stride 8 — timer timeout, player fire, player horn, player water-fall, in that order | H | `+0x1194` .. `+0x11b3` | the four `game_raise_*_script_event` functions; a 4-of-4 ordered lockstep with the PS2 |
 | `+0x2d6c` / `+0x2d70` | **NPC-kill-event registry**, stride `0x28` (`{program +0x0, event +0x4, name[0x20] +0x8}`), matched by a killed entity's model name | H | `+0x11b8` / `+0x11bc` (PS2 count/begin) | `game_do_npc_kill_event`; the PS2 registrar is `AddNPCKillEvent` |
 | `+0x2d7c` / `+0x2d80` / `+0x2d84` | the **driver-rig registry** — `0x10`-byte `{I3D_model *, I3D_animation_set *, …}` records | H | `+0x11c4` / `+0x11c8` | `game_add_driver_man` / `game_del_driver_man` |
+| `+0x2d88` / `+0x2d8c` | the frame counts of the two steering-wheel animations, `AutoRidicVolant.I3D` and `FormuleVolant.I3D`, read by `game_init` | H | `+0x11cc` / `+0x11d0` | `game_init`, `game_tick` (§6a) |
 | `+0x2d90` | embedded **`C_blood_manager`** | H | - | §3 |
 | `+0x2e4c` | the script-stack first-use latch — clearing it clears all three stacks at once | H | - | §4f |
 | `+0x2e54` / `+0x2e64` / `+0x2e74` | the inventory, character and float script stacks | H | - | §4f |
@@ -216,7 +226,7 @@ Confidence: **[H]** measured on both builds · **[M]** measured on PC, meaning p
 | `+0x2fa4` | the city-music-area vector | H | - | §4h |
 | `+0x2fb0` .. `+0x2fc0` | the **city-music sub-block**: `+0x2fb0` ticker re-eval countdown (ms), `+0x2fb4` current track id, `+0x2fb8` pending track id, `+0x2fbc` active channel handle (−1 = none), `+0x2fc0` paused gate (byte) | H | …/`+0x13c4`/`+0x13c8`/`+0x13d0` — the PS2 uses TWO channels | `game_city_music_set_paused`, `game_city_music_off` |
 | `+0x2fc8` .. `+0x2fd0` | the film-music handle vector | H | - | `game_set_film_music` / `_get_film_music` / `_clear_film_music` |
-| `+0x2fd4` | set to `7000` by `game_init` | U | - | `game_init` |
+| `+0x2fd4` | the delay from the player's death to the game-over screen, ms | H | - | `game_init` sets `7000`; once the player actor's death-processed latch `+0x5e` is set, `game_tick` counts it down, then starts a 1000 ms fade and opens `gui_game_over` |
 | `+0x2fd8` .. `+0x3618` | the **car scratch decal pool** — an inline FIXED array of 100 records, stride `0x10`, `{scratch_frame +0x0, car +0x4, source_frame +0x8, age_counter +0xc}`. `+0x3618` is where the array ends, not a separate structure | H | `+0x13d8`, **20** records | `game_scratch_add` / `_get_free_idx` / `_delete_from_car` |
 | `+0x361c` .. `+0x3628` | the scream-area vector (stride 8, `{frame, u16 mask}`) and the OR-ed camera mask word at `+0x3628` | H | - | `game_tick_scream_areas`, producer `game_collect_scream_area` |
 | `+0x3630` / `+0x3634` | the weather enable flag and the base particle count | H | - | `game_apply_weather_detail_level` |
@@ -231,8 +241,34 @@ Confidence: **[H]** measured on both builds · **[M]** measured on PC, meaning p
 | `+0x3684` | ItemBlur enable byte — gates `game_item_blur_tick` from `game_tick`, cleared by `game_item_blur_done` | H | `+0x1568` | the ItemBlur family |
 | `+0x368c` / `+0x3690` / `+0x3694` | the **ItemBlur item vector** (motion-blur streak trails) `begin` / `end` / `cap`, stride `0x28`: `{source_frame +0x0.., prev-pos, active byte, sub-item ptr array +0x8, count +0xc}` | H | `+0x156c` / `+0x1570` / `+0x1574`, stride `0x30` | the ItemBlur family |
 
-`C_game::S_sound_play` is `0x18` bytes: `+0x00` is an `I3D_sound *` and a `char` flag sits
-near `+0x10`; the rest is undecoded.
+¹ The gate is `mov al,[ebp+0x164]; test al,al; je` around the `game_lightness_tick` call, followed
+by the non-empty `+0x154 .. +0x158` test and `*(g_display + 0x9c) >= 2` (a detail-quality setting).
+Ghidra folds the displacement into a register, so the read is only visible in the disassembly. No
+shipped mission script uses `actorlightnesson`, so the byte stays clear in the retail game. The
+Mafia Script Data Reference describes the command as making *no* light affect the player; the
+binary shows only the gate above.
+
+² Type 0 = wall alarm box, type 1 = phone booth; the list is consumed by the cop "go to a phone and
+call HQ" task. `game_get_telephone_list` (`0x00425570`) is the address accessor; its result is
+handed to `vec_count_stride_0xc`, which reads `obj+4` / `obj+8` — that is what pins the header to
+this pair.
+
+³ `game_set_night_mission` is the engine side of the script command `game_nightmission nn`, which
+the Mafia Script Data Reference describes as *"sets the mission to day or night; **affects car
+lights** and shooting effects"*. `car_update`'s automatic-headlight block (`C_Vehicle+0x19c` bit
+`0x10000`, `structs/vehicle.md` §1b) runs only while the flag is non-zero; `car_deactivate` clears a
+car's script light-override bits only while it is ZERO.
+
+**`+0x2bc` is not a field.** The decomp renders one of `game_tick`'s real vtable calls as
+`(*(code *)**(game + 0x2bc))(dt)`, but a write-scan of the image finds no store to `C_game + 0x2bc`
+and a disassembly dump of `game_tick` contains no `[reg+0x2bc]` read; the tick's real effect work
+is the inlined vtable loop over `+0x2f8`.
+
+`C_game::S_sound_play` is `0x18` bytes: `+0x00` the `I3D_sound *`, `+0x04` the play handle,
+`+0x08` the target volume of a fade-in, `+0x0c` the signed fade rate per ms (positive fades in
+toward `+0x08`, otherwise the sound fades out and stops at 0), `+0x10` the fading flag (byte) and
+`+0x14` the last playback position, which shows when a sound has finished. `game_stop_3d_sound`
+either stops a sound at once or sets the flag, stores `-rate` and increments `+0x310`.
 
 **`g_net_session` (`DAT_006efbac`) is a different object.** It is a separate top-level
 session object (`structs/net_session.md`). The two are easy to conflate because **both have
@@ -255,12 +291,10 @@ through the singleton accessor.
 | `+0x26c` | **`C_compass`** | `lea ecx,[esi+0x26c]` in `game_init` and `lea ecx,[ebp+0x26c]` in `game_done` — the only two callsites of `compass_activate` | - |
 | `+0x29ec` | **`C_using_object`** | every safe callsite of all nine members loads `[reg+0x24] + 0x29ec` — 45 for `using_object_del_object`, 33 for `_add_object`, 24 and 16 for the invalid-item pair. PS2 `+0xde0` | `structs/using_object.md` |
 | `+0x2b3c` | **`soundArena`** | address accessor `game_get_sound_arena` (`0x00425550`) | `structs/soundArena.md` |
-| `+0x2d90` | **`C_blood_manager`** | 12 of 12 callsites: `lea ecx,[this+0x2d90]` in `game_init` / `game_tick` / `game_done`, and `mov ecx,[display+0x24]; add ecx,0x2d90` from every `human_*` / `dog_*` / `pedestrian_hit` wound path | `structs/blood.md` |
+| `+0x2d90` | **`C_blood_manager`** | 12 of 12 callsites: `lea ecx,[this+0x2d90]` in `game_init` / `game_tick` / `game_done`, and `mov ecx,[display+0x24]; add ecx,0x2d90` from every `human_*` / `dog_*` / `pedestrian_hit` wound path; `game_ctor` / `game_dtor` construct and free it through the shared folds `folded_vector_ctor_at_0x04` / `folded_vector_free_at_0x04` | `structs/blood.md` |
 
 Three more `C_game` features — per-object ambient shading, the shoot-light pool at `+0x2a48`
-and the `I3D_light` cache at `+0x16c` — have their own document, `structs/lightness.md`. All
-three are gutted to empty stubs on the PS2 and shipped in full on the PC, so that band is
-where the PS2 method count is a LOWER bound rather than an upper one.
+and the `I3D_light` cache at `+0x16c` — have their own document, `structs/lightness.md` (§6c).
 
 ## 4. Subsystems
 
@@ -272,13 +306,28 @@ consumer. `game_tick_shoot` is 8036 bytes that touch no sound at all: it steps t
 range `+0x18`, previous position `+0x1c`, damage `+0x28`, owner `+0x2c` — advancing each
 record by `dt * 0.3`, ray-testing the travelled segment and applying damage.
 
-Muzzle flashes go into the 10-slot pool at `+0x2a48` through `game_add_shoot_light`; the
-per-frame decay is inlined into `game_tick` (§6a). Shell casings come out of the two
-cartridge pools (§4l).
+`game_add_shoot_light(pos, range, lifetime_ms, flags)` claims the first of the ten slots at
+`+0x2a48` whose lifetime has run out, sets the light's range to `(range * 0.5, range)`, moves it to
+`pos`, links it into the scene, switches it on with an intensity of `rand × 0.4 + 0.8` and stores
+the lifetime and the flags. The per-frame part is inlined into `game_tick` (§6a): each slot's
+lifetime counts down, and at zero the light is unlinked and switched off; while it lasts, a slot
+with flag bit 0 flickers (`rand × 0.4 + 0.8`) and fades linearly over its last 500 ms. A slot
+without the flag keeps a steady light until it goes out.
+
+| caller | range | lifetime | flags |
+|---|---|---|---|
+| `human_shooting` (muzzle flash) | 7.0 | 50 ms | 0 |
+| `actor_shot_update` | 7.0 | 50 ms | 0 |
+| `game_new_explosion` | 12.0 | 100 ms | 0 |
+| `game_new_fire` | 10.0 | the fire's own lifetime | 1 |
+
+The muzzle effect of `game_new_shoot` itself is a particle: `particle_manager_create_particle` with
+the weapon's particle type at the muzzle frame. Shell casings come out of the two cartridge pools
+(§4l).
 
 ### 4b. Temporary actors
 
-Five functions over three containers: the two act-state buckets `+0xec` / `+0xfc`, the master
+Six functions over four containers: the two act-state buckets `+0xec` / `+0xfc`, the master
 vector `+0x124`, and the deferred retirement queue `+0x134`.
 
 | function | what it does |
@@ -286,6 +335,7 @@ vector `+0x124`, and the deferred retirement queue `+0x134`.
 | `game_add_temporary_actor` | the public add, with the register-virtual |
 | `game_add_temporary_actor_intern` | the same without it |
 | `game_remove_temporary_actor` | DEFERRED: set act-state 2 (spent) and queue onto `+0x134` |
+| `game_remove_temporary_actor_intern` | swap-remove from the master vector and both buckets, unless queued for retirement; no virtuals |
 | `game_remove_temporary_actor_now` | IMMEDIATE: swap-remove from the master vector and invalidate |
 | `game_clear_temporary_actors` | empty the master vector, skipping two sentinel globals |
 
@@ -321,8 +371,16 @@ parked over it does not count. The particles already alive keep drawing.
 Six functions over `+0x1a8`: `game_load_traffic_signals`, `game_enum_traffic_signal_frames`
 (its enumerator callback), `game_free_traffic_signals`, `game_tick_traffic_signals`,
 `game_build_traffic_signal_model_idx` and `game_del_traffic_signal`. There is **no
-`AddSemaphore` on either build**: the list is built wholesale at scene load, exactly like the
+single-record adder** (§6f): the list is built wholesale at scene load, exactly like the
 roadblock and telephone lists, and `Del` is the only single-record mutator.
+
+`game_enum_traffic_signal_frames` takes every `semafor.i3d` frame and looks up its child frames
+`RED`, `ORANGE` and `GREEN` into the record's three sub-light slots. Each tick of the light clock
+(every 3000 ms) `game_tick_traffic_signals` switches the three on or off from
+`g_game_semaphore_states[phase]` = `[1,1,1,1,1,4,4,4,4,2]`: bit `1` red, bit `2` orange, bit `4`
+green. A cycle is therefore 15 s red (phases 0..4), 12 s green (5..8) and 3 s orange (9). The two
+phases start at 0 and 5 and advance together, so the two crossing axes show opposite colours. The
+traffic AI reads the same phases to stop at a red light (`structs/driver.md` §3a).
 
 `game_collect_telephone` matches frame model basenames against exactly two literals —
 `alarm01.i3d` → type 0 (the wall alarm box) and `PHbox01.i3d` → type 1 (the phone box) — so
@@ -337,7 +395,9 @@ mask out of the hexadecimal number in parentheses inside the frame name.
 `game_play_all_sounds` (`PlayAllSounds`) are the whole-scene family; `game_play_3d_sound` /
 `game_stop_3d_sound` are the per-sound pair over `+0x2f8`; `game_flush_pending_actor_lookups`
 drains an actor-lookup queue and has nothing to do with audio.
-`game_pause_scene_sounds_recursive` exists only on the PC.
+`game_pause_scene_sounds_recursive` exists only on the PC. The fades of the `+0x2f8` records
+(§2) are advanced by the sound-list walk inlined into `game_tick` (§6a), which also retires every
+sound that has stopped playing.
 
 ### 4f. The three script stacks are one API
 
@@ -361,8 +421,9 @@ and `entity_force_ai`.
 ### 4h. City music, media and film music
 
 The city-music block is `+0x2fb0 .. +0x2fc0` with its area vector at `+0x2fa4`;
-`game_city_music_set_paused` gates it and calls `game_city_music_off`, which fades the active
-track over 5 s and promotes the pending one.
+`game_city_music_set_paused` gates it and calls `game_city_music_off`, which destroys the outgoing
+track at once and fades the incoming one to silence over 5000 ms. The script arm that starts an
+in-game music clip calls `game_city_music_off` too.
 
 The media / in-game-FMV player is eleven functions over `+0x2f1c` (§1), with per-entry volume
 re-applied against `g_music_volume` by `game_media_apply_volumes`.
@@ -379,8 +440,7 @@ teardown, case `0x2e`.
 
 An inline fixed array of 100 records at `+0x2fd8`, stride `0x10`. `game_scratch_add` stamps a
 mark, `game_scratch_get_free_idx` allocates the slot in three passes, `game_scratch_recompile`
-rebuilds the mesh and `game_scratch_delete_from_car` clears a car's marks. The PS2 pool is 20
-slots; the PC build enlarged it to 100.
+rebuilds the mesh and `game_scratch_delete_from_car` clears a car's marks (pool sizes: §6d).
 
 ### 4j. Freeride score
 
@@ -392,9 +452,8 @@ are re-driven by `game_save_game_load`.
 ### 4k. Box placement
 
 Sixteen functions over two vectors (`+0x2e84` boxes, `+0x2e94` destinations), one saved-info
-vector (`+0x34`) and the player's carried-box path node (`+0x2ea0`). They are listed in §1;
-three of the PS2 verbs (`GetBox`, `GetBoxDest`, `GetNextDest`) describe neither the return
-value nor the action, and the PC names state what the bodies do.
+vector (`+0x34`) and the player's carried-box path node (`+0x2ea0`). They are listed in §1,
+and the PC names state what the bodies do (§6f).
 
 ### 4l. The two shell-casing pools
 
@@ -406,23 +465,19 @@ is 30 entries at `+0x53c` with its cursor at `+0x5b4` (model `2nabojniceb.i3d`).
 
 ### 4m. Script-written scalars
 
-Eight scalar fields the script VM writes, each body-diffed against the PS2 `C_program::Process`
-arm for the same command: `+0x48`, `+0x164`, `+0x2ad9`, `+0x2b14`, `+0x2d48 .. +0x2d67`,
-`+0x2edc` / `+0x2ee0`, `+0x3638` and `+0x3665`. Their meanings and PS2 offsets are in §2.
+Eight scalar fields the script VM writes: `+0x48`, `+0x164`, `+0x2ad9`, `+0x2b14`,
+`+0x2d48 .. +0x2d67`, `+0x2edc` / `+0x2ee0`, `+0x3638` and `+0x3665`. Their meanings are in §2;
+the cross-build check is in §6f.
 
 ## 5. The constructor and destructor
 
 `game_ctor` (`0x00606750`) and `game_dtor` (`0x00606e20`) are **not** in `g_game.cpp`. They
-sit in the `Mission.cpp` translation unit on BOTH builds: the PS2 inlines the identical
-constructor into `Init__9C_missionFP10I3D_driver` and the identical destructor into
-`UnInit__9C_missionFv`, and its `std::__vector_deleter<C_game::S_*>` helpers are emitted in
-the same PS2 band. The PC keeps them out of line, and `mission_init` calls `game_ctor`
-straight after `operator_new(0x3698)`.
+sit in the `Mission.cpp` translation unit (§6f), out of line, and `mission_init` calls
+`game_ctor` straight after `operator_new(0x3698)`.
 
-The sub-object construction order settles the identification without a symbol to diff against
-(the PS2 has no `__ct__6C_gameFv`): `G_Camera`, the 100-slot decal pool at `+0x75c`,
-`C_rmorf`, `C_sledovacka`, `C_blood_manager` at `+0x2d90`, `C_shvestky` — the same sequence
-the PS2 emits inline. `game_dtor` unwinds it in reverse, ending at `camera_dtor`, and also
+The sub-object construction order is `G_Camera`, the 100-slot decal pool at `+0x75c`,
+`C_rmorf`, `C_sledovacka`, `C_blood_manager` at `+0x2d90`, `C_shvestky`; it settles the
+identification (§6f). `game_dtor` unwinds it in reverse, ending at `camera_dtor`, and also
 frees the ItemBlur storage that `game_item_blur_done` only empties.
 
 The two breakage sub-objects are destroyed through `game_subobject_0x208_dtor` and
@@ -434,35 +489,37 @@ The two breakage sub-objects are destroyed through `game_subobject_0x208_dtor` a
 
 ### 6a. Inlined into `game_tick`
 
-MSVC folded six PS2 `C_game` methods into `game_tick`, so they have no separate PC function.
+MSVC folded seven PS2 `C_game` methods into `game_tick`, so they have no separate PC function.
 Each site is bracketed with an `// ===== INLINED ... =====` banner in the decomp.
 
 | PS2 method | where it went | proof |
 |---|---|---|
-| `ShootLightTick__6C_gameFUi` | the muzzle-flash-light loop over `+0x2a48` | byte-verified |
-| `TickEffects__6C_gameFUi` | the per-frame `S_sound_play` walk over `+0x2f8` | same timer gate, same walk, same per-entry flag and cursor comparison, with the virtual offsets differing by the class's constant `+0x2c` vtable delta |
-| `TickFakeShadows__6C_gameFUi` | the fake-shadow / render-target LOD pass over `+0x290` / `+0x2a0`, timer-gated on `+0x2b0` / `+0x2b4`, distance-sorted, then `game_bind_fake_shadow_buffer` by texture-quality index | behaviour match; not byte-diffed |
+| `ShootLightTick__6C_gameFUi` | the shoot-light loop over `+0x2a48` | byte-verified; the PS2 walks a pool of 2 records, the PC its 10 |
+| `TickEffects__6C_gameFUi` | the per-frame `S_sound_play` walk over `+0x2f8` | statement for statement: the timer gate bypassed while fades are running, the is-playing test, the playback-position test, the three-virtual retire with swap-pop, both fade branches. The sound virtuals sit `0x2c` higher on the PS2 and the inherited frame virtuals `0x14` higher |
 | `TickCityMusic__6C_gameFUi` | the `+0x2fb0` block | bannered |
 | `TickShadows__6C_gameFv` | - | an empty PS2 stub; nothing to inline |
 | `LightCacheTick__6C_gameFUi` | absorbed whole (388 bytes) into `game_recompute_light_cache` — a 2-to-1 fold | bannered |
+| `SetActiveTrafficP__6C_gameFUi` | the traffic-generator pick over `+0x18c` / `+0x190`; `game_init` runs a second copy with the period plus one, which forces a pick on the first frame | statement for statement: the kind-`0x12` scan, the in-range-first then nearest choice, `SetActState(0)` and the selected byte |
+| `TickDriverMan__6C_gameFv` | the steering-wheel loop over `+0x2d7c`: frame = (current steer `car+0x714` / max steer `car+0x6fc` + 1) × 0.5 × the wheel animation's frame count `+0x2d88` / `+0x2d8c` | statement for statement, gated on the detail setting |
 
 `game_tick` also folds in per-frame blocks that are its OWN logic rather than separate
-methods: actor visibility (`+0x180`), the traffic-generator pick (`+0x18c`), a `+0x16c`
-distance cull, the level-effect registry sweep (`+0x2c8`) and the periodic scream-area pass
-(`+0x361c`).
+methods: actor visibility (`+0x180`), a `+0x16c` distance cull, the level-effect registry sweep (`+0x2c8`), the periodic scream-area pass
+(`+0x361c`) and the fake-shadow LOD pass over `+0x290` / `+0x2a0`, which no PS2 method performs
+(`structs/fake_shadow.md` §7).
 
 ### 6b. The 29 PS2 `C_game` methods with no located PC counterpart
 
 | group | methods | reading |
 |---|---|---|
-| inlined into `game_tick` (§6a) | `ShootLightTick`, `TickEffects`, `TickFakeShadows`, `TickCityMusic`, `TickShadows`, `LightCacheTick` | a factoring difference, not an absence |
+| inlined into `game_tick` (§6a) | `ShootLightTick`, `TickEffects`, `TickCityMusic`, `TickShadows`, `LightCacheTick`, `SetActiveTrafficP`, `TickDriverMan` | a factoring difference, not an absence |
+| inlined into `game_init` | `PreloadAnims` | the heavy-init block's clip preload and base-track seed, statement for statement (`structs/anim_machine.md` §4b); the PS2 calls it once from `InitSystem` |
 | InterCity city streaming | `AddInterCityArea`, `ClearInterCityAreas`, `TickInterCity`, `InterCityNajeb`, `InterCityVyjeb`, `VyhjebejTemporaryho` | PS2-port-only and TERMINAL. `InterCity` appears 0 times in the PC decomp; the PS2 added city-part streaming for the console's 32 MB, and `VyhjebejTemporaryho` exists only to move a temporary actor onto the mission-global list through `InterCity_AddGlobalActor` so it survives a city-part load |
 | FQL actor loading | `AddActorForFQL`, `CreateActorsFQL` | the same family as `C_mission`'s FQL path methods, which the PC also lacks |
 | death-human fade | `AddDeathHumanFade`, `ClearDeathHumanFade`, `TickDeathHumanFade` | the PS2's alternative to the PC's part arena (`structs/dropout.md`) |
-| fire flames | `AddFireFlame`, `TickFireFlames` | open; the PC has `game_new_fire` and `game_new_small_fires` and nothing at this rank |
-| fake-shadow add/del | `AddFakeShadow`, `DelFakeShadow`, `IsFramePlacement` | empty PS2 stubs, or PC-side inlined into the `+0x284` table walk |
-| active-actor bookkeeping | `AddNewActorToActive`, `DelNewActorFromAll`, `IsActorInActList` | open |
-| singles | `PreloadAnims`, `SetActiveTrafficP`, `TickDriverMan`, `TickHydrant` | open. `TickHydrant` is 864 real bytes on the PS2 doing distance culling and pause/resume of the hydrant particles; the PC has `game_add_hydrant` and `game_del_all_hydrants` and nothing between them, because `game_tick` does that work inline over `+0x2c8` (§4c) |
+| fire flames | `AddFireFlame`, `TickFireFlames` | replaced: at the `AddFireFlame` call position in `NewShoot` the PC builds the same `(0,0,0)` / `(0,0,1)` locals and calls `particle_manager_create_particle` with the weapon's muzzle particle, so nothing on the PC keeps or ticks a flame ring |
+| shadows for people | `AddFakeShadow`, `DelFakeShadow`, `TickFakeShadows` | PS2-only: a second shadow system, for people, whose calls the PC twins of every caller drop (`structs/fake_shadow.md` §7) |
+| active-actor bookkeeping | `AddNewActorToActive`, `DelNewActorFromAll`, `IsActorInActList` | PS2-port-only: every PS2 caller is InterCity code, the PS2-only rail generator (entity kind `0x26`), or the freeride setup tail whose PC twin `loadsave_freeride_setup_scene` ends at `mission_add_actor`; `IsActorInActList` has no caller |
+| singles | `TickHydrant`, `IsFramePlacement` | `IsFramePlacement` (92 bytes) is PS2-port-only: its one caller is the PS2-only `S_auto_hide_machine` (`structs/camera.md` §6d). `TickHydrant` is 864 real bytes on the PS2 doing distance culling and pause/resume of the hydrant particles; the PC has `game_add_hydrant` and `game_del_all_hydrants` and nothing between them, because `game_tick` does that work inline over `+0x2c8` (§4c) |
 
 ### 6c. Gutted on the PS2, shipped on the PC
 
@@ -474,7 +531,9 @@ nothing to diff against:
   light is added and no casing is ever ejected on the PS2 — although it keeps both cartridge
   pools and `ClearCartridges__6C_gameFv`;
 * `TickShadows`, `SetFrameForShadow` and `DelFrameForShadow` are `return` / `return 0` stubs;
-* the whole lightness band (`structs/lightness.md`) is stubbed there.
+* the whole lightness band (`structs/lightness.md`) is stubbed there — per-object ambient
+  shading, the shoot-light pool at `+0x2a48` and the `I3D_light` cache at `+0x16c` — so that band
+  is where the PS2 method count is a LOWER bound rather than an upper one.
 
 ### 6d. Container and layout differences
 
@@ -500,21 +559,28 @@ object file because this is where they were used. A branch-aware receiver census
 puts them on many unrelated owners — `std_vector4_insert_at` alone has **55** callsites across
 about 30 — so none of them may carry a class-qualified name.
 
+### 6f. Cross-build identification notes
+
+* **Singleton and code span:** the PS2 singleton is `*(int *)(act_mission + 0x20)` (PC `+0x24`),
+  and PS2 `C_game` code spans `0x002ea010`–`0x00306d70`.
+* **Traffic signals (§4d):** there is no `AddSemaphore` on either build.
+* **Broken models (§2):** PS2 `CreateCrashModel` pushes the broken model onto `C_game+0x10` and
+  switches it off, exactly as `crash_obj_create_from_model` does on the PC.
+* **City music (§4h):** `CityMusicOff` releases its two channel objects at once; the PC destroys
+  the outgoing track and fades the incoming one. Both PC callers sit where the PS2 calls it — the
+  music-clip script arm, statement for statement, and `CityMusicPaused` — so the twin is
+  STRUCTURAL. The PS2 `Done` calls it as well; `game_done` has no call at that position.
+* **Box placement (§4k):** three of the PS2 verbs (`GetBox`, `GetBoxDest`, `GetNextDest`)
+  describe neither the return value nor the action of the twin bodies.
+* **Script-written scalars (§4m):** each is body-diffed against the PS2 `C_program::Process` arm
+  for the same command; the PS2 offsets are in §2.
+* **Constructor and destructor (§5):** both builds place them in `Mission.cpp`. The PS2 has no
+  `__ct__6C_gameFv`; it inlines the identical constructor into `Init__9C_missionFP10I3D_driver`
+  and the identical destructor into `UnInit__9C_missionFv`, and its
+  `std::__vector_deleter<C_game::S_*>` helpers are emitted in the same PS2 band. The PC
+  sub-object construction order is the same sequence the PS2 emits inline, which settles the
+  identification without a symbol to diff against.
+
 ## 7. Open items
 
-| item | state |
-|---|---|
-| the PC vtable | not identified |
-| the writer of `+0xe4` | the player-actor field has 48 readers and no located writer |
-| `+0x2fd4` | `game_init` sets it to `7000`; no consumer decoded |
-| `+0x24` .. `+0x2c` | the sibling created-frame vector — the PC indexes it, but what distinguishes it from `+0x18` is not decoded |
-| `+0x148` | the actor list `engine_new_mission` pushes carried actors into; not otherwise traced |
-| the decal projector pool | the record layout of the 100 `0x58`-byte records is undecoded, and so are the bullet-impact producers of decal textures 2–5. Only the texture table is written down (`structs/blood.md` §5) |
-| the per-record `flags` of the shoot-light pool | undecoded on the PC; on the PS2 bit 0 chooses the flicker path in `ShootLightTick`, but the PC never reads it back |
-| `+0x164` polarity | the actor-lightness flag has a located writer and reader, but whether it enables or suppresses lighting on the player is not asserted |
-| `AddFireFlame` / `TickFireFlames` | no PC counterpart located (§6b) |
-| `AddNewActorToActive` / `DelNewActorFromAll` / `IsActorInActList` | no PC counterpart located (§6b) |
-| `PreloadAnims` / `SetActiveTrafficP` / `TickDriverMan` | no PC counterpart located (§6b) |
-| `InternTempActDel` | 304 bytes on the PS2, no PC counterpart located |
-| `TickEffects` / `TickFakeShadows` | inlined into `game_tick` on behaviour match; not byte-diffed |
-| `game_city_music_off` | CANDIDATE — role and call position match, but the PC body is refactored to one handle against the PS2's two channels, so no statement-level diff closes it |
+Nothing is open.

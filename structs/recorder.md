@@ -1,6 +1,6 @@
 # `C_recorder` — the keyframe track recorder and `.tck` loader
 
-**Created** 2026-08-04 18:07 +0200 · **Modified** 2026-09-27 15:52 +0200
+**Created** 2026-08-04 18:07 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -100,7 +100,7 @@ Ordered by vtable slot; all 53 slots are placed. Slot indices are relative to th
 | 40-42 | `recorder_binding_block_size` / `_write` / `_read` | the `.rep` binding section |
 | 43 / 44 | `recorder_bind_object_by_name` / `_unbind_` | - |
 | 45 | `recorder_open_speech_sound_for_text_id` | bridge into `structs/speech.md` |
-| 46 | `recorder_get_constant_5` | `return 5;` — dead; the meaning of 5 is undecoded |
+| 46 | `recorder_get_constant_5` | `return 5;` — dead (§7) |
 | 47 | `recorder_set_overlay_texture` | the cutscene letterbox |
 | 48 | `recorder_rebind_speaker_channel` | bridge into `structs/speech.md` |
 | 49 | `recorder_tick_speech` | bridge into `structs/speech.md` |
@@ -212,7 +212,7 @@ Allocated by `recorder_new_track`.
 | `+0x18` | first key chunk | every stream walk starts here; `recorder_key_stream_clear` nulls it |
 | `+0x20` | track name | `act_%d` / `hum_%d` / … ; copied into the binding record |
 | `+0x44` | **key-size table**, 4 entries | `{8, size1, size2, size3}`; indexed by `key[1]` |
-| `+0x54` | cleared on rewind | purpose untraced |
+| `+0x54` | unnamed | cleared on rewind (§7) |
 | `+0x58` | owner back-pointer | written by `recorder_add_track` |
 
 ### 4a. Track naming, and what it proves

@@ -1,6 +1,6 @@
 # `C_animations_machine_de_luxe` — the animation machine (`anim_machine_`)
 
-**Created** 2026-07-13 11:22 +0200 · **Modified** 2026-09-17 22:55 +0200
+**Created** 2026-07-13 11:22 +0200 · **Modified** 2026-09-29 19:47 +0200
 
 The engine's per-object **animation state machine**: it owns the animation tracks, the
 currently-playing clip, the blend state, the "extended" (overlay) animation slot, and the
@@ -11,8 +11,8 @@ vtable of its own in the PC build.
 |---|---|
 | PC prefix | **`anim_machine_`** (the static track table and its helpers: `anim_track_*`) |
 | PC cluster | `[0x005aa800, 0x005ad600)` |
-| Object size | **>= `0x124`** (§2) |
-| Method coverage | 22 of 24 PS2 methods located (§4) |
+| Object size | **`0x128`** (§2) |
+| Method coverage | all 24 PS2 methods accounted for: 21 own PC functions, 2 inlined, 1 folded (§4) |
 
 Confidence: treat every field as **[M]** unless marked **[H]**.
 
@@ -21,35 +21,47 @@ looks like `C_human` animation code may belong to this class instead.
 
 ---
 
-## 1. Where the object lives (five owners)
+## 1. Where the object lives (six owners)
 
 Established by a scan of `.text` for every `E8` call to the machine's methods, then a back-trace of
 the ECX source (`lea ecx,[reg+disp]` = EMBEDDED, `mov ecx,[reg+disp]` = POINTER) with each callsite
-attributed to its containing function. **86 callsites.** The decomp cannot answer this on its own:
-MSVC passes the machine in ECX and Ghidra hides the `this` at every callsite.
+attributed to its containing function. The decomp cannot answer this on its own: MSVC passes the
+machine in ECX and Ghidra hides the `this` at every callsite.
 
 | Owner | How it holds the machine | Offset | Conf | Evidence |
 |---|---|---|---|---|
 | **`C_human`** (and its subclasses `C_player` / `C_entity`) | EMBEDDED | **`+0xbc`** | H | 23 distinct owning functions. Worked example — `human_do_play_anim` (`0x004a63f0`): prologue `8b f1` (`mov esi,ecx`, ESI = `this`), then `8d be bc 00 00 00` (`lea edi,[esi+0xbc]`), `8b cf` (`mov ecx,edi`), `call anim_machine_set_anim` |
 | **`C_dog`** | EMBEDDED | `+0xe8` | H | 6 owning functions in the `0x0047b800..0x0047f3a0` cluster; the cluster's strings are `hlavapsa_I3D` (*hlava psa* = dog's head), `Datack_I3D` / `Dbark1_i3d` / `Dbreath_i3d` / `Ddeath_I3D` |
 | **`C_pumper`** (gas-station attendant) | EMBEDDED | `+0xe0` | H | The band's strings are `_pumpa_*` (*pumpa* = fuel pump), the idle set `Kurak*` (*kuřák* = smoker) and `Nuda*` (*nuda* = boredom) — `structs/pumper.md` |
+| **`C_traffic_car`'s crew element** (`S_ELEMENT`) | EMBEDDED | `+0x24` | H | `traffic_car_element_ctor` and `traffic_car_adopt_car_with_new_driver` both do `lea ecx,[reg+0x24]; call anim_machine_ctor`; the teardown goes through the adjustor thunk `thunk_stub_noop_cdecl_00574a40` (`add ecx,0x24`) — `structs/traffic_car.md` |
 | `C_traffic_element` | POINTER | `+0x08` | H | `pedestrian_end_taxi_wave` / `pedestrian_deactivate` deref `*(elem+8)` |
-| `S_rail_human` (the tram passenger, `rail_passenger_`) | POINTER | `+0x08` | H | Built by `railway_game_init`, driven by `rail_passenger_set_anim` from the passenger state at `+0x14` through the table `g_rail_passenger_anims`, destroyed by `rail_passenger_done` — `structs/railway.md` §2b |
+| `S_rail_human` (the tram passenger, `rail_passenger_`) | POINTER | `+0x08` | H | Built by `railway_game_init` and `railway_add_person`, driven by `rail_passenger_set_anim` from the passenger state at `+0x14` through the table `g_rail_passenger_anims`, destroyed by `rail_passenger_done` — `structs/railway.md` §2b |
 
-**The owner set is closed at five.** The machine's caller set is exactly this owner set:
-`human_ctor`, `dog_ctor`, `pumper_ctor`, `pedestrian_manager_add_pedestrian` (building a
-`C_traffic_element`) and `railway_game_init`.
+**The owner set is closed at six by the constructor's callsites.** `anim_machine_ctor` has exactly
+nine `E8` callers: `human_ctor`, `dog_ctor`, `pumper_ctor`, `traffic_car_element_ctor`,
+`traffic_car_adopt_car_with_new_driver` (the four embedded owners), `pedestrian_manager_add_pedestrian`
+(a heap machine for a `C_traffic_element`), and `railway_game_init` ×2 plus `railway_add_person`
+(heap machines for `S_rail_human`). Every heap machine is `operator_new(0x128)` followed by the ctor.
 
 **`pedestrian_set_anim` and `pedestrian_drop_umbrella` deref `this+0x8` as an anim-machine
 pointer**, so their `this` is a `C_traffic_element`, not a `C_human`.
 
+### 1a. Construction and teardown
+
+The machine's destructor is empty, so MSVC emits no body for it: every teardown calls the shared
+bare `ret` `stub_noop_cdecl_00574a40` with ECX = the machine, and the heap owners then free the
+block with `operator_delete`. The receivers are proven at every site: `human_dtor`
+(`lea ecx,[esi+0xbc]`), `dog_dtor` (`+0xe8`), `pumper_dtor` (`+0xe0`), three EH unwind funclets
+(`this+0xbc` ×2, `this+0xe0`), the crew-element thunk (`+0x24`), and `rail_passenger_done` /
+`pedestrian_manager_clear_pedestrians` (the pointer, followed by `operator_delete`). The stub has
+30 callers in all, so it is not a symbol of this class.
+
 ### Consistency check on `C_human + 0xbc`
 
-The machine is **>= `0x124` bytes** (§2), so embedded at `+0xbc` it spans `+0xbc .. ~+0x1e0`.
+The machine is **`0x128` bytes** (§2), so embedded at `+0xbc` it spans exactly `+0xbc .. +0x1e4`.
 `structs/human.md` documents `C_human` fields at `+0x4c`, `+0x74`, `+0x98`, `+0xac` (all below
-`+0xbc`) and then `+0x1e4` / `+0x1e5` / `+0x1e8` (all above `+0x1e0`) — **not a single documented
-`C_human` field falls inside `+0xbc..+0x1e0`**. The machine fills exactly the hole the field map
-leaves open, which pins its size at roughly `0x124..0x128`.
+`+0xbc`) and then `+0x1e4` / `+0x1e5` / `+0x1e8` — **the first documented field after the machine
+is exactly where the machine ends.**
 
 ---
 
@@ -81,10 +93,15 @@ typedef struct C_animations_machine_de_luxe {
     /* +0x10e*/ int16_t  ext_clip_id;        // [H] the extended anim's CLIP ID. 0xffff (-1) = none.
                                              //     -0x2357 is the "hail a taxi" wave clip — that exact
                                              //     magic is how pedestrian_end_taxi_wave detects it.
-    /* +0x110*/ uint8_t  ext_locked;         // [H] gate: when non-zero, DelExtendedAnim refuses to run
+    /* +0x110*/ uint8_t  locked;             // [H] 1 = the machine is frozen: every animation entry
+                                             //     point returns without acting (§3)
     /* +0x114*/ uint32_t tail_block[4];      // [M] +0x114..+0x120 — written by SetAnim
-} C_animations_machine_de_luxe;              // size >= 0x124 (upper bound not established)
+} C_animations_machine_de_luxe;              // size 0x128
 ```
+
+**Size `0x128`**, measured at every heap site: `pedestrian_manager_add_pedestrian`,
+`railway_game_init` ×2 and `railway_add_person` each do `operator_new(0x128)` followed by
+`anim_machine_ctor`.
 
 **Track count = 8.** `anim_machine_stop_anims` loops `i = 0..7` calling
 `anim_object->vtable[+0x68](i)`. The **extended/overlay animation uses track slot 2**
@@ -103,17 +120,23 @@ typedef struct C_animations_machine_de_luxe {
 | +0xfc | ext_time | H | `anim_machine_del_extended_anim` | - | zeroed when the blend-out starts |
 | +0x100 | ext_blend | H | `anim_machine_del_extended_anim` | - | stored as `-blend` while blending out |
 | +0x10e | ext_clip_id | H | `anim_machine_del_extended_anim` | `pedestrian_end_taxi_wave` | `0xffff` = none; `-0x2357` = the taxi-wave clip |
-| +0x110 | ext_locked | H | - | `anim_machine_del_extended_anim` | when set, DelExtendedAnim is a no-op; writer not located |
+| +0x110 | locked | H | `anim_machine_init_from_actor`, `anim_machine_init_from_traffic_element`, `anim_machine_init_from_model`, `anim_machine_reset` (0); `human_force_death`, `human_car_launched_into_air` (1) | `anim_machine_set_anim`, `anim_machine_is_active`, `anim_machine_tick`, `anim_machine_set_extended_anim`, `anim_machine_del_extended_anim`, `anim_machine_stage_blending_tick` | ¹ |
 
-## 4. Method coverage — 22 of 24 PS2 methods
+¹ Set to 1 only when a `C_human` dies outside the normal damage path: `human_force_death` plays the
+death clip directly on the I3D frame and then writes `C_human+0x1cc` (= `+0xbc + 0x110`);
+`human_car_launched_into_air` makes the same three stores (`+0x644` = 0, `+0x5d` = 0, the lock = 1).
+From then on the six readers return without acting, so the death pose is never overwritten. The
+three `Init`s and `Reset` clear it.
 
-PC VA order, PC name first.
+## 4. Method coverage — all 24 PS2 methods
+
+PC VA order, PC name first. The last three rows have no PC function of their own.
 
 | PC VA | PC name | PS2 twin | Status |
 |---|---|---|---|
 | 0x005aab20 | `anim_machine_ctor` | `__ct__28C_animations_machine_de_luxeFv` | CONFIRMED |
 | 0x005aab30 | `anim_machine_load_track` | `LoadTrack__28C_animations_machine_de_luxeFPc` | CONFIRMED |
-| 0x005aaf80 | `anim_track_dtor` | `ClearTracks__28C_animations_machine_de_luxeFv` | CONFIRMED ¹ |
+| 0x005aaf80 | `anim_track_dtor` | - | PC-only ¹ |
 | 0x005aafb0 | `anim_machine_get_track` | `GetTrack__28C_animations_machine_de_luxeFPc` | CONFIRMED |
 | 0x005ab020 | `anim_machine_clear_non_base_tracks` | `ClearNoBaseTracks__28C_animations_machine_de_luxeFv` | CONFIRMED |
 | 0x005ab170 | `anim_machine_init_from_actor` | `Init__28C_animations_machine_de_luxeFP7C_actor` | CONFIRMED |
@@ -133,19 +156,24 @@ PC VA order, PC name first.
 | 0x005ace20 | `anim_machine_get_track_end_point` | `GetEndPointOfTCK__28C_animations_machine_de_luxeFPcR8S_vector` | CONFIRMED |
 | 0x005ace60 | `anim_machine_get_track_mixing_point` | `GetMixingPointOfTCK__28C_animations_machine_de_luxeFPcR8S_vector` | CONFIRMED |
 | 0x005acee0 | `anim_machine_stage_blending_tick` | `StageBlendingTick__28C_animations_machine_de_luxeFUi` | CONFIRMED |
-| - | - | `__dt__28C_animations_machine_de_luxeFv` | not located |
-| - | - | `GetAnimBaseDelta__28C_animations_machine_de_luxeFP17I3D_animation_set` | not located |
+| - | - | `ClearTracks__28C_animations_machine_de_luxeFv` | inlined into `engine_shutdown` ⁴ |
+| - | - | `GetAnimBaseDelta__28C_animations_machine_de_luxeFP17I3D_animation_set` | inlined into `anim_machine_set_anim` ⁵ |
+| - | - | `__dt__28C_animations_machine_de_luxeFv` | folded onto `stub_noop_cdecl_00574a40` ⁶ |
 
-¹ The same PC body is the track table's element destructor (§4a).
-² 2073 B against 2812 B, body not read; the position is boxed 1:1 by eight anchors — a structural
-argument, not a body one.
+¹ The destructor of ONE 100-byte track record: it frees the two key vectors at `+0x48` and `+0x58`.
+The PS2 record holds raw arrays freed inline by `ClearTracks` / `ClearNoBaseTracks`, so it has no
+counterpart.
+² 2073 B against 2812 B, body not diffed in full; the position is boxed 1:1 by eight anchors — a
+structural argument, not a body one.
 ³ Both fell out of the `human_extern_ai_update` body diff: the PS2 calls `IsActive(this+0x250)` and,
 if true, `Tick(this+0x250, t)`; the PC function makes exactly those two calls in that order with the
 same guard polarity, its receiver hidden in ECX because `C_human` embeds the machine at `+0xbc`.
-
-**There is no PC function between `anim_machine_set_anim` and `anim_machine_is_active`** where
-`GetAnimBaseDelta` would sit. That is a gap, not evidence that the method is absent; inlining into
-`SetAnim` is a suspicion, not a fact (§7).
+⁴ The table clear `engine_shutdown` does after the anim-cache clear and before the driver release
+(§4a) — the position of the only PS2 call, in `CloseSystem`.
+⁵ The `base clip == -1` branch of `anim_machine_set_anim`: look up the node `"blnd"` in the
+animation set and take its position key 0 (zero vector when absent). The literal `"blnd"`
+(`0x0064e43c`) has exactly one `.text` reference, inside `anim_machine_set_anim`.
+⁶ The destructor is empty; §1a lists every call.
 
 The PC cluster preserves the PS2 emission order: every located pair comes out in the same relative
 order on both sides. Interpolation is only safe between two anchors with exactly one gap — by strict
@@ -162,7 +190,7 @@ entries. Body-diff everything else.
 | `0x006efdc0` | `g_anim_track_table_begin` | records of **100 bytes** each |
 | `0x006efdc4` | `g_anim_track_table_end` | - |
 | `0x006efdc8` | `g_anim_track_table_cap` | - |
-| `0x006efdcc` | `g_anim_base_track_count` | the high-water mark `anim_machine_clear_non_base_tracks` pops down to |
+| `0x006efdcc` | `g_anim_base_track_count` | the number of records loaded by the base preload (§4b); `anim_machine_clear_non_base_tracks` pops the table down to it |
 
 One record = a track name at `+0x00`, two `0xc`-stride key vectors at `+0x48` and `+0x58`, and the
 header fields `anim_machine_load_track` reads. Tracks are loaded from `anims\%s`, and **the file's
@@ -175,37 +203,57 @@ this table's own element ctor/dtor (`anim_track_construct_copy`, `anim_track_dto
 record stride. A fold of two classes' vector helpers would require both element types to share a
 constructor, i.e. to be one type.
 
-`anim_track_table_destroy_range` (`0x005ad4a0`) has a second caller in `engine_shutdown`
-(`0x005fb4f0`), which passes `ecx = 0x6efdbc` — this table's **own** allocator/header word, loading
-`[0x6efdc0]` and `[0x6efdc4]` immediately before. That is the static table's teardown inlined into
-shutdown, not another class.
+**Three routines empty the table:**
+
+| routine | what it does |
+|---|---|
+| `engine_shutdown` | `erase(begin, end)`: `anim_track_table_destroy_range` (with `ecx = 0x6efdbc`, the table's own allocator byte) destroys every record; the buffer is kept |
+| `anim_machine_clear_non_base_tracks` (sole caller `game_done`) | when the base count is at least 1, pops records down to it; when it is 0 or less, destroys every record and keeps the buffer |
+| `anim_track_table_static_dtor` (atexit) | the static vector's destructor: destroys every record and frees the buffer |
+
+### 4b. The base preload (`game_init`)
+
+Inside `game_init`'s heavy-init block (`C_game+0x2f9c`, `structs/game.md`), the engine walks
+`g_anim_info_table` to its `0xffff` terminator and loads every clip's track with
+`anim_track_load_by_name`. A clip name containing `?` is loaded twice, with the `?` replaced by
+`L` and then by `R`. While a network session is active the loop ticks it (and the loading screen)
+whenever more than 500 ms have passed. Then, only
+if `g_anim_base_track_count` is still 0, it is set to the table's record count
+(`(end − begin) / 100`, the `0x51eb851f` reciprocal). This is its only writer, so the base set is
+fixed by the first heavy init; `dog_load_tracks` runs after the seed, so the dog's tracks sit above
+the base mark.
 
 ## 5. PC vs PS2
 
 - **`C_human` embeds the machine at PC `+0xbc` ↔ PS2 `+0x250`**; `C_traffic_element` holds the
-  pointer at PC `elem+0x08` ↔ PS2 `elem+0x188`.
-- **Field delta:** the only firmly paired field is `ext_clip_id` — PC `+0x10e` ↔ PS2 `+0x12a`
-  (delta `0x1c`), pinned by the shared `-0x2357` magic. Do **not** extrapolate that delta to other
-  fields; cross-build layouts diverge.
+  pointer at PC `elem+0x08` ↔ PS2 `elem+0x188`. The PS2 `C_traffic_car` crew element holds a
+  POINTER and deletes it in `DeactivateElem`, `GameDone` and `VypraskeeeKaaaru`, where the PC embeds
+  it at `+0x24`.
+- **Size:** PS2 heap machines are `__nw__FUi(0x140)`; PC `0x128`.
+- **Field delta:** `ext_clip_id` PC `+0x10e` ↔ PS2 `+0x12a` (pinned by the shared `-0x2357` magic)
+  and `locked` PC `+0x110` ↔ PS2 `+0x12c` — both delta `0x1c`. Do **not** extrapolate that delta to
+  other fields; cross-build layouts diverge. The PS2 `SetExtendedAnim` / `DelExtendedAnim` test the
+  same lock first, and the PS2 twins `_intern_ForceDeath__7C_humanFv` and
+  `EineMeineKleineAutoInLuft__7C_humanFP5C_car` make the same three stores as the PC writers.
 - **Three `Init` overloads** exist on both builds (`P7C_actor`, `P17C_traffic_element`,
-  `P9I3D_model`), matching the owner set of §1. The PS2 also puts `SetAnim` on `C_dog`, `C_pumper`
-  and `S_rail_human` — all three identified owners.
-- **`tracks__28C_animations_machine_de_luxe` is a static class member** on the PS2, which is what
-  makes the PC global at `0x006efdbc` this class's member rather than a free table; the PC decomp
-  cannot supply that.
+  `P9I3D_model`). The PS2 also puts `SetAnim` on `C_dog`, `C_pumper` and `S_rail_human`.
+- **`tracks__28C_animations_machine_de_luxe` and `base_track__28C_animations_machine_de_luxe` are
+  static class members** on the PS2, which is what makes the PC globals at `0x006efdbc` and
+  `0x006efdcc` this class's members rather than free data; the PC decomp cannot supply that.
+- **`__dt__28C_animations_machine_de_luxeFv`** is only the delete-flag test; its 11 PS2 callers are
+  the three embedded owners (flag `-1`) and eight delete sites (flag `1`).
+- **`GetAnimBaseDelta`** looks up `"blnd"` (PS2 `0x4aaf58`) with `GetAnimIndex` and reads
+  `GetPosKey(index, 0)`; its only caller is `SetAnim`, in the same branch the PC inlines it into.
+- **`ClearTracks`** has one caller, `CloseSystem__Fv`, and also frees the buffer. The PS2
+  `ClearNoBaseTracks` has only the pop-to-base loop; the PC's clear-everything arm for a base count
+  of 0 or less has no PS2 counterpart, and the PS2 has no exit-time destructor for the table.
+- **The base preload is `PreloadAnims__6C_gameFv`** on the PS2, called once from `InitSystem__FPvRb`
+  under a static once-flag; the PC inlines the same loop and the same seed into `game_init` (§4b).
 
 ## 6. Cross-references
 
 - `structs/human.md` — `C_human` embeds the machine at `+0xbc`.
 - `structs/pumper.md` — the gas-station attendant, embedded at `+0xe0`.
+- `structs/traffic_car.md` — the crew element, embedded at `+0x24`.
 - `structs/railway.md` §2b — `S_rail_human`, pointer at `+0x08`.
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| `__dt__` and `GetAnimBaseDelta` | not located; the `GetAnimBaseDelta` slot is an order gap, which is not evidence of absence |
-| `ClearTracks`'s PC body | the registry maps it onto `anim_track_dtor` (`0x005aaf80`), the track table's element destructor; whether MSVC folded the method onto that body or the two are the same routine by construction is not settled |
-| `g_anim_base_track_count`'s writer | not located; the startup path matching `engine_shutdown`'s teardown (§4a) is the place to look |
-| `+0x110` `ext_locked` writer | not located |
-| the object's upper size bound | only `>= 0x124` is measured; the `C_human` hole argument suggests `0x124..0x128` |
+- `structs/game.md` — the heavy-init flag that gates the base preload.

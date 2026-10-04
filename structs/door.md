@@ -1,6 +1,6 @@
 # `C_door` — the hinged door (kind `6`)
 
-**Created** 2026-08-13 12:57 +0200 · **Modified** 2026-09-17 13:45 +0200
+**Created** 2026-08-13 12:57 +0200 · **Modified** 2026-10-01 14:23 +0200
 
 PC prefix **`door_`**.
 
@@ -81,7 +81,8 @@ typedef struct C_door {                   /* 0x1b8 bytes */
     /* +0x11d */ bool     hinge_enabled;  // [H] gates the step-3 geometry
     /* +0x11e */ bool     mirror;         // [H] negates the hinge axis; from flags bit 0x10
     /* +0x120 */ float    max_angle;      // [H] ctor seeds pi/2 (0x3fc90fdb)
-    /* +0x124 */ bool     cfg_byte;       // [M] duplicated + saved; meaning untraced
+    /* +0x124 */ bool     start_open;     // [M] door_game_init: set => door_set_state(2) and
+                                          //     rest open at max_angle; clear => rest closed
     /* +0x125 */ bool     locked;         // [H] set by door_lock (case 0x26); read only by
                                           //     door_set_state, which refuses state 2 (4c)
     /* +0x128 */ float    open_speed;     // [H] door_ai: angle += dt * this while state 2
@@ -97,7 +98,7 @@ typedef struct C_door {                   /* 0x1b8 bytes */
 } C_door;
 ```
 
-Confidence: **[H]** measured on both builds · **[M]** measured on PC, meaning open.
+Confidence: **[H]** measured on both builds · **[M]** measured on PC only.
 
 ### The `+0x110` flag word
 
@@ -182,9 +183,28 @@ through this getter/setter pair:
 | `0x13` | **Close it once clear.** 2 s / 5 s deadline window plus a distance gate ¹. |
 
 ¹ Farther than 3 m ⇒ the task completes without acting; closer than 1.4 m ⇒ still in the doorway,
-wait; in between with the door resting open ⇒ `door_set_state(3)`. This is the door-closing
-behaviour a player sees from NPCs. Neither type has a factory — `structs/entity.md` §6b lists the
-`ai_action_manager` factory types, not the whole type space (§9).
+wait; in between with the door resting open ⇒ `door_set_state(3)`.
+
+**Neither arm runs in the shipped game, because nothing creates either action.** Every
+`ai_action` gets its UID from `ai_action_generate_UID`, and a byte census of its callers returns
+exactly the 35 `ai_action_new_*` factories (`structs/entity.md` §6b), none of which stamps `0x07`
+or `0x13`; the PS2 `GenUID` likewise has 35 callers, all `New*` factories. No instruction in the
+image stores the immediate `7` or `0x13` into a register-addressed object as an action type.
+NPCs open doors through the path follower and the use-action instead (the caller table below),
+and nothing closes a door behind an NPC. In game, NPCs are seen opening doors and never
+closing one.
+
+**Every caller of `door_set_state`** (an `E8` census of `.text`, 11 callsites):
+
+| caller | ×  | what it asks for |
+|---|---|---|
+| `ai_path_update_spec_waypoints` | 3 | state 2 for the closed door a spec-node search left at `ai_path+0x68`, when the walker is a `C_entity` — **the path follower opens doors on its route** (`structs/ai_path.md` §1b) |
+| `entity_action_tick` | 2 | the type-`0x07` open and type-`0x13` close actions above, which no code creates |
+| `program_process_command` | 2 | dispatcher case `0x27` `door_open xx, yy`: state 3 for `yy == 0` on a door resting open, state 2 otherwise on a door resting closed |
+| `human_use_actor` | 1 | the use-action: the player's Action Button, and `ai_path_revalidate_for_actor` for an NPC stuck behind a door (`structs/ai_path.md` §3) |
+| `door_game_init` | 1 | state 2, with the active player as the opener, when `+0x124` (start open) is set |
+| `door_apply_net_event_msg` | 1 | the network receiver (§5) |
+| `door_set_state` | 1 | the linked-leaf push-down (§3 step 5) |
 
 ### 4c. The lock is `+0x125`, and `door_set_state` refuses to open
 
@@ -213,12 +233,13 @@ door_set_state(this, state, actor, force, walk_up):
 
 Consequences:
 
-* **Only opening is gated.** State 3 is not tested, so `door_open xx, 0`, the AI's type-`0x13` close
-  action and the network receiver can all still close a locked door.
+* **Only opening is gated.** State 3 is not tested, so `door_open xx, 0` and the network receiver
+  can still close a locked door.
 * The Mafia Script Data Reference's note on `door_open` — *"does not work if the door is locked"* —
   is accurate: a locked door is one reason the command does nothing, alongside a door in mid-swing.
-* The AI pathfinder reads `+0x125` in four `ai_path_find_spec_node_*` functions and, on a locked
-  door, stamps a `blocked_con` (magic `0x29a`, 30 000 ms expiry) so the NPC routes around it.
+* The AI pathfinder reads `+0x125` at four sites in the three `ai_path_find_spec_node_*`
+  functions and, on a locked door, stamps a `blocked_con` (magic `0x29a`, 30 000 ms expiry) so the
+  NPC routes around it; an unlocked closed door is opened instead (§4b).
 
 #### 4c-i. Two independent "locked" mechanisms
 
@@ -228,7 +249,7 @@ Consequences:
 | Action Button prompt | still shown | gone |
 | player uses it | rattle (`+0x150`), door stays shut | cannot ask |
 | `door_set_state(2)` from any caller | refused | succeeds |
-| an NPC's type-`0x07` action | refused | opens the door, visibly |
+| an NPC's path follower (`ai_path_update_spec_waypoints`) | refused; the edge is blocked for 30 s | opens the door |
 
 `door_enableus 0` removes the prompt via `using_object_del_object` and never touches `+0x70`,
 `+0x125` or `door_set_state`. A door can be locked, unusable, both or neither, and a player calls
@@ -264,8 +285,8 @@ What is measured:
   this is the only script in the mission that resolves `Cylinder00`.
 * `door_lock` clears the lock on five doors in one batch, immediately after the key pickup and
   immediately before `act_setstate` wakes the two guards.
-* With the lock clear and the prompt absent, `door_set_state(2)` from the guards' type-`0x07` action
-  succeeds and the player has no way to ask. Once a guard opens it, the player can walk through.
+* With the lock clear and the prompt absent, `door_set_state(2)` from the guards' path follower
+  (`ai_path_update_spec_waypoints`) succeeds and the player has no way to ask. Once a guard opens it, the player can walk through.
 
 In-game assessment by the player-tester:
 
@@ -284,7 +305,7 @@ half.
 
 | step | function | what it does |
 |---|---|---|
-| 1 | `door_event_payload_ctor` (`0x005946a0`) | called once, from `door_set_state`, as `(door+0x18, param_2 == 2)`: field 0 = door GUID, field 1 = the open/close verb |
+| 1 | `event_msg_door_state_payload_ctor` (`0x005946a0`) | called once, from `door_set_state`, as `(door+0x18, param_2 == 2)`: field 0 = door GUID, field 1 = the open/close verb |
 | 2 | `event_msg_door_state_ctor` (`0x005a1ad0`) | builds the `0x18`-byte message on `g_event_msg_vt_door_state` (`.rdata 0x0063c21c`), type **`0x34`** |
 | 3 | `event_msg_door_state_serialize` / `_deserialize` (`0x005946d0` / `0x00594700`) | vtable slots 2 / 3 |
 | 4 | `door_apply_net_event_msg` (`0x00482b50`) | accepts exactly type `0x34` and turns it back into a `door_set_state` call |
@@ -358,7 +379,5 @@ previous TU) · `structs/program.md` (`C_using_object`) · `structs/using_object
 
 | item | state |
 |---|---|
-| `+0x124` | duplicated and saved, so designer-set, but no consumer reveals what it configures |
-| what builds a type-`0x07` / type-`0x13` `ai_action` | no `ai_action_manager` factory creates either, and a sweep of `.text` finds no immediate dword store of `7`; the type is written from a register by a parameterised creator, or the action only arrives through `entity_load_action_man`. `ai_path_update_spec_waypoints` is not it — it calls `door_set_state` directly |
 | can an NPC open a door whose `+0x125` is set? | on the code as read it cannot (§4c); not tested in game |
 | does a glass door still block movement after shattering? | `door_hit` shatters the pane, but nothing observed clears the collision proxy |

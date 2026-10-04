@@ -1,6 +1,6 @@
 # `C_cartridge` — the ejected shell casing (PC prefix `cartridge_`)
 
-**Created** 2026-08-12 20:08 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-08-12 20:08 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 | | |
 |---|---|
@@ -24,14 +24,12 @@ inherits the whole ballistic arc from `C_bottle` and adds only a landing sound a
 retirement rule.
 
 The class sits in the PC `.rdata` vtable order directly after `C_car_ex`. Five levers agree, and
-no two of them share a premise:
+no two of them share a premise; levers 3 and 4 are read on the PS2 and sit in §5e:
 
 | # | lever | result |
 |---|---|---|
 | 1 | PC `.rdata` vtable order | `0x0063bd68` (`C_car_ex`) → **`0x0063be18`** → `0x0063beb8` (`C_clock`) |
 | 2 | link order by source file | `C_car_ex.cpp` → **`C_cartridge.cpp`** → `c_clock.cpp` |
-| 3 | the source-file manifest | `__sinit_C_cartridge.cpp` exists ⇒ the file was **compiled into the build** |
-| 4 | a static class member | `sounds__11C_cartridge` ↔ PC `g_cartridge_sounds`, 3 slots, same walk in the same teardown position |
 | 5 | PC-side, independent of 1–3 | the ctor chains `bottle_ctor` and writes kind **`0x10`**; `operator_new(0x13c)` against `C_bottle`'s `operator_new(0x138)` |
 
 Lever 5's arithmetic is the sharpest of the set: the subclass adds **exactly one dword**, and
@@ -46,6 +44,12 @@ Czech *nábojnice* is a cartridge case:
 |---|---|---|---|---|
 | A | `2nabojnice.i3d` | **100** | `C_game+0x3a8` | `C_game+0x538` |
 | B | `2nabojniceb.i3d` | **30** | `C_game+0x53c` | `C_game+0x5b4` |
+
+**Pool B is the shotgun shell.** The type the spawner receives selects the pool: `human_ai` passes
+bit 1 of the fired weapon's `predmety.def` flag word `+0x20`, and only the pump shotgun (id 11),
+the sawed-off shotgun (id 12) and the unused silent pump shotgun (id 34) carry that bit. Every
+other gun ejects into pool A, and so do the revolver reload (`human_start_weapon_effect`, six
+casings from the `cylinder` frame) and `game_vehicle_track_tick`.
 
 Both are built through the frame named `Line01`, each element `operator_new(0x13c)` +
 `cartridge_ctor`. `game_new_cartridge` takes the next slot, wraps at the pool size, and never
@@ -62,9 +66,9 @@ which inherited fields it *overrides the meaning of*.
 struct C_cartridge /* : C_bottle, 0x13c bytes */ {
     /* ...0x000..0x137 : C_bottle — see structs/bottle.md §1 ... */
     /* +0x138 */ char type;   // [H] THE ONLY OWN FIELD. Set at eject time by
-                              //     cartridge_set_type; selects the landing-sound column
-                              //     AND halves +0x88. A BOOL per the spawner's PS2
-                              //     signature (§5c).
+                              //     cartridge_set_type: 1 = shotgun shell (§1a). Selects
+                              //     the landing-sound column AND halves +0x88. A BOOL per
+                              //     the spawner's PS2 signature (§5c).
 };
 ```
 
@@ -75,11 +79,12 @@ struct C_cartridge /* : C_bottle, 0x13c bytes */ {
 | `+0x6d` `may_broadcast` | ctor sets **1** | `cartridge_ctor` **clears it** — a casing never replicates |
 | `+0xfc` `coll_registered` | ctor sets **1** | `cartridge_ctor` **clears it** — no dynamic-collision proxy is registered |
 | `+0xa4` `radius` | `bottle_game_init` computes it from the model's bound volume | `cartridge_game_init` **overwrites it with a fixed `0.1f`** |
-| `+0xa8..+0xb0` | `[U]` "unknown vector" | set to **`(0, 1, 0)`** |
+| `+0xa8` `frame_axis` | the second axis passed to `SetDir3`, tumbled each tick | set to **`(0, 1, 0)`** |
 | `+0x84` `landed_sets_state` | chooses act-state 1 vs 2 at flight end | cleared |
-| `+0x88` | `[M]`, GameInit = `0.4f`, no reader traced | second writer: `cartridge_set_type` halves it to `0.2f` for type B; no reader (§6) |
-| `+0x100` | `[U]`, saved, no reader traced | read by `cartridge_ai_tick`, which retires the casing once it passes **15** |
-| `+0x104` | `[U]`, saved | read as a gate that forces the landing-sound path |
+| `+0x88` `restitution` | speed kept per bounce, GameInit = `0.4f` | `cartridge_set_type` halves it to `0.2f` for a shotgun shell, so a shell bounces lower |
+| `+0x100` `bounce_count` | +1 per ground contact in `bottle_ai_tick` | `cartridge_ai_tick` retires the casing once it passes **15** bounces |
+| `+0x104` `on_ground` | the ground ray hit this tick | forces the landing-sound path |
+| `+0x134` `ray_all_layers` | clear: the ground ray tests mask 2 | `cartridge_game_init` **sets it**, so a casing's ground ray tests every layer |
 | `+0x12c` | part of "the saved tail" | the **surface material id** of the last contact — the index into `g_surface_material_table` |
 
 ---
@@ -88,14 +93,17 @@ struct C_cartridge /* : C_bottle, 0x13c bytes */ {
 
 | PC VA | PC name | vtable slot | PS2 twin | grade |
 |---|---|---|---|---|
-| 0x00476f80 | `cartridge_ctor` | - (factory) | - | CONFIRMED |
+| 0x00476f80 | `cartridge_ctor` | - | - | CONFIRMED |
 | 0x00476fb0 | `cartridge_scalar_deleting_dtor` | 16 | - | CONFIRMED |
 | 0x00476fd0 | `cartridge_dtor` | - | - | CONFIRMED |
 | 0x00476fe0 | `cartridge_ai_tick` | 13 | - | CONFIRMED |
 | 0x004771f0 | `thunk_bottle_update` | 14 | - | STRUCTURAL |
 | 0x00477200 | `cartridge_game_init` | 25 | - | CONFIRMED |
 | 0x00477260 | `cartridge_game_done` | 26 | - | CONFIRMED |
-| 0x004772e0 | `cartridge_set_type` | - (non-virtual) | - | STRUCTURAL |
+| 0x004772e0 | `cartridge_set_type` | - | - | STRUCTURAL |
+
+`-` in the slot column: no vtable slot — `cartridge_ctor` and `cartridge_dtor` are the constructor
+and destructor, and `cartridge_set_type` is non-virtual.
 
 Plus one off-family function that exists only to serve this class:
 
@@ -186,16 +194,9 @@ Not derivable: with no PS2 method bodies there is no PS2 field evidence for this
 only cross-build datum is `g_cartridge_sounds` ↔ `sounds__11C_cartridge`, which is a static,
 not an instance field.
 
----
+### 5e. The two PS2 identification levers (§1)
 
-## 6. Open items
-
-* **`+0x88` has no reader.** This class supplies its second writer (0.4f → 0.2f for type B), but
-  nothing in either build consumes it. A byte scan of `.text` for the displacement is the next
-  lever.
-* **What the two casing variants are is unnamed on both builds.** `+0x138` demonstrably
-  selects pool + model + landing-sound column; nothing says whether B is a shotgun shell, a
-  rifle case, or simply a second art asset. That is why `cartridge_set_type` is graded
-  STRUCTURAL and the word *type* is marked `[M]`.
-* **`+0x100` and `+0x104` semantics.** The reader is known; the *meaning* of the counter
-  (bounces? contacts? ticks?) is not.
+| # | lever | result |
+|---|---|---|
+| 3 | the source-file manifest | `__sinit_C_cartridge.cpp` exists ⇒ the file was **compiled into the build** |
+| 4 | a static class member | `sounds__11C_cartridge` ↔ PC `g_cartridge_sounds`, 3 slots, same walk in the same teardown position |

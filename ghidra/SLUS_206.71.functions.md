@@ -1,6 +1,6 @@
 # SLUS_206.71 — function symbols
 
-The 7788 `STT_FUNC` symbols of the non-stripped PS2 ELF `SLUS_206.71`, read from its `.symtab`; each C++ name is demangled into `class` and `method`, with the mangled form kept in `raw_name`.
+The 7788 STT_FUNC symbols of the non-stripped PS2 ELF (`SLUS_206.71`), read from its symbol table and demangled into `class` and `method`, one row per symbol.
 
 | vaddr | size | bind | class | method | raw_name |
 |---|---|---|---|---|---|

@@ -1,6 +1,6 @@
 # `C_detector` — the script trigger volume (kind `5`)
 
-**Created** 2026-08-13 00:24 +0200 · **Modified** 2026-09-17 17:53 +0200
+**Created** 2026-08-13 00:24 +0200 · **Modified** 2026-10-01 14:21 +0200
 
 PC prefix **`detector_`**.
 
@@ -12,7 +12,7 @@ PC prefix **`detector_`**.
 | PC instance size | `0x128` (entity factory `case 5`) |
 | PC translation unit | `[0x004793b0, 0x0047aae0)` — 25 function starts, all named, plus 5 functions at the head of the next unit (§2) |
 | Base classes | **`C_actor`** at `+0x00` **and `C_program` at `+0x70`** |
-| PS2 class | `C_detector`, 28 methods + 8 `@128@` thunks; 25 mapped, 2 PS2-port-only, `NetDirect` unmapped (§5, §7) |
+| PS2 class | `C_detector`, 28 methods + 8 `@128@` thunks; 25 mapped, 2 PS2-port-only, `NetDirect` on a shared empty stub (§5, §7) |
 
 ## 1. What it is
 
@@ -24,7 +24,7 @@ class behind the game's own `detector_*` script vocabulary, which is why the PC 
 |---|---|---|
 | `detector_inrange` | 1123 | `detector_program_process`, instruction `0x1c` |
 | `detector_issignal` | 567 | `detector_get_signal` — reads the BYTE at `+0xdc` |
-| `detector_setsignal` | 517 | `detector_set_signal` — writes the BYTE at `+0xdc` and clears `+0x65` |
+| `detector_setsignal` | 517 | `detector_set_signal` — writes the BYTE at `+0xdc` and clears `+0x65`, the `C_actor` save-exclusion byte, so a signalled detector is saved |
 | `detector_waitforuse` | 505 | `detector_program_process` `0x1f` → `detector_create_using_object`; released by `detector_use` |
 | `detector_waitforhit` | 96 | `detector_program_process` `0x20` → `detector_create_colls`; released by `detector_hit` |
 
@@ -79,7 +79,7 @@ typedef struct C_detector {              /* 0x128 bytes */
     /* +0x000 */ C_actor  base;          // [H] kind 5 at +0x10, frame at +0x68
     /* +0x070 */ C_program program;      // [H] the script VM sub-object
     /* +0x0b4 */ C_detector *self;       // [H] back-link written by GameInit
-    /* +0x0d8 */ uint  inrange_mask;     // [H] actor-type mask for detector_inrange
+    /* +0x0d8 */ uint  inrange_mask;     // [H] human_type mask for detector_inrange (4b)
     /* +0x0dc */ uint8_t signal;         // [H] the script signal byte
     /* +0x0dd */ bool  waiting_for_use;  // [H] set by CreateUO, cleared by detector_use
     /* +0x0de */ bool  waiting_for_hit;  // [H] set by Process 0x20, cleared by Hit
@@ -99,7 +99,7 @@ typedef struct C_detector {              /* 0x128 bytes */
 | offset | field | conf | writer(s) | reader(s) | notes |
 |---|---|---|---|---|---|
 | `+0xd8` | `inrange_mask` | H | `detector_init` (0), `detector_load_data`, `detector_duplicate_from`, `detector_save_game_load` | `detector_save_data`, `detector_save_game_save`, `detector_program_process` ¹ | designer data: the only field in the scene chunk |
-| `+0xdc` | `signal` | H | `detector_set_signal`, `detector_game_init` (0), `detector_save_game_load` | `detector_get_signal`, `detector_save_game_save` | `detector_set_signal` also clears `+0x65`; savegame load clears it when the byte is non-zero |
+| `+0xdc` | `signal` | H | `detector_set_signal`, `detector_game_init` (0), `detector_save_game_load` | `detector_get_signal`, `detector_save_game_save` | `detector_set_signal` also clears `+0x65`, the `C_actor` save-exclusion byte (`structs/actor.md` §1b); savegame load clears it when the byte is non-zero |
 | `+0xdd` | `waiting_for_use` | H | `detector_create_using_object`, `detector_use`, `detector_game_init` (0), `detector_save_game_load` | `detector_use`, `detector_save_game_save` | set on load ⇒ `detector_create_using_object` |
 | `+0xde` | `waiting_for_hit` | H | `detector_program_process` `0x20`, `detector_hit`, `detector_game_init` (0), `detector_save_game_load` | `detector_hit`, `detector_save_game_save`, `detector_program_process` | set on load ⇒ `detector_create_colls(0)` |
 | `+0xdf` | `volumes_live` | H | `detector_game_init` (0), `detector_program_process` `0x154`/`0x155` | `detector_update`, `detector_hit`, `detector_program_process` | |
@@ -110,6 +110,42 @@ typedef struct C_detector {              /* 0x128 bytes */
 
 The savegame record is `0xc` bytes: version byte 1, the `+0xd8` dword, the `+0xdc`/`+0xdd`/`+0xde`
 bytes and the using-object id at `+0x10c`.
+
+### 4b. The `inrange_mask` bits
+
+`detector_inrange` counts the actors (kind `0x1b` or `2`) within its radius whose `human_type`
+(`C_human+0x5fc`, a single-bit mask over 11 types, `structs/human.md`) intersects `+0xd8`. The
+mask bits are therefore `human_type` bits. Four of them have writers in the code that name them:
+
+| bit | who carries it | writer |
+|---|---|---|
+| `0x1` | the player | `player_init` |
+| `0x4` | police officers | `pedestrian_manager_spawn_cop_from_pedestrian`, `police_manager_apply_state` |
+| `0x10` | gang members and mafia pursuers | `pedestrian_spawn_gang_on_hit`, `traffic_car_spawn_mafia_pursuit_car` |
+| `0x80` | the taxi passenger | `pedestrian_wave_at_taxi` |
+
+No code writer names the other bits. The mask values the shipped scenes store, over
+all 2779 type-5 objects in the 79 `scene2.bin` files (the mask is the dword after the version
+byte of the object's data chunk):
+
+| mask | objects | example |
+|---|---|---|
+| `0` | 2051 | `music` (`00MENU`); scripts that never call `detector_inrange` |
+| `0x1` | 666 | `speed_end` (`EXTREME`) |
+| `0x3` | 17 | `detector_konec` (`MISE01`) |
+| `0x10` | 14 | `detector_kurak` (`MISE02-ULICKA`) |
+| `0x81` | 11 | `CIL1` (`MISE02A-TAXI`) |
+| `0x2` | 7 | `detector_pacidlo` (`MISE09-PREJIMKA`) |
+| `0x9` | 3 | `misto_pro_bednu` (`EXTREME`) |
+| `0x8` | 3 | `detector_autodrom` (`MISE05-MESTO`) |
+| `0x11` | 2 | `car_detector` (`MISE07B-SALIERY`) |
+| `0x80` | 2 | `zamceni_pokoje` (`MISE08-HOTEL`) |
+| `0xb` | 1 | `biff_detector` (`MISE07B-CHULIGANI`) |
+| `0x7f` | 1 | `xleseni` (`MISE13-RESTAURACE`) |
+| `0x71` | 1 | `dog` (`MISE13-RESTAURACE`) |
+
+The Mafia Script Data Reference describes `detector_inrange` only for the player, which matches
+the 666 player-only masks.
 
 ## 5. Method coverage
 
@@ -163,7 +199,7 @@ The `C_program` base methods behind the positionally matched calls in these bodi
 
 | code | script command | what the case does |
 |---|---|---|
-| `0x1c` | `detector_inrange` | counts scriptable actors (kind `0x1b` or `2`) within a radius whose human-type mask (`+0x5fc`) intersects `+0xd8`, writes the count into a script register, then advances |
+| `0x1c` | `detector_inrange` | counts scriptable actors (kind `0x1b` or `2`) within a radius whose human-type mask (`+0x5fc`) intersects `+0xd8` (§4b), writes the count into a script register, then advances |
 | `0x1f` | `detector_waitforuse` | releases any previous using-object, calls `detector_create_using_object`, blocks |
 | `0x20` | `detector_waitforhit` | arms the hit path (`detector_hit` releases it) |
 | `0x25` | `program_storage` | parks the actor in act-state 2 while program `+0x40` is 0; does not advance |
@@ -197,7 +233,8 @@ only two in the image that tail into `program_process_command` — but it interc
   eight `@128@` adjustor thunks (128 = `0x80`) — `__dt`, `SaveGameGetSize`, `SaveGameSave`,
   `SaveGameLoad`, `DecodeParams`, `DecodeInstruction`, `DecompileCommand`, `Process`; the PC uses
   two vtable installs, four adjustor thunks and plain forwarders. Same relationship, two ABIs.
-* **Field delta is not uniform.** Measured from both builds' `GameInit` and `SaveGameSave`:
+* **Field delta is not uniform.** Measured from both builds' `GameInit`, `SaveGameSave`,
+  `EraseColls` and `Update`:
 
   | field | PC | PS2 | delta |
   |---|---|---|---|
@@ -206,15 +243,26 @@ only two in the image that tail into `program_process_command` — but it interc
   | `signal` / `waiting_for_use` / `waiting_for_hit` / `volumes_live` | `+0xdc`..`+0xdf` | `+0x10c`..`+0x10f` | `+0x30` |
   | `uo` | `+0xe0` | `+0x110` | `+0x30` |
   | using-object id | `+0x10c` | `+0x144` | `+0x38` |
-  | volume arrays (GameInit zeroes) | `+0x118`/`+0x11c`/`+0x120`/`+0x124` | `+0x100`/`+0xe0`/`+0xe4`/`+0x104` | - |
-  | actor flag cleared by `set_signal` | `+0x65` | `+0x69` | `+0x4` |
+  | `colls` | `+0x118` | `+0x100` | `-0x18` |
+  | `world` | `+0x11c` | `+0xe0` | `-0x3c` |
+  | `world_inv` | `+0x120` | `+0xe4` | `-0x3c` |
+  | `coll_count` | `+0x124` | `+0x104` | `-0x20` |
+  | `C_actor` save_excluded, cleared by `set_signal` | `+0x65` | `+0x69` | `+0x4` |
 
+  The volume-array rows come from `EraseColls`, which is statement-aligned on both builds (walk
+  the count, erase and free each collision object, then free the three arrays in the same
+  order), and from `Update`, which writes the world matrix and then its inverse.
   The PS2 savegame record is `0x10` bytes against the PC's `0xc`.
 * **`DYNB` compare:** one dword compare on the PC, `memcmp(name, "DYNB", 4)` on PS2.
 * **Two PS2 methods are PS2-port-only:** `ChangeSceneInit__10C_detectorFv` and
   `ChangeSceneDone__10C_detectorFv`, the city-streaming pair; no unclaimed PC start remains in the
   TU for either.
-* **`NetDirect__10C_detectorFUi`** is an empty body on PS2 and has no PC row.
+* **`NetDirect__10C_detectorFUi`** is an empty body on PS2. On the PC its slot (15) holds
+  `stub_noop_args4_00461180` (`ret 4`), the word that slot 15 also holds in the vtables of
+  `C_entity`, `C_human`, `C_player`, `C_airplane`, `C_bridge`, `C_railway`, `C_wagon`,
+  `C_traffic_car` and `C_actor_shot` — the classes whose PS2 `NetDirect` is an empty override.
+  `C_actor`'s own slot 15 holds the separate `ret 4` stub `stub_noop_args4_004776f0`. A shared
+  stub cannot carry a twin, so `NetDirect` has no PC row.
 * **`detector_get_signal` / `detector_set_signal` have no PS2 symbol:** PS2 inlines both into its
   own `Process` arms (`DETECTOR_ISSIGNAL` `0x1b`, `DETECTOR_SETSIGNAL` `0x1c`), which read and write
   `+0x10c` / `+0x69` exactly as the PC does.
@@ -249,11 +297,3 @@ it.
 `structs/crash_obj.md` (the previous TU) · `structs/using_object.md` (the `S_using_object` record) ·
 `basic/artifacts/player-interactions.md` (the using-object menu) ·
 `script-mapping/artifacts/opcode-table.md` (the base dispatcher's opcode table).
-
-## 9. Open items
-
-| item | state |
-|---|---|
-| `detector_inrange`'s mask `+0xd8` | compared against the human-type mask at `+0x5fc`; the bit meanings are untraced |
-| the volume-array PS2 offsets | the PS2 `GameInit` zeroes `+0x100`/`+0xe0`/`+0xe4`/`+0x104`, not a band-shifted copy of PC `+0x118`..`+0x124`; the per-field mapping is not established |
-| `NetDirect` | the PS2 body is empty; whether the PC folds it onto a shared stub slot is not measured |

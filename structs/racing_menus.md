@@ -1,6 +1,6 @@
 # The racing front-end screens — `g_m_race.cpp`
 
-**Created** 2026-08-24 11:05 +0200 · **Modified** 2026-09-23 15:58 +0200
+**Created** 2026-08-24 11:05 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 The single-player racing menus: **14 `GM_Menu` subclasses** in one translation unit,
 `[0x00566280, 0x0056adc0)`, **40 starts, 0 unnamed**.
@@ -9,7 +9,7 @@ The single-player racing menus: **14 `GM_Menu` subclasses** in one translation u
 |---|---|
 | Prefix | `gui_race_<screen>_<method>` — one second token per class, extending the `gui_race_champ_select_*` pair of the multiplayer menus |
 | Base class | `GM_Menu` — read `structs/gui_screen.md` first; the 6-slot vtable map, the widget field map and the accessor vocabulary live there |
-| Related | `basic/artifacts/racing.md` (the feature and why it is unreachable in retail), `structs/racing.md` (`C_racing` and its five owned classes) |
+| Related | `basic/artifacts/racing.md` (the feature, and why these menus are unreachable in retail while mission 6 still runs a race), `structs/racing.md` (`C_racing` and its five owned classes) |
 
 ## 1. The class table
 
@@ -41,8 +41,7 @@ Plus one shared thunk, `thunk_gui_menu_close` at `0x00569500`, which is
 The constructors say almost nothing on their own: chain the base, install a vtable, push an
 integer, call the builder. **That integer is the answer.** Decoding the 14 `menu.def` groups
 and resolving every `text_id` through `textdb.json` names all 14 screens without reading a
-body; each is independently CONFIRMED by an `OnClick` case-set diff against the PS2 method of
-that name (§7).
+body; each is independently CONFIRMED against the other build (§7).
 
 ⚠️ **Read the fr/cz columns of `textdb.json`, not en.** Retail English overwrote ids
 410-412 with debug strings ("Controls unlocked", "Thrower spawned") when racing was cut;
@@ -69,8 +68,8 @@ The manufacturer screen runs **three erase filters** over each maker's car list 
 literal `| 0x2000000` — and disables the maker's row when nothing survives, in an `i < 0x14`
 maker loop. The model screen runs the same three per car.
 
-The colour screen lists one named variant per colour
-(`car_database_get_car_variant_name_id`).
+The colour screen lists one colour name per colour index
+(`car_database_get_color_name_id`).
 
 `gui_race_opponents_tick` reaches the same manufacturer screen for each AI slot.
 
@@ -90,9 +89,7 @@ The two halves of the mode are near-mirrors:
 * the two launch screens share `0x1c3`..`0x1c6` and `0x1c9`, but only the championship one
   has `0x1c7` (GARAGE);
 * the two results screens share six widget ids and differ in one return code (`0x33`
-  championship, `0x2f` single race);
-* their constructors are separated by widget ids that each appear in exactly one PS2 body
-  (§7).
+  championship, `0x2f` single race).
 
 Both results screens run `OnTick` + `OnKey` + `OnClick` in slot 5: a 500 ms standings
 refresh, a **15 000 ms auto-continue** countdown printed into widget `0x78`, and `F2` to
@@ -129,9 +126,9 @@ the Carcyclopedia on `0x1f6`.
 | `C_championship+0xd4` / `+0xd8` | opponent count / championship car mask | - |
 | `C_circuit+0x50` | the circuit's state; `!= 2` means selectable | `+0x00` |
 
-Two data symbols this TU touches are unnamed: `g_gui_race_champ_results_refresh_countdown_ms` (the 500 ms results-refresh
+Two data symbols this TU touches: `g_gui_race_champ_results_refresh_countdown_ms` (the 500 ms results-refresh
 countdown, 3 refs) and `g_gui_race_champ_launch_circuit_bmp_name` (the `circuit%d.bmp` scratch buffer, 3 refs; a shared
-buffer whose other writers are not censused).
+buffer, §8).
 
 ## 7. PC vs PS2
 
@@ -164,11 +161,13 @@ depend on order.
 
 **Per-screen comparison:**
 
+* **Class map** — each of the 14 design-id screens (§2) is independently CONFIRMED by an
+  `OnClick` case-set diff against the PS2 method of that name.
 * **Garage chain** — the manufacturer and model filters are a lockstep with the PS2: same
   filters, same order, same literal, same `i < 0x14` maker loop.
 * **Colour screen** — the one place the bodies genuinely diverge: the PS2 builds a
-  colour-swatch vector and `SetPointer`s it into the list widget instead of listing named
-  variants, so its row is STRUCTURAL.
+  colour-swatch vector and `SetPointer`s it into the list widget instead of listing colour
+  names, so its row is STRUCTURAL.
 * **Launch screens** — only the championship one has `0x1c7` (GARAGE) on both builds.
 * **Constructor discriminators** — `0x224`/`0x225` appear only in the PS2 championship-results
   body, `0x212`/`0x213`/`0x216`/`0x21b`/`0x231`/`0x708` only in the single-race results,
@@ -189,4 +188,5 @@ depend on order.
 | root menu and garage chain | in game (needs the racing mod — retail deletes the menu item): Main Menu → Racing should show the four-item root menu; Single Race → GARAGE should walk the three-screen car chain |
 | single-race grid size | in game: should hold 20 opponents regardless of circuit (§7) |
 | damage toggle | in game: the toggle on the championship launch screen should change its own label rather than open a sub-screen — the visible form of the missing `GM_DamageDifficulty` |
+| `g_gui_race_champ_launch_circuit_bmp_name` | a shared buffer; its writers outside this TU are not censused |
 | `g_racing+0x34` / `+0x28c` | `structs/racing.md` lists `+0x34` as the current `C_champ_circuit`, while this TU uses it as the launch screens' best-times owner; `+0x28c` is not in `structs/racing.md` |

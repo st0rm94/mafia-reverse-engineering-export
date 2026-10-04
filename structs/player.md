@@ -1,6 +1,6 @@
 # `C_player` — the player actor
 
-**Created** 2026-07-12 14:05 +0200 · **Modified** 2026-09-24 21:39 +0200
+**Created** 2026-07-12 14:05 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 **PC prefix: `player_`.** Type `C_player`, derived from `C_human` (its ctor tail-calls
 `human_ctor`). It is the player-controlled human: on-foot/driving/in-car control, sniper mode,
@@ -74,41 +74,7 @@ typedef struct C_player {                   // extends C_human; PC offsets, C_pl
 } C_player;                                     // partial — C_player band only
 ```
 
-### 1a. The C_player band has a 4-byte packing shift
-
-The PC↔PS2 offset delta for the C_player band is **not constant**. Eight field pairs proven by
-body-diff split cleanly in two:
-
-| PC offset | PS2 offset | delta | proven by |
-|---|---|---|---|
-| +0xab4 | +0xc38 | **0x184** | `player_change_model` |
-| +0xab8 | +0xc3c | **0x184** | `player_change_model` |
-| +0xac8 | +0xc48 | **0x180** ¹ | `player_change_model` |
-| +0xad0 | +0xc50 | **0x180** | `player_add_shot_accuracy_penalty` |
-| +0xad4 | +0xc54 | **0x180** | `player_add_shot_accuracy_penalty` |
-| +0xad8 | +0xc58 | **0x180** | `player_do_action_button_in_car` |
-| +0xadc | +0xc5c | **0x180** | `player_show_car_damage_bar` / `_invalidate_car_damage_bar` |
-| +0xae0 | +0xc60 | **0x180** | `player_show_car_damage_bar` / `_invalidate_car_damage_bar` |
-
-¹ Same list, not literally the same field: PC `+0xac8` is the vector's END POINTER and PS2 `+0xc48`
-is its SIZE. `player_change_model`'s `+0xac8 = +0xac4` is `end = begin`, i.e. clear the list, which
-is what PS2's `+0xc48 = 0` does.
-
-⇒ **delta 0x184 at/below PC `+0xabc`; delta 0x180 at/above PC `+0xad0`.**
-
-**The shift is the alpha-object list.** PC `+0xac0` is an MSVC `std::vector` in its 4-word form —
-`{alloc, begin, end, cap}`, **16 bytes** — against PS2 `+0xc44`, a 3-word `__vector_pod`, **12
-bytes**. `0xad0 − 0xac0 = 0x10` on the PC; `0xc50 − 0xc44 = 0xc` on the PS2. A PC object that is 4
-bytes larger makes every later PC offset 4 bytes higher, so the delta (PS2 − PC) SHRINKS by 4
-across it: `0x184 → 0x180`. Nothing is missing on either side; the two builds spell one member
-differently.
-
-This explains the save-record map (PS2 `+0xc20..+0xc5a` ↔ PC `+0xa9c..+0xada`, 11 fields, same
-order and types, same type-tag `1`), whose *start* implies delta 0x184 and whose *end* implies
-0x180: the record straddles the shift. **Use 0x180 for anything above `+0xac8` and 0x184 below
-`+0xab8`; do not extrapolate one delta across the whole band.** Any function touching that band
-has a C_player receiver. Corollary field map: PS2 `+0x224`↔PC `+0x98` (vehicle link), PS2
-`+0x228`↔PC `+0x9c`, PS2 `+0x238`↔PC `+0xac` (seat).
+The PC↔PS2 mapping of this band is in §7a.
 
 ## 2. Field evidence — C_player band
 
@@ -119,13 +85,13 @@ has a C_player receiver. Corollary field map: PS2 `+0x224`↔PC `+0x98` (vehicle
 | +0x680 | field_680 | M | `player_ctor` | - | = 3 |
 | +0xa9c | **drive_primary_bits** | H | `player_ai_drive`, `player_game_init` (`0xffff`), `player_save_game_load` | `player_ai_drive` | §5a |
 | +0xab0 | field_ab0 | M | `player_ctor` | - | = 200 |
-| +0xab4 | model_base_frame | H | `player_change_model` | `player_set_alpha` | Cached `"base"` sub-frame of the player model. Accepted only if the frame's type (+0x110) == 1 **and** its FourCC (+0x1d4) is `'SNGM'` (0x4d474e53) or `'SMMR'` (0x524d4d53) — both constants byte-identical on PS2 |
+| +0xab4 | model_base_frame | H | `player_change_model` | `player_set_alpha` | Cached `"base"` sub-frame of the player model. Accepted only if the frame's type (+0x110) == 1 **and** its FourCC (+0x1d4) is `'SNGM'` (0x4d474e53) or `'SMMR'` (0x524d4d53) (§7b) |
 | +0xab8 | **alpha** | H | `player_fade_reset`, `player_change_model`, `player_save_game_load` | `player_add_alpha_object`, `player_fade_reset` | The **current fade level**, 1.0 = opaque. `player_fade_reset` writes 1.0f then calls `player_set_alpha(1.0f)`; `player_add_alpha_object` re-applies it to a newly registered object when `< 1.0` |
-| +0xabc | alpha_partner | M | `player_fade_reset`, `player_save_game_load` | - | Set to 1.0f beside `+0xab8` by both writers. A target alpha or a fade rate would both fit; **no reader is located**, so the role stays [U] |
-| +0xac0 .. +0xacc | **alpha_list** | H | `player_add_alpha_object`, `player_del_alpha_object`, `player_change_model` | `player_set_alpha` | The **alpha-object list**: MSVC `std::vector` at `+0xac0` = `{alloc, begin +0xac4, end +0xac8, cap +0xacc}`. `lea edx,[this+0xac0]` is the argument both add/del methods hand their helper. **Elements are `I3D_object*`** — the PC decomp can only show a stride-4 pointer vector; the element type comes from `cbAlpha`'s template argument |
+| +0xabc | alpha_partner | M | `player_fade_reset`, `player_save_game_load` | - | Set to 1.0f beside `+0xab8` by both writers (§8) |
+| +0xac0 .. +0xacc | **alpha_list** | H | `player_add_alpha_object`, `player_del_alpha_object`, `player_change_model` | `player_set_alpha` | The **alpha-object list**: MSVC `std::vector` at `+0xac0` = `{alloc, begin +0xac4, end +0xac8, cap +0xacc}`. `lea edx,[this+0xac0]` is the argument both add/del methods hand their helper. **Elements are `I3D_object*`** — the PC decomp can only show a stride-4 pointer vector; the element type comes from the PS2 build (§7b) |
 | +0xad0 | **shot_accuracy_spread** | H | `player_add_shot_accuracy_penalty`, `player_ai` | `player_add_shot_accuracy_penalty`, `player_ai` | Accumulated per-shot **crosshair accuracy penalty**. Each shot ADDs `weapon_record+0x84`; `player_ai` decays it on foot. Pushed to the HUD as `spread*3.0+1.0` via `hud_set_player_accuracy` (hud+0x9234 = the scale of the bit-0x20 AIM CROSSHAIR). Clamp: >1.0 re-seeds to `rand*0.2+0.8`. Also mirrored to world `+0xd8` |
 | +0xad4 | shot_spread_window_ms | H | `player_add_shot_accuracy_penalty` | - | = 3000 ms, armed on every shot |
-| +0xad8 | action_button_scratch | M | `player_do_action_button_in_car` | `player_do_action_button_in_car` | Touched ×2 by the in-car action-button handler (×2 on PS2 too). Role not decoded |
+| +0xad8 | action_button_scratch | M | `player_do_action_button_in_car` | `player_do_action_button_in_car` | Touched ×2 by the in-car action-button handler (§8) |
 | +0xadc | car_damage_window_ms | H | `player_show_car_damage_bar`, `player_invalidate_car_damage_bar` | - | = 3000 ms on show; = -1 on invalidate |
 | +0xae0 | **car_damage_target** | H | `player_show_car_damage_bar`, `player_invalidate_car_damage_bar` | `player_invalidate_car_damage_bar` | The `C_car` whose damage bar is on screen (HUD flag bit **0x10000** = `cardamagevisible`). Show requires `car+0x2031`; invalidate only fires if the passed car IS this one, and keeps the bar up when the player is in a car (`+0x98` kind==4) |
 | +0xada | controls_locked | H | `player_lock_controls` | `player_collision`, `player_hit` | Last field of the save record; the guard both overrides test |
@@ -141,7 +107,7 @@ health, then pushes `cur/max*100` to `hud_set_player_health_value`.
 
 PC-first; PS2-only rows leave the PC columns `-`. Status: **CONFIRMED** (body-diffed) ·
 **STRUCTURAL** (same slot and role, bodies not diffable) · **PS2-ONLY** · **INLINED** ·
-**not located**. Sorted by PS2 VA.
+**INLINED?** (inlining candidate, unproven) · **not located**. Sorted by PS2 VA.
 
 | PC VA | PC name | PS2 twin (mangled) | PS2 VA | Status | Role |
 |---|---|---|---|---|---|
@@ -222,8 +188,8 @@ in this TU is distorted.
 
 | PC VA | PC name | what it is |
 |---|---|---|
-| 0x004c6b80 | `player_set_navi_point` | A **free function** — mangled `__FP9I3D_frame`, no class tag, no `this`. One statement: `g_player_navi_frame = frame`. It is the FIRST symbol of `C_player.cpp` on both builds. Callsite census 3↔3, roles matching one for one: the SETCOMPASS script case in range (the frame) and out of range (NULL), plus game/mission init (NULL) |
-| 0x004cd680 | `player_alpha_list_add_frame_tree` | The file-local recursive collector that fills the alpha list. Its PS2 template argument is what types the list: **`I3D_object*`** |
+| 0x004c6b80 | `player_set_navi_point` | A **free function** — no `this` (§7b). One statement: `g_player_navi_frame = frame`. It is the FIRST symbol of `C_player.cpp`. Three callsites: the SETCOMPASS script case in range (the frame) and out of range (NULL), plus game/mission init (NULL) |
+| 0x004cd680 | `player_alpha_list_add_frame_tree` | The file-local recursive collector that fills the alpha list of **`I3D_object*`** (§7b) |
 | 0x004cd720 | `player_alpha_list_remove_frame_tree` | Its mirror; PC-only |
 | 0x004cda20 | `player_set_hand_scale` | PC-only. The BOXER cheat's hand-scale setter (`game_cheat_check` case 4; its sole caller passes `[world+0xe4]` = the active player). Writes `(1,1,1)` or `(2,2,2)` to `frame+0x90..+0x98` (local SCALE) on `r_hand`/`l_hand` |
 | 0x004cdb60 | `std_vector4_insert_n` | **Not C_player at all** — 192 callsites across ~40 modules, COMDAT-placed in this TU; the mechanical name is correct |
@@ -237,7 +203,7 @@ containing functions:
 |---|---|---|
 | `0x006560d0`..`0x006560e0` | **`player_ai_drive` only** — 5 floats, 2 refs each | the secondary-binding latches of §5a: `g_player_drive_steer_right_secondary_latch`, `_steer_left_`, `_clutch_`, `_brake_`, `_accel_secondary_latch` |
 | `0x006560e4` | `game_init`, `human_intern_use_car`, `human_put_in_vehicle_at_seat`, `human_update`, `player_ai`, `player_ai_drive`, + its setter `hud_set_car_damage_bar_enabled` | `g_hud_car_damage_bar_enabled`, an `extern` defined in this run: set by script `cardamagevisible`, cleared by `game_init` |
-| `0x006560e8` | **nothing** | `g_player_navi_frame` (PS2 `navi_frame`). Write-only on both builds |
+| `0x006560e8` | **nothing** | `g_player_navi_frame`. Write-only (§7b) |
 
 ### 5a. The driving-input latches
 
@@ -272,12 +238,12 @@ start every secondary axis is ignored until it moves.
 
 | # | difference | evidence |
 |---|---|---|
-| 1 | **PS2 has AUTOAIM; the PC does not.** `FireMagnetism` / `FireDriveFindTarget` / `FindNearestEnemyToTurn` are PS2-only. | PC's `player_ai_drive` does drive-by aim with manual `human_do_aimed` + `collision_test_line_horizontal` and calls no magnetism. ✅ Confirmed by the user (Tier-1) |
-| 2 | **No auto-goto-car on the PC.** The `GoToCar_*` family is the PS2 gamepad auto-walk-to-car assist; `GoToCar_Init`/`Process` have no PC twin and `GoToCar_Cancel` (a 1-line clear) is inlined. | ✅ Confirmed by the user (Tier-1). The third PS2 `Can_UseCar` caller has no PC counterpart because the feature is absent |
+| 1 | **PS2 has AUTOAIM; the PC does not.** `FireMagnetism` / `FireDriveFindTarget` / `FindNearestEnemyToTurn` are PS2-only. | PC's `player_ai_drive` does drive-by aim with manual `human_do_aimed` + `collision_test_line_horizontal` and calls no magnetism. ✅ Observed in game |
+| 2 | **No auto-goto-car on the PC.** The `GoToCar_*` family is the PS2 gamepad auto-walk-to-car assist; `GoToCar_Init`/`Process` have no PC twin and `GoToCar_Cancel` (a 1-line clear) is inlined. | ✅ Observed in game. The third PS2 `Can_UseCar` caller has no PC counterpart because the feature is absent |
 | 3 | **Both alpha methods ignore their frame parameter on PC.** `player_add_alpha_object` and `player_del_alpha_object` accept an `I3D_frame*` (`ret 4`) and never read it; they walk `this->+0x68`, the actor's own scene frame (`structs/actor.md`), so the whole model is rescanned. PS2 walks the frame it is given. | Disassembly of both: `mov ecx,[esi+0x68]` / `lea edx,[esi+0xac0]` and no access to `[esp+8]`. The divergence is **symmetric across both methods**, which makes it a build difference rather than a decompiler artifact |
 | 4 | **`DelAlphaObject` clears the whole list on PS2 and removes one subtree on PC.** | PS2's 8-byte body is `*(this+0xc48) = 0`; the PC recurses a frame tree doing swap-with-last removals |
 | 5 | **`ShowWeaponName` exists only on PC.** The PS2 body is empty; the PC prints the weapon's localized name (textdb 3300 + slot) to the HUD console on every weapon change. | Here the PS2 method count is a **lower** bound |
-| 6 | **The C_player band's 4-byte packing shift is the alpha vector.** PC `std::vector` 16 B vs PS2 `__vector_pod` 12 B. | §1a |
+| 6 | **The C_player band's 4-byte packing shift is the alpha vector.** PC `std::vector` 16 B vs PS2 `__vector_pod` 12 B. | §7a |
 | 7 | **Control input.** The three control ticks take a `G_ConsoleControls*` on PS2 (gamepad); the PC reads input directly. | `AI_walk` / `AI_drive` / `AI_car_fire` signatures, §3 |
 | 8 | **Steering linearity.** `player_update_controls` passes the tunable `g_steering_linearity`; PS2 passes the literal `0.5f`. | §3 |
 | 9 | **Accuracy mirror.** PC's `player_add_shot_accuracy_penalty` mirrors the accumulated spread to world `+0xd8`; PS2's `ShootDeAimed` has no such statement. | §8 |
@@ -286,6 +252,52 @@ A PS2 method count of 44 was never the PC target: several of those methods are c
 features the PC never had. Both feature differences follow from the controls differing between
 builds (gamepad vs mouse/keyboard).
 
+### 7a. The C_player band has a 4-byte packing shift
+
+The PC↔PS2 offset delta for the C_player band is **not constant**. Eight field pairs proven by
+body-diff split cleanly in two:
+
+| PC offset | PS2 offset | delta | proven by |
+|---|---|---|---|
+| +0xab4 | +0xc38 | **0x184** | `player_change_model` |
+| +0xab8 | +0xc3c | **0x184** | `player_change_model` |
+| +0xac8 | +0xc48 | **0x180** ¹ | `player_change_model` |
+| +0xad0 | +0xc50 | **0x180** | `player_add_shot_accuracy_penalty` |
+| +0xad4 | +0xc54 | **0x180** | `player_add_shot_accuracy_penalty` |
+| +0xad8 | +0xc58 | **0x180** | `player_do_action_button_in_car` |
+| +0xadc | +0xc5c | **0x180** | `player_show_car_damage_bar` / `_invalidate_car_damage_bar` |
+| +0xae0 | +0xc60 | **0x180** | `player_show_car_damage_bar` / `_invalidate_car_damage_bar` |
+
+¹ Same list, not literally the same field: PC `+0xac8` is the vector's END POINTER and PS2 `+0xc48`
+is its SIZE. `player_change_model`'s `+0xac8 = +0xac4` is `end = begin`, i.e. clear the list, which
+is what PS2's `+0xc48 = 0` does.
+
+⇒ **delta 0x184 at/below PC `+0xabc`; delta 0x180 at/above PC `+0xad0`.**
+
+**The shift is the alpha-object list.** PC `+0xac0` is an MSVC `std::vector` in its 4-word form —
+`{alloc, begin, end, cap}`, **16 bytes** — against PS2 `+0xc44`, a 3-word `__vector_pod`, **12
+bytes**. `0xad0 − 0xac0 = 0x10` on the PC; `0xc50 − 0xc44 = 0xc` on the PS2. A PC object that is 4
+bytes larger makes every later PC offset 4 bytes higher, so the delta (PS2 − PC) SHRINKS by 4
+across it: `0x184 → 0x180`. Nothing is missing on either side; the two builds spell one member
+differently.
+
+This explains the save-record map (PS2 `+0xc20..+0xc5a` ↔ PC `+0xa9c..+0xada`, 11 fields, same
+order and types, same type-tag `1`), whose *start* implies delta 0x184 and whose *end* implies
+0x180: the record straddles the shift. **Use 0x180 for anything above `+0xac8` and 0x184 below
+`+0xab8`; do not extrapolate one delta across the whole band.** Any function touching that band
+has a C_player receiver. Corollary field map: PS2 `+0x224`↔PC `+0x98` (vehicle link), PS2
+`+0x228`↔PC `+0x9c`, PS2 `+0x238`↔PC `+0xac` (seat).
+
+### 7b. Build-invariant details
+
+- The `+0xab4` FourCC constants `'SNGM'` / `'SMMR'` are byte-identical on PS2.
+- `+0xad8` is touched ×2 by the in-car action-button handler on PS2 too.
+- The alpha list's element type **`I3D_object*`** is the template argument of the PS2 recursive
+  collector `cbAlpha`, the twin of `player_alpha_list_add_frame_tree`.
+- `player_set_navi_point` is mangled `__FP9I3D_frame` on PS2 — no class tag — and is the first
+  symbol of `C_player.cpp` on both builds. Callsite census 3↔3, roles matching one for one.
+- `g_player_navi_frame` is PS2 `navi_frame`, write-only on both builds.
+
 ## 8. Open items
 
 | item | state |
@@ -293,7 +305,8 @@ builds (gamepad vs mouse/keyboard).
 | `NastavTypKrizkuPodleZbraneAtToTiSuliniOdSebePoznaji` (140 B) | the crosshair-type-by-weapon selector. The PC gap between `player_do_action_button_in_car` and `player_indicator_set_aimed` is **empty**, so it is recorded *not located*, never "inlined"; it is also not inlined into `player_indicator_set_aimed` (checked). Lever: `player_indicator_set_aimed` (flag bit 0x20) + `hud_set_player_accuracy` (+0x9234) are the crosshair path — search their neighbourhood |
 | `ZkurvenaPrebijeciFunkceAdvanced` (reload, 888 B) | CANDIDATE-inlined into one of the three control ticks. Confirm which by scanning `player_ai_walk` / `_car_fire` for the reload state machine |
 | what reads `g_player_navi_frame` | nothing does, on either build (§5). The value is published and consumed by nobody |
-| `+0xabc` (`alpha_partner`) | set to 1.0f beside the alpha by two writers, read by nobody located |
+| `+0xabc` (`alpha_partner`) | set to 1.0f beside the alpha by two writers, read by nobody located; a target alpha or a fade rate would both fit |
+| `+0xad8` (`action_button_scratch`) | touched ×2 by `player_do_action_button_in_car`; role not decoded |
 | the `+0xd8` world mirror | PC's `player_add_shot_accuracy_penalty` writes it, PS2's `ShootDeAimed` does not. Whether `+0xd8` drives a separate screen/camera effect on the PC, or is read back by the same crosshair path, is undecided |
 | `car+0x2044` / `car+0x2031` | the gates on `player_try_use_car`'s police-report branch and on `player_show_car_damage_bar`; both unidentified |
 | `player_set_wingman_indicator` and `act_mission_get_game` (§4) | not body-diffed against any PS2 method |

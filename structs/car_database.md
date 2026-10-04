@@ -1,6 +1,6 @@
 # `G_CarDatabase` — the car catalogue
 
-**Created** 2026-08-23 16:22 +0200 · **Modified** 2026-09-17 13:45 +0200
+**Created** 2026-08-23 16:22 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 PC prefix **`car_database_`**. A file-scope singleton constructed by `car_database_static_init`
 and living in the same translation unit as `G_LoadSaveClass` — see `structs/loadsave.md` for the
@@ -33,7 +33,7 @@ Almost every entry point takes or returns a **packed id**, not a plain index:
 
 ```
 bits  0..15   car index into the carindex table
-bits 16..23   a sub-selector (model level / variant), used by the actor path
+bits 16..23   always 0 on the PC (below)
 bits 24..31   colour index
 ```
 
@@ -41,10 +41,16 @@ bits 24..31   colour index
 |---|---|
 | `car_database_pack_id(idx, _, colour)` | `(idx & 0xffff) \| (colour << 24)` |
 | `car_database_pack_id_by_model(name, _, colour)` | name → index → the same pack |
-| `car_database_pack_id_from_car(car)` | a live `C_car` → id, folding in `car_get_model_level` |
+| `car_database_pack_id_from_car(car)` | a live `C_car` → id + colour; it calls `car_get_model_level`, but `xor al,al; shl eax,0x10` clears the level before the shift, so bits 16..23 stay 0 |
 | `car_database_get_index_by_model(name)` | name → index, `__strcmpi` scan from entry 1 |
 | `car_database_get_index_by_model_filename(name, &colour)` | a full **filename** → index + colour |
 | `car_database_clamp_packed_id(&id)` | repairs an id in place: clears an out-of-range car, clamps the colour |
+
+**Bits 16..23 carry nothing.** Every producer writes 0 there, and the one reader,
+`enabled_cars_have_car`, uses the byte to pick a bank only when its third argument is set;
+both of its callers (`car_database_collect_cars_by_class_mask` and
+`car_database_collect_cars_by_manufacturer`, a closed set of two `E8` calls) push 0. The
+variant-looking string choice is made by the colour byte (§3).
 
 `car_database_get_index_by_model_filename` is where the model filename convention is
 readable: it strips any path, lifts the colour digit from `name[len-6]`, then truncates
@@ -60,7 +66,9 @@ a car.
 
 ### Car index record (`carindex.def`, stride 0xa4)
 
-Only offsets with a named reader are listed.
+The record is four 0x20-byte strings and nine dwords; every byte is accounted for. The shipped
+file holds 83 records: entry 0 is the placeholder `-`, entries 1..81 are cars and entry 82 is
+all zero.
 
 | offset | type | meaning | reader |
 |---|---|---|---|
@@ -71,8 +79,11 @@ Only offsets with a named reader are listed.
 | `+0x80` | dword | manufacturer bit | `car_database_collect_cars_by_manufacturer` (`1 << n`) |
 | `+0x84` | dword | **race** unlock mask | `car_database_is_enabled_for_race`, `loadsave_race_cars_unlock_from_car` |
 | `+0x88` | dword | **class / championship** mask ² | `car_database_is_enabled_for_championship`, `car_database_get_car_class_mask`, `car_database_collect_cars_by_class_mask` |
+| `+0x8c` | dword | **steal-group mask** — bit n is letter `A` + n ³ | `garage_can_steal_car_model` (`garage+0x98 & +0x8c`) |
 | `+0x90` | dword | **steal time, milliseconds** | `car_database_get_steal_time` (default **15000**) |
+| `+0x94` | dword | 0 in all 83 records | none |
 | `+0x98` | dword | civilian-usage mask | `car_database_get_civil_mask_by_model` |
+| `+0x9c` | dword | **seat count** — 2 on 55 cars, 4 on 21, 1 on the five single-seaters (the four racers and `HotRod`) ⁴ | none |
 | `+0xa0` | dword | **Free Ride** unlock mask | `car_database_is_enabled_for_freeride` |
 
 ¹ `game_add_frame_for_shadow` stores it on the car's `S_shadow_item`, and
@@ -80,12 +91,21 @@ Only offsets with a named reader are listed.
 preloaded, so a name that is not one of the 43 silently gets no shadow (`structs/fake_shadow.md`).
 ² A double duty: `car_database_get_car_class_mask` and `car_database_is_enabled_for_championship`
 read the same dword.
+³ Script command `garage_enablesteal` (`garage_enable_steal_for_letter`) ORs letter `A`..`Z`
+into `garage+0x98`; the shipped scripts grant every letter at least once. In the shipped table
+60 cars carry the same mask here as in the race mask `+0x84`, the five racing cars carry only
+bit 31, which no letter can grant, and the 16 bonus cars (entries 66..81) carry 0, so neither
+group can ever pass the steal test. No car carries the `Z` bit.
+⁴ In game one person enters a car per door, so a two-door car seats two (user). The values
+follow the body style: 2 on the two-door Tudors, coupes, roadsters, pickups and trucks, 4 on
+the four-door cars.
 
 ### Detail record (`carcyclopedia.def`, stride 200)
 
 `+0xa4` = colour count (hence `car_database_get_max_color_index` returning it minus one),
-`+0xac` = the carcyclopedia mask, `+0xb0`..`+0xc0` = five localized name string-ids selected by
-variant.
+`+0xac` = the carcyclopedia mask, `+0xb0`..`+0xc0` = five **colour-name** string ids, one per
+colour index, returned by `car_database_get_color_name_id`. Every non-zero id in the shipped file
+is a colour name, textdb 3800..3813 ("Blue", "Dark blue", "Brown", "Green", "Red", ...).
 
 ### Player index record (`playerindex.def`, stride 0x24)
 
@@ -147,7 +167,7 @@ the packed id selects the bank and the low 16 bits select the bit.
 | `car_database_get_player_record` | `0x0055c4e0` | - ² |
 | `car_database_get_player_model` | `0x0055c510` | `GetPlayerModel__13G_CarDatabaseFUi` |
 | `car_database_get_car_name` | `0x0055c540` | `GetCarName__13G_CarDatabaseFUi` |
-| `car_database_get_car_variant_name_id` | `0x0055c570` | `GetCarSecondName__13G_CarDatabaseFUiUi` |
+| `car_database_get_color_name_id` | `0x0055c570` | `GetCarSecondName__13G_CarDatabaseFUiUi` |
 | `car_database_clamp_packed_id` | `0x0055c620` | `RepairIndex__13G_CarDatabaseFRUi` |
 | `car_database_get_max_color_index` | `0x0055c670` | `GetCarMaxColor__13G_CarDatabaseFUi` |
 | `car_database_get_car_model` | `0x0055c6b0` | `GetCarModel__13G_CarDatabaseFUiPUcb` |
@@ -180,10 +200,15 @@ the packed id selects the bank and the low 16 bits select the bit.
 ## 7. PC vs PS2
 
 * **Strides differ:** car record **0xa4 PC / 0xa8 PS2**, detail record **200 PC / 204
-  PS2**. The player record is 0x24 on both. Every offset in §3 is the PC's; the PS2's are
-  4 bytes further along from `+0x80` onward.
+  PS2**. The player record is 0x24 on both. The car-record offsets of §3 are the same on both
+  builds — the PS2 accessors read `+0x84` (race), `+0x88` (class), `+0x90` (steal time), `+0x98`
+  (civil mask) and `+0xa0` (Free Ride) — and the extra PS2 dword is `+0xa4`, which the
+  PS2-only `CreateBestTimes__8C_racingFv` reads as a racing-segment selector.
 * **Three PS2 methods have no PC function start:** `GetCarsByRaceMask` (which would test `+0x84`
-  in a loop), `EnableCarsForFree` and `GetWreckageByID`.
+  in a loop), `EnableCarsForFree` (it ORs together the race masks of every record whose Free Ride
+  mask matches) and `GetWreckageByID`.
+* **The level byte is dropped on both builds.** PS2 `GetIDByActor` ORs `level << 16` into the id
+  and then masks it with `& 0xff00ffff`, the same outcome as the PC's cleared shift (§2).
 * **Three PC functions are surplus:** `car_database_get_player_record` (the NULL-returning
   variant of `GetPlayerModel`, which returns the `"-"` default string instead),
   `car_database_pack_id_by_model` and `car_database_collect_player_models_by_civil_mask`.
@@ -204,6 +229,4 @@ the packed id selects the bank and the low 16 bits select the bit.
 
 | item | state |
 |---|---|
-| `carindex.def` full field map | 0xa4 bytes per record and this document names about 40 of them; the `.def` is plain data in the DTA |
-| packed-id bits 16..23 | `car_database_get_car_params` clamps it to 4 and `car_database_get_car_variant_name_id` uses it to pick one of five string ids, but nothing located explains what a "variant" is beyond colour |
 | steal time in game | hot-wire two different cars and time them — `+0x90` says the durations are per-model and the fallback is 15 s |

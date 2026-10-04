@@ -1,6 +1,6 @@
 # The network event message — the PC's multiplayer replication layer
 
-**Created** 2026-08-26 20:52 +0200 · **Modified** 2026-09-17 17:52 +0200
+**Created** 2026-08-26 20:52 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`event_msg_`**. Core range `[0x005929c0, 0x00594740)`. **PC-only** — see §7.
 
@@ -120,8 +120,7 @@ the `g_event_msg_vt_u8` arms are `case 0x10` / `case 0x11`.
 **`g_event_msg_vt_unsent_type_0x25`.** A scan of the image for the address as a pointer finds one
 reference: `0x0059f3d1`, inside `net_session_handle_event_msg`. There is no producer and no
 constructor — and the receiving arm (`case 0x24`) parses the payload into a stack local and falls
-through to `break` without reading it. Both halves are inert. It is not "cut content" until
-unreachability is shown (§9).
+through to `break` without reading it. Both halves are inert (§9).
 
 **`g_event_msg_vt_actor_guid_table` is send-only by construction** — slot 3 of its descriptor is the
 shared stub `stub_ret0_args8_00575a60`. The receive side is a separate free function,
@@ -155,7 +154,7 @@ arm below each one deserialises into:
 
 **The family has byte-identical duplicates because `/OPT:ICF` was not applied to them.**
 `event_msg_dword_pair_payload_init_005a1930` is byte-identical to `event_msg_dword_pair_payload_init`
-(`0x00594650`), and `event_msg_car_damage_payload_init` to `door_event_payload_init` (`0x005946c0`).
+(`0x00594650`), and `event_msg_car_damage_payload_init` to `event_msg_door_state_payload_init` (`0x005946c0`).
 Filtering the image's byte-identical function groups down to bodies with no relative branch or call
 leaves four genuinely foldable pairs, all unfolded.
 
@@ -200,7 +199,7 @@ network GUID (top byte = owning peer slot).
 | `0x37` / `0x38` | a racer finished | `racing_do_gates` |
 | `0x3a` | race camera selected | inside `camera_tick`, which also writes `g_racing+0x98` |
 
-Types `0x5`, `0x11`–`0x14`, `0x39`, `0x3b`–`0x41` are dispatched but not individually traced (§9).
+Types `0x5`, `0x11`–`0x14`, `0x39`, `0x3b`–`0x41` are also dispatched (§9).
 
 ## 5. The wire format
 

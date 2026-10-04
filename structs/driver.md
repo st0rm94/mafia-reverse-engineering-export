@@ -1,6 +1,6 @@
 # `C_driver` — the chase AI-driver record (~0x29C bytes)
 
-**Created** 2026-07-11 13:22 +0200 · **Modified** 2026-09-23 21:44 +0200
+**Created** 2026-07-11 13:22 +0200 · **Modified** 2026-10-01 18:52 +0200
 
 One `C_driver` is the per-car AI that physically **steers / throttles / brakes** a chase car along a
 cached path of nav-graph nodes. It is not police-specific: police pursuits, AI combat chases and
@@ -137,17 +137,14 @@ the racing side; see `structs/racing.md` §9e.
 |---|---|---|---|
 | +0x00.. | sub-point vec3 slots | H | candidate world positions; active one chosen by entry byte +0x44 |
 | +0x30 + i*4 | per-sub-point segment lengths | M | float array; summed for look-ahead (`driver_last_route_in_brake_path`) |
-| +0x44 | entry sub-point index | H | byte; selects the node's entry vec3 |
+| +0x44 | entry sub-point index | H | byte; selects the node's entry vec3. The steering helpers also read the NEXT node's byte (`i*0x70 + 0xb4` = `node[i+1]+0x44`) to pick the exit direction |
 | +0x48 | node width / segment length | H | float; `lookahead_dist = width * speed_jitter` |
 | +0x4C | corner speed gate | H | `driver_advance_checkpoint` / `driver_compute_brake_pedal` compare speed vs this |
 | +0x50 | turn-radius cap | H | `driver_compute_radius`: `clamp_len*tan(angle/2)`; `0x497423f0`=straight |
 | +0x58/+0x5C | nav marker ptrs | M | char* one-way/lane markers, tested for `&0x300` lane side |
 | +0x60 | nav node/edge index | H | ushort; high bit 0x8000 = edge |
 | +0x61 | node flag byte | M | `&0x80` gates a path-advance branch |
-| +0x68 | stop-type object pointer | H | §3a |
-| +0xB4 | exit sub-point index | H | byte; selects the exit vec3 (next-node direction) ¹ |
-
-¹ `+0xB4` lies beyond the 0x70 stride (§7).
+| +0x68 | traffic-light phase pointer | H | `int *`, §3a |
 
 ### 3a. `driver_path_node_at` and node `+0x68`
 
@@ -158,7 +155,7 @@ the `C_sledovacka` translation unit as an out-of-line inline member: 2 callsites
 erase/insert siblings in the same TU are shared across modules and keep generic names
 (`std_vector70_erase_range`, `std_vector70_insert_n`); each was measured separately.
 
-**Path node `+0x68` is a POINTER.** Three consumers agree on its shape:
+**Path node `+0x68` points at a traffic-light phase.** Three consumers read it the same way:
 
 ```
 driver_tick                : (node->+0x68 != NULL) && ((&g_driver_semaphore_states)[**(int**)(node+0x68) * 4] & 4) == 0
@@ -166,22 +163,39 @@ driver_advance_checkpoint  : the same expression, verbatim
 pursuit_event_tick         : (node->+0x68 == NULL) || ((&g_pursuit_event_semaphore_states)[**(int**)(node+0x68) * 4] & 4) != 0
 ```
 
-The two table addresses hold **byte-identical** 10-dword data — `[1,1,1,1,1,4,4,4,4,2]` —
-i.e. one file-local `static const` array emitted once per translation unit. Four copies exist:
-`g_driver_semaphore_states` (the `C_driver` file), `g_pursuit_event_semaphore_states` (the `C_sledovacka` file),
-`g_railway_semaphore_states` and `g_game_semaphore_states`. `game_tick_traffic_signals` indexes its
-copy by a traffic-light phase and tests bits 0/1/2 per bulb. Here the index is the first dword of
-whatever `+0x68` points at, and **only bit `4` is ever tested**:
+The table addresses hold **byte-identical** 10-dword data — `[1,1,1,1,1,4,4,4,4,2]` — i.e. one
+file-local `static const` array emitted once per translation unit. Four copies exist:
+`g_driver_semaphore_states` (the `C_driver` file), `g_pursuit_event_semaphore_states` (the
+`C_sledovacka` file), `g_railway_semaphore_states` and `g_game_semaphore_states`. The index is the
+`int` that `+0x68` points at, a **traffic-light phase 0..9**, and the entry's bits are the three bulbs
+`game_tick_traffic_signals` drives: bit `1` red, bit `2` orange, bit `4` green (`structs/game.md` §4d).
+Phases 0..4 are red, 5..8 green and 9 orange.
 
-* **bit clear** → `driver_tick` forces `+0x1c0` (the cornering speed cap) to **0**: stop
-  here. So the node is a legitimate stopping point.
-* **bit set** → `pursuit_event_tick` stretches its stuck-driver timeout from 2 s to 15 s
-  before latching `driver+0x298`, so a car waiting at such a node is never reported
+**The two writers** are the path builders `traffic_car_activate_elements` and
+`pursuit_event_recompile_path`. Both point `+0x68` at one of three phase variables:
+
+| target | chosen when |
+|---|---|
+| `C_game+0x19c` | the node's X offset to its neighbours is larger than its Z offset |
+| `C_game+0x1a0` | otherwise, the Z offset being at least as large |
+| a bridge actor's `act_state` (`+0x138`) | the next node is a bridge slot of `g_traffic_bridge_slots_begin` ¹ |
+
+¹ The `C_traffic_car::S_BRIDGE` vector, `{actor *, ushort node}`; the match is on the next node's
+nav index.
+
+The two `C_game` phases are one city-wide light cycle seen from the two crossing axes: `game_init`
+seeds them 0 and 5 and `game_tick` advances both together, so one axis is green while the other is
+red. A bridge's `act_state` is 1 while it cycles (red) and 7 at rest (green), `structs/bridge.md`.
+
+**Only bit `4` (green) is ever tested here:**
+
+* **not green** → `driver_tick` forces `+0x1c0` (the cornering speed cap) to **0** once the node is
+  inside the braking distance, and `driver_advance_checkpoint` zeroes the throttle `+0x104`: the car
+  stops at the node.
+* **`pursuit_event_tick`'s stuck-driver timer** (latching `driver+0x298` after 2 s with no predicted
+  obstacle) runs on to **15 s** when an obstacle is predicted and the node has no light or a green
+  one. At a red or orange light the timer is held, so a car waiting at the light is never reported
   blocked.
-
-The first dword of the pointed-to object is a type id in 0..9. Its neighbours `+0x58`/`+0x5c` are
-the one-way/lane marker strings and `+0x60` the nav node/edge index, so a road-network special
-object is the obvious shape (§7).
 
 The symbols `g_driver_semaphore_states` / `g_pursuit_event_semaphore_states` are the **array bases** (element [0]). Every reference
 is `test byte [reg*4 + <symbol>], 4` (`f6 04 85 2c c2 63 00 04`), so the index scales from the
@@ -276,16 +290,12 @@ live beside the container helpers, not in the owning class's cluster.
   brake pedal.
 - The 10-entry table of §3a is the PS2 `semaphore_states` (40 bytes, indexed from 0 by
   `IsSemaPoint` and `TickSemaphores__6C_gameFv`).
+- The phase pointer is PS2 node `+0x80`; the PS2 builders `RecompilePath__12C_sledovackaFi`,
+  `ActivateElems__13C_traffic_carFbi` and `AI__13C_traffic_carFUi` point it at `C_game+0x1e4` /
+  `+0x1e8` (PC `+0x19c` / `+0x1a0`) by the same axis test, or at `+0x140` of a bridge list entry.
 
 ## 6. Cross-references
 
 - `structs/vehicle.md` — the `C_Vehicle` the driver drives (`this+0x10`) + gas/brake/steer setters.
 - `structs/pursuit-event-manager.md` — the S_ELEMENT record that owns this driver at `+0x04`.
 - `police-system/artifacts/boosting.md` — `speed_factor` / model-level boost.
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| class of the object at path node `+0x68` | unidentified; its first dword indexes the same 10-entry table `game_tick_traffic_signals` indexes by traffic-light phase, which is consistent with a traffic light but not proven |
-| path node `+0xB4` (exit sub-point index) | lies beyond the 0x70 PC stride; the offset may be PS2-relative or belong to a different record |

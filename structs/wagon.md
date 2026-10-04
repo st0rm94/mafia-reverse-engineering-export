@@ -1,6 +1,6 @@
 # `C_wagon` — entity kind `0x1e`, the tram / train wagon
 
-**Created** 2026-08-18 21:09 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-08-18 21:09 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -19,18 +19,18 @@ emission order.
 
 ## 1. How the class was identified
 
-Three independent witnesses, none of which needed a body diff:
+Two independent PC witnesses, neither of which needed a body diff (the source-file evidence is in
+§8):
 
 1. **`wagon_ctor` chains `actor_ctor`** and installs vtable `0x0063cff0`, so it is a
    `C_actor` subclass rather than anything in the `C_Vehicle` family.
 2. **`wagon_rebuild_all_forward_paths` filters on the kind byte:** it scans
    `g_actor_global_list` for actors whose `+0x10` is **`0x1e`**.
-3. **`C_wagon.cpp` was compiled into the PS2 build** (§8).
 
 ## 2. Why it sits exactly here — the link-order corroboration
 
-The PC link order is alphabetical by source file, and across five consecutive files the two
-builds agree:
+The PC link order is alphabetical by source file, and five consecutive files lead up to this
+one (the other build's link order agrees, §8):
 
 ```
 C_turnout.cpp  ->  C_Vehicle.cpp  ->  _effects.cpp  ->  _kernel.cpp  ->  _sounds.cpp  ->  C_wagon.cpp
@@ -50,7 +50,7 @@ PC-first, ordered by PC VA; every row body-diffed.
 | PC VA | PC name | size | PS2 method | size | Grade |
 |---|---|---:|---|---:|---|
 | 0x0053c2b0 | `wagon_ctor` | 176 | `{ctor}` | 240 | CONFIRMED |
-| 0x0053c360 | `wagon_scalar_deleting_dtor` | 32 | - (MSVC only) | - | STRUCTURAL |
+| 0x0053c360 | `wagon_scalar_deleting_dtor` | 32 | - | - | STRUCTURAL |
 | 0x0053c380 | `wagon_dtor` | 128 | `{dtor}` | 180 | CONFIRMED |
 | 0x0053c400 | `wagon_init` | 32 | `Init` | 32 | CONFIRMED |
 | 0x0053c420 | `wagon_save_game_get_size` | 80 | `SaveGameGetSize` | 64 | CONFIRMED |
@@ -69,7 +69,8 @@ PC-first, ordered by PC VA; every row body-diffed.
 | 0x00540620 | `wagon_game_done` | 336 | `GameDone` | 376 | CONFIRMED |
 | 0x00540770 | `wagon_rebuild_all_forward_paths` | 128 | `RecompileNewPath` | 208 | CONFIRMED |
 
-Size ratios run 0.62–1.33. Five further PS2 methods have no own PC function (§8).
+`wagon_scalar_deleting_dtor` is MSVC-only and has no PS2 method. Size ratios run 0.62–1.33. Five
+further PS2 methods have no own PC function (§8).
 
 `wagon_rebuild_all_forward_paths` rebuilds **only** the forward vector `+0xac`/`+0xb0`; the back
 path at `+0x80` is read for its first node and never touched. It is a member function whose body

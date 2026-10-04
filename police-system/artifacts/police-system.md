@@ -1,11 +1,12 @@
 # Police System — Mafia: The City of Lost Heaven
 
-**Created** 2026-08-02 11:41 +0200 · **Modified** 2026-09-18 15:31 +0200
+**Created** 2026-08-02 11:41 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 The police / pursuit system as observed in gameplay, and the engine code behind it. The per-bit
 offence table is `police-system/artifacts/offences.md`; the struct layouts are
-`structs/police_manager.md` (per-actor, at `actor+0x2da0`) and `structs/police-board.md` (the global
-singleton at `0x006552a8`).
+`structs/police_manager.md` (a single instance embedded in the `C_game` world object at
+`C_game+0x2DA0`, holding one `pursuit_record` per tracked suspect) and `structs/police-board.md` (the
+global singleton at `0x006552a8`).
 
 ## 1. Police states
 
@@ -93,8 +94,13 @@ state:
 - While in the **searching** state, if the player is noticed committing a crime again, the previous
   state is restored.
 
-In code the substate is the per-officer faded toggle `officer+0xf44`, driven from the officer's
-visibility value `officer+0xafc` against the threshold `officer+0xf58` (§13c).
+In code the two dimensions are separate. **Transparency** is `police_board_has_recent_sighting`: no
+officer assigned to the player has logged a sighting of him in the last 2000 ms. **Searching** is
+`pursuit_record+0x51`, recomputed by `police_manager_tick` from what the chasing squads know: each
+squad stores the vehicle it knows the player by (`police_action+0x64`) and a face-known flag
+(`+0x68`), and the player is recognised in that vehicle, or on foot when the flag is set. Each rule
+above follows from those two fields; the full recompute, the writers and the two paths behind the
+pedestrian-cop exception are in `structs/police_manager.md` §3.2.
 
 ## 4. Transitions
 
@@ -176,26 +182,27 @@ debug-print test script, confirmed not to interfere with the result. Observed:
 
 | `zz` | Offence (observed) | Notes |
 |---|---|---|
-| 0 | **firearm drawn / equipped** | Set live by `police_manager_tick` (VA `0x005cbce0`) while the player's human-state `+0x4a0` ∈ [5,15) = the **firearm**-drawn band. **Firearms only** — melee weapons (bat/knife) do NOT set it and are not an offence. Live flag, no decay. `offences.md` §2.4 |
+| 0 | **gun or throwable drawn** | live flag, no decay: `police_manager_tick` mirrors equipped-weapon id `+0x4a0` ∈ [5,15] (guns + throwables); melee weapons do not set it. `offences.md` §2.4 |
 | 1 | shooting | - |
 | 2 | speeding | set above **17 m/s** |
 | 3 | **world / environment contact** | car touching road edges, tram tracks, scenery. Very buggy — set almost constantly while driving, decays slowly (stays set after leaving the car). **Police ignore it** |
 | 4 | crashing into any car | - |
 | 5 | hitting a pedestrian with a car | - |
 | 6 | driving on the sidewalk | **Police ignore it** — the escalation/print is unreachable in the shipped EXE (the off-by-800 sidewalk bug; `offences.md` §8) |
-| 7 | - | never observed set (unused) |
-| 8 | - | never observed set (unused) |
+| 7 | - | never observed set; no code sets it (unused) |
+| 8 | - | never observed set; no code sets it (unused) |
 | 9 | **melee / violence vs any pedestrian** (incl. cops) | punches and melee weapons set it; **gunfire does NOT** (gunfire sets bit 1). The Mafia Script Data Reference's "attack on a policeman" label is just the police-relevant case |
 | 10 | running a red light in a car | - |
 | 11 | stealing a car | - |
 | 12 | traffic-sign damage | any form — car-hit **or** gunfire both set it |
 
-**`zz ≥ 13` is unreliable.** Once the traffic-sign bit (12) is set, `get_pm_state zz = 13/14/15/16`
-*also* return 1, so the command is only trustworthy for `zz = 1..12`. The command was evidently not
-intended to be used past bit 12, which is also why the Mafia Script Data Reference documents bit 13
-as a duplicate "traffic sign" type — it is reading spurious state, not a distinct offence. The high
-escalation bits 13 and 15 *are* real police-internal flags (assault on officer / assault on car) but
-are not cleanly queryable this way; see `offences.md` §2.2.
+**`zz ≥ 13` reads bit 12.** The script loader clamps the operand: `program_decode_params` case
+`0xae` (`0x005b0428`..`0x005b043d`) stores the mask `1 << min(zz, 12)`, and a negative `zz` gives mask
+1. So `get_pm_state zz = 13/14/15/16` all read the traffic-sign bit (12) and return 1 exactly when it
+is set; the command is trustworthy for `zz = 0..12` only. This is also why the Mafia Script Data
+Reference documents bit 13 as a duplicate "traffic sign" type. The high escalation bits 13 and 15
+*are* real police-internal flags (assault on officer / assault on car) but cannot be queried this
+way; see `offences.md` §2.2 and §4.
 
 ## 8. Script commands
 
@@ -208,21 +215,25 @@ even after he no longer has an active police state (no icon on screen).
 
 - `police_speed_factor nn` — speed coefficient of police cars during a chase (cops get faster than
   normal). `nn` is a float in `<0,1>`. Example: `police_speed_factor 0.8`.
-- `police_support` — parameters and usage unknown (§18).
+- `police_support ww, xx [, yy]` — spawns one patrol car crewed by two cops at radius `ww` around
+  actor `xx` and engages it as a squad on him: `yy != 0` opens the squad at the gun tier, otherwise
+  at the handcuffs tier (`structs/police-action.md` §3). Engine entry
+  `police_manager_spawn_patrol_car_reinforcements_at_radius`. No shipped script calls it.
 - `policeitchforplayer xx` — writes to `flt[xx]`: **1** if police are chasing the player AND know his
   identity (fine / handcuffs / gun state), **0** if there are no police or police are only in the
   searching state (identity not yet known). Opcode **300** (`0x12c`). Implementation: the case body
   calls `police_manager_count_officers_alive_for_target` and
-  `police_manager_target_identity_pending`, writing 1 iff **(a)** no officer currently sees the
-  player while a pursuit on him is active (the chase persists past line-of-sight loss, gated by
-  `police_board_is_busted_cutscene_active`), OR **(b)** at least one officer sees the player AND
-  identity is already locked in (`police_manager_target_identity_pending` returns 0). It writes
-  **0** otherwise: no pursuit at all, or officers see the player but their identity is still pending
-  (the searching / identifying state). The case body's `script_pred_c = (script_pred_c == '\0')` is
+  `police_manager_target_identity_pending`; `police_manager_count_officers_alive_for_target` counts
+  the living officers assigned to the player (`pursuit_record+0x74`), not officers that currently
+  see him. The result is 1 iff **(a)** no living officer is assigned while a pursuit on him is
+  active (gated by `police_board_is_busted_cutscene_active`), OR **(b)** living officers are
+  assigned AND identity is already locked in (`police_manager_target_identity_pending` returns 0).
+  It writes **0** otherwise: no pursuit at all, or officers are assigned but the identity is still
+  pending (the searching state). The case body's `script_pred_c = (script_pred_c == '\0')` is
   **not** a logical inversion of the script-side meaning — it converts "pending" into "known" before
-  writing the result. Corroboration: the `+0x51` writer inside `police_manager_tick` sets that
-  field as `(police_board_target_matches == '\0')`, i.e. set when no matching record yet exists,
-  which makes `+0x51` a "still being identified" flag; and `scene2.bin` scripts use
+  writing the result. Corroboration: with living officers and a chasing squad,
+  `police_manager_tick` sets `+0x51` as `(police_board_target_matches == '\0')`, i.e. set while no
+  squad recognises the player, which makes `+0x51` a "not recognised" flag; and `scene2.bin` scripts use
   `policeitchforplayer 0; if flt[0]=1, -1, 2` to hold the player in a dialog loop while the cops
   still know him, releasing on `flt[0] == 0`.
 - `policemanager_add "ssss"` — police start reacting to the named actor's behaviour. `ssss` is the
@@ -249,7 +260,9 @@ even after he no longer has an active police state (no icon on screen).
   `xx` is vestigial: stored at `police_manager+0x34` but never read by runtime code; always 980000
   when supplied. `yy` = the backup-vehicle severity tier (§5c). Auto-registers the player actor.
   Example: `policemanager_on 980000, 2`.
-- `policemanager_setspeed` — parameters and usage unknown (§18).
+- `policemanager_setspeed xx, yy` — sets the speeding thresholds in km/h: `xx` = fine, `yy` =
+  handcuffs, stored as m/s at `police_manager+0x0c` / `+0x10` (defaults 17 / 28 m/s). Engine entry
+  `police_manager_set_speed_thresholds`.
 - `vlvp xx` — writes to `flt[xx]`: **1** if there is an active police state (searching / fine /
   handcuffs / gun) AND police can currently see the player, **0** if there are no police or police
   cannot see the player. Equivalently: 1 iff the on-screen icon is opaque, 0 if transparent or
@@ -288,9 +301,8 @@ even after he no longer has an active police state (no icon on screen).
 
 ### 8a. Runtime dispatcher
 
-`program_process_command` is at **VA `0x005bb2d0`**. Ghidra cannot decompile it — it reports a
-process timeout, because 390 inline case bodies in one function exceed the decompiler's limit — so
-only an asm view exists. It works exactly like a classic bytecode VM step:
+`program_process_command` is at **VA `0x005bb2d0`**, decompiled in full; every command's arm carries
+its own case docblock. Its dispatch is a classic bytecode VM step:
 
 ```asm
 PUSH this->ip                     ; current script-tree node
@@ -302,17 +314,17 @@ JA   <default_handler>
 JMP  [0x005c7700 + EAX*4]         ; <-- the dispatch table
 ```
 
-- **Dispatch table** lives at VA `0x005c7700` with **409 dword entries**, each the address of one
-  command's case body, all inside `program_process_command`. The 19 entries past index `0x185` are
-  repeats of the default fallback.
-- **Opcode space**: `1..0x186` (= 1..390 = 390 commands). Opcode 0 and out-of-range values fall
-  through to the default.
+- **Dispatch table** lives at VA `0x005c7700` with **`0x186` (390) dword entries**
+  (`0x005c7700..0x005c7d18`), indexed by `opcode - 1`, each the address of one command's arm or of
+  the default arm, all inside `program_process_command`.
+- **Opcode space**: `0x000..0x186`, **391 commands**. Opcode 0 is `LABEL`, which the compiler
+  consumes, so it has no arm; out-of-range values fall through to the default.
 
 So for `vlvp`: at load time `program_decode_instruction` resolves the name to opcode `0x122`; at
 runtime the script-tree walker enters `program_process_command`, reads the opcode from the current
 node, and `JMP [0x005c7700 + (0x122 - 1) * 4]` lands at the case body that queries police state and
-stores 0/1 into the destination `flt` slot. `policeitchforplayer` is **not** "one slot after `vlvp`"
-— the opcode space between `0x122` and `0x12c` contains 9 unrelated commands.
+stores 0/1 into the destination `flt` slot. `policeitchforplayer` is opcode `0x12c`, ten opcodes
+after `vlvp`.
 
 The full opcode-to-name mapping is `script-mapping/artifacts/opcode-table.md` — all 391 commands,
 `0x000`..`0x186`, byte-extracted from the game's own keyword table. Per-command evidence is in
@@ -329,8 +341,8 @@ The system is split across three layers. Address table: `Game-ghidra.exe.functio
 | Layer | Owner | What it tracks |
 |---|---|---|
 | **Per-officer** | NPC entity (`officer + 0xf40..+0x12xx`) | the officer's individual state machine: 0 = idle, 2 = warn, 3 = chase-foot, 4 = arrest (handcuffs), 6 = vehicle-pursuit. `+0xf44` is the substate (faded toggle bit, vehicle action 1..7). `+0xafc` is visibility — 0.75 is the cutoff above which `entity_force_ai` refuses any new state |
-| **Pursuit group** (`0x6c` bytes) | police-manager array `+0x14..+0x18` | the handcuffs / gun / searching roadblock-and-chase team. Holds the officer list, target leader (`+0x60`), group vehicle (`+0x5c`), group state (`+0x2c`) and timer (`+0x40`/`+0x44`) |
-| **Pursuit table** (`0x38` bytes, machine 0..5) | police-manager array `+0x4..+0x8` | per-target arrest/escort timing. State 0 → 2 → 5 (faded) → 1 (back to idle); state 4 = enforced-pursuit window; state 3 = approach |
+| **Pursuit squad** (`police_action`, `0x6c` bytes) | `police_board` array `+0x14..+0x18` (`structs/police-action.md`) | the chase team for one suspect. Holds the officer list, the suspect (`+0x60`), the chase vehicle (`+0x5c`), the response tier (`+0x2c`) and the sighting timers (`+0x40`/`+0x44`) |
+| **Follow group** (`ai_follow_group`, `0x38` bytes, machine 0..5) | `ai_follow_manager` group vector `+0x04..+0x08` (`structs/ai_follow_manager.md`) | per-target arrest/escort timing. State 0 → 2 → 5 (faded) → 1 (back to idle); state 4 = enforced-pursuit window; state 3 = approach |
 
 **`police_board+0x24` is the arrest-settle timer**, not a wanted-bar field. `police_board_tick`
 decrements this uint (ms) each frame; `police_board_arrest_settle_is_zero` reports zero; it is
@@ -358,12 +370,12 @@ engine_game_loop                      (engine vtable, every frame)
                  │                       └─ human_pose_null_rotate
                  ├─ ai_groups_tick                — per-target line-of-sight prune (radius 150²)
                  ├─ ai_follow_manager_update      — drives the 0..5 pursuit-table state machine
-                 ├─ ai_fight_manager_tick         — 2 s heartbeat over fight/pursuit groups: member
+                 ├─ ai_fight_manager_tick         — 2 s heartbeat over fight followships: member
                  │                                  state machine, AI car commandeering
                  │                                  (ai_group_get_closest_usable_car →
                  │                                  ai_fight_followship_take_car), pursuit-event
-                 │                                  dispatch. NOT police-only
-                 └─ police_manager_tick(this = player_police_block, dt_ms)   — §10a
+                 │                                  dispatch. Never reaches the police board
+                 └─ police_manager_tick(this = C_game+0x2DA0, dt_ms)   — §10a
 ```
 
 `police_action_broadcast_event` and `ai_follow_manager_event` are reached on demand, not from the
@@ -371,21 +383,21 @@ per-frame chain, when a state-changing event happens.
 
 ### 10a. `police_manager_tick` — the player-side engine
 
-`police_manager_tick` is the per-frame state machine for the player's `police_manager`, distinct from
-`police_board_tick` which drives the per-officer / per-pursuit-group AI.
+`police_manager_tick` is the per-frame state machine for the `police_manager`, distinct from
+`police_board_tick` which drives the per-officer / per-squad AI.
 
 ```
-police_manager_tick(this = player_police_block, dt_ms)
+police_manager_tick(this = C_game+0x2DA0, dt_ms)
      ├─ tick_acc_outer += dt; if (913 < acc) {
      │    acc -= 913;
      │    police_manager_npc_list_tick(this, 0)
-     │    └─ walks npc_list at +0x80/+0x84, computes
-     │       2D camera-distance² per NPC, evicts NPCs
-     │       failing distance/type/flag checks via
-     │       swap-pop, finalizes evicted NPCs.
+     │    └─ walks npc_list at +0x80/+0x84 (the
+     │       despawn list, §15), computes the 2D
+     │       camera distance² per member and despawns
+     │       the cars and NPCs that are out of range.
      │  }                    — ~1.1 Hz, ALWAYS RUNS
      │
-     ├─ npc_list_size_cap   — trim head while size > 5
+     ├─ tracked-car cap     — keep the +0x90 police cars ≤ 5
      │
      ├─ end_screen_path     — if police_board_arrest_settle_is_zero()
      │                        && hud_fade_get_state() → spawn
@@ -434,7 +446,7 @@ police_manager_tick(this = player_police_block, dt_ms)
      │  }                    — ~3.0 Hz
      │
      └─ scene_cleanup_path  — when the player actor goes
-           invalid: walk rndr_arr_a, finalize entries,
+           invalid: walk tracked_police_cars, finalize entries,
            free backing, call
            police_manager_npc_list_tick(this, 1) — the
            mode=1 "tick + wipe entire list" variant
@@ -444,7 +456,7 @@ police_manager_tick(this = player_police_block, dt_ms)
 **Tick rates are structural, not nested by code** — each accumulator advances independently. The
 middle tier is gated by `!police_board_is_busted_cutscene_active()`, not by the outer tier's
 overflow; the inner tier is unconditional within the per-frame body. So during an active pursuit
-(with a pursuit group spun up) the middle-tier visibility refresh is dormant and only the inner and
+(with a squad spun up) the middle-tier visibility refresh is dormant and only the inner and
 outer tiers tick.
 
 **Magic literals.** The four operational period defaults (330 / 913 / 217 / 4013) are byte-verified
@@ -452,9 +464,9 @@ by `police_manager_game_init`. The 4013 ms period at `+0x28` and the (`+0x2c`, `
 are **vestigial** — written by `police_manager_ctor` and `police_manager_game_init` but never read;
 most likely removed-feature remnants. Full analysis: `structs/police_manager.md` §2.2.
 
-**How the two engines interact.** `police_manager_tick` drives the player's `police_manager`: its
-records vector (the pursued targets, including the player), its npc_list (NPCs registered for
-proximity-based culling) and its renderer arrays. `police_board_tick` drives `police_action` objects
+**How the two engines interact.** `police_manager_tick` drives the `police_manager`: its
+records vector (the pursued targets, including the player), its npc_list (the despawn list of
+temporary cars and NPCs, §15), its tracked police cars (`+0x90`) and `rndr_arr_b` (`+0xA0`). `police_board_tick` drives `police_action` objects
 and the per-officer state machines. They meet at the
 `police_board_promote_handcuffs_escalation` / `police_board_promote_gun_escalation` calls made from
 the commit step, and at the `police_board_has_recent_sighting` /
@@ -546,7 +558,7 @@ gated by line of sight / recent sighting just like the on-foot offences. Per-bit
 
 The `police_manager` holds three pre-loaded **ready-reserve pools** of pursuit assets:
 `police_vehicles` (vec2 @ `+0x50`), `spike_strips` (vec3 @ `+0x60`), `foot_cops`
-(vec4 / npc_list @ `+0x70`). These pools are populated up front by a script-driven producer and
+(vec4 @ `+0x70`). These pools are populated up front by a script-driven producer and
 drained on demand by a runtime consumer, so mid-pursuit asset deployment happens with zero i3d-load
 and zero `operator_new` cost.
 
@@ -588,7 +600,9 @@ deploying a vehicle or a spike strip returns 0 until the script re-issues `POLIC
 deploying a foot cop remains immediately available. The asymmetry is intentional — foot cops carry
 persistent AI state that scripts depend on across scene transitions.
 
-**The composite "spawn a chase patrol car" workflow** (the dominant caller):
+**The composite "spawn a chase patrol car" workflow** — `police_manager_spawn_patrol_car_reinforcements_at_radius`,
+one of the two callers of the vehicle deploy (the other, `police_manager_spawn_roadblock_in_neighbor_cells`,
+passes flag 0):
 
 1. Compute a spawn pose around the target: a 10-iteration retry loop with navmesh snap and a
    distance² threshold against the target's current position.
@@ -679,7 +693,7 @@ script: console_addtext(2100)       offence: "Police! Weapon seen!"
         └─ raises the player's police state (record+0x3c); police_board+0x24 is NOT bumped here
                 ↓
 entity_dispatch_event(officer, target, 0x0D, …)
-        └─ police_board_find_group_by_officer → pursuit group
+        └─ police_board_find_group_by_officer → squad
         └─ entity_spawn_police_response(target, 2|3, …)
                 └─ entity_dispatch_event(target, 0x14, 0)
                 └─ entity_force_ai(officer, 6, sub=2|3, …)
@@ -717,24 +731,28 @@ wanted bar (record+0x44) drains in police_manager_tick while unseen
 
 ### 13d. Sequence: searching ↔ police state swap on car/foot transition
 
-The faded substate is what makes the searching swap (§3) work in code:
+The searching swap (§3) is decided by the chasing squads' identity fields (`police_action+0x64`
+known vehicle, `+0x68` face known) and read back by `police_manager_tick`:
 
 ```
-state 4/6 (handcuffs/gun) on foot
-        ↓ player enters car while +0xafc < +0xf58 (faded)
-entity_dispatch_event(officer, _, 0x0C, …)
-        └─ police_action sees the vehicle change
-        └─ entity_spawn_police_response ↺  (state stays 6 / 4 internally)
-                ↓ from the player HUD point of view: icon switches to "searching"
-                ↓ (engine consults officer+0xf40 + visibility)
-        ↓ player leaves car, faded substate ends
-entity_force_ai(officer, prev_state, …)         icon restored
+player seen committing an offence on foot
+        └─ police_board_create_and_engage          squad +0x64 = 0, +0x68 = 1
+                ↓ player enters a car, no officer sighting in the last 2000 ms
+human_intern_use_car → police_board_update_sighting(player, 0, 0)
+        └─ not witnessed → squad fields unchanged
+police_manager_tick (inner tick)
+        └─ police_board_target_matches: car != +0x64  → record+0x51 = 1 → icon "searching"
+                ↓ player leaves the car
+police_manager_tick
+        └─ on foot and +0x68 set → record+0x51 = 0 → icon restored
 ```
 
-The searching icon is shown when the per-officer state is non-zero **and** `+0xf44` indicates faded
-**and** the player's vehicle has changed since the last sighting.
+The mirror case (seen only in a car, leaves it unseen) runs the same way with `+0x64` = that car and
+`+0x68` = 0. A witnessed entry or exit, an officer struck by the player or his car (`entity_hit`),
+and any squad created or refreshed while the player is on foot all set `+0x68`; the complete writer
+table and the recompute branches are in `structs/police_manager.md` §3.2.
 
-## 14. Escalation bridge and pursuit-group lifecycle
+## 14. Escalation bridge and squad lifecycle
 
 Mission-script offence triggers do not poke the group state directly. They go through a two-step
 queue:
@@ -764,7 +782,7 @@ The two families differ in job:
 
 | Family | Members | What it does |
 |---|---|---|
-| raisers | `police_board_raise_handcuffs_escalation` (writes `+0x3c = 2`) · `police_board_raise_gun_escalation` (writes `+0x3c = 3`) | used by gameplay event paths; they additionally dispatch the chase vehicle (dispatch constants `0x400,0x3c` for **gun**, `0x200,0x1e` for **handcuffs**) and refresh the last-seen vector at `+0x10..+0x1c` on the matching pursuit group |
+| raisers | `police_board_raise_handcuffs_escalation` (writes `+0x3c = 2`) · `police_board_raise_gun_escalation` (writes `+0x3c = 3`) | used by gameplay event paths; they additionally dispatch the chase vehicle (dispatch constants `0x400,0x3c` for **gun**, `0x200,0x1e` for **handcuffs**) and refresh the last-seen vector at `+0x10..+0x1c` on the matching squad |
 | promoters | `police_board_promote_handcuffs_escalation` (sets the handcuffs group pair 4,5) · `police_board_promote_gun_escalation` (sets the gun group pair 0,1) | mirror the escalation into the group FSM: state pair + sighting refresh |
 | pending setters | `police_manager_register_violence_offence_for_target` · `police_manager_register_gunfire_offence_for_target` | set the pending tier that the commit step later latches |
 
@@ -795,29 +813,35 @@ grace (§9).
 
 | Offset | Type | Role |
 |---|---|---|
-| `police_manager + 0x80` | `npc**` | `npc_list_begin` — `std::vector<npc*>::_begin` |
-| `police_manager + 0x84` | `npc**` | `npc_list_end` — `std::vector<npc*>::_end` |
-| `police_manager + 0x88` | `npc**` | `npc_list_cap` — `std::vector<npc*>::_cap`, read by the writer `police_manager_npc_list_push` (the eraser does not read it) |
+| `police_manager + 0x80` | `actor**` | `npc_list_begin` — `std::vector<actor*>::_begin` |
+| `police_manager + 0x84` | `actor**` | `npc_list_end` — `std::vector<actor*>::_end` |
+| `police_manager + 0x88` | `actor**` | `npc_list_cap` — `std::vector<actor*>::_cap`, read by the writer `police_manager_npc_list_push` (the eraser does not read it) |
 
-**The list holds NPC handles.** Three writers / readers:
+**The list is the despawn list.** It holds temporary cars (kind 4) and `C_entity` NPCs (kind
+`0x1b`) that the engine spawned or released; `police_manager_npc_list_tick` deletes each one once it
+is more than 150 m from the active camera. Membership and the removal rules are measured in
+`structs/police_manager.md` §2.3. The functions that touch it:
 
 | Function | Role | Receiver verification |
 |---|---|---|
-| `police_manager_npc_list_push(this, npc)` | Unique-append inserter for the npc_list at `+0x80`: uniqueness scan, then append or realloc. Generic vector code, but every located caller passes the player's `police_manager` | Multiple callsites in police code; in `program_process_command` case `0x171` the receiver is byte-recovered as the player's `police_manager`, via the same `act_mission_get_game` → `game_get_police_block` chain as case `0x16b` |
-| `police_manager_npc_list_erase(this, npc)` | Erase-by-value swap-pop counterpart to the push, polymorphic on receiver layout | Receiver byte-recovered as the player's `police_manager` in case `0x16b` |
-| `police_manager_game_init(this)` | Partial in-place reset: clears `enabled`, resets `speed_threshold_fine` to `17.0f` and `speed_threshold_arrest` to `28.0f`, drains the records vector at `+0x40` by setting `end = begin` (buffer kept), and clears vec2 / vec3 / npc_list the same way, preserving the buffer pointers. The `end = begin` write is the entire drain — the empty `ret 8` stub `stub_noop_args8_00575c00` that sits next to it does nothing. vec4 at `+0x70` and the renderer arrays at `+0x90`/`+0xA0` are NOT touched | Receiver verified as `police_manager` via disasm at VA `0x005dc670`: `lea ecx, [esi + 0x2da0]; call police_manager_game_init` |
+| `police_manager_npc_list_push(this, npc)` | Unique-append inserter for the npc_list at `+0x80`: uniqueness scan, then append or realloc. Generic vector code, but every located caller passes the `police_manager` | Multiple callsites in police code; in `program_process_command` case `0x171` the receiver is byte-recovered as the `police_manager` (`C_game+0x2DA0`), via the same `act_mission_get_game` → `game_get_police_manager` chain as case `0x16b` |
+| `police_manager_npc_list_erase(this, npc)` | Erase-by-value swap-pop counterpart to the push, polymorphic on receiver layout | Receiver byte-recovered as the `police_manager` in case `0x16b` |
+| `police_manager_npc_list_tick(this, mode)` | The consumer: mode 0 despawns the out-of-range members (outer tick), mode 1 empties the list | Called from `police_manager_tick` with its own `this` |
+| `police_manager_game_init(this)` | Partial in-place reset: clears `enabled`, resets `speed_threshold_fine` to `17.0f` and `speed_threshold_arrest` to `28.0f`, drains the records vector at `+0x40` by setting `end = begin` (buffer kept), and clears vec2 / vec3 / npc_list the same way, preserving the buffer pointers. The `end = begin` write is the entire drain — the empty `ret 8` stub `stub_noop_args8_00575c00` that sits next to it does nothing. vec4 at `+0x70`, `tracked_police_cars` (`+0x90`) and `rndr_arr_b` (`+0xA0`) are NOT touched | Receiver verified as `police_manager` via disasm at VA `0x005dc670`: `lea ecx, [esi + 0x2da0]; call police_manager_game_init` |
 
-**Script-side callers.** `program_process_command` case `0x171` is ADD —
-`police_manager_npc_list_push(slot_npc)` with `this` = the player's `police_manager`; case `0x16b` is
-REMOVE — `police_manager_npc_list_erase(slot_npc)` with the same receiver. The two form a paired
+**Script-side callers.** `program_process_command` case `0x171` (`ACTOR_ADDDORICI`) is ADD —
+`police_manager_npc_list_push(slot_npc)` with `this` = the `police_manager`; case `0x16b`
+(`HUMAN_RETURNTOTRAFF`) is REMOVE — `police_manager_npc_list_erase(slot_npc)` with the same receiver.
+Both names come from `script-mapping/artifacts/opcode-table.md`. The two form a paired
 add/remove command. Both validate the slot object with `folded_get_dword_0x10 == 0x1b`, the
 `C_actor::GetKind` role of that folded symbol.
 
-**Engine-side caller of note.** `police_manager_apply_state` iterates each `pursuit_record`'s officer
-vector (at `record+0x74..+0x78`) and pushes each officer onto the `police_manager`'s npc_list via
-`police_manager_npc_list_push`. So during apply-state cleanup the npc_list collects all officers
-across all pursuit records. This is the strongest evidence that the npc_list category is "officers
-registered to this actor's police state" (§18).
+**Engine-side adders.** An `E8` census finds 15 `police_manager_npc_list_push` callsites and 5
+`police_manager_npc_list_erase` callsites, and no tail jump to either. The adders are the pursuit
+dispatch and reinforcement spawners, the cop promotion from a pedestrian, the gang spawn, traffic
+code, exploded cars, thrown-out occupants, and the officer releases in `police_manager_tick` and
+`police_manager_unregister_actor` (the loop that pushes every officer of a record); the full list is
+in `structs/police_manager.md` §2.3. `police_manager_apply_state` makes no call to either.
 
 **Receiver discipline.** At all three identified call sites — cases `0x16b` and `0x171` in
 `program_process_command`, and `police_manager_game_init` from a `game_init` context — Ghidra's C
@@ -828,18 +852,14 @@ decomp hides the `__thiscall` receiver. Recovering the true call shape requires 
 Grouped by struct receiver. All claims here are body-derived; cross-references point at function
 names and struct docs.
 
-### 16a. The per-officer visibility cache
+### 16a. Per-officer status fields
 
-There is exactly **one** per-officer visibility cache.
+Two per-officer fields are read by the police code as officer status:
 
 | Field | Meaning |
 |---|---|
-| `officer + 0x5e` | "officer is visible to its current target" — 0 = exposed, non-zero = behind cover. A genuine per-tick visibility cache, refreshed by the middle-tier (~4.6 Hz) pass in `police_manager_tick` |
-| `officer + 0x11ec` | **"a weapon is drawn"** — the weapon-armed flag, a member of the `C_entity` weapon-AI band `+0x11d0..+0x11ec` (`structs/entity.md`). Read by `entity_weapon_is_armed`; written by `entity_weapon_get_info` (set iff the weapon slot `+0x1e8` ∈ 1..3) and by the `+0x11e8` weapon-state FSM. Not a visibility cache and not part of the LOS pipeline |
-
-`officer + 0x5e` is a cache, not a live query — readers consult it in the per-tick AI without
-recomputing LOS. Used by `police_manager_count_officers_alive_for_target`, which filters on
-`*(officer+0x5e) == 0`.
+| `officer + 0x5e` | the `C_actor` **death-processed latch** (`structs/actor.md`): set once by `actor_tick` when the death has been handled. `police_manager_count_officers_alive_for_target` counts assigned officers with `+0x5e == 0`, and `police_manager_tick` prunes the ones with it set |
+| `officer + 0x11ec` | **"a weapon is drawn"** — the weapon-armed flag, a member of the `C_entity` weapon-AI band `+0x11d0..+0x11ec` (`structs/entity.md`). Read by `entity_weapon_is_armed`; written by `entity_weapon_get_info` (set iff the weapon slot `+0x1e8` ∈ 1..3) and by the `+0x11e8` weapon-state FSM. Not part of the LOS pipeline |
 
 ### 16b. `entity_can_safe_shoot` — an occluder walk, not raw LOS
 
@@ -873,33 +893,24 @@ When called with `force_if_idle == 0` AND `officer + 0xf08 & 0x1000`, the functi
 not yet acknowledged", `0x2000` is "soft reset acknowledged, the action consumer should process it on
 the next tick". The bits are mutually exclusive within this pair.
 
-### 16e. The `ai_fight_modes` array — `officer + 0x14..+0x148`
+### 16e. The `ai_fight_modes` sub-object — `C_entity + 0xf64`
 
-The per-entity fight-mode / visibility-distance scoring array spans `officer + 0x14..+0x148`, reached
-as an object through `entity_get_ai_fight_modes`:
+Every NPC officer carries the combat-mode scorer `ai_fight_modes`, embedded at `C_entity + 0xf64`
+and reached through `entity_get_ai_fight_modes`. The full field map, the per-mode constants and the
+decide/act split are in `structs/ai_fight_modes.md`; offsets below are relative to that object.
 
-- Slot count = **6**; stride = **0x34**.
-- Active-mode anchor at `officer + 0x148`.
-- Rotation counters at `officer + 0x138` / `+0x13c` / `+0x140` — re-seeded to **5** by
-  `ai_fight_modes_reset`, which also clears the first 3 dwords of each slot.
-- Scratch counter at `officer + 0x144` — cleared to 0 by `ai_fight_modes_set_mode_score`.
-- `ai_fight_modes_set_mode_score(entity, slot_idx, value)` writes `(value, current_frame_timestamp)`
-  to `slot + 0x24` / `slot + 0x28`, where `slot = entity + slot_idx * 0x34`. Heavy use — about 28
+- Six mode slots of `0x34` bytes at `+0x00..+0x137`. Per slot: `+0x00..+0x0c` input weights,
+  `+0x10` hit weight, `+0x14` the mode's total, `+0x18` accumulated hit statistic, `+0x1c`
+  viability, `+0x20` last-used time, `+0x24` preference score, `+0x28` the time of that write,
+  `+0x2c` the finish-request byte.
+- `+0x138` active mode, `+0x13c` previous mode, `+0x140` round-robin refresh cursor — all three
+  reset to **5** ("no mode") by `ai_fight_modes_reset`; `+0x144` the refresh deadline; `+0x148` the
+  current enemy.
+- `ai_fight_modes_set_mode_score(slot_idx, value)` writes the value and the mission clock to
+  `+0x24` / `+0x28` of that slot and zeroes `+0x144`, forcing a full rescore. Heavy use — about 28
   callsites inside `entity_action_tick` alone.
-
-Per-slot layout (`slot + 0x00` is the slot base inside the 6-element array):
-
-| Slot offset | Type | Role |
-|---|---|---|
-| `+0x10`, `+0x14`, `+0x18`, `+0x24` | float | Score values — compared, maxed and seeded by different helpers; the per-float semantic is not pinned (§18) |
-| `+0x28` | uint | Timestamp — the frame clock at the last seed |
-| `+0x2c` | byte | Finish-request flag, set by `ai_fight_modes_request_finish_mode` and consumed by `ai_fight_modes_consume_finish_request` |
-
-The rest of the family: `ai_fight_modes_init`, `_destroy`, `_tick`, `_apply_hit`,
-`_enact_active_mode`, `_get_hit_stat`, `_finish_mode`, `_force_mode`, and `ai_fight_modes_set_enemy`,
-which seeds slot 2 to `5.0` and slot 1 to `1.5` on a target switch. The word *score* here is
-mechanical — the floats ARE compared, maxed and seeded — and imports no specific gameplay semantic;
-`basic/artifacts/freeride-score.md` is the parent case that motivates the caution.
+- `ai_fight_modes_set_enemy` seeds mode 2 (cover-seeking) to `5.0` and mode 1 to `1.5` on every
+  enemy change.
 
 ### 16f. Pursuit-event timing block — `officer + 0x11f0..+0x1204`
 
@@ -956,12 +967,12 @@ polymorphic per-type inner buffer:
 | `task + 0x08`, `+0x0c` | dword | caller-supplied tags, mirrored from the ctor arguments |
 | `task + 0x10` | uint | creation timestamp from `g_act_mission+0x24+0x2b0c`, or a 0 sentinel |
 | `task + 0x14` | uint | `sizeof` the inner payload buffer |
-| `task + 0x18` | uint | flag word, OR'd by `set_flag_for_target` |
+| `task + 0x18` | uint | flag word, OR'd by `ai_action_manager_signal_children` |
 | `task + 0x20` | `void*` | pointer to the per-type inner buffer, from `operator_new(<size at +0x14>)` |
 | `task + 0x30` | int | counter bumped by `ai_action_generate_UID`; no visible decrement helper |
 
-The full type inventory is the **35 `ai_action` factories** (`ai_action_new_*`, PS2
-`ai_action_manager::New*`) — the generic NPC AI action vocabulary consumed by `entity_action_tick`.
+The full type inventory is the **35 `ai_action` factories** (`ai_action_new_*`) — the generic NPC AI
+action vocabulary consumed by `entity_action_tick`.
 **Only 2 of the 35 are police-specific**: type `0x21` `ai_action_new_police_action` (the fine/arrest
 action) and type `0x28` `ai_action_new_police_call` (radio for backup). Full inventory:
 `structs/entity.md` §6b. The inner-buffer size per type is captured by each factory's `operator_new`
@@ -988,40 +999,41 @@ subscribers to a per-task event, e.g. officers attached to a list_c task:
 The primary/secondary pair is the same general layout as the cross-task subscriber-list cluster;
 wrappers for the inner block carry the `subscriber_list_*` prefix.
 
-### 16j. Per-actor pursuit-target slot — `actor + 0xe4`
+### 16j. The player pointer — `C_game + 0xe4`
 
-`game_get_player_actor` reads `actor + 0xe4`, the per-actor "currently hunting this NPC" slot. It is
-symmetric — any actor can be hunting any other actor. That makes it distinct from
+`game_get_player_actor` (`0x00425530`) reads `C_game + 0xe4`, the single pointer to the player's
+`C_actor` in the world object (`structs/game.md` §2). It is not a per-actor slot. It is distinct from
 `officer + 0x127c` / `+0x1280`, which hold the per-entity `ai_logs` maxima: the greatest fear
 (`ai_logs_get_max_fear`, max of `+0x50`) and anger (`ai_logs_get_max_angry`, max of `+0x4c`) among
 non-suppressed log entries, whose receiver is the per-entity `ai_logs` sub-object rather than a
-police manager. The pursuit-group target leader at `police_action + 0x60` (§16l) is a third layer.
+police manager. The suspect a pursuit squad chases is `police_action + 0x60` (§16l).
 
 ### 16k. `police_board_invalidate_actor` state transitions
 
-When an NPC tracked by a pursuit group is destroyed, the group's state machine advances:
+When an NPC tracked by a squad is destroyed, the squad's tier advances:
 
-- **Vehicle-lost path**: applies `(0, 2, 4) → (1, 3, 5)` — the same odd/even pairing as
-  `police_board_raise_gun_escalation` / `police_board_promote_handcuffs_escalation`, where state
-  pairs `(0,1)` = gun and `(4,5)` = handcuffs.
-- **State 7** is unrecoverable: the group is disbanded on vehicle loss, with no state advance
-  attempted.
+- **Vehicle-lost path**: applies `(0, 2, 4) → (1, 3, 5)` — the same tier pairing as
+  `police_board_raise_gun_escalation` / `police_board_promote_handcuffs_escalation`, where the pairs
+  are `(0,1)` = gun, `(2,3)` = fine and `(4,5)` = handcuffs.
+- **Tier 7** (disbanded) gets no step on vehicle loss.
 
-The even/odd pairing throughout the pursuit-group state encodes active / standby — even = active
-broadcasting, odd = standby waiting for the next trigger.
+The even/odd pairing throughout the squad tier encodes the squad's posture: **even = in a car, odd =
+on foot** (`structs/police-action.md` §3). Tier 7 is not always terminal: a squad disbanded while
+still holding a car is revived at its old tier, on foot, by the next redispatch
+(`structs/police-action.md` §3a).
 
-### 16l. Pursuit-group struct fields (`0x6c` bytes)
+### 16l. Squad (`police_action`) struct fields (`0x6c` bytes)
 
 | Field | Type | Role |
 |---|---|---|
-| `+0x2c` | uint | group state |
+| `+0x2c` | uint | response tier (`structs/police-action.md` §3) |
 | `+0x30` | uint | pursuit-session ID, stamped at construction by `police_board_increment_counter`; propagates to every group officer's `+0xf54` via `entity_spawn_police_response` |
-| `+0x40` / `+0x44` | uint | group timer |
+| `+0x40` / `+0x44` | uint | last-perceived timestamp / sighting accumulator (`police_action_tick_sighting_timers`) |
 | `+0x5c` | ptr | group vehicle |
 | `+0x60` | `npc*` | target NPC pointer, written from the second parameter of `police_board_create_and_engage` |
 
 Lookup helpers: `police_board_find_group_by_session_id` looks up by `+0x30`;
-`police_board_has_pursuit_group_for_target` looks up by `+0x60`.
+`police_board_has_group_for_target` looks up by `+0x60`.
 
 ### 16m. Bone-string anchors — handcuff geometry
 
@@ -1030,16 +1042,13 @@ From the body of `human_free_hand`, the handcuff-prop spawner used during an arr
 - `s_l_hand_0064bcf0` and `s_r_hand_0064bcf8` are 8-byte adjacent string literals (`"l hand"` and
   `"r hand"`, each null-terminated to 8 bytes including terminator and padding).
 - They are used as **attach-point bone names** when binding handcuff geometry to the player skeleton.
-- **Frame type 9 = "attach point"** in the scene-entity frame enum: `human_free_hand` constructs
-  frame-type-9 nodes for each handcuff loop.
-
-The frame-type-9 → attach-point mapping is the first byte-confirmed entry in the scene-entity
-frame-type enum (§18).
+- `human_free_hand` constructs a frame of type 9 for each handcuff loop; type 9 is **MODEL** in the
+  frame-type names of `ls3df.dll` (`structs/i3d_frame.md` §3a).
 
 ## 17. PC vs PS2
 
-- `ai_fight_manager_tick` is the PC twin of PS2 `Tick__16ai_fight_managerFv`. It is not police-only:
-  the 2 s heartbeat covers fight and pursuit groups alike.
+- `ai_fight_manager_tick` is the PC twin of PS2 `Tick__16ai_fight_managerFv`. Its 2 s heartbeat
+  walks only the fight followships; it never reaches the police board.
 - `entity_weapon_is_armed` is the PC twin of PS2 `WeaponIsArmed__8C_entityFv` (CONFIRMED).
 - The 35 `ai_action_new_*` factories are the PC twins of the PS2 `ai_action_manager::New*` family.
 - The three `C_traffic_car` collision adapters have the PS2 twins `CoDelasTyCuraku`,
@@ -1052,11 +1061,4 @@ frame-type enum (§18).
 
 | item | state |
 |---|---|
-| which NPCs the `police_manager.npc_list` holds | the static evidence fits several readings — officers chasing, all cops in this actor's pursuit, witness NPCs, or a mixed set. Closing it needs runtime work: break on `police_manager_npc_list_push` with `this` = the player's `police_manager`, trigger a pursuit, and dump the handles being pushed. The gameplay role of membership (during pursuit vs during cleanup vs script-driven attachment) is equally open |
-| script command names for `program_process_command` cases `0x16b` and `0x171` | both unidentified; neither a string-literal anchor nor a byte-level keyword-table lookup has been done for either case |
-| `police_support`, `policemanager_setspeed` | parameters and usage unknown |
-| offence bits 7 and 8 | never observed set in the in-game sweep; presumed unused |
-| `get_pm_state` for `zz ≥ 13` | returns spurious 1s once bit 12 is set, so bits 13–16 are not cleanly queryable (§7) |
-| the per-float semantics of the `ai_fight_modes` slots (`+0x10`, `+0x14`, `+0x18`, `+0x24`) | the mechanical role is certain (compared / maxed / seeded); the gameplay reading — rolling per-officer per-target visibility and distance ranks advanced by the rotation counter — is supported by the seeding pattern in `ai_fight_modes_set_enemy` but is not byte-proven |
 | the decrement half of the `ai_action` `+0x30` counter | no decrement helper is visible in the module, and the disposer does not read `+0x30` before deleting. Either the counter carries refcount-1 sentinel semantics, or the decrement lives in the per-type subscriber-detach helpers |
-| the scene-entity frame-type enum | only frame type 9 (attach point) is byte-confirmed; other values are referenced throughout the asset-loading code but remain unmapped |

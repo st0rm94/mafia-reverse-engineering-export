@@ -1,13 +1,12 @@
 # `C_roads` — the road graph
 
-**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-09-17 13:47 +0200
+**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`roads_`**. The singleton is `*(g_act_mission + 0x30)`.
 
 The city's driving graph: a table of **road nodes** and a table of **crossings**, loaded
 from the level `.dta` and queried by the traffic AI, the NPC pathfinder and the police
-red-light test. **21 of 21 PS2 methods are mapped** — the class is closed, on a forced gapless
-order-align whose two ends are independently confirmed by the vtables of both builds (§2b).
+red-light test. The class is closed (§2, §2b).
 
 ---
 
@@ -47,7 +46,7 @@ writes its tables straight out.
 
 ¹ Each road slot is `0x34` bytes: `+0x00` the neighbour tagged id, `+0x04` the road length
 `roads_recompile_distances` writes, and four lane bytes at stride 8 that
-`roads_disconnect_unused_road_links` tests. The remaining ~0x20 bytes are undecoded.
+`roads_disconnect_unused_road_links` tests. The rest of the slot is open (§6).
 
 **`S_pathfind` is `{u16 prev_id; float cost}`** and nothing else — 8 bytes. `roads_pathfind_entry_ctor`
 initialises `prev = 0xffff`, `cost = 1e+10`; the `1e+10` is the infinity substitute the Dijkstra
@@ -177,9 +176,8 @@ gap.
   position where `game_collect_road_block_node` calls `roads_get_near_node`, both discarding `-1` —
   an independent witness for the mapping from a different translation unit.
 * **`S_pathfind` size.** Fixed at 8 bytes by the PS2's `__construct_new_array(..., 0, 8, count)`.
-* **`roads_get_node_or_crossing_pos` has no PS2 twin located.** Searched: the 19-method `C_roads`
-  class column, a `0x7fff` + `0xec` co-occurrence grep of the PS2 decomp, and
-  `Tick__10C_shvestkyFUi` (§5).
+* **Method mapping.** 21 of 21 PS2 methods are mapped, on a forced gapless order-align whose two
+  ends are independently confirmed by the vtables of both builds (§2b).
 * **The four `Max<int>` sites** in each chunk loader are a PC inlining: the PS2 calls
   `Max<i>__FRCiRCi(0x4dc2bc, &remaining)` where the PC has a compare-and-select that is
   plain `max(0, remaining)`. Bannered in the decomp at the first site of
@@ -209,6 +207,6 @@ gap.
 |---|---|
 | the crossing record | `0xec` bytes; only the position, the `+0x0c` flag and part of the four road slots are decoded |
 | road-slot tail | ~0x20 bytes of each `0x34`-byte road slot are undecoded |
-| PS2 twin of `roads_get_node_or_crossing_pos` | none located; a header inline on PS2 is the likeliest explanation, not proven |
+| PS2 twin of `roads_get_node_or_crossing_pos` | none located. Searched: the 19-method `C_roads` class column, a `0x7fff` + `0xec` co-occurrence search of the PS2 decomp, and `Tick__10C_shvestkyFUi`. A header inline on PS2 is the likeliest explanation, not proven |
 | six PS2 container helpers without PC rank | almost certainly inlined; not proven |
 | in game: un-policed crossings | running a red light should only be recorded at a crossing whose `+0x0c` flag is set, so some intersections should be un-policed; which ones is untested |

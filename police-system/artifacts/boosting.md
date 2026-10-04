@@ -1,6 +1,6 @@
 # Car "Boosting" — the pursuit model-level / CARINIT swap
 
-**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-09-17 17:58 +0200
+**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 **Status:** static analysis complete, byte-verified against `Game.exe`. The in-game Cheat Engine
 confirmation is open (§10).
@@ -42,13 +42,13 @@ enable from disable — §6 recovers the true values from the raw bytes.
 
 `g_pursuit_change_tables` is read at exactly two pursuit-event methods:
 
-**Apply — `pursuit_event_dispatch_pursuit_vehicle` (`AddCarHunt`, @ 0x004EC5F0):**
+**Apply — `pursuit_event_dispatch_pursuit_vehicle` (@ 0x004EC5F0):**
 ```c
 if ((g_pursuit_change_tables != 0) && (car_get_model_level_count() > 1))
     car_set_model_level(car_get_model_level_count() - 1);   // → top model level
 ```
 
-**Remove — `pursuit_event_remove_vehicle` (`RemoveCar`, @ 0x004EDAC0):**
+**Remove — `pursuit_event_remove_vehicle` (@ 0x004EDAC0):**
 ```c
 if (((g_pursuit_change_tables != 0) || record_state in {3,4}) && car_get_model_level() > 0)
     car_set_model_level(0);                                     // → back to level 0 (stock)
@@ -73,10 +73,10 @@ stays about the same while acceleration and grip rise.
 
 ```
 chase starts → g_pursuit_change_tables = 1
-             → AddCarHunt: model_level_count>1 ? set car to top level
+             → pursuit_event_dispatch_pursuit_vehicle: level_count>1 ? top level
              → car_set_model_level → vehicle_apply_carinit_params(top_slot)
              → car now runs the top variant's faster CARINIT table
-chase ends   → RemoveCar: set car back to level 0 → stock CARINIT reloaded
+chase ends   → pursuit_event_remove_vehicle: back to level 0 → stock CARINIT reloaded
 ```
 
 ### 2a. Script-side entry point
@@ -113,7 +113,7 @@ Two independent knobs, differing in **who they affect**:
 1. script `POLICE_SPEED_FACTOR` (case 0x173) writes `g_police_speed_factor` @0x006552D0, clamped `[0,1]`.
 2. `police_action_tick`'s chase dispatch passes it as the **last arg** (`param_7`) of
    `pursuit_event_dispatch_pursuit_vehicle` — the only callsites that read the global.
-3. `AddCarHunt` stores it into the chase driver's `driver+0x84`.
+3. `pursuit_event_dispatch_pursuit_vehicle` stores it into the chase driver's `driver+0x84`.
 4. each frame `driver_tick`'s tail computes the pedal `= driver+0x84 (speed_factor) × driver+0x104`,
    where `+0x104` is the AI's per-frame throttle demand (`1.0` on a clear straight, pulled down by
    the inlined corner/collision helpers), then calls `vehicle_set_power(pedal, 1)`.
@@ -172,18 +172,18 @@ precisely the boostable set:
 > `blackha` (Falconer), `buikFor` (Wright Fordor), `cad_ford` (Lassiter V16 Fordor), `forVfor`
 > (Bolt V8 Fordor), `hudfor` (Guardian Terraplane Fordor), `arrow` (Silver Fletcher), `polCad`
 > (Lassiter V16 Police), `poli` (Schubert Six Police), `polimFor` (Schubert Extra Six Fordor
-> Police), `polimTud` (Schubert Extra Six Tudor Police), `chuligani` (BGUTI custom) — every entry in
-> `boosting-debug/Boostable cars in Mafia.csv` — plus `bugatti`, `black`, `buigang` (mission/gang
-> chase cars not fully listed in the CSV).
+> Police), `polimTud` (Schubert Extra Six Tudor Police), `chuligani` (BGUTI custom) — every car the
+> community boostable-car list names — plus `bugatti`, `black`, `buigang` (mission/gang chase cars
+> that list does not fully cover).
 
-This also explains the CSV note "Guardian Terraplane Tudor is not boosted despite both Wrights
-are": the **Fordor** body `hudfor` is a `level_count = 2` record, but the **Tudor** body `hudtu` is
+This also explains why the Guardian Terraplane Tudor does not boost although both Wrights do: the
+**Fordor** body `hudfor` is a `level_count = 2` record, but the **Tudor** body `hudtu` is
 a separate `level_count = 1` record — boostability is per vehicles.bin record (per body variant),
 and has nothing to do with model files.
 
 ### Level 0 vs Level 1 — the boost is acceleration, not top speed (`blackha` / Falconer)
 
-Field names below are from **RHAM 3.0** (the authoritative editor; `boosting-debug/RHAM.png`).
+Field names below are from the **RHAM 3.0** car editor.
 Level 0 is the base block; level 1 is the boosted block. Full field/offset map:
 `def-files-docs/vehicles-bin.md`.
 
@@ -207,13 +207,13 @@ levels; top speed is a *derived* result of those, not a stored value. The boost 
 only**; the boosted level 1 lives in the same record but neither editor surfaces it.
 
 **Load → boost chain:** at vehicle load the engine reads all `level_count` CARINIT blocks from
-vehicles.bin into the car's `+0x20F4` slot array (one slot per level); `AddCarHunt` with the flag
-set calls `car_set_model_level(level_count - 1)` → activates the top (level 1) block →
+vehicles.bin into the car's `+0x20F4` slot array (one slot per level);
+`pursuit_event_dispatch_pursuit_vehicle` with the flag set calls `car_set_model_level(level_count - 1)` → activates the top (level 1) block →
 `vehicle_apply_carinit_params` loads the boosted physics live.
 
 ## 4. The pursuit-event system and the "actor" requirement
 
-Boosting is **only** applied inside `pursuit_event_dispatch_pursuit_vehicle` (`AddCarHunt`), which
+Boosting is **only** applied inside `pursuit_event_dispatch_pursuit_vehicle`, which
 is only reached through the pursuit-event chase system. A car boosts **iff an actor enrolls it into a
 sledovačka hunt while the flag is on.** That enrollment is NOT police-specific — the dispatch callers
 are:
@@ -223,24 +223,24 @@ are:
 | `police_board_create_and_engage`, `police_action_tick`, `police_board_raise_gun_escalation`, `police_board_raise_handcuffs_escalation`, `ai_follow_manager_update` | police pursuit |
 | `ai_fight_manager_tick` | AI combat chase |
 | `traffic_car_spawn_mafia_pursuit_car` | mission/gang chase — realizes a rammed gang car, builds an ai_group, dispatches it into the pursuit |
-| `entity_process_command` (the entity mission-script command interpreter) | **mission-script chase command**: its `case 0x100c` reads two entity indices (car + target) from the program args and calls `AddCarHunt(car, target, mask, sub, vec, speed×0.01)` |
+| `entity_process_command` (the entity mission-script command interpreter) | **mission-script chase command**: its `case 0x100c` reads two entity indices (car + target) from the program args and calls `pursuit_event_dispatch_pursuit_vehicle(car, target, mask, sub, vec, speed×0.01)` |
 
 This is why the **non-police cars** in the CSV boost: they are mission/scripted chase cars enrolled
 by mission actors — most directly via the `entity_process_command` `case 0x100c` program command (a
 mission-script opcode that makes one entity's car chase another), plus the gang/AI-fight paths.
 Boosting is a general chase property of the sledovačka system, not a police-only effect.
 
-The sibling dispatcher `pursuit_event_dispatch_escape_vehicle` (`AddCarEscape`, @ 0x004EC980,
-immediately after `AddCarHunt`) enrolls flee-type chases; its `0x29C` sub-record is a driver
+The sibling dispatcher `pursuit_event_dispatch_escape_vehicle` (@ 0x004EC980, immediately after
+`pursuit_event_dispatch_pursuit_vehicle`) enrolls flee-type chases; its `0x29C` sub-record is a driver
 (`driver_ctor`/`driver_dtor`).
 
 **The MISE03-MORELLO exception (observed in game):** there, mission gangsters (scene2.bin actors)
 can steal a car and chase the player via ordinary driving AI **without** being enrolled into a
-pursuit-event hunt (no `AddCarHunt` call for them). Because `car_set_model_level` is therefore never
+pursuit-event hunt (no `pursuit_event_dispatch_pursuit_vehicle` call for them). Because `car_set_model_level` is therefore never
 invoked for their car, it stays at level 0 and does not boost **even if it is a boostable model and
 even with the flag on**. The requirement is enrollment in the sledovačka chase system; no
-intrinsic per-actor "can boost" bit exists. (`AddCarHunt` binds a car **and** an actor; that hunt
-binding is the "something set on the actor".)
+intrinsic per-actor "can boost" bit exists. (`pursuit_event_dispatch_pursuit_vehicle` binds a car
+**and** an actor; that hunt binding is the "something set on the actor".)
 
 The pursuit-event manager itself is a sub-object of `C_game` at `[[0x0065115C] + 0x24] + 0x2B18`
 (its S_ELEMENT record vector lives at manager `+0x14`/`+0x18`). See
@@ -324,12 +324,12 @@ value, re-derived from the disassembly and agreeing with the tables above in eve
 | PC VA | PC name | PS2 twin |
 |---|---|---|
 | `0x00465AD0` | `car_set_model_level` | `C_car::SetActualLevel` |
-| `0x004EC1E0` | `pursuit_event_set_change_tables` | `EnableChangeTables__12C_sledovacka` (SLUS_206.71 @ 0x00202FD0) |
+| `0x004EC1E0` | `pursuit_event_set_change_tables` | `C_sledovacka::EnableChangeTables` |
 | `0x004EC5F0` | `pursuit_event_dispatch_pursuit_vehicle` | `C_sledovacka::AddCarHunt` |
-| `0x004EC980` | `pursuit_event_dispatch_escape_vehicle` | `C_sledovacka::AddCarEscape` (CONFIRMED by body diff) |
+| `0x004EC980` | `pursuit_event_dispatch_escape_vehicle` | `C_sledovacka::AddCarEscape` |
 | `0x004EDAC0` | `pursuit_event_remove_vehicle` | `C_sledovacka::RemoveCar` |
-| `0x005053E0` | `traffic_car_spawn_mafia_pursuit_car` | `Krles__13C_traffic_car` |
-| - | `entity_process_command` | `Process__8C_entityFUi` (CONFIRMED) |
+| `0x005053E0` | `traffic_car_spawn_mafia_pursuit_car` | `C_traffic_car::Krles` |
+| - | `entity_process_command` | `C_entity::Process` |
 
 **Gang-car throttle.** PS2 `Krles` calls `AddCarHunt(car, target, 0x200, 0x14, &zero_vec,
 0x3f800000)` — the hard `1.0` throttle of §2b. The PC callsite is Ghidra-mangled but matches.
@@ -364,11 +364,11 @@ chase is active.
 | **disable** – exit-car / lost | `Game.exe+44121` | `police_action_tick` teardown (CL=0) |
 | **disable** – gun escalation | `Game.exe+478B8` | `police_board_raise_gun_escalation` (CL=0) |
 | **disable** – handcuffs escalation | `Game.exe+479EB` | `police_board_raise_handcuffs_escalation` (CL=0) |
-| **apply-boost reader** `AddCarHunt` | `Game.exe+EC5F0` | any car being enrolled+boosted; step to its `car_set_model_level(count-1)` branch |
+| **apply-boost reader** `pursuit_event_dispatch_pursuit_vehicle` | `Game.exe+EC5F0` | any car being enrolled+boosted; step to its `car_set_model_level(count-1)` branch |
 | **mission-script** enroll (case 0x100c) | `Game.exe+2B016` | `entity_process_command` dispatching a scripted car chase (non-police) |
 | **gang** enroll | `Game.exe+1053E0` | `traffic_car_spawn_mafia_pursuit_car` (rammed-gang realize) |
-| escape dispatch `AddCarEscape` | `Game.exe+EC980` | flee-type enrollment |
-| un-boost `RemoveCar` | `Game.exe+EDAC0` | car leaving the chase (resets model level → 0) |
+| escape dispatch `pursuit_event_dispatch_escape_vehicle` | `Game.exe+EC980` | flee-type enrollment |
+| un-boost `pursuit_event_remove_vehicle` | `Game.exe+EDAC0` | car leaving the chase (resets model level → 0) |
 
 ### 8.3 Which path fired
 
@@ -384,8 +384,8 @@ the **police flow** — the flag is only written here):
 | `police_board_raise_handcuffs_escalation` | `+479EB` | 0 | fine→handcuffs → boost OFF |
 
 **Non-police paths never hit the writer** — `entity_process_command` case 0x100c,
-`traffic_car_spawn_mafia_pursuit_car`, `ai_fight_manager_tick` only `AddCarHunt` the car and *read*
-the police-set flag. To see a non-police car boost or not, watch its `+20EC` model level (§8.1) or
+`traffic_car_spawn_mafia_pursuit_car`, `ai_fight_manager_tick` only enroll the car through
+`pursuit_event_dispatch_pursuit_vehicle` and *read* the police-set flag. To see a non-police car boost or not, watch its `+20EC` model level (§8.1) or
 break `Game.exe+EC5F0`/`+2B016`.
 
 ### 8.4 Reproduce & force
@@ -405,12 +405,7 @@ break `Game.exe+EC5F0`/`+2B016`.
 - `ghidra/Game-ghidra.exe.functions.md` — `pursuit_event_*`, `car_*_model_level`,
   `vehicle_apply_carinit_params` rows + PS2-twin columns.
 - `def-files-docs/vehicles-bin.md` — the CARINIT field/offset map.
-- `boosting-debug/Boostable cars in Mafia.csv` — the observed boostable-car list (matches the 14
-  `level_count == 2` records in vehicles.bin, §3).
-- `exe-re/game-sources/tables/vehicles.bin` / `vehicles.dat` — per-car CARINIT data (levels) +
-  field-schema; `programs/mafia_car_value_editor/MCVE.exe` edits level 0 only.
-- `boosting-debug/mafia-autosplitter/…/autosplitter-sounds.asl` — reads `boostEnabled`
-  (`0xE7D64, 0x18` → `g_pursuit_change_tables`).
+- `tables/vehicles.bin` / `vehicles.dat` (shipped) — per-car CARINIT data (levels) + field-schema.
 
 ## 10. Open items
 

@@ -1,6 +1,6 @@
 # `G_LoadSaveClass` and the `g_loadsave` translation unit
 
-**Created** 2026-08-23 16:22 +0200 · **Modified** 2026-09-24 21:22 +0200
+**Created** 2026-08-23 16:22 +0200 · **Modified** 2026-10-04 19:18 +0200
 
 The PC translation unit `[0x00556f10, 0x00561b70)` — 176 function starts, all named. This
 document is the PC's; PS2 material is in §9 and in the twin cells of the coverage tables.
@@ -30,11 +30,11 @@ establishes the unit's identity without reading a body.
 
 | class | PC prefix | starts | what it owns |
 |---|---|---|---|
-| `G_LoadSaveClass` | `loadsave_` | 56 | profiles, savegame slots, replay, objectives, freeride, settings, credits |
+| `G_LoadSaveClass` | `loadsave_` | 57 | profiles, savegame slots, replay, objectives, freeride, settings, credits |
 | `G_CarDatabase` | `car_database_` | 37 | the three `.def` tables and packed car ids — see [car_database.md](car_database.md) |
 | `G_Stream` | `stream_` | 13 | the encrypted savegame stream |
 | `G_EnabledCars` | `enabled_cars_` | 1 | the four-bank car permission bitmap |
-| `G_GarageClass` | `garage_` | 17 | the Free Ride garage |
+| `G_GarageClass` | `garage_` | 16 | the Free Ride garage |
 
 The remaining starts are CRT scaffolding, five MSVC file-I/O routines, two STL helpers,
 two credits free functions and `textdb_unload`.
@@ -65,7 +65,7 @@ Offsets are PC. Every row has at least one named reader or writer in the decomp.
 | `+0x91` | 1 | profile-load-failed flag | set by `loadsave_ctor`, cleared on a good load |
 | `+0x94` | 4 | **race-unlock mask** | `loadsave_race_cars_enable` / `_disable` / `_get_enabled` |
 | `+0x98` | 4 | **steal-permission mask** | `garage_enable_steal_for_letter`, `garage_can_steal_car_model` |
-| `+0x9c` | 4 | **Free-Ride enabled-car mask** | `garage_enable_start_for_letter`, `loadsave_freeride_get_enabled_cars` (§9e) |
+| `+0x9c` | 4 | **Free-Ride enabled-car mask** — bit `n` = car group `'A' + n` | `loadsave_freeride_enable_car_group`, `loadsave_freeride_get_enabled_cars` (§9e; `structs/garage.md` §2b) |
 | `+0xa0` | 25 × 8 | garage table: `{packed_car_id, C_car*}` | `garage_clear`, `garage_add_car_by_*`, `garage_is_car_parked` |
 | `+0x168` | 25 × 4 | previous-scene SNAPSHOT of the table above | `garage_show_results` diffs the two, then re-snapshots |
 | `+0x1d4` | 1 | the one-shot save-suppress flag (§9h) | `loadsave_savegame_load` sets it, `loadsave_savegame_from_script` reads and clears it |
@@ -92,7 +92,7 @@ their `menu.def` components.
 |---|---|---|
 | `+0x4c4` | `g_steering_linearity` | steering linearity slider |
 | `+0x4c8` | `g_blood_level` | "Level of Blood" slider |
-| `+0x4cc`..`+0x4d7` | - | not decoded |
+| `+0x4cc`..`+0x4d7` | - | §10 |
 | `+0x4d8` / `+0x4dc` | `g_aiming_sensitivity_x` / `_y` | aiming sensitivity sliders |
 | `+0x4e0` | `g_max_aiming_speed_x` | "Max Aiming Speed X" slider |
 | `+0x4e4` | `g_saved_sounds_volume` | sounds volume |
@@ -171,11 +171,16 @@ loadsave_freeride_store_params(mode, flags, ratio_a, ratio_all, ratio_c)
            _traffic_ratio_c
 
 loadsave_freeride_apply_script_params()          // only when mode > 2
-        g_freeride_stored_traffic_car_ratio  -> 0x00656154
-        g_freeride_stored_traffic_all_ratio  -> g_traffic_ratio_all
-        g_freeride_stored_traffic_police_ratio    -> 0x0065615c  and  0x0064c05c
+        g_freeride_stored_traffic_car_ratio     -> g_traffic_car_elems_coef   (0x00656154)
+        g_freeride_stored_traffic_all_ratio     -> g_traffic_ratio_all        (0x0064c058)
+        g_freeride_stored_traffic_police_ratio  -> g_traffic_car_police_coef  (0x0065615c)
+                                                   and g_traffic_ratio_police (0x0064c05c)
         this+0x98 = this+0x94                // steal mask := race-unlock mask
 ```
+
+`g_traffic_car_elems_coef` is the traffic element-count coefficient, `g_traffic_car_police_coef`
+weights the police spawn entries in `traffic_car_game_init`, and `g_traffic_ratio_police` has no
+reader on the PC (§9j).
 
 The last line is a real gameplay fact: **in Free Ride you may steal every car you have
 unlocked for racing.**
@@ -253,7 +258,7 @@ it is called from.
 
 ## 8. Coverage
 
-**176 of 176 starts named**, 33 of them PC-only; the rest carry a PS2 twin cell in the
+**176 of 176 starts named**, 32 of them PC-only; the rest carry a PS2 twin cell in the
 function registry. Six functions that would read as `C_game`'s wear the class prefix instead,
 all six body-diffed CONFIRMED (§9h): `loadsave_savegame_create`, `loadsave_savegame_load`,
 `loadsave_save_actor_proc`, `loadsave_savegame_save`, `loadsave_savegame_from_script` and
@@ -310,11 +315,15 @@ inventory and its savegame encryption.
 are graded STRUCTURAL for exactly this reason: no code diff is possible, so they rest on field,
 rank and arity instead.
 
-### 9e. PS2 methods with no PC start — *not located*, no terminal tag
+### 9e. PS2 methods with no PC start
 
-Thirteen: `RemoveInHand`, `ShowResults`, `AddLastStolen`, `Vysum`, `AutoVybuchlo`, `CanStart`,
-`GetCarsByRaceMask`, `EnableCarsForFree`, `GetWreckageByID`, `WriteAdrAtPos`,
-`ObjectivesComplete`, `ObjectivesGetList`, `FreerideEnableCar`.
+Twelve, listed in §10.
+
+**`FreerideEnableCar` IS located.** Its PC twin is **`loadsave_freeride_enable_car_group`** (VA
+`0x0055ff70`), CONFIRMED: both bodies decode the letter `A`..`Z` / `a`..`z` to a bit index and OR
+that bit into the mask the accessor below returns (PS2 `+0x2b8`, PC `+0x9c`). The PS2 body also
+maps the digits `0`..`6` to bits 26..32, remaps `U` to `0`, and ORs
+`G_CarDatabase::EnableCarsForFree` into `+0x2b4`; the PC has none of the three.
 
 **`FreerideGetEnabledCars` IS located.** It is the 8-byte accessor `{ return *(this + 0x2b8); }`.
 Its PC twin is **`loadsave_freeride_get_enabled_cars`** (VA `0x0055ffb0`,
@@ -387,7 +396,7 @@ folding put **three unrelated source functions on that one address**:
 |---|---|---|
 | **`G_LoadSaveClass::ProfileGetList`** — this class | `mov ecx, 0x671fb0`, then `[eax+4]` | 9 |
 | the trivial `C_blood` constructor | `operator_new(0x24)`, `mov ecx,eax` — `structs/blood.md` | 1 |
-| a third owner, class not established | `mov ecx,[esp+0x14]` in `recorder_sync_clock_from_system` | 1 |
+| no class: a one-argument identity inline on a time value | `mov ecx,[esp+0x14]` in `recorder_sync_clock_from_system` — its first stack argument | 1 |
 
 Read the row as *"this class's `ProfileGetList` is realised by the code at `0x005575f0`"*, never
 as *"`0x005575f0` is `ProfileGetList`"*, and expect no `PS2 twin:` stamp on the PC symbol.
@@ -399,13 +408,21 @@ this; the three disagreeing receivers are.
 ⚠️ Consequence for §8: every PS2 method still has located PC code, but `ProfileGetList` is the
 one row whose PC code is **not exclusively its own**. There is no dedicated function to find.
 
+### 9j. The Free Ride traffic knobs
+
+The four globals `loadsave_freeride_apply_script_params` publishes to (§5) are identified by their
+PS2 names: `g_traffic_car_elems_coef` = `elems_coefff__13C_traffic_car`, `g_traffic_ratio_all` =
+`ratio_all__19C_traffic_generator`, `g_traffic_car_police_coef` = `police_coefff__13C_traffic_car`
+and `g_traffic_ratio_police` = `ratio_police__19C_traffic_generator`.
+
 ---
 
 ## 10. Open items
 
 | item | state |
 |---|---|
-| the three traffic-ratio globals (§5) | which of `0x00656154` / `g_traffic_ratio_all` / `0x0065615c` is which knob is a `C_traffic_car` question; all three stay `DAT_` until a consumer says |
 | the `+0x520` (0x9c) and `+0x5bc` (0x18) blocks | persisted, but no individual field has a named reader |
+| settings block `+0x4cc`..`+0x4d7` (§2a) | not decoded |
+| twelve PS2 methods with no PC start (§9e) | `RemoveInHand`, `ShowResults`, `AddLastStolen`, `Vysum`, `AutoVybuchlo`, `CanStart`, `GetCarsByRaceMask`, `EnableCarsForFree`, `GetWreckageByID`, `WriteAdrAtPos`, `ObjectivesComplete`, `ObjectivesGetList`: not located, no terminal tag |
 | in game: profile delete | delete a profile and confirm all its save slots disappear with it (§3) |
 | in game: Free Ride stealing | start a Free Ride and check that every car unlocked for racing is stealable (§5) |

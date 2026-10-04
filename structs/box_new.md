@@ -1,6 +1,6 @@
 # `C_box_new` — the physics-base box that replaced `C_box`
 
-**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-09-17 13:45 +0200
+**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 A thin `C_PhThing` subclass: it holds a **six-field descriptor**, decides at mission start whether
 the body behaves as a *box* or as a *wheel*, hands that descriptor to the shared physics base, and
@@ -32,8 +32,8 @@ typedef struct C_box_new {                /* extends C_PhThing */
     /* +0x20c */ float      base_state_b;     // [M] C_PhThing field, set to -1.0
     /* +0x210 */ int        base_state_c;     // [M] C_PhThing field, zeroed
     /* +0x3b0 */ char       is_box;           // [H] 1 = S_THING_BOX, 0 = S_THING_WHEEL
-    /* +0x3b4 */ float      width;            // [H] default 1.0   (wheel only)
-    /* +0x3b8 */ float      height;           // [H] default 1.0   (wheel only)
+    /* +0x3b4 */ float      wheel_radius;     // [H] default 1.0   (wheel only)
+    /* +0x3b8 */ float      wheel_param;      // [H] default 1.0   (wheel only) -> C_PhThing +0x21c
     /* +0x3bc */ float      mass;             // [H] default 10.0; overwritten from the model volume
     /* +0x3c0 */ float      friction;         // [H] default 0.5
     /* +0x3c4 */ float      damping;          // [H] default 0.01  (wheel only)
@@ -55,8 +55,28 @@ descriptor structs on the stack:
 | set | `S_THING_BOX` | `+0x3bc` (mass), `+0x3c0` (friction) |
 | clear | `S_THING_WHEEL` | `+0x3b4`, `+0x3b8`, `+0x3bc`, `+0x3c0`, `+0x3c4` |
 
-So `width` / `height` / `damping` are **wheel-only** — dead storage for a box-configured instance,
+So `wheel_radius` / `wheel_param` / `damping` are **wheel-only** — dead storage for a box-configured instance,
 which still round-trips through the savegame.
+
+### 1a. The descriptor layouts (PC)
+
+Read from the stack stores in `box_new_game_init` and from the loads in
+`physical_object_init_box` / `physical_object_init_wheel`:
+
+| struct | offset | field | source | destination in `C_PhThing` |
+|---|---|---|---|---|
+| `S_THING_BOX` | `+0x00` | mass | `+0x3bc` | `+0x190` |
+| `S_THING_BOX` | `+0x04` | initial velocity (vec3) | 0 | `+0x1e0` |
+| `S_THING_BOX` | `+0x10` | friction | `+0x3c0` | `+0x1f8` |
+| `S_THING_WHEEL` | `+0x00` | wheel radius | `+0x3b4` | `+0x220` |
+| `S_THING_WHEEL` | `+0x04` | wheel parameter (§5) | `+0x3b8` | `+0x21c` |
+| `S_THING_WHEEL` | `+0x08` | mass | `+0x3bc` | `+0x190` |
+| `S_THING_WHEEL` | `+0x0c` | initial velocity (vec3) | 0 | `+0x1e0` |
+| `S_THING_WHEEL` | `+0x18` | friction | `+0x3c0` | `+0x1f8` |
+| `S_THING_WHEEL` | `+0x1c` | damping | `+0x3c4` | `+0x224` |
+
+A velocity below `1e-05` squared puts the body at rest (act state 1); `box_new_game_init`
+always passes zero, so every `C_box_new` starts at rest.
 
 ## 2. Method coverage — 10/10 PS2 methods mapped; 11/11 PC starts accounted
 
@@ -121,8 +141,8 @@ as `__ct__9C_box_newFv` chains to `__ct__9C_PhThingFv`.
 | PC | PS2 | field |
 |---|---|---|
 | `+0x3b0` | `+0x640` | `is_box` |
-| `+0x3b4` | `+0x644` | `width` |
-| `+0x3b8` | `+0x648` | `height` |
+| `+0x3b4` | `+0x644` | `wheel_radius` |
+| `+0x3b8` | `+0x648` | `wheel_param` |
 | `+0x3bc` | `+0x64c` | `mass` |
 | `+0x3c0` | `+0x650` | `friction` |
 | `+0x3c4` | `+0x654` | `damping` |
@@ -148,6 +168,15 @@ collision/hit pair the last two. All five are body-diffed on both sides and CONF
 A statement-position match inside a confirmed twin is a lead, not a twin: the two `CollisionCount`
 specialisations do **not** resolve to a 1:1 twin that way (`structs/physical_object.md` §6c).
 
+### 3e. Descriptor field order
+
+The PS2 puts the initial velocity (a 16-byte `S_vector`) FIRST in both descriptors:
+`S_THING_BOX` = {velocity, mass `+0x10`, friction `+0x14`}, `S_THING_WHEEL` = {velocity,
+radius `+0x10`, parameter `+0x14`, mass `+0x18`, friction `+0x1c`, damping `+0x20`}. The PC puts the
+scalars that precede friction first and the 12-byte velocity after them (§1a). Both builds'
+`GameInit` fill the velocity with zeros, and both builds' `InitBox` / `InitWheel` read each
+field from its own build's offset, so the difference is a declaration order, not a behaviour.
+
 ## 4. Related
 
 - `structs/physical_object.md` — `C_PhThing`, where all the dynamics live (26/26 methods named).
@@ -158,4 +187,4 @@ specialisations do **not** resolve to a 1:1 twin that way (`structs/physical_obj
 
 | item | state |
 |---|---|
-| `S_THING_BOX` / `S_THING_WHEEL` field order | the PS2 mangled names give the type names; the field order inside the structs differs between the two builds' stack layouts and is not reconciled |
+| the wheel parameter (`S_THING_WHEEL +0x04`) | carried from `+0x3b8` to `C_PhThing +0x21c` (§1a); no consumer traced |

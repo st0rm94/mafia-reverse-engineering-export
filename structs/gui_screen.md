@@ -1,9 +1,9 @@
 # `GM_Menu` — the GUI screen framework
 
-**Created** 2026-08-16 18:02 +0200 · **Modified** 2026-09-27 17:33 +0200
+**Created** 2026-08-16 18:02 +0200 · **Modified** 2026-10-04 19:24 +0200
 
-The framework's own translation unit is `g_menu.cpp` `[0x0056adf0, 0x00575c20)` (file name
-inferred, §10): 208 function starts, all named. This file documents the screen class and its API
+The framework's own translation unit is `g_menu.cpp` `[0x0056adf0, 0x00575c20)` (one unit,
+measured; the file name is the PS2's, §7): 208 function starts, all named. This file documents the screen class and its API
 (§7); the widget classes in the same TU are documented in `structs/gui_widget.md`.
 
 **Prefix:** `gui_menu_` for the base class itself; `gui_<screen family>_<screen>_<method>`
@@ -114,7 +114,7 @@ denote.
 | `0x0067a4c4` | `g_gui_scale_y` | `screen_height / 600` |
 | `0x00672618` | `g_gui_mouse_x` | menu cursor X in pixels; seeded to 400.0f |
 | `0x0067261c` | `g_gui_mouse_y` | menu cursor Y in pixels; seeded to 300.0f |
-| `0x0067a4e0` | `g_gui_menu_open_sound` | `sounds\menuopen.wav` |
+| `0x0067a4e0` | `g_gui_menu_open_sound` | `sounds\menuopen.wav`, played by `gui_menu_ctor` every time a screen is built; `gui_menu_execute_modal` loads it on first use and plays it then unless the top screen carries flag `0x400000` |
 | `0x0067a4dc` | `g_gui_menu_change_sound` | `sounds\menuchange.wav`, played on every focus move |
 
 ¹ Accumulated by `gui_menu_tick`, wraps at `0x578` = 1400, switches state at 700 — a 50 % duty
@@ -134,7 +134,8 @@ The GUI does not own a text engine. It calls **HUD methods** on the HUD singleto
 
 * `hud_text_draw_line` — 44 of its 70 call sites are in this `0x0057xxxx` region.
 * `hud_text_draw_line_alt_font` and `hud_text_measure_fixed_pitch` — used **only** here,
-  by the text-input widget `gui_widget_edit_ip_draw` (caret and space width). See
+  by the text-input widget `gui_widget_edit_ip_draw` (caret and space width), the draw of the
+  `'edip'` class, which nothing ever builds (`structs/gui_widget.md` §4). See
   `structs/hud.md` §2 for the two-font-table layout those two read.
 * `hud_draw_mouse_cursor` — the cursor quad, out of the `1int.tga` sheet at `hud+0x9080`.
 * `hud_render_all` — called by `gui_menu_i3d_draw_callback` right after the GUI itself.
@@ -164,6 +165,13 @@ strings (ids 410-412) with debug text; fr/cz still carry the real labels.
 ## 7. The named API (`g_menu.cpp`)
 
 Registry section: *"GUI menu framework — the `g_menu.cpp` translation unit"*.
+
+**One translation unit.** The range holds exactly one `.CRT$XCU` group — the two head
+initializers `thunk_gui_scale_static_init` (`0x0056adf0`) and `thunk_gui_mouse_pos_static_init`
+(`0x0056ae20`) and the tail guard `crt_static_init_guard_00575c20` — the same head-and-tail shape
+as the neighbouring units, whose tail guards are `crt_static_init_guard_0056adc0` and
+`crt_static_init_guard_0057d6e0`. The PC binary carries no source-file string, so the file name
+comes from the PS2 (§8).
 
 | band | functions |
 |---|---|
@@ -222,9 +230,13 @@ a PS2 `Tick`.
 * The PS2 `OnCloseChild` base is an empty 8-byte stub; the PC base re-arms input steering.
 * **Source files.** The PS2 calls the TU `g_menu.cpp` and its link order puts it after every
   `g_m_*.cpp`, which the PC order matches. The PS2 splits the PC range across FOUR files
-  (`g_menu.cpp` + `g_m_comps.cpp` / `_comps2` / `_compsm`).
-* **Menu sounds.** The PS2 pair is `menuSoundChange` / `menuSoundClose`;
-  `gui_menu_execute_modal` plays its second sound behind a `0x400000` flag test (§10).
+  (`g_menu.cpp` + `g_m_comps.cpp` / `_comps2` / `_compsm`), each with its own `__sinit`; the PC
+  range is one unit (§7).
+* **Menu sounds.** The PS2 declares `menuSoundChange` and `menuSoundClose`, but only
+  `menuSoundChange` is ever created, from the same `sounds\menuchange.wav`; `menuSoundClose`,
+  played when a child screen closes, has no writer. The PC's second sound is a different sound on
+  a different event — the screen-open sound of §4 — and has no PS2 counterpart. The PS2
+  `ExecuteMenu` tests the same screen flag `0x400000` to choose between its two draw paths.
 
 ### 8a. The two next-TU screens (§9)
 
@@ -234,7 +246,7 @@ the PS2 has code:
 | PC function | PS2 functions | grade |
 |---|---|---|
 | `gui_combo_dropdown_screen_ctor` | `__ct__12GM_ComboMenuFP12GM_Component` + `OnCreate__12GM_ComboMenuFv` | STRUCTURAL ¹ |
-| `gui_notice_panel_ctor` | - | twin not searched (§10) |
+| `gui_notice_panel_ctor` | - (PC-only, below) | - |
 
 ¹ One PC function against two PS2 functions, so no single-body agreement is assertable. The PS2
 `GM_ComboMenu` constructor stores only the owner and pulls the option vector back through the
@@ -257,7 +269,13 @@ carries a `// PS2-INLINED HERE:` banner in the annotated decomp.
 `OnCreate__14GM_QuestionBoxFv` shifts components `0x8a` and `0x8b`, which design 0 does not ship,
 and `GM_QuestionBox` takes a `bool` third constructor argument the design-0 ctor does not. The PC
 twin is **`gui_question_box_ctor` / `gui_question_box_tick`** (`0x005764c0` / `0x00576560`,
-design 1) — `structs/game_menus.md` §3.
+design 1) — `structs/game_menus.md` §3. The `GM_QuestionBox` constructor flag only picks the
+console layout `psx_questionbox`; the Yes/No pair is always there.
+
+**The notice panel itself is PC-only.** At every call position of its constructors (§9) the PS2
+builds nothing: its `C_entity::Process` arms for the entity-script commands `0x100f` / `0x1010`
+only advance the script, its `GM_GunShop` is gutted, and the other callers are the multiplayer
+front end (`structs/game_menus.md` §10c).
 
 ## 9. Two screens in the NEXT translation unit that `g_menu.cpp` constructs
 
@@ -268,7 +286,7 @@ GUI TU.
 | PC function | VA | screen | design | vtable | reached from |
 |---|---|---|---|---|---|
 | `gui_combo_dropdown_screen_ctor` | `0x00575c50` | the combo drop-down list | `0x13` | `0x0063ddfc` | `gui_widget_combo_key`, `gui_widget_combo_mouse`, `gui_widget_combo_range_key`, `gui_widget_combo_range_mouse` |
-| `gui_notice_panel_ctor` | `0x00575f50` | the two-message NOTICE PANEL (no buttons) | `0` | `0x0063de14` | `gui_notice_panel_present_once` |
+| `gui_notice_panel_ctor` | `0x00575f50` | the two-message NOTICE PANEL (no buttons) | `0` | `0x0063de14` | `gui_notice_panel_present_once`, `entity_process_command`, `gui_gun_shop_tick`, `net_host_session_start`, `net_open_session_browser`, `net_multiplayer_run` |
 
 **`gui_combo_dropdown_screen_ctor`** takes the field's screen rectangle, the option vector and
 the owning combo's write-back slot, builds design `0x13`, and sets the modal flag bits `0x8010`.
@@ -280,8 +298,8 @@ frame around it. That auto-fit pass is why the function is 600+ bytes. Design `0
 marker, a frame and TWO `ctxt` rows and **no buttons**. A `const char *` overload,
 `gui_notice_panel_ctor_from_strings` (`0x005761d0`), shares the vtable and the size.
 
-**`gui_notice_panel_present_once`** (`0x0056e3f0`, inside the GUI TU) is the only caller of the
-ctor: it pushes `g_hud_flags` onto the save stack (`g_hud_flags_save_stack_begin`/`_end`), forces
+**`gui_notice_panel_present_once`** (`0x0056e3f0`, inside the GUI TU) is the caller the
+multiplayer front end uses for a one-frame panel: it pushes `g_hud_flags` onto the save stack (`g_hud_flags_save_stack_begin`/`_end`), forces
 the flags to 1, builds the panel, drives **one** frame, and pops. There is no input loop — it is a
 splash, not an interactive modal.
 
@@ -289,7 +307,4 @@ splash, not an interactive modal.
 
 | item | state |
 |---|---|
-| the PC source file name | `g_menu.cpp` is inferred from the PS2 (§8), not measured; whether the PC range, which the PS2 splits across four files and which has a single static-init pair at its head, is one PC translation unit is not measured either. The `.CRT$XCU` table would settle it |
-| `g_gui_menu_open_sound` | may be a misnomer: the PS2 pair is change / **close**, and `gui_menu_execute_modal` plays the second sound behind a `0x400000` flag test (§8); not re-graded |
-| the design-0 notice panel's PS2 counterpart | not searched (§8a) |
 | in game: one cursor per stack? | opening a submenu over a menu should leave exactly one cursor drawn, on the topmost menu |

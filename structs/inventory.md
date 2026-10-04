@@ -1,6 +1,6 @@
 # `G_Inventory` — the per-person item/weapon inventory
 
-**Created** 2026-07-26 21:35 +0200 · **Modified** 2026-09-17 17:54 +0200
+**Created** 2026-07-26 21:35 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -43,7 +43,7 @@ typedef struct G_Inventory {              // 0xe4 bytes, embedded at C_human+0x4
 ```
 
 `inventory_set_can_carry_big_weapon` writes the object's field `[0]` and `inventory_set_in_car` field
-`[1]`; `inventory_can_accept_item` reads both. Their byte offsets are not recorded (§8).
+`[1]`; `inventory_can_accept_item` reads both (§8).
 
 ### 1a. `S_GameItem` — the 0x10-byte inventory instance
 
@@ -79,7 +79,7 @@ id != 0 && id < g_num_game_items && (g_game_item_table[id * 0xbc + 0x20] & mask)
 | `+0xd0..+0xdc` | `stash` | M | `inventory_holster` | `inventory_build_cycle_list`, save pair | - |
 | `+0xe0` | `unke0` | U | `inventory_reset` | - | the last field |
 
-¹ Elements are dwords. No insert is located and no `inventory_*` function touches it.
+¹ Elements are dwords (§8).
 ² `inventory_remove_slot`'s band selector 2 is `+0x80`, and the UI's kind 2 is "Coat" (§5).
 
 ## 2. Behaviour

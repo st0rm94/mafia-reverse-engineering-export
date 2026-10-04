@@ -1,6 +1,6 @@
 # The Win32 bootstrap translation unit — `winmain`, the host helpers and the CD check
 
-**Created** 2026-08-23 11:15 +0200 · **Modified** 2026-09-27 17:33 +0200
+**Created** 2026-08-23 11:15 +0200 · **Modified** 2026-10-01 09:01 +0200
 
 `[0x00623e10, 0x006242b0)` — **`Winstuff.cpp`** (§6).
 
@@ -50,13 +50,13 @@ cd_require_disc
 ```
 
 **`cd_scan_drives_for_disc`** stamps the letter into `"X:\"` (`DAT_0064d928`), calls
-`GetDriveTypeA` (**result discarded**), then `GetVolumeInformationA` into a 0x80-byte volume-name
+`GetDriveTypeA` (**result discarded** — EAX is overwritten by the next call without a read), then `GetVolumeInformationA` into a 0x80-byte volume-name
 buffer and a 0x80-byte filesystem-name buffer. That call is tested only for success — media present
 and readable — and **no volume label is ever compared.** The disc is identified purely by carrying
 `MafiaGame\a1.dta` (format string `0x00651b0c`). Returns 1 on the first hit, 0 after `'Z'`.
 
-**`cd_require_disc`** does not check, it **blocks**: on failure it calls `g_engine` vtable `+0x3c`
-(releasing the display so a modal box can appear), shows
+**`cd_require_disc`** does not check, it **blocks**: on failure it presents a frame through
+`g_engine` slot `+0x3c` (§3a), shows
 `MessageBoxA("Please insert MAFIA CD 1", 0x15 = MB_RETRYCANCEL|MB_ICONHAND)`, and retries until the
 disc appears or the user cancels, in which case it returns 0. Its two callers are `engine_main` and
 `mission_open` (callsite `0x005fff62`).
@@ -64,16 +64,16 @@ disc appears or the user cancels, in which case it returns 0. Its two callers ar
 **`cd_find_game_file`** is a separate path and is *not* part of that chain. It resolves one named
 file: it first tries the bare name in the working directory with `CreateFileA`, and only on failure
 walks `'C'`..`'Z'` building `"X:\MafiaGame\%s"` (`0x00651ae0`); this walk also calls
-`GetDriveTypeA` and discards the result. The **resolved** path is written back into the caller's
+`GetDriveTypeA` and discards the result in the same way. The **resolved** path is written back into the caller's
 buffer. Its four callers and their arguments, recovered from the disassembly because Ghidra hides
 the `__fastcall` operands:
 
 | callsite | argument | what the caller does with the resolved path |
 |---|---|---|
-| `0x005c6539` (`program_process_command`) | `"intro.avi"` | `g_display` vtable `+0x70` |
+| `0x005c6539` (`program_process_command`) | `"intro.avi"` | queries the screen size (`g_engine` slots `+0x6c` / `+0x70`), creates a video player through `g_engine` slot `+0x00` and opens the path with the player's `+0x0c` |
 | `0x005fa411` (`engine_init`) | `"a1.dta"` | `dtaCreate(buf)`, stored in `DAT_006f92a8` |
-| `0x005fb214` (`engine_init`) | `"logo1.avi"` | `g_display` vtable `+0x00` |
-| `0x005fb25c` (`engine_init`) | `"logo2.avi"` | `g_display` vtable `+0x00` |
+| `0x005fb214` (`engine_init`) | `"logo1.avi"` | creates a video player through `g_engine` slot `+0x00` and opens the path with the player's `+0x0c` |
+| `0x005fb25c` (`engine_init`) | `"logo2.avi"` | the same as `logo1.avi` |
 
 Every caller consumes the **buffer**, not just the boolean — which is what proves it is a path
 resolver and not a predicate. The set of names is the assets that live on the disc rather than in
@@ -85,19 +85,33 @@ the install: the two logo videos, the intro video, and one archive.
 
 **`win_message_box`** maps an internal button-set code to a Win32 type — `0`/default `MB_OK`,
 `1`→`MB_YESNO`, `2`→`MB_YESNOCANCEL`, `3`→`MB_RETRYCANCEL`, `4`→`MB_OKCANCEL` — takes its parent HWND
-from `g_engine` vtable `+0x10` (NULL when `g_engine` is null), and normalizes the result:
+from `g_engine` slot `+0x10`, the main-window handle (NULL when `g_engine` is null), and normalizes the result:
 `IDRETRY`/`IDYES` → 1, `IDNO` → 0, `IDCANCEL` → 2, anything else → -1. Its single caller reports a
 sound error (`"Sound type I3DSOUND_VOLUME not exist."` / `"ConstructSound"`). `cd_require_disc` does
 **not** use it — it calls `MessageBoxA` directly with a literal `0x15`.
 
 **`win_load_string_resource`** is a bare forwarder to `LoadStringA`. Its one caller, `engine_init`,
-fetches **string id 3** into a 128-byte buffer and hands it to `g_display` vtable `+0x18`.
+fetches **string id 3** into a 128-byte buffer and hands it to `g_engine` slot `+0x18`, which sets the application's window name.
 
 **`win_set_app_icon`** calls `LoadIconA(hInstance, MAKEINTRESOURCE(1))` and, on success,
 `SetClassLongA(hWnd, GCL_HICON, hIcon)`. `engine_init` passes the HWND it has just fetched from
-`g_display` vtable `+0x10`.
+`g_engine` slot `+0x10`.
 
-### 3a. The resources this TU reads
+### 3a. `g_engine` — the `IGraph` interface
+
+`g_engine` (`0x006f9528`) is the object `engine_init` receives from `LS3DF.dll`'s `GetIGraph()`. The
+slots this TU and its callers use are read off the DLL itself: `GetIGraph` returns a singleton whose
+constructor installs the vtable at `LS3DF.dll:0x10099498`, and each slot's body says what it is.
+
+| slot | what the `LS3DF.dll` body does | used by |
+|---|---|---|
+| `+0x00` | creates a video-player object (no argument; the caller opens a path with the object's `+0x0c`) | `engine_init` (the two logos), `program_process_command` (the intro) |
+| `+0x10` | returns the main-window handle (a global the constructor zeroes) | `win_message_box`, `engine_init` (for `win_set_app_icon`) |
+| `+0x14` | returns the child-window handle (a second global the constructor zeroes) | - |
+| `+0x18` | sets the application name: compares the argument with the stored name, copies it and sets the window text | `engine_init` |
+| `+0x3c` | presents the frame: a once-per-second frame counter, the device's present call, and on a lost device a sleep-250-ms-and-reset loop | `cd_require_disc` |
+
+### 3b. The resources this TU reads
 
 From `.rsrc`, which is **byte-identical in retail and in both cracked builds**:
 
@@ -203,15 +217,15 @@ name for the block; `display_` is taken by the `C_mission + 0x90` sub-object (38
 | `+0x1e` | byte 2 of the `+0x1c` group | - | contributes bit `0x10` to the sound-driver init flags |
 | `+0x1f` | byte 3 of the `+0x1c` group | - | contributes bit `0x20` to the IGraph mode word |
 | `+0x20` | `g_ls3d_setup_field_0x20` | 0 | contributes bit `0x20` to the sound-driver init flags |
-| `+0x21` | `g_ls3d_setup_field_0x21` | 1 | written only by the two default fillers; no reader located |
-| `+0x22` | `g_ls3d_setup_field_0x22` | 0 | a dword, written only by the two default fillers; no reader located |
+| `+0x21` | `g_ls3d_setup_field_0x21` | 1 | written only by the two default fillers (§7) |
+| `+0x22` | `g_ls3d_setup_field_0x22` | 0 | a dword, written only by the two default fillers (§7) |
 | `+0x26` | `g_ls3d_setup_wbuffer_enabled` | 1 | the **W-buffer** setting ³ |
 | `+0x27 … +0x3b` | the six quality/scale mirrors | 1.0, 1.0, 2, 2, 3, 2 | the persisted copy of `C_mission + 0x90` — `structs/mission.md` §2 |
 
 ¹ The `IGraph` mode word `engine_init` assembles: `+0x12` vs 4 and 2 → `0x2000`/`0x1000`,
 `+0x13` → `0x4000`, `+0x14` → `0x8000`, `+0x15` → `2`, `+0x16` → `0x10`, `+0x17` → `0x100`,
-`+0x19` → `4`, `+0x1f` → `0x20`, plus the constant `0x10090`. What each bit selects is not decoded,
-which is why these fields keep offset names.
+`+0x19` → `4`, `+0x1f` → `0x20`, plus the constant `0x10090`. These fields keep offset names
+(§7).
 ² `engine_igraph_error_callback` clears it before re-saving the blob on a video-memory overflow, so
 it selects something video-memory-hungry. The `+0x1c` group keeps a mechanical offset name because
 its four bytes have different subjects (two graphics, two sound).
@@ -235,7 +249,7 @@ member.
 | `0x005f83e0` | `joy_devices_init` | - | `ijoy.dll` bring-up; fills `g_joy_device_list` |
 | `0x005f8660` | `joy_devices_done` | - | releases them |
 | `0x005f86c0` | `engine_draw_overlay_callback` | `cbScene__F20SCN_CALLBACK_MESSAGEUiUi` | scene callback **id 6** |
-| `0x005f8700` | `engine_new_mission` | `InternMissionInit__Fv` | the queued mission change; `structs/mission.md` §7 |
+| `0x005f8700` | `engine_new_mission` | `InternMissionInit__Fv` | the queued mission change; `structs/mission.md` §6 |
 | `0x005f9540` | `engine_game_loop` | `GameLoopSingle__Fv` | the single-player in-game loop (a `do { } while (true)` loop) |
 | `0x005f98e0` | `engine_igraph_error_callback` | - | IGraph error hook, out-of-memory only ¹ |
 | `0x005f99b0` | `engine_main` | `main` | the real main; called by `winmain` |
@@ -293,15 +307,25 @@ settings block too, alongside `0x15` / `0x19` / `0x22` fed by the `+0x18` group.
 
 **`engine_draw_overlay_callback`** is scene callback id 6 on both builds.
 
+**The `IGraph` slots of §3a have PS2 names.** The PS2 statically links the same class
+(`__vt__6IGraph`), but its vtable order differs from the PC DLL's (it starts with `Init`), so each
+slot is matched by its BODY, not by position:
+
+| PC slot | PS2 method | matched on |
+|---|---|---|
+| `+0x00` | `CreateIShow__6IGraphFv` | [M] shape only: no argument, returns the object the caller opens a video with |
+| `+0x10` | `GetMainHWND__6IGraphFv` | returns `m_MainHWnd` |
+| `+0x14` | `GetChildHWND__6IGraphFv` | returns the second window handle |
+| `+0x18` | `SetAppName__6IGraphFPCc` | `strcmp` with `m_AppName`, `strncpy`, `SetWindowText(m_MainHWnd, …)` |
+| `+0x3c` | `Present__6IGraphFv` | `m_ShowFPS` counter against `timeGetTime` (1000 ms), device present with four null arguments, the `D3DERR_DEVICELOST` (`0x88760868`) sleep-250 / reset loop |
+
 Related: [`basic/artifacts/dll.md`](../basic/artifacts/dll.md) — SafeDisc's own import table in the
 retail exe names `LS3DF.dll`, `IJoy.dll`, `Inet.dll` and `rw_data.dll` in the developers' original
 casing, independently corroborating that document's four Illusion DLLs.
-
----
 
 ## 7. Open items
 
 | item | state |
 |---|---|
-| `g_engine` vtable slots used here | undocumented: `+0x10` (returns the HWND), `+0x18` (consumes the app-name string), `+0x3c` (called before a modal box) |
-| `GetDriveTypeA` in both drive walks | its result is discarded in `cd_find_game_file` and in `cd_scan_drives_for_disc`; no purpose found |
+| the `IGraph` mode-word bits (§5b ¹) | `engine_init` assembles them from `+0x12`..`+0x17`, `+0x19` and `+0x1f`; what each bit selects is not decoded |
+| `g_ls3d_setup` `+0x21` / `+0x22` | written only by `ls3d_setup_static_init` and `ls3d_setup_set_defaults`; no reader located |

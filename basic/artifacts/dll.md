@@ -1,6 +1,6 @@
 # The Illusion DLLs — what is NOT in `Game.exe`
 
-**Created** 2026-08-14 09:10 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-08-14 09:10 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 This documents the PC build. PS2 material is confined to §6.
 
@@ -12,11 +12,8 @@ This documents the PC build. PS2 material is confined to §6.
 everything those DLLs implement is **absent from the decomp** — no body, no vtable, no
 function to name, ever.
 
-That matters beyond the DLLs themselves, because of a cross-build asymmetry: **the PS2 has no
-DLLs, so the port compiled all of this into the ELF.** A class with PS2 symbols and no PC code
-is therefore not automatically inlined, in another cluster, or PS2-port-only — **it may simply
-live in a DLL on the PC**. This is a fifth explanation for "PS2 method, no PC twin" (§6a), and
-the only one that can never be resolved by looking harder inside `Game.exe`.
+That matters beyond the DLLs themselves: a function the other build has and `Game.exe` lacks
+may simply live in a DLL (§6).
 
 ---
 
@@ -121,8 +118,11 @@ the PC decomp. `Open(const char*, u32)` at vtable `+0x50`, `SetTo(I3D_frame*)` a
 * **The mangling records the calling convention:** `QAG` / `QBG` = public
   (non-const / const) **`__stdcall`** member functions. Preserve that on any signature.
 * `I3DGetDriver` / `ISndGetDriver` / `GetIGraph` are the three driver factories; the objects
-  they return are the `g_renderer` / `g_i3d_driver` family at `0x006f9520` and the sound driver.
-  Those are DLL objects too — their methods are not nameable.
+  they return are the `g_renderer` / `g_i3d_driver` family at `0x006f9520`, `g_engine`
+  (`0x006f9528`, the `IGraph` interface) and the sound driver. Those are DLL objects too: `Game.exe`
+  holds none of their method bodies, but the shipped `LS3DF.dll` does, so a vtable slot can be
+  identified from the DLL's own body — `structs/app_bootstrap.md` §3a does so for five `IGraph`
+  slots.
 
 ---
 
@@ -144,8 +144,12 @@ controls.
 
 ## 6. PC vs PS2
 
-The PS2 build statically links the equivalents of all four DLLs, so **the PS2 symbol table
-contains classes whose PC code is unreachable by construction**:
+The PS2 build has no DLLs: it statically links the equivalents of all four into the ELF, so **the
+PS2 symbol table contains classes whose PC code is unreachable by construction**. A class with PS2
+symbols and no PC code is therefore not automatically inlined, in another cluster, or
+PS2-port-only — **it may simply live in a DLL on the PC**. This is a fifth explanation for "PS2
+method, no PC twin" (§6a), and the only one that can never be resolved by looking harder inside
+`Game.exe`.
 
 | PS2 class | methods | PC location |
 |---|---|---|

@@ -1,6 +1,6 @@
 # `check_seg` / `check_seg_cluster` / `check_seg_clusters` — the map segment index
 
-**Created** 2026-05-27 09:13 +0200 · **Modified** 2026-09-17 17:55 +0200
+**Created** 2026-05-27 09:13 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 A **`check_seg`** is one **map segment**: a spatial bucket that owns a sorted list of
 `C_web_node` array indices plus a handful of typed **"specials"** — navigation geometry (cover
@@ -50,10 +50,11 @@ typedef struct check_seg {                   // 0x2c bytes; 4 of them per check_
     /* +0x0c */ uint32_t *nodes_cap;         // [H] capacity pointer
     /* +0x10 */ uint32_t  packed;            // [H] type nibbles + special count - see §1c.
                                              //     ALSO the empty-slot marker: 0 = free
-    /* +0x14 */ uint32_t  _extent[4];        // [M] four dwords copied verbatim by
-                                             //     check_seg_clusters_add_segment and read
-                                             //     straight from the file; a position/extent
-                                             //     block. Individual fields NOT read.
+    /* +0x14 */ float     centre[3];         // [H] the segment's world-space centre, file data
+                                             //     copied by check_seg_clusters_add_segment;
+                                             //     no function reads it (section 4a)
+    /* +0x20 */ float     radius;            // [H] the segment's radius, 2.7..10.6 in the
+                                             //     shipped files; no function reads it
     /* +0x24 */ void     *own_payload;       // [H] the segment's own typed record; its size is
                                              //     0x28/0x34/0x10 for type 1/2/4. Type 8
                                              //     segments own nothing here
@@ -123,7 +124,11 @@ PC payload directly. `ai_wayfind_plan_route_via_corner` (route strategy 2) does 
 `entity_save_action_man` / `entity_load_action_man` serialise type-2 payloads for savegames:
 **four independent consumers, all testing `== 2`, all treating the payload as a corner.**
 
-**Types 4 and 8 are [U]** — §7.
+**Types 4 and 8 have no consumer.** In the 47 shipped files the PC loads, specials are only ever
+type 1 or 2, type 4 occurs only as a segment's own type, and type 8 never occurs (§4a). A
+segment's own type and own payload are read only by `check_seg_clusters_load` and
+`check_seg_clusters_clear` — a closed set of two `E8` calls to `check_seg_get_type_and_data` —
+so the PC loads and frees them without using them.
 
 ### 1e. `check_seg_cluster` (`0xb0`) and `check_seg_clusters` (the singleton)
 
@@ -274,8 +279,10 @@ bound, `check_seg_clusters_get_segment` per index (skipping NULLs), then
 `check_seg_get_special_count` / `check_seg_get_special` over the specials.
 
 **The type-agnostic consumer is the interesting one.** Every consumer except `ai_loc_update`
-tests `== 1` or `== 2`; only `ai_loc_update` records types 4 and 8 at all. That is what makes
-`ai_seg_stat`'s (missing) reader the last route to those two payload meanings (§7).
+tests `== 1` or `== 2`; only `ai_loc_update` records types 4 and 8 at all, and nothing reads the
+`vector<ai_seg_stat>` it records them into (`structs/ai_loc.md` §3). So no code on the PC
+consumes a type-4 or type-8 special beyond the sphere test that records it, and the shipped
+files contain no special of either type (§4a).
 
 ---
 
@@ -297,23 +304,43 @@ This is **not** `check.bin`: `clusters.seg` is a separate file shipped alongside
 
 | Size | Field |
 |---|---|
-| 4 | *(unread — goes into the `+0x14` extent block)* |
-| 4 | *(unread — extent block)* |
-| 0xc | a vec3 *(unread — extent block)* |
+| 4 | the packed type word → `+0x10` (§1c) |
+| 4 | the radius → `+0x20` |
+| 0xc | the centre → `+0x14` |
 | 4 | `node_count` |
 | 4 × `node_count` | the sorted `C_web_node` array indices (§1b) |
 | 0x28 / 0x34 / 0x10 | the segment's **own payload**, sized by its type code (1 / 2 / 4). Type 8 has none |
 | 0x38 / 0x38 / 0x18 / 0x2c | one payload **per special**, sized by that special's type code (1 / 2 / 4 / 8) |
 
-The special count is **not stored separately** — it is already in the packed word that arrived
-with the extent block, and `check_seg_clusters_load` calls `check_seg_get_special_count` on the
-partly-filled stack record to drive the loop.
+The special count is **not stored separately** — it is already in the packed word that opens the
+record, and `check_seg_clusters_load` calls `check_seg_get_special_count` on the partly-filled
+stack record to drive the loop.
 
 **Loader behaviour worth knowing:** `Load` calls `check_seg_clusters_clear` then
 `check_seg_clusters_init` before opening the file, and builds every record in **one reused
 stack-local `check_seg`**, handing it to `check_seg_clusters_add_segment` — which *moves* the
 contents out and leaves the local empty for the next record. That is why `_add_segment` empties
 its source, and it is visible from outside as two `lea ecx,[esp+…]` receivers in an ECX census.
+
+### 4a. The shipped files
+
+53 missions ship a `clusters.seg`. **Six carry the magic `AISEG-V1.0-JIPO`** — MISE09-SALIERY,
+MISE10-SALIERY, MISE11-SALIERY, MISE14-PARNIK, MISE14-SALIERY and MISE17-MESTO — so the loader's
+magic compare fails and those scenes run with an empty segment store. The other 47 parse to the
+exact file size:
+
+| Type | as a segment's own type | as a special |
+|---|---:|---:|
+| none (0) | 2 130 | - |
+| 1 | 1 819 | 545 |
+| 2 | 2 386 | 4 266 |
+| 4 | 3 479 | 0 |
+| 8 | 0 | 0 |
+
+Every own-type-4 payload is one horizontal vector `(x, 0, z, 0)` of length 0.92 to 1.41 (1.0 on
+2 241 of them). Typed segments carry a world position and a radius in `+0x14..+0x23`; untyped
+segments carry the MSVC debug fill `0xcdcdcdcd` there, which says the level tool never wrote those
+fields for them.
 
 ---
 
@@ -327,7 +354,7 @@ its source, and it is visible from outside as two `lea ecx,[esp+…]` receivers 
   |---|---|---|
   | index vector | `+0x00` (`std::vector`) | `+0x10` (Metrowerks `__vector_pod`) |
   | packed word | `+0x10` | `+0x1c` |
-  | extent block | `+0x14` | `+0x00` |
+  | centre + radius | `+0x14` | `+0x00` |
   | own payload / specials array | `+0x24` / `+0x28` | `+0x24` / `+0x28` — **identical** |
 
   Rebasing a single offset across builds here produces nonsense: PC `+0x10` is the packed
@@ -359,7 +386,7 @@ its source, and it is visible from outside as two `lea ecx,[esp+…]` receivers 
   (`lqc2`/`sqc2`/`vadd`), which need 16-byte alignment, and putting both vectors first at offset 0
   guarantees it. ⇒ Never carry this record's offsets across builds; and treat a PS2 struct whose
   vectors sit at the front as a hint that the port reordered it for the VU.
-- **A real behavioural difference, unexplained:** `isInSpecial` reads a **different radius for
+- **A real behavioural difference (§7):** `isInSpecial` reads a **different radius for
   type 8** on the two builds. PS2 uses `[0xc]` where type 2 uses `[10]`; PC merges the two arms
   and reads `[9]` for both — and MSVC only merges arms that are *identical in the source*, so
   this is a source-level difference, not a compiler artifact.
@@ -394,5 +421,4 @@ its source, and it is visible from outside as two `lea ecx,[esp+…]` receivers 
 
 | item | state |
 |---|---|
-| the `+0x14` extent block (4 dwords) | copied verbatim, read from the file, never interpreted by any function in this family. The two loose dwords plus a vec3 in the file record map onto it, so it is almost certainly a bounding position/extent, but no consumer reads it in either build. Anything that does would be outside this TU |
-| what types **4** and **8** mean | they select payload sizes (`0x18` / `0x2c`) and radius offsets and nothing more, in every function in this family. Every consumer but one tests `== 1` or `== 2` (§3), so the only code that touches them is `ai_loc_update`, which records them type-agnostically into `ai_loc`'s `vector<ai_seg_stat>` — and **nothing on either build reads that vector** (on PS2 the symbol `ai_seg_stat` appears 4 times, all four being the `insert`/`erase` instantiations). The next step is to find that reader, not to read more `check_seg` code: candidates are an inlined loop over `C_human+0x748` in an AI method, or a consumer Ghidra renders through a register. Types 4 and 8 have consumers somewhere; this records where they are *not* |
+| the type-8 radius difference (§5) | a source-level difference between the builds; its cause is not explained |

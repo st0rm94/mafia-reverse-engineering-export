@@ -1,6 +1,6 @@
 # NPC ↔ player voice interactions (greeting / brush-off)
 
-**Created** 2026-06-20 14:42 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-06-20 14:42 +0200 · **Modified** 2026-09-29 09:31 +0200
 
 How ambient NPCs vocally react to the player: the **interaction-button response** (live) and the
 **proactive greeting** (built but dead). Static analysis of the decomp, cross-checked against
@@ -82,7 +82,7 @@ the player (frame vtable `+0x38` with the `"neck"` bone string `s_neck`, VA `0x0
 - player **on foot** (`player+0x98 == 0`);
 - within ~5 units (`dist² < 25`) and facing it (`S_vector::AngleTo < 2.0`).
 
-**Why it is dead:** the gate requires the player to be **"engaged"** (in a pursuit group — mixed up
+**Why it is dead:** the gate requires the player to be **"engaged"** (in a police squad — mixed up
 in a chase) **and** to have **no officers** chasing him at the same time. Those two states do not
 co-occur in normal play, so the gate never passes, `npc+0x1fd` is never set, and the greeting is
 never heard — matching the user's in-game test. Same shape as the dead police-call path

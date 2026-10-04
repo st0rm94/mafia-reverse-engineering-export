@@ -1,6 +1,6 @@
 # The speech / lip-sync subsystem (`speech_`)
 
-**Created** 2026-08-19 18:06 +0200 · **Modified** 2026-09-24 21:22 +0200
+**Created** 2026-08-19 18:06 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -53,8 +53,8 @@ visible.
 | `+0x14` | `g_speech_channel_sound` | the voice clip loaded from `sounds\%08d.wav` |
 | `+0x18` | `g_speech_channel_owner_frame` | the speaking actor's frame (`C_human+0x68`) |
 | `+0x1c` | `g_speech_channel_morph_frame` | the head morph frame — `+0x110 == 1`, `+0x1d4 == 'SMMR'` |
-| `+0x20` | `g_speech_channel_extra_frame_b` | from `C_human+0x58c`; mask bit 1; role unknown (§7) |
-| `+0x24` | `g_speech_channel_extra_frame_a` | from `C_human+0x588`; mask bit 0; role unknown (§7) |
+| `+0x20` | `g_speech_channel_extra_frame_b` | from `C_human+0x58c`; mask bit 1 (§7) |
+| `+0x24` | `g_speech_channel_extra_frame_a` | from `C_human+0x588`; mask bit 0 (§7) |
 | `+0x28` | `g_speech_channel_field_0x28` | morph parameter, seeded `0.46` ² |
 | `+0x2c` | `g_speech_channel_field_0x2c` | morph parameter, seeded `0` ² |
 | `+0x30` | `g_speech_channel_field_0x30` | morph parameter, seeded `0.53` ² |
@@ -155,21 +155,20 @@ bank is not.
 | `speech_release_channels` | 144 | `DabingDone__Fv` | 164 | 0.88 | CONFIRMED |
 | `speech_get_free_channel` | 48 | `DabingGetFreeChanel__Fv` | 84 | 0.57 | CONFIRMED |
 | `speech_channel_set_human` | 912 | `DabingSetHuman__FiP7C_human` | 1204 | 0.76 | CONFIRMED |
-| `speech_release_channels_and_reset_morphs` | 432 | - | - | - | open ¹ |
+| `speech_release_channels_and_reset_morphs` | 432 | - | - | - | - |
 | `speech_channel_set_model` | 448 | `DabingSetModel__FiP9I3D_model` | 644 | 0.70 | CONFIRMED |
 | `speech_invalidate_channel_for_actor` | 416 | `DabingInvalidate__FP7C_human` | 628 | 0.66 | CONFIRMED |
 | `speech_channel_speak_line` | 1456 | `DabingSpeak__FiUibUi` | 2148 | 0.68 | CONFIRMED |
-| `speech_channel_attach_accessory_frame` | 288 | - | - | - | open ¹ |
+| `speech_channel_attach_accessory_frame` | 288 | - | - | - | - |
 | `speech_channel_is_speaking` | 128 | `DabingIsSpeaking__Fi` | 108 | 1.19 | CONFIRMED |
 | `speech_channel_stop` | 80 | `DabingStop__Fi` | 140 | 0.57 | CONFIRMED |
-| `speech_update_accessory_frames` | 192 | - | - | - | open ¹ |
+| `speech_update_accessory_frames` | 192 | - | - | - | - |
 | `speech_tick_channels` | 2064 | `DabingTick__FUi` | 3576 | 0.58 | CONFIRMED |
 | `speech_pause_all_channels` | 144 | `DabingPauseSounds__Fbb` | 284 | 0.51 | CONFIRMED |
 | `speech_preload_for_record` | 240 | `DabingPreLoad__FPCc` | 308 | 0.78 | CONFIRMED |
-| - | - | `DabingPreUnload__Fv` | 44 | - | open ² |
+| - | - | `DabingPreUnload__Fv` | 44 | - | - |
 
-¹ No PS2 rank: PC-only or folded into a PS2 twin; not decided (§7).
-² No PC start located; folded (inlined) on PC, not absent.
+The four rows graded `-` have no twin on the other build; each is open (§7).
 
 ### 5b. The three byte-level confirmations
 
@@ -216,6 +215,6 @@ attendant, the clearest live consumer) · `structs/human.md` (`+0x57c` morph fra
 | `+0x08` | written as `1` (stop), `200`, and a text-length duration; one name does not cover all three uses |
 | `+0x28` … `+0x3c` | the morph-weight meaning of each seeded parameter |
 | The three rank-less PC functions | `speech_release_channels_and_reset_morphs`, `speech_channel_attach_accessory_frame`, `speech_update_accessory_frames`. `DabingSetHuman` is 292 B larger than its PC twin, which suggests a fold and proves nothing |
-| `DabingPreUnload` | 44 B on PS2, no PC start; where the PC frees `dabingPreData` is unlocated |
+| `DabingPreUnload` | 44 B on PS2, no PC start; read as folded (inlined) on PC rather than absent, but where the PC frees `dabingPreData` is unlocated |
 | `C_game::S_enemy_talk` | the PC counterpart of the PS2 talk registry (§5d) is unsearched |
 | In game | watch a character's mouth during `human_talk` and confirm the 40 ms viseme rate; check what happens when a 17th line is requested (the code reuses channel 15) |

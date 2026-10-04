@@ -1,6 +1,6 @@
 # `C_program` — the per-entity mission-script VM
 
-**Created** 2026-08-02 19:48 +0200 · **Modified** 2026-09-18 10:37 +0200
+**Created** 2026-08-02 19:48 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c`, cross-checked against the non-stripped PS2 ELF
 (`SLUS_206.71`). **This documents the PC build**; cross-build material is confined to §5.
@@ -110,11 +110,10 @@ typedef struct C_program {                 // embedded at C_entity+0xa9c, C_dete
 
 Every offset above comes from a body read on both builds.
 
-### 1b. Why the base offset is not a rebase of any other C_entity offset
+### 1b. The base sub-object offsets
 
-PC `+0xa9c` ↔ PS2 `+0xbf0` is a delta of `0x154`. The AI sub-objects on the same class sit at
-different deltas (`ai_ghost` `0x1f8`, `ai_action_manager` `0x1e4`). The deltas are **band-wise,
-not constant** — `structs/entity.md` warns against rebasing a single offset.
+`C_program` sits at `C_entity+0xa9c` and at `C_detector+0x70` (§2a, §2d); the cross-build mapping
+of the offset is in §5a.
 
 ### 1c. The interpreter's runtime state — timing, the return stack, the register files
 
@@ -461,7 +460,7 @@ has `program_process_command` among its callers — that is what makes block B o
 block A.
 
 ⚠️ The twin is graded on arity + cluster + elimination plus a head/tail read and the jump table,
-**not** a statement diff: ~52 KB against 95 KB has not been walked.
+**not** a statement diff (§9).
 
 ---
 
@@ -487,7 +486,7 @@ PC-first, ordered by PC VA. Every CONFIRMED row was established by reading **bot
 | 0x005afca0 | `program_decode_let` | `DecodeLet__9C_programFRQ29C_program13S_instructionPc` | 520 | CONFIRMED |
 | 0x005afdd0 | `program_decode_if` | `DecodeIf__9C_programFRQ29C_program13S_instructionPc` | 292 | CONFIRMED |
 | 0x005afe70 | `program_decode_params` | `DecodeParams__9C_programFPcRQ29C_program13S_instruction` | 9352 | CONFIRMED |
-| 0x005b1b60 | `program_decode_instruction` | `DecodeInstruction__9C_programFPcRi` | 380 | CONFIRMED — see §5 for the 94× ratio |
+| 0x005b1b60 | `program_decode_instruction` | `DecodeInstruction__9C_programFPcRi` | 380 | CONFIRMED ¹ |
 | 0x005ba6a0 | `program_compile` | `Compile__9C_programFPcbPiPi` | 696 | CONFIRMED |
 | 0x005ba9a0 | `program_get_float_reg` | `GetFloatReg__9C_programFi` | 60 | CONFIRMED |
 | 0x005ba9c0 | `program_get_frame_reg` | `GetFrameReg__9C_programFi` | 60 | CONFIRMED |
@@ -507,13 +506,20 @@ PC-first, ordered by PC VA. Every CONFIRMED row was established by reading **bot
 | 0x005bae90 | `program_save_game_save` | `SaveGameSave__9C_programFPPv` | 624 | CONFIRMED |
 | 0x005bb020 | `program_save_game_load` | `SaveGameLoad__9C_programFPPv` | 788 | CONFIRMED |
 | 0x005bb2a0 | `program_find_actor_later` | `FindActorLater__9C_programFiUi` | 108 | CONFIRMED |
-| 0x005bb2d0 | `program_process_command` | `Process__9C_programFUi` | 95704 | CONFIRMED (§3) |
-| - | - | `TryChangeProgramData__9C_programFv` | 524 | **no PC function — §5** |
-| - | - | `DecompileCommand__9C_programFiPc` | 8 | PS2 stub; the PC's only impl is the `C_entity` override |
-| - | - | `CallBack__9C_programFQ29C_program11E_cb_action` | 8 | PS2 stub, outside the cluster (`0x0014c700`) |
-| - | - | `GetInterCityName__9C_programFPc` | 116 | **PS2-PORT-ONLY, terminal — §5** |
-| - | - | `PreloadAnims__9C_programFv` | 4304 | **no PC function — §5** |
-| - | - | `DebilitizeScripts__9C_programFv` | 376 | **PS2-PORT-ONLY, terminal — §5** |
+| 0x005bb2d0 | `program_process_command` | `Process__9C_programFUi` | 95704 | CONFIRMED ² |
+| - | - | `TryChangeProgramData__9C_programFv` | 524 | PS2-ONLY CANDIDATE ³ |
+| - | - | `DecompileCommand__9C_programFiPc` | 8 | PS2 STUB ⁴ |
+| - | - | `CallBack__9C_programFQ29C_program11E_cb_action` | 8 | PS2 STUB ⁵ |
+| - | - | `GetInterCityName__9C_programFPc` | 116 | TERMINAL ⁶ |
+| - | - | `PreloadAnims__9C_programFv` | 4304 | PS2-ONLY CANDIDATE ³ |
+| - | - | `DebilitizeScripts__9C_programFv` | 376 | TERMINAL ⁶ |
+
+¹ The 94× size ratio is explained in §5c.
+² Graded as described in §3.
+³ No PC function; a strong PS2-only candidate, not terminal (§5e).
+⁴ 8-byte PS2 base stub; the PC's only implementation is the `C_entity` override (§5e).
+⁵ 8-byte PS2 stub at `0x0014c700`, outside the cluster (§5e).
+⁶ PS2-port-only, terminal (§5e).
 
 **The alignment is forced and gapless.** Block A holds 37 definitions; the PS2 main cluster holds
 38 methods; removing `TryChangeProgramData` and `DecompileCommand` leaves 36, and 36 + the
@@ -527,6 +533,9 @@ MSVC-only scalar deleting destructor = 37.
 
 - **Base sub-object: PC `C_entity+0xa9c` / PS2 `C_entity+0xbf0`** (delta `0x154`). Byte-proven on
   both sides — PC by the `sub ecx, 0xa9c` quartet, PS2 by GCC's `@3056@` prefix (3056 = `0xBF0`).
+- **The base offset is not a rebase of any other C_entity offset.** The AI sub-objects on the same
+  class sit at different deltas (`ai_ghost` `0x1f8`, `ai_action_manager` `0x1e4`). The deltas are
+  **band-wise, not constant** — `structs/entity.md` warns against rebasing a single offset.
 - The adjustor thunks exist on both builds in the same four slots; MSVC emits them for the
   C_entity-declared virtuals, GCC for the C_program-declared ones. Different halves, same
   construct — do not read the asymmetry as a behavioural difference.
@@ -563,7 +572,7 @@ block markers PC `0x45`/`0x46` ↔ PS2 `0x47`/`0x48`; the event marker PC `0x48`
 | `TryChangeProgramData` | strong PS2-only CANDIDATE, **not terminal** | no PC function at its forced rank; PC `LoadSourceCode` lacks PS2's tail call to it; it is driven by `DAT_004e2174`/`DAT_004e2178`, a `{mission path, program name, actor name, replacement source}` table with **zero writers anywhere in the PS2 image** — a compiled-in per-mission script override list. Its caller is a shared method, so the PS2-only reasoning stops short of terminal |
 | `PreloadAnims` | strong PS2-only CANDIDATE, **not terminal** | called only from `Init`; PC `Init` does not call it, and 4304 B cannot be spliced into a 278-byte body. It walks the compiled instruction stream for animation opcodes (`0x1001`…) and pre-loads every clip they name — a streaming adaptation. Sits in the PS2's SECOND `C_program` emission block (`0x001d2b50…`) between the two terminal entries above |
 | `DecompileCommand` | 8-byte PS2 base stub | the PC's only implementation is the `C_entity` override `entity_script_format_command` (`0x00429ca0`) |
-| `CallBack` | 8-byte PS2 stub | at `0x0014c700`, outside the cluster; no PC counterpart searched |
+| `CallBack` | 8-byte PS2 stub | at `0x0014c700`, outside the cluster (§9) |
 
 Both non-terminal rows carry an inline banner in the decomp at the exact statement where the PS2
 makes the call — see `program_load_source_code` (`LAB_005af709`) and `program_init` (after the
@@ -585,6 +594,13 @@ PS2-port-only.
 - **Block B.** The PS2 build inlines every one of block B's accessors into its own
   `Process__9C_programFUi` arm, so the PS2 arm for the same command is a second body: block B's
   members are named from body diffs rather than from consumer guesses (§6).
+- **The `STREAM_CONNECT` chain (§6b).** The PS2 twin of `glass_shatter_cut_mesh`,
+  `CutMesh__19C_Break_plain_glass...`, is CONFIRMED. The PS2 `STREAM_CONNECT` arm (opcode 0xb8) is
+  an empty stub — its entire body is `NextCommand__9C_programFPc(param_1, 0)` — so for the three
+  chain members there is no second body on that arm; the levers of §6b go around it.
+- **`i3d_animation_set_set_default_options` (§6b).** The PS2 twin of `i3d_cache_anim_create` spells
+  the receiver type in its mangled name (`...FPCcPP17I3D_animation_set...`). The PS2
+  `MODEL_PLAYANIM` counterpart is a cache-slot refcount INCREMENT where the PC assigns 2.
 
 ---
 
@@ -640,8 +656,8 @@ holds the command map and `script-mapping/artifacts/opcodes-verified.md` the per
 documentation — and the PS2 build's inlined arm supplies the second body (§5g). A full command↔case
 map is not required; only the arms that reach the member.
 
-That is why these accessors carry FIELD names rather than offset names: the sixteen whose field was
-initially undecoded resolved to `i3d_frame_get_child_count_ptr` (`0x005c8530`),
+That is why these accessors carry FIELD names rather than offset names, among them these sixteen:
+`i3d_frame_get_child_count_ptr` (`0x005c8530`),
 `i3d_animation_set_set_default_options` (`0x005c8540`), `i3d_camera_get_fov_ptr` (`0x005c85a0`),
 `i3d_scene_get_root_frame_ptr` (`0x005c85f0`), `i3d_sound_get_volume_ptr` (`0x005c8630`),
 `mission_get_actor_list` (`0x005c8640`), `mission_get_particle_manager` (`0x005c8650`),
@@ -663,27 +679,22 @@ which crosses two LS3D classes. Two independent levers name every hop:
 
 1. **A second PC consumer of the identical chain.** `glass_shatter_cut_mesh` walks
    `frame+0x1e0 -> vt[1](0) -> vt[5](0) -> [+4]` exactly as the `STREAM_CONNECT` arm does,
-   and its PS2 twin `CutMesh__19C_Break_plain_glass...` is CONFIRMED.
+   and its twin is CONFIRMED (§5g).
 2. **The loop bounds.** At `0x004fc8fd` each of the two counts is the bound of the indexed
    getter loop it guards, which is what a count is.
 
 `i3d_animation_set_set_default_options` (`0x005c8540`) is named from its receiver instead: its ECX
 is `[esp+0x4c]`, the OUT slot of `i3d_cache_anim_create`, whose twin's mangled name spells the type
-(`...FPCcPP17I3D_animation_set...`). Its single callsite is cross-block, so the receiver census
-alone yields nothing, and the PS2 `MODEL_PLAYANIM` counterpart is a cache-slot refcount INCREMENT
-where the PC assigns 2. The classes are documented in `structs/i3d_frame.md` §9 and
-`structs/i3d_cache.md` §7.
-
-The PS2 `STREAM_CONNECT` arm (opcode 0xb8) is an empty stub — its entire body is
-`NextCommand__9C_programFPc(param_1, 0)` — so for these three there is no second body on that arm;
-the levers above go around it.
+(§5g). Its single callsite is cross-block, so the receiver census alone yields nothing. The classes
+are documented in `structs/i3d_frame.md` §9 and `structs/i3d_cache.md` §7.
 
 ### 6c. Where block B ends
 
 The next `.CRT$XCU` initializer is at **`0x005c9720`**, so `[0x005c8740, 0x005c9720)` is the rest of
-this same object file (more of the same helper tail, ~100 defs) and **`0x005c9720` is where the next
-translation unit starts** — the first VA above this range that a standard PS2 order-align can be run
-against.
+this same object file — 74 more helper-tail definitions, all named, from
+`vehicle_controller_set_field_0x65` to `stl_max_int_ptr` — and **`0x005c9720` is where the next
+translation unit starts**. `basic/artifacts/script-opcode-dispatch.md` §9 maps every definition in
+`[0x005c7da0, 0x005c9740)` to the script command(s) whose arm reaches it.
 
 ---
 
@@ -746,6 +757,6 @@ all. The stride-4 sibling is `vec_index_addr_stride_0x4` (`0x005a17b0`).
 | `program_process_command` ↔ `Process__9C_programFUi` | graded on arity, cluster, elimination, a head/tail read and the jump table; ~52 KB against 95 KB has never been statement-diffed (§3) |
 | `TryChangeProgramData`, `PreloadAnims` | strong PS2-only candidates; neither is terminal, because each is reached from a method both builds share (§5e) |
 | the 34 lead receivers in block B | one back-trace short of a class; each needs the receiver resolved before its owner can be claimed (§6) |
-| `[0x005c8740, 0x005c9720)` | the rest of the same object file, ~100 further definitions, not yet enumerated (§6c) |
 | folding vs dedup-by-name for `vec_index_addr_stride_0x8` | the two element types were read off their use, not off a type declaration (§7) |
 | the 14-bit pc field | caps a script at 16384 instructions and nothing checks it; no shipped script is known to approach the limit (§1c) |
+| `CallBack__9C_programFQ29C_program11E_cb_action` | 8-byte PS2 stub outside the cluster (`0x0014c700`); no PC counterpart has been searched for (§5e) |

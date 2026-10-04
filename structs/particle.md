@@ -1,6 +1,6 @@
 # The particle system — `[0x005a1b00, 0x005a5fb0)` (PC prefixes `particle_*`, `particle_effect_*`, `particle_manager_*`)
 
-**Created** 2026-08-30 10:03 +0200 · **Modified** 2026-09-17 18:02 +0200
+**Created** 2026-08-30 10:03 +0200 · **Modified** 2026-10-04 17:00 +0200
 
 Three consecutive translation units implement every particle effect in the game — engine
 smoke, exhaust, sparks, the damage plume, the level-placed ambient effects. They are
@@ -149,16 +149,28 @@ the particle pool are two indistinguishable vectors of same-shaped blocks.
 
 ### 5a. `tables\effects.tbl` — the effect-type table
 
-Read by `particle_manager_load_data` through a stack `C_chunk`. Outer chunk id **100** per
-effect type (`operator_new(0x3c)`); inside it:
+Read by `particle_manager_load_data` through a stack `C_chunk`. Outer chunk id **100** (`0x64`)
+per effect type (`operator_new(0x3c)`); the shipped file holds 93. The id tree, with the shipped
+counts; in each of the three readers, every id not listed takes the level's `0x6a` arm:
 
-| sub-chunk | meaning |
-|---|---|
-| `0x65` | one emitter definition, `operator_new(0x9c)`, appended to the type's emitter list ¹ |
-| `0x67` | a string into `type+0x08` |
-| `0x68` | a string into `type+0x34` (the model name the scene cache is keyed on) |
-| `0x6e` | two flag bytes |
-| *(other)* | a `0xc`-byte block pair |
+| Id | Inside | Shipped | Payload and destination |
+|---|---|---:|---|
+| `0x65` | effect type | 169 | one emitter definition, `operator_new(0x9c)`, appended to the type's emitter list ¹ |
+| `0x67` | effect type | 93 | a string into `type+0x08` |
+| `0x68` | effect type | 93 | a string into `type+0x34`, the model name the scene cache is keyed on |
+| `0x6a` | effect type | 93 | two 12-byte blocks from `type+0x1c` |
+| `0x6e` | effect type | 93 | two flag bytes, `type+0x38` / `+0x39` |
+| `0x66` | emitter | 261 | one phase definition, `operator_new(0x68)`, appended to the emitter's phase list |
+| `0x67` | emitter | 155 | a name string |
+| `0x69` | emitter | 169 | a string into `emitter+0x1c` |
+| `0x6a` | emitter | 169 | two vec3 then fourteen dwords, `emitter+0x20`..`+0x98` |
+| `0x6b` | emitter | 169 | two vec3, `emitter+0x38` / `+0x44` |
+| `0x6c` | emitter | 169 | two vec3, `emitter+0x58` / `+0x64` |
+| `0x6d` | emitter | 169 | a dword, `emitter+0x7c` |
+| `0x67` | phase | 11 | a string into `phase+0x08` |
+| `0x6a` | phase | 261 | three vec3 then nine dwords, `phase+0x0c`..`+0x60` |
+| `0x6b` | phase | 261 | a dword, `phase+0x64` |
+| `0x6c` | phase | 261 | two vec3, `phase+0x38` / `+0x44` |
 
 ¹ The `0x9c` definition is built by `particle_data_type_ctor` (`0x005a63d0`) and filled by
 `particle_data_type_load_data` (`0x005a6490`); both read through the `C_chunk` helpers
@@ -233,6 +245,13 @@ containment is **`C_PData_Emitter` ⊃ `C_PData_Type` ⊃ `C_PData_Phase`**.
 `C_ParticleEmitter::Init` appends one such record per `C_PData_Type` — exactly what
 `particle_manager_create_particle_from_type` does with its `operator_new(0xc0)` loop.
 
+**`C_ParticleType` has no PS2 methods**, so the PC `particle_type_*` functions have no twin of
+their own: each is the per-record half of a `C_ParticleEmitter` method that the PS2 runs inline.
+`particle_type_init` is that half of `Init`, called by the manager's two creators (§7b);
+`particle_type_reset` of `Destroy`, called only by `particle_effect_destroy`; `particle_type_dtor`
+of the destructor, called by `particle_effect_dtor` and `particle_manager_mission_done`. The
+`particle_effect_*` functions carry the twins.
+
 The only genuine structural difference is **where the particles live**: the PS2 keeps one shared
 particle list on `C_ParticleEmitter+0xb4`; the PC gives each `0xc0` record its own list at
 `record+0x20`. Both builds keep one runtime record per emitter definition.
@@ -249,15 +268,10 @@ Each site is marked in the decomp by an inline banner.
 | `__ct__10C_ParticleFv`, `__ct__17C_ParticleEmitterFv`, `__ct__15C_PData_EmitterFv` | inlined at each `operator_new` site |
 | `C_ParticleEmitter::Init`'s record construction | hoisted into the manager's two creators |
 
-### 7c. Not located
+### 7c. The PS2 vertex-buffer path
 
-`SortParticlesAndCreateBBOX`, `PrepareVBuffer`, `UpdateOptimized`, `ReInit`,
-`PreloadTextures`, `ReleasePreloadedTextures`, `LoadStaticParticles_100`,
-`LoadStaticParticles_201`.
-
-The first four are the PS2's own vertex-buffer path; the PC delegates particle rendering to
-`ls3df.dll`'s `I3D_emitor`, so a PC counterpart is not *expected* — an expectation, not a
-measurement (§9).
+`SortParticlesAndCreateBBOX`, `PrepareVBuffer`, `UpdateOptimized` and `ReInit` are the PS2's own
+vertex-buffer path; the PC delegates particle rendering to `ls3df.dll`'s `I3D_emitor` (§9).
 
 ### 7d. Two shipped behavioural differences
 
@@ -294,11 +308,11 @@ counterpart, purely because of this member. Below `+0x64` the two maps agree. Do
 * **The `+0x30` guid counter is never incremented by the manager** — the guid comes from
   the engine driver's own counter in `particle_effect_init`. What `+0x30` counts, beyond
   "not `-1` means armed", is undecoded.
-* **The `particle_type_*` functions' PS2 class.** §7a maps the `0xc0` record to
-  `C_ParticleType`, but `particle_type_dtor` / `particle_type_reset` / `particle_type_init`
-  (`0x005a6c50` / `0x005a6d80` / `0x005a6f60`) are recorded as twins of `C_ParticleEmitter`'s
-  dtor / `Destroy` / `Init`. Which class those PS2 methods belong to is not settled here.
-* **The eight PS2 methods of §7c** have no PC counterpart located; none has been measured absent.
+* **Eight PS2 methods have no PC counterpart located**, and none has been measured absent:
+  `SortParticlesAndCreateBBOX`, `PrepareVBuffer`, `UpdateOptimized`, `ReInit` (the vertex-buffer
+  path of §7c, where a PC counterpart is not expected — an expectation, not a measurement),
+  `PreloadTextures`, `ReleasePreloadedTextures`, `LoadStaticParticles_100`,
+  `LoadStaticParticles_201`.
 * **In game:** does a street plume visibly stop emitting under an awning or a bridge, and
   resume when the camera moves it clear? (§6, step 3.)
 * **In game:** the 150-unit destroy radius of §6 step 2 should make distant ambient effects

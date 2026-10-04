@@ -1,6 +1,6 @@
 # The lightness subsystem — `C_game`'s per-object shading, shoot lights and light cache
 
-**Created** 2026-09-02 19:51 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-09-02 19:51 +0200 · **Modified** 2026-10-04 16:36 +0200
 
 Not a class: three related **features of `C_game`**, built from one record type, one engine
 class and ten PC functions in the `g_game.cpp` translation-unit tail `[0x005f1090, 0x005f79a0)`.
@@ -61,6 +61,11 @@ tags, which are not shaded by ambient light.
 
 ### 2d. What the tick does
 
+`game_tick` calls `game_lightness_tick` only while the enable byte `C_game+0x164` is set, the
+vector is non-empty and the detail setting is 2 or more (`structs/game.md` §2). Only the script
+command `actorlightnesson` sets the byte, `game_init` clears it on every scene, and no shipped
+mission script calls the command, so in the retail game the pass does not run.
+
 `game_lightness_tick(ms)` runs two passes over the same vector:
 
 1. **Sample one record per frame.** The cursor at `+0x160` selects it. The record is sampled
@@ -109,8 +114,8 @@ Ten records of stride `0xc` at `C_game+0x2a48`, spanning `+0x2a48`..`+0x2ac0`:
 | offset in record | field |
 |---|---|
 | `+0x00` | `I3D_light *` — the pre-created light object |
-| `+0x04` | `int timer` — the free/alive test (`< 1` means free) |
-| `+0x08` | `ushort flags` — bit 0 selects the flicker path |
+| `+0x04` | `int lifetime_ms` — counted down every frame; `< 1` means the slot is free |
+| `+0x08` | `ushort flags` — bit 0: flicker, then fade over the last 500 ms (§4c) |
 
 ### 4b. What `game_add_shoot_light` does
 
@@ -118,22 +123,27 @@ Scans the pool from slot 9 downward for the first record whose timer is `< 1`, t
 light: sets the range through vtable `+0x64` with `(range * 0.5, range)`; writes the world
 position into the frame at `+0x80`..`+0x88`; rewrites the frame flags
 `& 0xfffffedf | 0x40000000` (the project-wide "frame is on and dirty" idiom); re-links it into
-the scene sector; and finally gives it an intensity of `rand() * 0.4 + 0.8`. The record's timer
-and flags are then zeroed.
+the scene sector; gives it an intensity of `rand() * 0.4 + 0.8`; and stores the caller's
+lifetime and flags in the record.
 
-Callers: `human_shooting` (muzzle flash), `actor_shot_update`, `game_new_explosion`,
-`game_new_fire`.
+| caller | range | lifetime | flags |
+|---|---|---|---|
+| `human_shooting` (muzzle flash) | 7.0 | 50 ms | 0 |
+| `actor_shot_update` | 7.0 | 50 ms | 0 |
+| `game_new_explosion` | 12.0 | 100 ms | 0 |
+| `game_new_fire` | 10.0 | the fire's own lifetime | 1 |
 
-### 4c. No PC ticker for the pool is located
+### 4c. The per-frame tick is inlined into `game_tick`
 
-A disassembly sweep of the whole `.text` for the displacements `0x2a48`, `0x2a4c` and `0x2ac4`
-returns, besides `game_add_shoot_light` itself, only three `lea`s — in `game_init`, `game_done`
-and `game_done_intern`. Nothing found decrements the timer, so the free-slot scan always takes
-slot 9 and the pool behaves as a single reusable light.
+`game_tick` walks all ten records every frame. For a slot with lifetime left it subtracts the
+frame time; at zero it notifies a kind-5 parent, unlinks the light and switches it off. While the
+slot lasts and flag bit 0 is set, the intensity is re-rolled to `rand() * 0.4 + 0.8` every frame
+while more than 500 ms remain, and set to `lifetime * 0.002` below that, a linear fade. A slot
+without the flag keeps its creation intensity until it goes out.
 
-This is a measurement, not a terminal conclusion: a ticker that reaches the pool through a
-register whose displacement the compiler folded away would be invisible even to the byte sweep
-(§7).
+A displacement sweep for `0x2a48`, `0x2a4c` or `0x2ac4` does not see this loop: it starts at
+`lea esi,[ebp+0x2ac0]`, the END of the pool, and reads each record at negative offsets
+(`[esi-8]` the lifetime, `[esi+8]` after the step the flags).
 
 ## 5. The light cache
 
@@ -183,7 +193,7 @@ A row whose PS2 side is one of the three stubs can be matched as a *symbol* but 
 | `0x005f1460` | `game_lightness_tick` | `LightnessTick__6C_gameFUi` | `0x002ff620` | STRUCTURAL (stub) |
 | `0x005f1750` | `game_lightness_apply_recursive` | - | - | PC-only (§6c) |
 | `0x005f17c0` | `game_add_shoot_light` | `AddShootLight__6C_gameFR8S_vectorfiUs` | `0x002ff630` | STRUCTURAL (stub) |
-| - | - | `ShootLightTick__6C_gameFUi` | `0x002ff640` | no PC twin located (§6d) |
+| - | inlined into `game_tick` | `ShootLightTick__6C_gameFUi` | `0x002ff640` | inlined (§6d) |
 | `0x005f1900` | `game_use_light_cache_system` | `UseLightCacheSystem__6C_gameFv` | `0x002ff7d0` | CONFIRMED |
 | `0x005f1950` | `game_light_cache_collect_recursive` | `cbLight__Q26C_game19S_hlp$18015game_cpp…` | `0x002ff8c0` | CONFIRMED |
 | `0x005f19c0` | `game_recompute_light_cache` | `RecomputeLightCache__6C_gameFv` | `0x002ffa50` | CONFIRMED, 2→1 fold |
@@ -201,16 +211,15 @@ function: the PS2 gates on flag `0x800` of `I3D_frame+0x1d0` where the PC uses t
 whitelist, and the PS2 recurses over the raw sibling chain where the PC uses the child-count and
 `GetChild` virtuals.
 
-### 6d. `ShootLightTick` is real on the PS2 and unlocated on the PC
+### 6d. `ShootLightTick` is inlined into `game_tick` on the PC
 
-388 bytes, and it is what identified `game_add_shoot_light`: it walks **2** records of the
-identical `{I3D_light *, int timer, ushort flags}` stride-`0xc` layout at `C_game+0xe0c`,
-decrements the timer, turns the light off on expiry, and otherwise flickers the intensity with
-the **same `rand() * 0.4 + 0.8`** expression the PC uses when the light is created.
-
-Two content differences fall out: the PC pool is **10** slots against the PS2's **2**, and the
-PC applies the random intensity once at creation where the PS2 re-rolls it every frame above
-501 ms remaining and fades it linearly below that.
+The PS2 method is 388 bytes, and it is what identified `game_add_shoot_light`: it walks **2**
+records of the identical `{I3D_light *, int lifetime, ushort flags}` stride-`0xc` layout at
+`C_game+0xe0c`. The PC copy inlined into `game_tick` (§4c) matches it statement for statement —
+the countdown, the parent notification and switch-off on expiry, and the bit-0 branch with
+`rand() * 0.4 + 0.8` above 500 ms and `lifetime * 0.002` below — and differs only in the pool
+size, **10** slots against **2**. With `AddShootLight` stubbed, the PS2 tick never finds a lit
+slot.
 
 ### 6e. The factoring difference in `game_recompute_light_cache`
 
@@ -230,9 +239,6 @@ feature) · `basic/artifacts/dll.md` (why `SetLightnessHR` is not in `Game.exe`)
 
 | item | state |
 |---|---|
-| a PC ticker for the shoot-light pool | not found by a `.text` displacement sweep (§4c); a register-relative access would evade it |
-| shoot lights in game | not tested: two shots fired far apart within a few hundred ms should light only the second position, and a muzzle flash should never fade on its own |
-| the per-record `flags` of the pool at `C_game+0x2a48` | undecoded on the PC — on the PS2 bit 0 chooses the flicker path in `ShootLightTick`, but the PC never reads it back |
 | `game_lightness_add`'s `kind`/`flags` parameters | the mangled PS2 signature carries a `ushort`; only bit 0 is decoded |
-| object lightness in game | not tested: an actor in a dark alley should darken over ~0.25 s once within 40 units of the camera and stop updating beyond it (§2d) |
+| object lightness in game | not tested. In the retail game no actor should darken, because the pass is gated off (§2d); with `actorlightnesson` executed, an actor in a dark alley should darken over ~0.25 s once within 40 units of the camera and stop updating beyond it |
 | which missions arm the light cache | it is armed only by a script command; the missions that use it are untraced |

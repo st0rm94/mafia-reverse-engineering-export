@@ -1,6 +1,6 @@
 # The fake-shadow subsystem — `C_game`'s blob shadows
 
-**Created** 2026-09-02 16:27 +0200 · **Modified** 2026-09-17 13:45 +0200
+**Created** 2026-09-02 16:27 +0200 · **Modified** 2026-10-04 11:48 +0200
 
 Part of the `g_game.cpp` translation unit, `[0x005dc190, 0x005ee3d0]`.
 
@@ -37,10 +37,10 @@ pass according to the display setting.
 
 ```c
 /* the buffer table element — stride 8 */
-typedef struct {                    /* PS2: C_game::S_fake_shadow_buff  */
+typedef struct {                    /* PS2: C_game::S_shadow_temp       */
 /* +0x00 */ I3D_shadow *mesh;       /* created type 0xf, Open()ed from a path */
 /* +0x04 */ char       *basename;   /* heap copy, path stripped; operator delete on teardown */
-} S_fake_shadow_buff;
+} S_shadow_temp;
 
 /* the per-caster element — stride 0x1c */
 typedef struct {                    /* PS2: C_game::S_shadow_item       */
@@ -86,8 +86,8 @@ The name free list is a real allocation optimisation, not scaffolding: a name is
 | `0x005e8e30` | `game_add_frame_for_shadow` | `AddFrameForShadow__6C_gameFP9I3D_frame13E_shadow_type13E_shadow_typeP9I3D_framePc` | CONFIRMED | register a caster, create its `I3D_shadow` |
 | `0x005e91d0` | `game_set_frame_for_shadow` | `SetFrameForShadow__6C_gameFP9I3D_frame13E_shadow_type13E_shadow_type` | STRUCTURAL | repoint an existing item at another buffer |
 | `0x005e9350` | `game_del_frame_for_shadow` | `DelFrameForShadow__6C_gameFP9I3D_frame13E_shadow_type` | STRUCTURAL | unregister a caster, recycle its name buffer |
-| inlined in `game_tick` | the LOD pass | `TickFakeShadows__6C_gameFUi` | not byte-diffed | distance sort + activate the nearest N |
-| inlined in `game_tick` | (part of the same pass) | `TickShadows__6C_gameFUi` | - | empty on both sides in effect |
+| inlined in `game_tick` | the LOD pass | - | PC-only | distance sort + activate the nearest N; no PS2 code sorts the shadow items (§7) |
+| - | - | `TickShadows__6C_gameFUi` | PS2-only | an empty 8-byte body |
 
 The two STRUCTURAL rows cannot be raised: both PS2 bodies are `return 0`, so there is nothing
 to body-diff against (§7).
@@ -143,10 +143,12 @@ so the shadow **count** is the graphics setting, not the shadow resolution. A ca
 
 ## 7. PC vs PS2
 
-**Record type names.** `S_fake_shadow_buff` comes from
-`gif::vector<Q26C_game18S_fake_shadow_buff,8>` and `S_shadow_item` from
-`std::__vector_imp<…C_game13S_shadow_item…>::insert`. Two further PS2 record names in the same
-family have **no located PC structure**: `S_fake_shadow_hum` and `S_shadow_temp`.
+**Record type names.** The PC mesh table's element is `S_shadow_temp`: PS2 `C_mission::Init`
+constructs a `vector<S_shadow_temp>` at PS2 `C_game+0x2c4`, and PS2 `DoneIntern` releases it the
+way the PC `game_done_intern` releases `+0x284` — stride 8, the shadow object, then a heap name
+freed with `delete[]`. `S_shadow_item` comes from `std::__vector_imp<…C_game13S_shadow_item…>::insert`,
+and PS2 `Init` constructs two of those vectors, at `+0x2d0` and `+0x2dc`. `S_fake_shadow_buff` and
+`S_fake_shadow_hum` belong to the PS2-only person shadows below.
 
 **The mesh table is the difference.** The PS2 ELF contains **zero** occurrences of
 `ShadowMan`, `ShadowGirl` or `car_shadow`, and exactly one shadow asset string:
@@ -154,18 +156,26 @@ family have **no located PC structure**: `S_fake_shadow_hum` and `S_shadow_temp`
 everything. This is a content difference, not a port artifact — the code that would consume
 a table is present on both sides.
 
-**The PS2 pools its buffers; the PC preloads them.** PS2 `AddFakeShadow__6C_gameFP9I3D_frameP7C_actor`
-scans a stride-8 vector at `+0x1678` for a slot whose `+4` byte is 0, claims it, and scans a
-stride-`0xc` vector at `+0x1684` (`S_fake_shadow_hum`) for the caster. The PC has no
-equivalent of either vector: it keys on the mesh name instead of on a free slot.
-`AddFakeShadow` and `DelFakeShadow` therefore have **no PC twin located**, untagged — the PC
-design does not need a claim-a-slot step.
+**The PS2 has a second shadow system, for people only, with no PC counterpart.** PS2
+`AddFakeShadow__6C_gameFP9I3D_frameP7C_actor` claims a slot of the stride-8 `S_fake_shadow_buff`
+pool at `+0x1678` (a slot whose `+4` byte is 0) and records the caster in the stride-`0xc`
+`S_fake_shadow_hum` vector at `+0x1684`; `DelFakeShadow` releases it. `TickFakeShadows` then places
+each blob under its person every frame: within 20 units of the camera at the person's frame,
+farther out at the centre of a footprint that `cbFindMinMax` gathers from the type-10 frames below
+it. Every caller of `AddFakeShadow` / `DelFakeShadow` is a `C_human`, `C_player`,
+`C_traffic_element`, `C_traffic_generator` or script method, and each pairs the call with
+`AddFrameForShadow` / `DelFrameForShadow` in the next statement. The PC twins keep only
+`game_add_frame_for_shadow` / `game_del_frame_for_shadow`: PS2 `Death__7C_humanFv` runs
+`DelFrameForShadow`, `DelFakeShadow`, `PoseNullRotate`, `DeactivateColls` where `human_death` runs
+`game_del_frame_for_shadow`, `human_pose_null_rotate`, `human_deactivate_colls`, and
+`GameInit__7C_humanFv` lines up with `human_game_init` the same way. The four methods and both
+record types are PS2-only.
 
 **Field pairs**
 
 | PC | PS2 | what |
 |---|---|---|
-| `+0x284` | `+0x2c4` (count `+0x2c8`, ptr `+0x2cc`) | the `S_fake_shadow_buff` vector; matched through `DoneIntern` |
+| `+0x284` | `+0x2c4` (count `+0x2c8`, ptr `+0x2cc`) | the `S_shadow_temp` vector; matched through `DoneIntern` |
 | `+0x290` / `+0x2a0` | `+0x2d0` / `+0x2dc` | the two `S_shadow_item` vectors, stride `0x1c` on both |
 | `+0x3678` / `+0x367c` | `+0x1560` / `+0x1564` | the recycled-name free list |
 
@@ -173,13 +183,9 @@ design does not need a claim-a-slot step.
 `SetFrameForShadow` and `DelFrameForShadow` are both `return 0`, and `TickShadows` is empty. All
 three bodies were read, not inferred from size.
 
-**PS2 method without a PC counterpart:** `cbFindMinMax__Q26C_game19S_hlp_11688game_cpp`
-(6 arguments, computes a bounding min/max through an `S_matrix`) — possibly inlined into the PC's
-`game_add_frame_for_shadow` or the LOD pass; untagged.
-
-**`TickFakeShadows` is not body-diffed.** The PC's inlined LOD pass is bannered inside
-`game_tick` with that correspondence hedged. `AddFakeShadow`, `DelFakeShadow` and
-`AddFrameForShadow` were read.
+**No PS2 code sorts the shadow items.** Apart from the teardown's `clear`, `AddFrameForShadow` is
+the only PS2 code that touches the two `S_shadow_item` vectors, so the PC's distance-sorted LOD pass
+in `game_tick` has no PS2 counterpart.
 
 ---
 
@@ -211,9 +217,5 @@ builds, and the only use of that type anywhere in the PC decomp.
 
 | item | state |
 |---|---|
-| PS2 `AddFakeShadow` / `DelFakeShadow` | no PC twin located, untagged; settled by whether any PC path claims a buffer slot rather than naming a mesh |
-| PS2 `cbFindMinMax` | no PC counterpart identified; not tagged inlined |
-| PS2 `TickFakeShadows` | the PC's inlined LOD pass is not byte-diffed against it |
-| PS2 `S_shadow_temp` | a record name with no located use on either build |
 | in game: shadow-quality setting | expected to reduce the NUMBER of actors casting a shadow (nearest-first), not the resolution (§6); not observed |
 | in game: unmatched shadow-model name | a car whose `carindex.def` shadow model is not among the 43 meshes is expected to get no shadow (§6); not observed |

@@ -1,6 +1,6 @@
 # `pursuit_event_manager` — the chase driving system (`C_sledovacka`)
 
-**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-09-17 17:53 +0200
+**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`pursuit_event_`**. Class `C_sledovacka` (*sledovačka* = Czech "chase / tail").
 
@@ -139,14 +139,13 @@ car to its **top model level** (`car_set_model_level(count-1)`), which re-applie
 variant's CARINIT physics table (faster + better handling = "boosting"); `RemoveCar` reverts
 to level 0. Only cars with `> 1` model level can be boosted — the level count comes from the
 car's record in `tables/vehicles.bin` (14 cars carry a 2nd, boosted CARINIT block; not tied
-to model files — `police-system/artifacts/boosting.md` §3). This byte is what the LiveSplit
-autosplitter reads as `boostEnabled` (`0xE7D64, 0x18`). Full mechanism, toggle map, and
+to model files — `police-system/artifacts/boosting.md` §3). Full mechanism, toggle map, and
 boostable-car list in `police-system/artifacts/boosting.md`.
 
 ## 6. Cheat Engine
 
-- **Boost flag (`boostEnabled`):** 4-byte at `Game.exe+0xE7D64` → `+0x18`, i.e. absolute
-  `0x0064C6D8`. 1 = a chase is boosting, 0 = not.
+- **Boost flag:** 4-byte at `Game.exe+0xE7D64` → `+0x18`, i.e. absolute `0x0064C6D8`.
+  1 = a chase is boosting, 0 = not.
 - **Chase record N (only while a chase is active):**
   base `[[[0x0065115C]+0x24]+0x2B18 +0x14]`; record N at `base + N*0x44`.
   Useful fields: `+0x00` chase car ptr, `+0x0C` target ptr, `+0x24` mode (VoleMode, §8),
@@ -220,7 +219,8 @@ them at `entity_process_command` cases `0x100c`/`0x100d`/`0x100e`.
 `pursuit_event_save_game_get_size` / `_save` / `_load` are a closed triple. The chunk tag
 is **6**; each surviving record costs **0xb8 bytes** plus `0x70` per driver path node, and
 the header is 4 bytes. All three apply the identical five-clause survival guard — the car,
-the driver and both tracked actors must not be mid-teardown (`actor+0x65` clear) and the
+the driver and both tracked actors must not be excluded from the savegame (`actor+0x65` clear,
+`structs/actor.md` §1b) and the
 car's `+0x1c` must not be 2. `_load` wipes every live record through
 `pursuit_event_remove_vehicle` before rebuilding.
 

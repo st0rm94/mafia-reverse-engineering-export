@@ -1,6 +1,6 @@
 # `C_sound_table` — the `sounds.dat` sound bank
 
-**Created** 2026-09-04 08:51 +0200 · **Modified** 2026-09-17 13:46 +0200
+**Created** 2026-09-04 08:51 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`sound_table_`**. Hosted by the tail of the `tools.cpp` translation unit,
 `[0x0061cba0, 0x0061d820)`.
@@ -217,15 +217,15 @@ developer assert.
 
 ## 5. Slot 9 is a three-owner fold
 
-`GetSounds__13C_sound_tableFv` is `return this+0x10`, and MSVC's identical-COMDAT folding merged it
-onto `0x004253a0`, which also serves `C_actor::GetKind` (~317 calls) and `C_mission::GetScene`
-(29 calls).
+Slot 9 is `folded_get_dword_0x10` (`0x004253a0`), whose body is `return this+0x10`: MSVC's
+identical-COMDAT folding merged this class's slot-9 accessor onto the address that also serves
+`C_actor::GetKind` (~317 calls) and `C_mission::GetScene` (29 calls).
 
 **No callsite census can find this owner**: slot 9 is never called by name, so the function has zero
 `E8` references from this class and exactly one data reference — the vtable entry at `0x0063ef04`.
-The owner comes from comparing **both builds' vtable sequences** slot by slot. No `PS2 twin:` line is
-stamped on the folded symbol (it has three owners); the mapping lives in this table, in the fold's
-registry row and in an inline comment in its body.
+The owner comes from the vtable-sequence comparison in §6. No `PS2 twin:` line is stamped on the
+folded symbol (it has three owners); the mapping lives in the §2 table, in the fold's registry row
+and in an inline comment in its body.
 
 ---
 
@@ -266,6 +266,9 @@ mid-gameplay — but the caller set is not closed (§8).
   size accessor. All four are bannered in the decomp.
 * `TestConstructSound` is folded to a jump into `ConstructSound` on **both** builds. Its
   PS2 symbol is 8 bytes, which is a MIPS tail jump, not an empty stub.
+
+**Slot 9 (§5).** The PS2 `GetSounds__13C_sound_tableFv` is `return this+0x10`; comparing **both
+builds' vtable sequences** slot by slot pairs it with PC slot 9, `folded_get_dword_0x10`.
 
 ---
 

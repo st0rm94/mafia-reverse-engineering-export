@@ -1,6 +1,6 @@
-# The race and multiplayer session drivers — PS2 `multiloop.cpp`
+# The race and multiplayer session drivers
 
-**Created** 2026-08-27 20:16 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-08-27 20:16 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 This is **not a class.** It is a translation unit of **thirteen global free functions**
 that drive a game-mode session: the two race frame loops, the race runner, the two menu
@@ -24,8 +24,7 @@ names its class. Likewise the `crt_*` pair is scaffolding.
 
 Three independent measurements:
 
-1. **Symbol shape** — every located twin is mangled `__Fv` / `__FRUi` / `__FUiUiUiUi` /
-   `__Fb`: no class tag, `GLOBAL` binding (§5).
+1. **Symbol shape** — every located twin is a free function with no class tag (§5d).
 2. **Receiver census** — a census of the ECX value loaded before every callsite of nine of
    them finds **no consistent ECX**. The loads are leftovers: `mov ecx,1`,
    `mov ecx,[esp+0x24]`, `lea ecx,[eax-0x35]`, `mov ecx,[0x6f958c]`. Compare
@@ -34,8 +33,7 @@ Three independent measurements:
    through `g_racing`, `g_net_session` and `g_act_mission`.
 
 `race_run`'s callers do `lea ecx,[esp+8]` / `lea ecx,[esp+0x10]`. That is **not** a `this` —
-it is the `unsigned int&` out-parameter the PS2 mangling `__FRUi` declares, in which the
-function returns the next menu code.
+it is an `unsigned int&` out-parameter (§5d), in which the function returns the next menu code.
 
 ## 2. What it does — the two session shapes
 
@@ -155,6 +153,12 @@ implementation of the same beat*, which is why they have no PS2 twin rather than
 | `race_menu_run` case `0x2e` → `net_multiplayer_run` | absent | the PS2 build has no networking at all |
 | `race_run` branches into `race_net_load_sync` + `race_game_loop_net` | absent | same reason |
 | - | `ZpicenyPleaseWait`, `LSI_CdTrayCheck`, `LSI_TestOurCD`, `C_cache_base_block::Tick`, `C_silver_screen::Tick`, `PauseAllSounds`/`PlayAllSounds` | PS2-port-only calls inside `GameLoopSingle1` (CD tray, streaming cache, loading screen), not PC inlinings |
+
+### 5d. The symbol evidence for free functions
+
+Every located PS2 twin (§5a) is mangled `__Fv` / `__FRUi` / `__FUiUiUiUi` / `__Fb`: no class tag,
+`GLOBAL` binding. The `unsigned int&` out-parameter of `race_run` is the one the mangling
+`RunRacing__FRUi` declares.
 
 ## 6. Related
 

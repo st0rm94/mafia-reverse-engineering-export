@@ -1,6 +1,6 @@
 # `C_irenka` — the police spike strip (entity kind `0x1f`, PC prefix `spike_strip_`)
 
-**Created** 2026-08-14 09:10 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-08-14 09:10 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 This documents the PC build. All cross-build material is confined to §6.
 
@@ -39,8 +39,10 @@ It has no AI worth the name: `spike_strip_ai_tick` sets act-state 1 and returns.
 | `0x004ae8c0` | `spike_strip_game_init` | `GameInit__8C_irenkaFv` | CONFIRMED |
 | `0x004aeb70` | `spike_strip_game_done` | `GameDone__8C_irenkaFv` | CONFIRMED |
 | `0x004aebb0` | `spike_strip_deactivate` | `Deactivate__8C_irenkaFv` | CONFIRMED |
-| `0x004aebe0` | `spike_strip_activate` | - (PC-only) | CONFIRMED |
+| `0x004aebe0` | `spike_strip_activate` | - | CONFIRMED |
 | `0x004aeda0` | `spike_strip_test_segment_crossing` | `ZapichameSi__8C_irenkaFRC8S_vectorRC8S_vector` | CONFIRMED |
+
+`spike_strip_activate` is PC-only (§6).
 
 The remaining PS2 methods are stubs whose PC realisations are **shared** functions; a body shared
 by several classes has no single owner, so none of them carries a twin line:
@@ -69,9 +71,9 @@ body diff: **13** AI · **14** Update · **15** NetDirect · **16** sdd · **17*
 
 ## 3. `Init` is a fold owned by no class
 
-`actor_subclass_init_require_frame` (`0x004ae890`) is statement-identical to PS2's
-`Init__8C_irenkaFP9I3D_frame` (`if (!frame) return false; return C_actor::Init(frame) != 0;`) —
-but a scan of `.rdata` for the address as a pointer puts it at **slot 18 of six vtables**:
+`actor_subclass_init_require_frame` (`0x004ae890`) realises this class's `Init` at slot 18 (the
+body match is in §6) — but a scan of `.rdata` for the address as a pointer puts it at **slot 18 of
+six vtables**:
 `0x0063b7c0` (`C_airplane`), `0x0063c0d0` (`C_dog`), `0x0063c568` (this class), plus `0x0063ca58`,
 `0x0063cc98` and `0x0063cee0` (§7).
 
@@ -126,6 +128,8 @@ So it is named for the **family** and carries **no `PS2 twin:` line** — a docb
 
 * **Class name.** `C_irenka` — Czech *Irenka*, a developer's pet name; the police code calls the
   object an **Iris** (`FreeTempIris`, `S_road_block_iris`).
+* **`Init` (§3).** `actor_subclass_init_require_frame` is statement-identical to PS2's
+  `Init__8C_irenkaFP9I3D_frame` (`if (!frame) return false; return C_actor::Init(frame) != 0;`).
 * **Field skew.** PC `+0x68/+0x70/+0x74/+0xb8` ↔ PS2 `+0x70/+0xc0/+0xd0/+0x118`; PS2's
   dyn-coll block is `0x60` bytes where the PC's is `0x48`, so **do not rebase band-wise**.
   PS2 writes the kind at `+0x50`, the PC at `+0x10`.

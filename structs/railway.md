@@ -1,6 +1,6 @@
 # `C_railway` — the ambient rail-traffic system (entity kind 8)
 
-**Created** 2026-08-16 22:24 +0200 · **Modified** 2026-09-27 14:06 +0200
+**Created** 2026-08-16 22:24 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -102,7 +102,7 @@ shares one layout.
 | offset | meaning |
 |---|---|
 | `+0x04` | the passenger's `I3D_frame` |
-| `+0x08` | `C_animations_machine_de_luxe*` — 🔑 **the fifth owner of that class** |
+| `+0x08` | `C_animations_machine_de_luxe*` — a heap machine; `S_rail_human` is one of that class's six owners (`structs/anim_machine.md` §1) |
 | `+0x10` | last applied animation state |
 | `+0x14` | current state |
 | `+0x20` | animation-finished flag |
@@ -187,9 +187,7 @@ All four file-scope vectors have an MSVC static-init/atexit group in
 
 ## 4. Method coverage
 
-**127/127 PC starts named. 76/76 `C_railway` PS2 methods accounted**, plus
-`S_RailSeats` 11/11, `S_rail_human` 10/10, `rail_doors` 7/7, `rail_glass` 3/4,
-`rail_window` 2/3, `rail_entries` 2/2.
+**127/127 PC starts named.** The PS2 method accounting is in §6.
 
 **The frame-enumeration callbacks.** Four free functions are handed to the scene's frame
 enumerator (vtable `+0x34`). `railway_enumerate_scene_frames` passes two, both with filter
@@ -203,20 +201,6 @@ Four of its `copy_range_stride_0x10` calls are dead code: each sits behind `mov 
 cmp ecx,1; jae`, which subtracts a register from itself, so the "shift the tail" branch of the
 inlined `vector::insert(end(), 1, x)` never runs.
 
-The per-function PC↔PS2 twins are in the function registry, `Game-ghidra.exe.functions.md`.
-What is *not* a simple 1:1 is listed here:
-
-| PS2 method | status |
-|---|---|
-| `CheckDistance`, `GetCheckpoints`, `IsStopPoint`, `InRangeActivate`, `OutOfRangeDeactivate` | **inlined on PC** — proven positively, each is the only call missing at its mirrored position. Marked with `// ===== INLINED ON PC:` comments at those sites in the decomp |
-| `PreduceMovementCar` | **partly inlined**: only its swept-sphere kernel stayed out of line, as `railway_sweep_sphere_along_curve`. One source function, two PC symbols ⇒ STRUCTURAL |
-| `RestoreWindows` | folded into `rail_glass_game_done` — *not located* |
-| `Place(int, C_web_node*)`, `GeneratePersonTrafic`, `FreePersonTrafic`, `ReGenerate` | **not located as a group** ¹ |
-| `MemWrite`, `MemRead` | **present on PC** as the shared `entity_mem_write` / `entity_mem_read`, called ×14 each from the SaveGame pair on both builds |
-
-¹ `Place(node)`'s only PS2 caller is `GeneratePersonTrafic`, so the whole rider-generation band is
-absent from this cluster together (§5).
-
 ---
 
 ## 5. Open items
@@ -224,7 +208,8 @@ absent from this cluster together (§5).
 | item | state |
 |---|---|
 | 🥇 **`g_rail_clamp_candidates_*` has no writer** | Read back-to-front by `railway_clamp_movement_against_traffic`, its only consumer, and **no inserting writer is found** — so as read, that loop never runs. Its atexit group is also the only one of the four without a teardown guard bit. Not yet classed as dead code; a `.text` byte scan for the displacement is the next lever |
-| the rider-generation band | four PS2 methods (§4) absent as a unit; a second PC cluster may hold them |
+| the rider-generation band | four PS2 methods (§6) absent as a unit; a second PC cluster may hold them |
+| `RestoreWindows` | no distinct PC function. Its restore-all loop exists once on the PC, inside `rail_glass_game_done`, so a fold there is the likely explanation; not proven |
 | what the `S_RailSeats` row *category* means | `+0x2c` is matched against the caller's request and `-1` is the wildcard, but nothing traced says what the categories ARE |
 | the three sound slots | only slot 3 (the curve squeal) is pinned. Slots 1 and 2 are built by `railway_game_init` and released by `railway_on_act_state_changed`; no player is located for either |
 | `S_rail_human +0x18` | the panic-cause key `railway_do_panic` matches against; its value domain is untraced |
@@ -244,6 +229,22 @@ statement-identical caller acting as a callee oracle at a scale no order alignme
 reach. `railway_place_on_track` then repeated it one level down: its
 five-call tail is `FindBackPos, SpringProcess, FindBackPos, FindBackPos, SpringProcess`,
 matching PS2 `Place(i)` exactly.
+
+**Method accounting.** 76/76 `C_railway` PS2 methods accounted, plus `S_RailSeats` 11/11,
+`S_rail_human` 10/10, `rail_doors` 7/7, `rail_glass` 3/4, `rail_window` 2/3, `rail_entries` 2/2.
+The per-function PC↔PS2 twins are in the function registry, `Game-ghidra.exe.functions.md`.
+What is *not* a simple 1:1 is listed here:
+
+| PS2 method | status |
+|---|---|
+| `CheckDistance`, `GetCheckpoints`, `IsStopPoint`, `InRangeActivate`, `OutOfRangeDeactivate` | **inlined on PC** — proven positively, each is the only call missing at its mirrored position. Marked with `// ===== INLINED ON PC:` comments at those sites in the decomp |
+| `PreduceMovementCar` | **partly inlined**: only its swept-sphere kernel stayed out of line, as `railway_sweep_sphere_along_curve`. One source function, two PC symbols ⇒ STRUCTURAL |
+| `RestoreWindows` | **not located** (§5) |
+| `Place(int, C_web_node*)`, `GeneratePersonTrafic`, `FreePersonTrafic`, `ReGenerate` | **not located as a group** ¹ |
+| `MemWrite`, `MemRead` | **present on PC** as the shared `entity_mem_write` / `entity_mem_read`, called ×14 each from the SaveGame pair on both builds |
+
+¹ `Place(node)`'s only PS2 caller is `GeneratePersonTrafic`, so the whole rider-generation band is
+absent from this cluster together (§5).
 
 **Field deltas measured** (do NOT extrapolate — this class is not a uniform shift):
 
@@ -280,5 +281,5 @@ on the PC.
 
 **Related:** `structs/entity.md` §1 (kind 8) and §3 (`C_railway` vs `C_wagon`) ·
 `structs/seagull_flock.md` (the TU immediately after this one) ·
-`structs/anim_machine.md` (`S_rail_human` is the fifth owner) ·
+`structs/anim_machine.md` (`S_rail_human` is one of its six owners) ·
 `structs/railway_switch.md` (the turnout).

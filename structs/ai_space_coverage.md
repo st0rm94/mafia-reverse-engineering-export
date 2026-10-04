@@ -1,9 +1,9 @@
 # `ai_space_coverage` — the 8-direction "where should I go next" scorer
 
-**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-28 19:37 +0200
+**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-09-29 19:00 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c`, cross-checked against the non-stripped PS2 ELF
-(`SLUS_206.71`). This documents the PC build; cross-build material is confined to §5.
+(`SLUS_206.71`). This documents the PC build; cross-build material is confined to §4.
 
 An `ai_space_coverage` answers one question for one AI decision: **"of the eight compass
 directions, which one should I take?"** It combines three inputs into a per-direction score —
@@ -33,7 +33,7 @@ attractive. It is a novelty accumulator, not a pathfinder.
 | PC prefix | `ai_space_coverage_*` |
 | PS2 methods | 4 — **4/4 mapped**, every row body-diffed (§2) |
 | PC cluster | `[0x00439f70, 0x0043a150)` — four consecutive functions, contiguous |
-| Singleton | none — the object is caller-owned and reached through a register at every callsite (§1b) |
+| Owner | the 0x84-byte payload of a `_hostile_coverage` action (type `0x24`), at payload offset 0 (§1b) |
 
 **Confidence tags:** **[H]** body-read on both builds · **[M]** inferred · **[U]** not observed.
 
@@ -75,15 +75,28 @@ third parameter takes **one float**, the computed threshold, and tolerates NULL.
 The out-parameter is decided by these four lines at the *end* of a 1280-byte function, not by its
 loop.
 
-### 1b. Ownership [U]
+### 1b. Ownership [H]
 
-At all 8 callsites the receiver is loaded as `mov ecx, <reg>`, so the callsite alone does not name
-an owner. The disassembly at the `ai_space_coverage_compute` callsite in the `0x00430xxx` caller
-shows that the receiver register also carries fields at `+0x68`, `+0x6c`, `+0x70` (another
-`0x29a` sentinel) and `+0x74`, and that the enclosing action object stores it at `action+0x20`. So
-the coverage object is **embedded at offset 0 of a larger object** that the action holds a pointer
-to. Because this object ends at `0x5c`, `+0x68`…`+0x74` are fields of that larger object. The
-enclosing type is unidentified (§4).
+The object is the first member of the **payload of a `_hostile_coverage` action** (type `0x24`,
+`structs/ai_action_manager.md`). `ai_action_new_hostile_coverage` allocates the 0x24-byte action
+record and a separate 0x84-byte payload, stores the payload size `0x84` at action `+0x14` and the
+payload pointer at action `+0x20`, and runs `ai_space_coverage_compute` on payload `+0x00`. Only two
+functions reach the class: that factory (`compute` ×1, `prefer_dir` ×2, one bias per smelled hostile)
+and `entity_action_tick` (`compute`, `tick`, `get_look_dir`, `prefer_dir` ×2), 8 callsites in all,
+each with the payload in the receiver register.
+
+The payload fields after the coverage object, as the factory seeds them:
+
+| payload offset | seeded with |
+|---|---|
+| `+0x00..+0x5b` | the `ai_space_coverage` object |
+| `+0x5c` / `+0x60` / `+0x64` | 0 |
+| `+0x68` | mission clock + 500 ms |
+| `+0x6c` | the factory's second argument (`uint`) |
+| `+0x70` | `0x29a` (the project-wide "none") |
+| `+0x74` | 4 |
+| `+0x7c` | the acting person |
+| `+0x80` | the `vector<C_actor*>` of hostiles |
 
 ## 2. Method family — PC ↔ PS2 (4 of 4)
 
@@ -96,7 +109,7 @@ Ordered by **PC VA**, PC name first. **Every row is body-diffed on both builds.*
 | 0x0043a0d0 | `ai_space_coverage_get_look_dir` | `GetLook__17ai_space_coverageFR8S_vector` | CONFIRMED | Reads out the winner. Same scan (seed −1.0, strict `>`, lowest index wins ties) and table lookup |
 | 0x0043a120 | `ai_space_coverage_prefer_dir` | `Preffer__17ai_space_coverageFR8S_vectorfb` | CONFIRMED | Writes/accumulates a bias. The `(vec3&, float, bool)` push order identifies the class ² |
 
-¹ Size ratios for all four rows are in §5.
+¹ Size ratios for all four rows are in §4.
 ² At the `prefer_dir` callsite the argument push order is `push 1` (a bool), then a float, then a
 `lea` of a vec3 — `(S_vector&, float, bool)`, which matches `FR8S_vectorfb` and no other method in
 the family. The enclosing caller writes `0x24` as the action type, the `_hostile_coverage` action.
@@ -124,7 +137,7 @@ tends to move *decisively* rather than by one step.
 ⚠️ **Default answer:** a freshly computed object that has never been ticked or biased has all
 scores at 0 against the `−1.0` seed, so `get_look_dir` returns **direction 0** — the `+Z` axis.
 
-## 5. PC vs PS2
+## 4. PC vs PS2
 
 - **Field offsets differ by band**, because the PS2 anchor is a 4-float `S_vector` where PC uses
   3 floats:
@@ -165,19 +178,15 @@ scores at 0 against the `−1.0` seed, so `get_look_dir` returns **direction 0**
 - **`get_look_dir` reads a SECOND COPY of the normalised direction table** at PC `0x006551a8`
   where PS2 has the single `Dir8TableN`. See `structs/ai_check.md` §3a.
 - **No PS2-only methods** and no PC-only functions in the cluster.
+- **The owning payload** is 0x90 bytes on PS2 (`NewHostileCoverage` allocates `__nw__FUi(0x90)`)
+  against the PC's 0x84, the usual 4-float `S_vector` padding.
 - **Naming.** `GetLook` returns a direction, so the PC name keeps the PS2 verb and adds `_dir`.
   `Preffer` is a PS2 misspelling of "prefer", rendered `prefer_dir`. The sibling
   `PrefferMode__14ai_fight_modesFUifb` — same verb, same `(id, float, bool)` shape — is rendered
   `ai_fight_modes_set_mode_score`, so the two renderings of the same verb differ.
 
-## 6. Cross-references
+## 5. Cross-references
 
 - `structs/ai_check.md` — `ai_check_builder`, the space probe this class delegates to, and §3a
   for the duplicated direction table.
 - `structs/ai_action_manager.md` — action type `0x24` `_hostile_coverage`, the consumer.
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| what owns the object (§1b) | the larger structure carrying `+0x68`..`+0x74` is unidentified; the functions containing the two `compute` callsites (`0x00422989`, `0x00430abe`) are the way in |

@@ -1,6 +1,6 @@
 # `C_traffic_car` — entity kind `0xc`, the ambient-traffic MANAGER
 
-**Created** 2026-08-17 15:33 +0200 · **Modified** 2026-09-23 15:55 +0200
+**Created** 2026-08-17 15:33 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -132,7 +132,7 @@ traffic_car_ai
   ├─ traffic_car_activate_elements   (0x004f76d0, §6)
   │    ├─ traffic_car_get_next_pos_info  ── chooses the next node + lane
   │    │    └─ traffic_car_find_last_crossing
-  │    │       (FindNodesIndex is INLINED here — marked in the decomp)
+  │    │       (a node-index lookup is INLINED here — marked in the decomp, §8)
   │    └─ traffic_car_prepare_next_direction   (also inlined a second time here)
   ├─ traffic_car_deactivate_element  ×3
   ├─ traffic_car_lock_crossing       ×2
@@ -148,8 +148,8 @@ traffic_car_ai
   into `traffic_car_activate_elements` (whose body makes two `vec2_signed_angle_diff` calls where
   the out-of-line copy makes one) and kept the out-of-line body for `traffic_car_ai`. That is why
   the out-of-line copy's caller is `traffic_car_ai`.
-* **`FindNodesIndex` is inlined into `traffic_car_get_next_pos_info`**, marked in the decomp with a
-  `// ===== INLINED ON PC:` banner (call-count proof in §8).
+* **A node-index lookup is inlined into `traffic_car_get_next_pos_info`**, marked in the decomp
+  with a `// ===== INLINED ON PC:` banner (the inlined method and the call-count proof are in §8).
 
 ## 6. `traffic_car_activate_elements` — the activation pass
 

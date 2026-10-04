@@ -1,6 +1,6 @@
 # The ambient pedestrian crowd — `C_traffic_element` + `C_traffic_generator` + `C_don_ocas`
 
-**Created** 2026-08-14 17:51 +0200 · **Modified** 2026-09-24 12:22 +0200
+**Created** 2026-08-14 17:51 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 | | |
 |---|---|
@@ -125,7 +125,7 @@ unproven · `-` no reader located.
 | `+0x7c` | pedestrian arena base (stride `0x200`) | H | `pedestrian_manager_game_init` allocates |
 | `+0x80` | live pedestrian count | H | budget comparison in `_ai` |
 | `+0x84` | arena slot count | H | sum of the per-name spawn counts |
-| `+0x88`/`+0x8c`/`+0x90`/`+0x94` | designer floats `100.0` / `50.0` / `90.0` / `50.0` | H | saved; individual meanings unproven |
+| `+0x88`/`+0x8c`/`+0x90`/`+0x94` | designer floats `100.0` / `50.0` / `90.0` / `50.0` | H | saved (§8) |
 | `+0x98` | model-name array (`char*`, each `0x11` bytes) | H | designer table |
 | `+0x9c` | model-name count | H | idem |
 | `+0xa0` | per-name spawn-count array (dwords) | H | idem |
@@ -138,16 +138,16 @@ unproven · `-` no reader located.
 **Savegame record:** `0xbc` bytes per live pedestrian, plus a 10-byte header
 (`pedestrian_manager_save_game_get_size`).
 
-### 3a. The taxi model tables — the same list on both builds, PS2 has two more
+### 3a. The taxi model table
 
 `pedestrian_manager_player_in_taxi` sets `g_traffic_player_in_taxi` when the player's
-current car's **model name** (`car+0x20cc`; PS2 `car+0x240c` — an already-proven field
-pair) case-insensitively matches one of a hard-coded table of model names. The flag's
-only reader is `pedestrian_manager_tick_pedestrians`, `&&`-ed with
-`g_traffic_taxi_driver_enabled`, and it is what allows a passenger to be generated.
+current car's **model name** (`car+0x20cc`) case-insensitively matches one of a
+hard-coded table of model names. The flag's only reader is
+`pedestrian_manager_tick_pedestrians`, `&&`-ed with `g_traffic_taxi_driver_enabled`, and
+it is what allows a passenger to be generated.
 
-Both tables were resolved from the binaries (PC `.data` `0x0064c060..0x0064c0c0`;
-PS2 pointer table at `0x00495b30`) and they are the same list in the same order:
+The PC table is `.data` `0x0064c060..0x0064c0c0`, walked **downwards** from the last
+entry; the PS2 table holds the same list in the same order plus two entries (§7c):
 
 | # | PC (9 entries) | PS2 (11 entries) |
 |---|---|---|
@@ -163,16 +163,8 @@ PS2 pointer table at `0x00495b30`) and they are the same list in the same order:
 | 10 | - | **`hotrodp3`** |
 | 11 | - | **`thunderbird`** |
 
-Both loops walk the table **downwards** from the last entry. Identical models in
-identical order with two extra PS2 rows is as strong as a shared-magic-constant match
-gets, and it is what grades the `PlayerInTaxi` twin **CONFIRMED**.
-
 ⚠️ The list is **not** "the taxis": it is the set of models the passenger generator will
-accept. Six of the nine are not taxis at all. What the hot-rods and `blackdragon` are
-doing in it is **not established** — do not infer a reason from the name.
-
-🎮 **A checkable gameplay difference:** on PS2 a `hotrodp3` or a `thunderbird` counts for
-the Free-Ride passenger generator and on PC neither does. One in-game test settles it.
+accept. Six of the nine are not taxis at all (§8).
 
 ## 4. `C_don_ocas` — the crowd's stand-in actor (PC, entity kind `0x13`)
 
@@ -271,10 +263,14 @@ switch.
 | `0x004b5790` | `pedestrian_manager_add_free_person_from_car` | `AddFreePersonFromCar__19C_traffic_generatorF…` | CONFIRMED |
 | `0x004b58c0` | `pedestrian_manager_play_pedestrian_scream` | `ElementNewScream__19C_traffic_generatorFiiR8S_vectorffff` | CONFIRMED |
 | `0x004b5ab0` | `pedestrian_manager_release_pedestrians_from_car` | `VyfunOdTeMasiny__19C_traffic_generatorFP5C_car` | CONFIRMED |
-| - | - | `Init` (32 B, tail-calls the base) | the PC vtable slot points straight at `actor_init` |
-| - | - | `IsPossibleColl` · `Collision` · `Hit` · `Update` · `NetDirect` · `DetachMesh` (8 B each) | folded onto shared PC stubs |
-| - | - | `ChangeSceneInit` · `ChangeSceneDone` | PS2-port-only (city streaming) |
-| - | - | `InvalidateActor` | not located on the PC (§8) |
+| - | - | `Init` (32 B, tail-calls the base) | PS2-ONLY ¹ |
+| - | - | `IsPossibleColl` · `Collision` · `Hit` · `Update` · `NetDirect` · `DetachMesh` (8 B each) | FOLDED ² |
+| - | - | `ChangeSceneInit` · `ChangeSceneDone` | PS2-ONLY ³ |
+| - | - | `InvalidateActor` | not located |
+
+¹ The PC vtable slot points straight at `actor_init`.
+² Folded onto shared PC stubs.
+³ The city-streaming pair (§7).
 
 ### 6c. `C_traffic_element` — 22/26
 
@@ -302,15 +298,20 @@ switch.
 | `0x004be0d0` | `pedestrian_greet_player` | `Karle_hoj__17C_traffic_elementFv` | CONFIRMED |
 | `0x004be250` | `pedestrian_drop_umbrella` | `DropUmbrella__17C_traffic_elementFv` | CONFIRMED |
 | `0x004be390` | `pedestrian_spawn_gang_on_hit` | `CreateMafianos__17C_traffic_elementF10E_hit_type…` | CONFIRMED |
-| - | - | `__dt__17C_traffic_elementFv` (68 B) | trivial; no PC start in the gap |
-| - | - | `HitFall` · `HitGun` · `HitStroke` (file-local) | most likely inlined into `pedestrian_hit` (§8) |
+| - | - | `__dt__17C_traffic_elementFv` (68 B) | not located ¹ |
+| - | - | `HitFall` · `HitGun` · `HitStroke` (file-local) | not located ² |
+
+¹ Trivial; no PC start in the gap.
+² Most likely inlined into `pedestrian_hit` (§8).
 
 ### 6d. Foreign helpers emitted inside the TU
 
 `vec2_length`, `vec2_dot` (shared math) and the `C_chunk` tail — `chunk_vector_allocate`
 (vtable `0x0063c828` slot 0), `chunk_ctor`, `chunk_open_file`
-(`OpenFile__7C_chunkFPCcb`), `chunk_close` (`Close__7C_chunkFv`). They land here because
-`pedestrian_wave_at_taxi` builds a stack `C_chunk` to read `system\taxi_pas.dat`.
+(`OpenFile__7C_chunkFPCcb`) and `chunk_dtor`, the destructor (`C_chunk::Close` itself,
+`chunk_close`, sits in the `C_recorder` TU). They land here because `pedestrian_wave_at_taxi`
+builds a stack `C_chunk` to read `system\taxi_pas.dat`, the taxi passenger's script template
+(`structs/chunk.md` §4c).
 
 ## 7. PC vs PS2
 
@@ -354,8 +355,19 @@ direction (`structs/pumper.md`).
 ⚠️ It also says something about the class: `C_pumper` is a `C_actor` subclass with its
 own vtable and its own kind byte, and it STILL routes impacts through the crowd proxy.
 So the proxy is not only the pedestrians' stand-in — it is the shared impact handler
-for human-shaped actors that do not implement one. Whether any third class does the
-same is **not** established.
+for human-shaped actors that do not implement one (§8).
+
+### 7c. The taxi model table on PS2
+
+PS2 `car+0x240c` is the twin of the PC model-name field `car+0x20cc` (§3a). The PS2
+pointer table at `0x00495b30` holds the PC's nine entries in the same order plus
+**`hotrodp3`** and **`thunderbird`**, and its loop also walks the table downwards from the
+last entry. Identical models in identical order with two extra PS2 rows is as strong as a
+shared-magic-constant match gets, and it is what grades the `PlayerInTaxi` twin
+**CONFIRMED**.
+
+🎮 On PS2 a `hotrodp3` or a `thunderbird` counts for the Free-Ride passenger generator and
+on PC neither does (§8).
 
 ## 8. Open items
 
@@ -368,5 +380,7 @@ same is **not** established.
 | `+0xc4..+0x10c` | 0x12 dwords the ctor zeroes with no located reader |
 | `+0x190` = `3000` | written on the witness path; no located reader |
 | the `'SNGM'` / `'SMMR'` child-frame magic | `pedestrian_create_model` stores the matching child frame at `+0xb8`; what it selects is unproven |
-| `system\taxi_pas.dat` | the passenger-profile table `pedestrian_wave_at_taxi` reads; format undocumented |
 | in game | does `g_traffic_scream_budget` audibly cap crowd screams during a shoot-out? A grenade in a busy street should hit the `> 100` refusal |
+| the taxi model table | why the hot-rods and `blackdragon` are among the models the passenger generator accepts is not established (§3a) |
+| in game | does a `hotrodp3` or a `thunderbird` generate Free-Ride taxi passengers on PS2 and not on PC (§7c)? One in-game test settles it |
+| the crowd proxy as impact handler | `C_pumper` routes impacts through `C_don_ocas` (§7b); whether any third class does the same is not established |

@@ -1,6 +1,6 @@
 # `ai_wayfind` — the route planner (checkpoint-based wayfinding)
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-28 19:40 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-10-04 20:16 +0200
 
 PC prefix **`ai_wayfind_*`**.
 
@@ -8,7 +8,7 @@ PC prefix **`ai_wayfind_*`**.
 |---|---|
 | PC singleton | **`0x00655224`**, a member of the `ai_manager` root at `ai_manager+0x0c` |
 | PC cluster | `[0x00403ee0, 0x0040f760)` — shared with `ai_path`, one PS2 translation unit |
-| PS2 class | `ai_wayfind`, 19 methods, **18 mapped**, all CONFIRMED by body-diff (§2) |
+| PS2 class | `ai_wayfind`, 19 methods, **18 mapped**, all CONFIRMED by body-diff; `isInBound` has no PC counterpart (§4) |
 | Route strategies | 6, all mapped (§3a) |
 | Route-cost callbacks | 5, all named (§3b) |
 
@@ -28,10 +28,9 @@ Confidence tags: **[H]** body-read on both builds · **[M]** inferred · **[U]**
 
 ## 1. Singleton layout (PC offsets from `0x00655224`)
 
-The base address is byte-solid. `mov ecx, 0x00655224` appears at 34 of 35 callsites of
-`ai_wayfind_build_optimal_path`, and a receiver probe that reads the ECX write preceding each
-reference finds the same constant at all 43 references of the two checkpoint-container accessors
-(29 set, 14 clear). Every absolute `_DAT_006552xx` address observed in the strategy bodies resolves
+The base address is byte-solid. The ECX write preceding each call is `mov ecx, 0x00655224` at all
+35 callsites of `ai_wayfind_build_optimal_path` and at all 32 of the two checkpoint-container
+accessors (22 set, 10 clear). Every absolute `_DAT_006552xx` address observed in the strategy bodies resolves
 to a distinct `this+N` below, with no collision — see §1a.
 
 ```c
@@ -42,15 +41,24 @@ typedef struct ai_wayfind {                  // singleton at 0x00655224
     /* +0x18 */ float      cb_direction[3];  // [H] normalised; the 1e-08 / +-1.0-axis ladder
     /* +0x24 */ float      cb_result[3];     // [H] written BY the goal callback
                                              //     ai_wayfind_cb_flee_goal_beyond_radius
+    /* +0x30 */ float      cb_goal_dist_sq;  // [H] directed v3: max(dist^2, param), a floor;
+                                             //     read by ai_wayfind_cb_forward_edge_cost
+    /* +0x34 */ uint32_t   _unused_34;       // [H] never accessed: no absolute reference to
+                                             //     0x00655258, no this-relative access
     /* +0x38 */ float      cb_range;         // [H] flee: radius^2 clamped at 400.0 (= 20 units);
                                              //     directed: the raw float, unclamped
     /* +0x3c */ int32_t    cb_forward_mode;  // [H] 0/1/2, read by both forward callbacks
     /* +0x40 */ uint32_t   cb_target_node;   // [H] v3: the target's cached node; -1 otherwise
     /* +0x44 */ uint32_t   cb_target_next;   // [H] v3: the target's alternate node; -1 otherwise
-    /* +0x48 */ uint8_t    cb_field_48;      // [H] stored 0 by v2 and v3 before the search; no reader
-    /* +0x4c */ std_vector route;            // [H] the class's own std::vector<uint> of node
-                                             //     indices: allocator byte +0x4c, begin +0x50,
-                                             //     end +0x54, cap +0x58; count = (end-begin) >> 2.
+    /* +0x48 */ uint8_t    cb_field_48;      // [H] stored 0 by v2 and v3 before the search and
+                                             //     never read, on either build: write-only
+    /* +0x4c */ std_vector route;            // [H] the ROUTE: std::vector<uint> of node indices,
+                                             //     allocator byte +0x4c, begin +0x50, end +0x54,
+                                             //     cap +0x58; count = (end-begin) >> 2. Every
+                                             //     strategy clears it and passes it as the OUTPUT
+                                             //     of its web-path search; build_optimal_path
+                                             //     consumes it. Strategy 6's candidate flood goes
+                                             //     to a caller-local vector, not here.
                                              //     An empty list (+0x50 == 0) makes
                                              //     ai_wayfind_build_optimal_path free the fresh
                                              //     ai_path and return NULL. The ONLY allocation
@@ -63,15 +71,18 @@ typedef struct ai_wayfind {                  // singleton at 0x00655224
                                              //     - four callers write it by absolute address.
                                              //     The 0x10 stride is a `blocked_con` record, from
                                              //     the PS2 type reserve__gif::vector<blocked_con,2>;
-                                             //     installers seen so far: entity_script_tick
-                                             //     (C_entity+0x1198), dog_replan_path and
+                                             //     installers: entity_action_tick through
+                                             //     ai_wayfind_set_checkpoint_container (22 calls,
+                                             //     C_entity+0x1198; 10 clears); by absolute
+                                             //     address entity_script_tick (C_entity+0x1198),
+                                             //     dog_replan_path and
                                              //     dog_set_destination_and_plan (C_dog+0x2fc)
     /* +0x60 */ float      start_pos[3];     // [H] written by ai_wayfind_resolve_start_node
     /* +0x6c */ float      end_pos[3];       // [H] written by ai_wayfind_resolve_end_node
     /* +0x78 */ uint32_t   status;           // [H] bit 0 = start resolve failed, bit 1 = end
     /* +0x7c */ uint32_t   start_node;       // [H] node index, 0xffffffff = unresolved
     /* +0x80 */ uint32_t   end_node;         // [H] node index, 0xffffffff = unresolved
-} ai_wayfind;
+} ai_wayfind;                                // 0x84 bytes; police_board follows at root+0x90
 ```
 
 The node indices in `route` index the `C_web_path` node array (the body multiplies them by the node
@@ -85,7 +96,7 @@ the root: `structs/ai_manager.md`.
 
 **Two constant up-vectors sit just below this object and are NOT part of it** —
 `g_vec_up_00655198_*` and `g_vec_up_00655208_*`, each a separately static-initialised `(0, 1, 0)`
-(`crt_init_vec_up_00655198` / `..._00655208`). The first is the cross-product axis of the
+(`vec_up_00655198_static_init` / `vec_up_00655208_static_init`). The first is the cross-product axis of the
 `ai_path` corridor tests. Do not fold them into the singleton or into each other.
 
 ### 1a. Why the object has TWO copies of the query geometry
@@ -153,12 +164,12 @@ Ordered by **PC VA**, PC name first. Every row body-diffed on both builds.
 | `0x004072c0` | `ai_wayfind_plan_search_route` | `FindWaySEARCH__10ai_wayfindFP15ai_check_searchUiUib` (`0x0035d140`) | CONFIRMED | **Strategy 6/6.** Start node only, then flood the web via `ai_wayfind_score_and_add_checkpoint` and route with the **plain** search — that is what separates it from strategies 3–5. Arity 4↔4 |
 | `0x00407620` | `ai_wayfind_test_corner_hide_side` | `hasCornerVisHide__10ai_wayfindFP13ai_seg_cornerR8S_vectorR8S_vectorR8S_vectorPUibf` (`0x0035d4c0`) | CONFIRMED | Corner-usability predicate that also writes the 0/1 side selector. Shared magic `9.0`, `1.25`, `1e-08`; three signed-2D-angle calls; LOS test. Arity 7↔7 |
 | `0x0040d4e0` | `ai_wayfind_find_nearest_hide_corner` | `FindCORNERNEAR__10ai_wayfindFR8S_vectorR8S_vectorP19ai_corner_hide_info` (`0x00366360`) | CONFIRMED | Scans the map's segment clusters for cover corners, tests each with `ai_wayfind_test_corner_hide_side` and fills the caller's `ai_corner_hide_info`. The helper behind strategy 2. Callee set exact incl. `hasCornerVisHide` ×1 ↔ the confirmed anchor ×1; 3 args ↔ 3 |
-| `0x0040d700` | `ai_wayfind_score_and_add_checkpoint` | `WeightCheckpoints__10ai_wayfindFP15ai_check_search…UiUiUiUi` (`0x00366750`) | CONFIRMED | The flood-fill step of strategy 6: dedup-guard, append to the node vector, then gate on filter mask / start radius² / target radius² / forward-facing. Arity 6↔6, ratio 1.40. Free callee-harvest |
+| `0x0040d700` | `ai_wayfind_score_and_add_checkpoint` | `WeightCheckpoints__10ai_wayfindFP15ai_check_search…UiUiUiUi` (`0x00366750`) | CONFIRMED | The flood-fill step of strategy 6: dedup-guard, append to the node vector, then gate on filter mask (tested against the node's `+0x0c` category) / start radius² / target radius² / forward-facing, and weight the node by the two nibbles of its `+0x16` descriptor byte (`structs/ai_check.md` §2b). Arity 6↔6, ratio 1.40. Free callee-harvest |
 | `0x0040dc10` | `ai_wayfind_compute_2d_line_intersection` | `Compute2DIntersection__10ai_wayfindFP9S_vector2×5` (`0x00366ec0`) | CONFIRMED | Statement-for-statement 2-D line/line intersection. Every param indexed `[0]`/`[1]` only ⇒ five `S_vector2*`. PC's `0x322bcc77` **is** `1e-08` as a float. Arity 5↔5, ratio 1.31 |
-| `0x0040dc90` | `ai_wayfind_compute_node_left_right_gate` | `GetLR__10ai_wayfindF…P12ai_path_nodefff` (`0x00366f70`) | CONFIRMED | Builds the left/right gate pair around a path node — the pair a normal waypoint stores at record `+0x00`/`+0x0c`. `Compute2DIntersection` ×2 + `AngleTo2` ×1 exact; shared `0.707`, `1.2`, `0.5`×6. Arity 7↔7, ratio 1.14. The "gate" noun is inferred: the 3008 B body was fingerprinted, not statement-read |
+| `0x0040dc90` | `ai_wayfind_compute_node_left_right_gate` | `GetLR__10ai_wayfindF…P12ai_path_nodefff` (`0x00366f70`) | CONFIRMED | Builds the left/right gate pair around a path node — the pair a normal waypoint stores at record `+0x00`/`+0x0c`. `Compute2DIntersection` ×2 + `AngleTo2` ×1 exact; shared `0.707`, `1.2`, `0.5`×6. Arity 7↔7, ratio 1.14 (§6) |
 | `0x0040e850` | `ai_wayfind_compute_nearest_point_on_segment` | `ComputeNearestPoint__10ai_wayfindF…ff` (`0x00367ce0`) | CONFIRMED | Projects a point onto an X/Z segment, lerps two offsets by the projection ratio, steps perpendicular via an identical sign cascade; Y forced to 0. Arity 6↔6, ratio 0.86 — below band |
 
-The one unmapped PS2 method is **`isInBound`** (260 B) — an open hunt, §6.
+The one unmapped PS2 method is **`isInBound`** (260 B): the PC build has no code that would call it (§4).
 
 ### 2a. PC-only members
 
@@ -172,7 +183,8 @@ an accessor or a destructor.
 | `0x004256f0` | `ai_wayfind_clear_checkpoint_container` | - | one-line accessor: releases `+0x5c` |
 | `0x00443840` | `ai_wayfind_dtor` | - | inlined into `__dt__10ai_managerFv`; `operator_delete` on the buffer at `+0x50`, then zeroes `+0x50`/`+0x54`/`+0x58` |
 
-The accessor usage shape comes from `entity_action_tick` case 0:
+Both accessors are called only from `entity_action_tick` (22 set, 10 clear). The usage shape, from
+its case 0:
 **set(`entity+0x1198`) → `ai_wayfind_plan_shortest_route` → clear()** — the caller installs its own
 blocked-connection list into the planner for the duration of one plan, then releases it.
 
@@ -235,28 +247,51 @@ behaviour.
 - **The tail of the cluster is only half forced.** `ai_wayfind_score_and_add_checkpoint`
   (PS2 rank 33) sits inside it and splits it: the sub-gap **below** that anchor is a forced 18↔18,
   while the sub-gap **above** it is genuinely non-forced (23 PC starts vs 11 PS2 methods, two of
-  them PS2-only). Anything still open up there needs callee-harvest, never interpolation.
+  them PS2-only).
 - **PS2-only, near-certain:** `ai_path`'s class-specific `operator new` / `operator delete` (pool
   allocation via the `ai_spageman` family) — PC uses the global `operator_new` here.
-- **The singleton's PS2 base is `0x005090b0`** [M]. Inferred, not probed: `FindStartCheckpoint`
-  writes `this+0x00`, `FindEndCheckpoint` writes `this+0x10`, and `FindWayRUNAWAY_V1` /
-  `FindWayFORWARD_V2` write the absolute globals `DAT_005090b0` / `DAT_005090c0` respectively — the
-  same two fields. `GetPosition` writes `this+0x90`/`+0x94` ↔ PC `+0x78`/`+0x7c`, giving the class
-  rebase delta of **`0x18`** for the tail band.
+- **The singleton's PS2 base is `0x00509090`** [H]: all 48 PS2 calls of `ai_wayfind` methods pass
+  `this = 0x509090`, the `ai_manager` root (`0x509080`) `+0x10`. Both builds hold the same fields,
+  including the TWO copies of the query geometry; PS2 puts the resolvers' copy first:
+
+  | field | PC | PS2 |
+  |---|---|---|
+  | resolver start / end position | `+0x60` / `+0x6c` | `+0x00` / `+0x10` |
+  | `cb_start` / `cb_end` / `cb_dir` / `cb_result` | `+0x00` / `+0x0c` / `+0x18` / `+0x24` | `+0x20` / `+0x30` / `+0x40` / `+0x50` |
+  | `cb_goal_dist_sq` / never accessed / `cb_radius_sq` | `+0x30` / `+0x34` / `+0x38` | `+0x60` / `+0x64` / `+0x68` |
+  | `cb_forward_mode` / target nodes / write-only byte | `+0x3c` / `+0x40`,`+0x44` / `+0x48` | `+0x6c` / `+0x70`,`+0x74` / `+0x78` |
+  | the route vector | `+0x4c` | `+0x80` |
+  | the `blocked_con` list pointer | `+0x5c` | `+0x8c` |
+  | status / start node / end node | `+0x78` / `+0x7c` / `+0x80` | `+0x90` / `+0x94` / `+0x98` |
+
+  The PS2 rows are read from `FindStartCheckpoint` (writes `+0x00`, `+0x94`, reads `+0x8c`),
+  `FindEndCheckpoint` (`+0x10`, `+0x98`), `GetPosition` (`+0x90`, `+0x94`), `FindWayRUNAWAY_V1`
+  (`0x5090b0`, `0x5090d0`, `0x5090f8`, `0x5090e0`), `FindPath`'s route argument `+0x80` and the
+  `C_entity` / `C_dog` writers of `0x50911c`; `0x5090f4` is referenced nowhere. The tail band
+  rebases by a constant **`0x18`**; the rest does not, so map by the table.
 - **The callback publication block spacing differs by exactly the `S_vector` padding.** PS2 vectors
   are 4 floats (16 B), PC's are 3 (12 B), so the block strides `b0 / c0 / d0` on PS2 against
-  `224 / 230 / 23c` on PC. That the deltas shrink by 4 per successive vector is an independent
-  cross-check on the whole block and on the base addresses.
-- **A real factoring difference:** on PS2 the resolvers write the SAME fields the callbacks read
-  (`this+0x00` / `this+0x10`); on PC the resolvers keep their own copy at `this+0x60` / `this+0x6c`
-  and the strategies publish a second copy into the callback block. PC therefore stores the query
-  geometry twice where PS2 stores it once. Recorded, not explained.
+  `224 / 230 / 23c` on PC.
 - **`hasCornerVisHide`'s corner field index shifts by one float** — PS2 reads `corner[0xb]` where PC
   reads `corner[10]`, because a leading `S_vector` is 4 floats on PS2 and 3 on PC. Same cause as the
   block spacing above.
-- **`+0x48` is dead on both builds.** PS2 `FindWayFORWARD_V2` and `_V3` store `AIManager+0x88` = 0
-  right after the two node sentinels (`AIManager+0x80`/`+0x84` = -1), the same three statements as
-  the PC's `+0x40`/`+0x44`/`+0x48`, and nothing on the PS2 reads that byte either.
+- **`+0x48` is dead on both builds.** PS2 `FindWayFORWARD_V2` and `_V3` store `AIManager+0x88`
+  (`0x509108`, `ai_wayfind+0x78`) = 0 right after the two node sentinels (`AIManager+0x80`/`+0x84`
+  = -1), the same three statements as the PC's `+0x40`/`+0x44`/`+0x48`, and nothing on the PS2 reads
+  that byte either.
+- **`isInBound` (260 B) has no PC counterpart because the code that calls it is absent on the PC.**
+  It is a convex-polygon test over a `std::vector<S_vector2>` PARAMETER (fewer than 3 points
+  returns 0; every edge cross product must share one sign); `0x509090` is its `this`. Its 6 calls
+  sit ×2 in each of the three spec-node searches, in two loops that run when only one of the two
+  colliders was hit: for each pass-side entry (`ai_actor_evading`) whose blocker is that collider's
+  owner, blocker kind not 2 or `0x1b` and side 2 (resp. 1), they fetch the blocker's 2-D footprint
+  through its virtual `GetBoundPoints2D` and abort the search unless the probe point lies inside.
+  In all three PC searches (`ai_path_find_spec_node_from_coll_list` / `_from_plane` /
+  `_from_positions`) the second door block leads directly to the "both colliders null" exit, and
+  the counts agree: PS2 7 virtual bound-point calls per search (5 + the 2 in these loops) against
+  PC 4 plus 4 `i3d_frame_get_bound_points_2d`, the 5 ↔ 4 being the merged block of
+  `structs/ai_check.md` §4. So the PC skips this abort; `ai_path_is_point2d_in_checkpoint_radius`
+  is a genuine radius test and is not its counterpart.
 - **`FindPathCompFuncJIPO`** exists on both builds as a distinct search entry point used only by
   `FindWayFORWARD_V3`; it is not a PS2-only symbol.
 - **`ai_corner_hide_info`'s member order differs between builds** — PC puts the corner pointer
@@ -274,37 +309,10 @@ behaviour.
   the two records strategy 2 works with. `ai_seg_corner`'s `radius` sits at PC `+0x24`, the same
   float `check_seg_is_pos_in_any_special` reads as the type-2 sphere radius — two unrelated
   functions agreeing on one offset is what byte-proved the field.
-- `structs/ai_check.md` §6 — the `ai_path_find_spec_node_*` searches and their bound-points calls.
+- `structs/ai_check.md` §5 — the `ai_path_find_spec_node_*` searches and their bound-points calls.
 
 ## 6. Open items
 
 | item | state |
 |---|---|
-| `isInBound` (260 B), the one unmapped PS2 method | see the evidence block below; recorded as open, **not** tagged inlined |
-| is the `+0x4c` vector the request's checkpoint list or the resulting route? | one `std::vector<uint>` of node indices serves both roles in the observed traffic: the plan strategies fill it (strategy 6 through `ai_wayfind_score_and_add_checkpoint`) and `ai_wayfind_build_optimal_path` consumes it. Which name is the developers' is not established |
-| singleton interior `+0x28..+0x38`, and everything past `+0x84` | not mapped |
-| `+0x48` | written 0 before every directed search and never read, on both builds (§4) |
-
-**`isInBound` — what is known and what is ruled out.**
-
-On PS2 it is a **point-in-polygon test** over a `std::vector<S_vector2>` global (`0x509090`,
-requires ≥3 points) with **exactly 6 callsites — ×2 inside each of the three
-`ai_path_find_spec_node_*` searches**. Its signature,
-`isInBound__10ai_wayfindFPQ23std48vector<9S_vector2,…>R8S_vector`, takes **exactly the vector that
-`GetBoundPoints2D` fills**, and that free function is named on PC:
-**`i3d_frame_get_bound_points_2d`** (`0x004029c0`), called ×4 by each of the three
-`ai_path_find_spec_node_*` searches. So the PS2 idiom is a *pair* — build the 4 bound points of a
-frame's footprint, then test a position against them.
-
-| candidate / test | outcome |
-|---|---|
-| a PC callee appearing ×2 in the three `ai_path_find_spec_node_*` bodies | none |
-| an inlined equivalent with a `< 3` guard or a polygon global on PC | none. That fingerprint could not match: on PS2 the point list is a global, on PC it is a **caller local** filled by `i3d_frame_get_bound_points_2d` |
-| `ai_path_is_point2d_in_checkpoint_radius` — ×2 per spec-node search, sits right after the bound-points build, indexes its second argument with stride 8 (`S_vector2`) | **refuted by the body**: it computes `dx² + dz²` against `param_3²`, a genuine **radius** test, and it has 10 callers. Its PC name is accurate and must not be changed |
-| PS2-port-only subsystem | does not apply: its callers are ordinary `ai_path` methods |
-
-Next step: re-search the three PC `ai_path_find_spec_node_*` bodies for an inline point-in-quad test
-over the local vector, immediately after each `i3d_frame_get_bound_points_2d` call. That would also
-explain the **×5 PS2 vs ×4 PC** call-count mismatch on `i3d_frame_get_bound_points_2d`
-(`structs/ai_check.md` §6): if PC merged one bound-points build with the containment test, one call
-would disappear. Still a hypothesis.
+| the "gate" noun of `ai_wayfind_compute_node_left_right_gate` (§2) | inferred: the 3008 B body was fingerprinted, not statement-read |

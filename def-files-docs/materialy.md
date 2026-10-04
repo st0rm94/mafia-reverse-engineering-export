@@ -1,6 +1,6 @@
 # `tables\materials.def` — surface / material table
 
-**Created** 2026-06-04 11:16 +0200 · **Modified** 2026-09-18 05:35 +0200
+**Created** 2026-06-04 11:16 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 The collision **surface-material table**. Each numeric id names one record. Ids are used as a
 **byte** throughout the engine: a collision contact stores the hit geometry's material id, which
@@ -14,9 +14,22 @@ reference. The original is in Czech; the table below is translated to English.
 
 * Loaded by `data_load_def_tables` (`0x00592080`) from the DTA archive into the global
   `g_surface_material_table`; record stride **`0x170` (368) bytes**; record count
-  `g_num_surface_materials`. Freed by the sibling at `0x00592240`.
+  `g_num_surface_materials`. Freed by `data_unload_def_tables` (`0x00592240`).
 * A material record carries per-surface sound-event ids (record `+0x28` / `+0x2c`, read by the
   contact-sound routine) and float blocks from `+0x108`.
+* Record `+0x3c` is the **bullet-mark decal index** and `+0x40` the **hit-particle id**:
+  `game_tick_shoot` places decal `+0x3c` at a bullet impact (when it lies in 0..9) and passes
+  `+0x40` to `particle_manager_create_particle` (when it is not negative). `-1` means none. The
+  shipped file's decal indices (`structs/blood.md` §5d for the textures):
+
+  | decal | texture | material ids |
+  |---|---|---|
+  | 2 | `2dirbet.bmp` | 1-4, 6-10, 17, 33, 36-38, 46 |
+  | 3 | `2dirdre.bmp` | 13-16, 18, 42 |
+  | 4 | `2dirple.bmp` | 19-22 |
+  | 5 | `2dirsklo.bmp` | 24, 25 |
+  | -1 | none | every other id (grass, foliage, fences, water, body, the unused and scripted ids) |
+
 * A parallel surface table `DAT_00656320` (`0x28`-byte records) is indexed by the same material id.
 * A collision contact holds its material id at `wheel_contact+0xb4`, a byte copied from the
   collision hit descriptor by the per-wheel ground-update routine (Ghidra label `LAB_005341b4`).
@@ -82,15 +95,16 @@ reference. The original is in Czech; the table below is translated to English.
 ³ "0% / 30% / 70%" are variant tiers of the same base material.
 
 ⁴ The player cannot swim, so entering a body of water (river, ocean) on foot or in a car results in
-death. Id 44 is the wet-road handling material and is distinct from id 31. A special-case helper at
-`0x0046e080` forces a wheel contact's `+0xb4` to `0x1f`.
+death. Id 44 is the wet-road handling material and is distinct from id 31. `car_collision_filter_wheel`
+(`0x0046e080`) forces a wheel contact's `+0xb4` to `0x1f`.
 
 ⁵ Ids 40 and 41 are scripted collision volumes, not real-world surfaces.
 
 ## 3. Related
 
 `police-system/artifacts/offences.md` — the sidewalk offence (material id 3) ·
-`structs/crash_obj.md` — a consumer that resolves surface material ids through this table.
+`structs/crash_obj.md` — a consumer that resolves surface material ids through this table ·
+`structs/blood.md` §5 — the decal pool the bullet marks go into.
 
 ## 4. Open items
 

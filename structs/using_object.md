@@ -1,6 +1,6 @@
 # `C_using_object` — the usable-object registry behind the action menu
 
-**Created** 2026-09-04 00:21 +0200 · **Modified** 2026-09-17 13:46 +0200
+**Created** 2026-09-04 00:21 +0200 · **Modified** 2026-10-01 18:52 +0200
 
 PC prefix **`using_object_`**. The object is **embedded at `C_game + 0x29ec`**.
 
@@ -52,14 +52,15 @@ constructor. The type name is the PS2 template argument on `AddObject` / `DelObj
 | `+0x00..+0x0b` | world position (3 floats) | H | read by `using_object_is_any_object_near` and `_find_near_objects`, then optionally transformed |
 | `+0x0c` | radius **squared** | H | the horizontal distance test compares against it directly |
 | `+0x10` | `S_matrix *` / parent transform | H | when non-null the position is multiplied by it before the distance test |
-| `+0x14` | flags | H | bit `0x1` = the record is owned and must be `delete`d; bit `0x2` = it owns the `+0x18` frame |
+| `+0x14` | flags | H | bit `0x1` = the record is owned and must be `delete`d; bit `0x2` = it owns the `+0x18` frame. A dropped item's heap record carries 3 |
 | `+0x18` | `I3D_frame *` | H | invalidated, detached from its parent and released when bit `0x2` is set |
+| `+0x1c` | owning actor | H | read by `player_do_action_button_on_foot` after a pickup: non-zero → `game_remove_temporary_actor(owner)`, zero → `using_object_del_object`. A dropped item's in-place record stores the item actor, its heap record 0 (`structs/drop_in_weapon.md` §3a) |
 | `+0x20` | frame filter | H | `0` means "any"; otherwise the object is only offered when the caller's frame argument matches |
 | `+0x28..+0x37` | **`S_GameItem`**, 0x10 bytes | H | copied wholesale into the action-menu list by `using_object_find_near_objects` |
 | `+0x28` | **item id (`uint16`)** = `S_GameItem + 0x00` | H | ¹ |
 | `+0x2c` | **action code** = `S_GameItem + 0x04` | H | the value `using_object_is_invalid_item` is called with ² |
 | `+0x30` | `S_GameItem + 0x08` | M | pocket ammo on the `createweaponfromframe` path ¹ |
-| `+0x34` | self-pointer = `S_GameItem + 0x0c` | H | ¹ |
+| `+0x34` | self-pointer = `S_GameItem + 0x0c` | H | ¹; the action-menu copy carries it back to the record |
 
 ¹ **The record constructor path.** `using_object_record_ctor` zero-initialises a new record: it
 clears `+0x10`, `+0x18`, `+0x1c`, `+0x20`, `+0x24` and the whole `S_GameItem` block, deliberately
@@ -78,11 +79,12 @@ Reference as *"xx = weapon ID"*), `int32 @+0x2c` = `argv[2]` (the magazine round
   box — "these actions are unavailable right now".
 * `detector_create_using_object` writes its caller's action argument into the same slot
   (`detector + 0x10c`, the record's `+0x2c`).
-* The `createweaponfromframe` path puts the magazine round count there instead (¹).
+* The `createweaponfromframe` path puts the magazine round count there instead (¹), and a dropped
+  item its clip ammo (`structs/drop_in_weapon.md` §2).
 
 ### 1b. The reach test
 
-Both query methods use the identical gate, and the constant is shared across builds:
+Both query methods use the identical gate:
 
 ```
 |dy|² < 2.25                      // within 1.5 units vertically
@@ -115,8 +117,8 @@ offer it.
 
 ### 2a. Savegame
 
-Two populations are saved: registered `S_using_object` records of type 3 (`+0x14 == 3`) whose
-`+0x24` flag is clear and whose `+0x28` word is greater than 1, and every live actor of
+Two populations are saved: registered `S_using_object` records whose flags `+0x14` are 3 (the
+registry owns the record and its frame) and whose `+0x24` flag is clear and whose `+0x28` word is greater than 1, and every live actor of
 **kind `0x25`** (`C_drop_in_weapon`) with a frame — the dropped weapons lying in the world. The
 loader rebuilds each from the item table and hands it back to `using_object_add_object`.
 
@@ -128,7 +130,8 @@ The PC savegame record writes ids at `[0..3]` and the quaternion at `[7..10]`.
 
 ## 3. Consumers
 
-* **`player_do_action_button_on_foot`** — the sole caller of `using_object_find_near_objects`.
+* **`player_do_action_button_on_foot`** — the sole caller of `using_object_find_near_objects`; after
+  a pickup it follows each taken item back to its record and routes the teardown on `+0x1c`.
 * **`player_ai_walk`** — the sole caller of `using_object_is_any_object_near`, presumably to
   decide whether to show the "you can interact" prompt.
 * **`human_do_box_pick_up` / `human_do_dead_body_pick_up` / `human_do_box_cancel`** — the
@@ -189,8 +192,8 @@ action menu this feeds) · `structs/drop_in_weapon.md` · `structs/door.md` · `
 
 | item | state |
 |---|---|
-| `S_GameItem + 0x08` | carries the pocket count on the `createweaponfromframe` path; meaning for other item kinds not decoded |
-| `S_using_object + 0x1c` and `+0x24` | never read by anything in this cluster (`+0x24` is tested only by the savegame filter) |
+| `S_GameItem + 0x08` | carries the pocket count on the `createweaponfromframe` path and a dropped item's reserve ammo; meaning for other item kinds not decoded |
+| `S_using_object + 0x24` | tested only by the savegame filter; no other reader located |
 | `Tick` PS2-only status | would close with a byte scan of the PC image for the `0.004` / `0.001` per-ms rates paired with `6.2831855` |
 | `FindAutoPickObjects` PS2-only status | would close with a whole-binary hunt for a second `S_GameItem` gatherer |
 | in game: pickup highlight | a usable object should pulse and rotate on the PS2 and sit still on the PC — the visible consequence of the missing `Tick` |

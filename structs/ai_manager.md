@@ -1,6 +1,6 @@
 # `ai_manager` — the AI root object
 
-**Created** 2026-08-03 16:30 +0200 · **Modified** 2026-09-17 17:53 +0200
+**Created** 2026-08-03 16:30 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c` and `Game.exe`; PS2 material is in §4.
 
@@ -11,6 +11,7 @@ container: one file-scope C++ object, constructed by the CRT before `main` and d
 
 ```
   ai_manager                    @ 0x00655218        THIS FILE
+    +0x00  ai_check_builder     @ 0x00655218        structs/ai_check.md (no state)
     +0x04  check_seg_clusters   @ 0x0065521c        structs/check_seg.md
     +0x0c  ai_wayfind           @ 0x00655224        structs/ai_wayfind.md
     +0x58  (ai_wayfind's own vector — head ai_wayfind+0x4c)
@@ -18,8 +19,7 @@ container: one file-scope C++ object, constructed by the CRT before `main` and d
     +0xc4  ai_groups            @ 0x006552dc        structs/ai_group.md
     +0xec  ai_follow_manager    @ 0x00655304        structs/ai_follow_manager.md
     +0x100 ai_fight_manager     @ 0x00655318        structs/ai_fight_manager.md
-    +0x110 [U]
-    +0x120 [U]
+    +0x110 one member: two std::vectors, +0x110 and +0x120 (§3b)
 ```
 
 - **PC prefix:** `ai_manager_*`.
@@ -39,8 +39,12 @@ container: one file-scope C++ object, constructed by the CRT before `main` and d
 0x00443555   jmp  ai_manager_ctor
 ```
 
-The receiver is `0x00655218`. Nothing in the decomp references that address outside the
-ctor/dtor thunks: every member is referenced by *its own* absolute address, never through the root.
+The receiver is `0x00655218`. Outside the ctor/dtor thunks that address is loaded only as the
+`this` of the stateless `ai_check_builder` member at `+0x00`: `vec3_rotate_by_angle_in_place` ×3
+from `entity_action_tick`, `ai_check_builder_test_space_8dir` from `ai_space_coverage_compute`, and
+`ai_check_builder_get_dir8_index` from `ai_space_coverage_tick` and `ai_space_coverage_prefer_dir`.
+No method reads it. Every other member is referenced by its own absolute address, never through the
+root.
 
 ### 1a. 🔑 The unwind funclet block is the member map
 
@@ -78,14 +82,14 @@ Ordered by **PC VA**, PC name first. **5 of 5 PS2 methods accounted for:** 1 out
 
 | PC VA | PC name | PS2 twin | Status | Body-diffed | Role / decisive evidence |
 |---|---|---|---|---|---|
-| 0x00443540 | `ai_manager_static_init` | - | STRUCTURAL | PC | CRT static-init entry: `call ai_manager_static_ctor ; jmp ai_manager_register_atexit_dtor` ¹ |
+| 0x00443540 | `ai_manager_static_init` | - | STRUCTURAL | yes | CRT static-init entry: `call ai_manager_static_ctor ; jmp ai_manager_register_atexit_dtor` ¹ |
 | 0x00443550 | `ai_manager_static_ctor` | - | **CONFIRMED** | yes | `mov ecx, 0x655218 ; jmp ai_manager_ctor` |
 | 0x00443560 | `ai_manager_register_atexit_dtor` | - | **CONFIRMED** | yes | `push ai_manager_static_dtor ; call atexit` |
 | 0x00443570 | `ai_manager_static_dtor` | - | **CONFIRMED** | yes | `mov ecx, 0x655218 ; jmp ai_manager_dtor` — the pointer handed to `atexit` |
-| 0x00443580 | `ai_manager_dtor` | `__dt__10ai_managerFv` | **CONFIRMED** | **both** | tears the members down in exact reverse-construction order, arm for arm ² |
+| 0x00443580 | `ai_manager_dtor` | `__dt__10ai_managerFv` | **CONFIRMED** | yes | tears the members down in exact reverse-construction order, arm for arm ² |
 | 0x00443720 | `ai_manager_ctor` | - ³ | **CONFIRMED** | yes | default-constructs the eight `std::vector` members; calls nothing (a ctor, not the `Init` method — §2a) |
-| *(inlined)* | **`game_init`** | `Init__10ai_managerFv` | **CONFIRMED** | **both** | §2a |
-| *(inlined)* | **`game_done`** | `Destroy__10ai_managerFv` | **CONFIRMED** | **both** | §2a |
+| *(inlined)* | **`game_init`** | `Init__10ai_managerFv` | **CONFIRMED** | yes | §2a |
+| *(inlined)* | **`game_done`** | `Destroy__10ai_managerFv` | **CONFIRMED** | yes | §2a |
 | - | - | `Tick__10ai_managerFUi` | TERMINAL | yes | no PC counterpart (§4) |
 | - | - | `ResetCounting__10ai_managerFv` | TERMINAL | yes | no PC counterpart (§4) |
 
@@ -119,8 +123,8 @@ decomp, not as a name.
 ## 3. Layout
 
 ```c
-typedef struct ai_manager {              // file-scope singleton @ 0x00655218, ~0x130 bytes
-    /* +0x00 */ uint32_t          _head;             // [U] not written by the ctor
+typedef struct ai_manager {              // file-scope singleton @ 0x00655218, 0x130 bytes
+    /* +0x00 */ ai_check_builder  check_builder;     // [H] no fields; padded to 4 (§1)
     /* +0x04 */ check_seg_clusters clusters;         // [H] = 0x0065521c
     /* +0x0c */ ai_wayfind         wayfind;          // [H] = 0x00655224
     /* +0x58 */ std_vector         wayfind_vec;      // [H] IS ai_wayfind+0x4c — see §3a
@@ -128,9 +132,9 @@ typedef struct ai_manager {              // file-scope singleton @ 0x00655218, ~
     /* +0xc4 */ ai_groups          groups;           // [H] = 0x006552dc
     /* +0xec */ ai_follow_manager  follow;           // [H] = 0x00655304
     /* +0x100 */ai_fight_manager   fight;            // [H] = 0x00655318
-    /* +0x110 */std_vector         _unk_110;         // [U] destroyed inline, no funclet
-    /* +0x120 */std_vector         _unk_120;         // [U] pointer vector (stub_noop recycler)
-} ai_manager;
+    /* +0x110 */std_vector         tail_a;           // [H] ONE 0x20-byte member with two vectors
+    /* +0x120 */std_vector         tail_b;           // [H]   (§3b); no PC code uses it
+} ai_manager;                                     // 0x00655348 is the next global
 ```
 
 Every `std_vector` here is the MSVC four-word shape `{allocator, begin, end, cap}` — which is
@@ -143,11 +147,17 @@ allocator member, not a flag.
 `ai_manager_ctor` default-constructs at head `root+0x58`. So the head is **`ai_wayfind+0x4c`**,
 that class's own and only owned allocation — not an anonymous root member.
 
-### 3b. `+0x110` and `+0x120`
+### 3b. `+0x110` — one member with two vectors
 
-Both are `std::vector` members constructed by `ai_manager_ctor` and destroyed **inline** by
-`ai_manager_dtor` (no dedicated unwind funclet, so §1a does not name them). They do not belong to
-`ai_fight_manager`, which is one vector and ends at `+0x110` (§4). Owner `[U]` (§6).
+`ai_manager_ctor` builds two vectors, at `+0x110` and `+0x120`, and `ai_manager_dtor` tears both
+down through ONE member cursor: `lea ebp,[esi+0x110]` is stored to the frame local the unwind
+funclets read (`[ebp-0x10]`); the `+0x120` vector is released through `ebp+0x10` (element range
+destroy `stub_noop_args8_00575c00`, so trivially destructible elements) and the `+0x110` vector by
+`vector_dispose_at_0x04` with the cursor in ECX. The funclets at `0x00635533` and `0x00635546` rerun
+that dispose through the same cursor. That is one class whose members are two vectors — the idiom
+`police_board` shows at `+0x90`. The member does not belong to `ai_fight_manager`, which is one
+vector ending at `+0x110`. No function outside the ctor and dtor touches `0x00655328`–`0x00655347`,
+by absolute address or as a receiver, so the member has no PC code. Its likely identity is in §4 [M].
 
 ---
 
@@ -160,34 +170,40 @@ Both are `std::vector` members constructed by `ai_manager_ctor` and destroyed **
 - **`ai_manager` exists on both builds.** PC has a real out-of-line destructor; what it lacks is
   the PS2-only children the PS2 `Tick` exists to drive.
 - **Offset anchors.** Most offsets drift because an MSVC `std::vector` is one word larger than
-  PS2's `gif::vector`. Two sit before the first vector member: PS2 `Destroy__10ai_managerFv`
-  calls `Clear__18check_seg_clustersFv(param_1 + 4)` — **`+0x04` on both builds** — and PS2
-  `Init__10ai_managerFv` opens `reserve__…(param_1 + 0x90, 100)` ¹. The drift is the documented
-  amount: PS2 `ai_groups→ai_follow_manager` = `0x20`, PC = `0x28`; PS2
+  PS2's `gif::vector`. PS2 `Destroy__10ai_managerFv` calls `Clear__18check_seg_clustersFv(param_1 + 4)`
+  — **`+0x04` on both builds**. Every PS2 member offset below is the `this` its methods receive:
+  `ai_check_builder` `0x509080`, `check_seg_clusters` `0x509084` (17 calls), `ai_wayfind` `0x509090`
+  (48), the board `0x509130` (67), `ai_follow_manager` `0x50917c` (29), `ai_fight_manager` `0x50918c`
+  (11), `ai_sight_manager` `0x509198` (16), `ai_panic_manager` `0x5091b8` (8). PS2 `Init`'s
+  `reserve__…(param_1 + 0x90, 100)` is `ai_wayfind`'s own vector (`ai_wayfind+0x80`), not the board.
+  The drift is the documented amount: PS2 `ai_groups→ai_follow_manager` = `0x20`, PC = `0x28`; PS2
   `ai_follow_manager→ai_fight_manager` = `0x10`, PC = `0x14`.
 
   | member | PS2 | PC |
   |---|---|---|
+  | `ai_check_builder` | +0x00 | +0x00 |
   | `check_seg_clusters` | +0x04 | +0x04 |
-  | `police_board` (first vector) | +0x90 ¹ | +0x90 |
+  | `ai_wayfind` | +0x10 | +0x0c |
+  | `police_board` | +0xb0 | +0x90 |
   | `ai_groups` | +0xdc | +0xc4 |
   | `ai_follow_manager` | +0xfc | +0xec |
   | `ai_fight_manager` | +0x10c | +0x100 |
-  | `ai_sight_manager` | +0x118 | - PS2-only |
-  | `ai_panic_manager` | +0x138 | - PS2-only |
-  | `ai_framerater` | +0x148 | - PS2-only |
-  | `ai_spageman` ×5 | +0x14c/+0x17c/+0x1ac/+0x1dc/+0x20c | - PS2-only |
-  | `ai_unlock_manager` | +0x23c | - refactored to the `ai_groups+0x00` scalar |
-  | counting fields | +0x248/+0x24c | - PS2-only |
+  | `ai_sight_manager` | +0x118 | +0x110 [M] ¹ |
+  | `ai_panic_manager` | +0x138 | - |
+  | `ai_framerater` | +0x148 | - |
+  | `ai_spageman` ×5 | +0x14c/+0x17c/+0x1ac/+0x1dc/+0x20c | - |
+  | `ai_unlock_manager` | +0x23c | - ² |
+  | counting fields | +0x248/+0x24c | - |
 
-  ¹ Contradicted by the board's own callsites: `ZacatekSmeny__18ai_police_nastenkaFv` and
-  `KonecSmeny__18ai_police_nastenkaFv` (board methods, so `this` is the board base) are invoked
-  on `0x509130` = root `+0xb0`, not root `+0x90` (§6). The PC offset is unaffected — it is
-  byte-proven by the funclet at `0x006354fb` (§1a).
+  `-` = no PC member; PS2-only unless noted. ¹ Two vectors, no code (§3b). ² Refactored to the
+  `ai_groups+0x00` scalar.
 
-- **`ai_fight_manager` ends at PC `+0x110`.** PS2 spacing `root+0x10c → +0x118` is `0xc`,
-  exactly one `gif::vector`. PS2 places `ai_sight_manager` at `+0x118`, which is PS2-only — so PC
-  `+0x110` / `+0x120` have **no PS2 sibling at that position**.
+- **The PC member at `+0x110` sits where the PS2 puts `ai_sight_manager`.** `ai_fight_manager`
+  is one vector on both builds (PS2 `root+0x10c → +0x118` is `0xc`, one `gif::vector`), so the next
+  member follows it directly: PC `+0x110`, PS2 `+0x118`. PS2 `ai_sight_manager` holds two pointer
+  vectors (entities and corpses: `Next` / `NextCorpses`, `Tick` / `TickCorpses`) and two cursor
+  words that `Init` sets to `-1`. The PC member holds two vectors, no cursors and no code. The
+  identification rests on position and shape only [M].
 - **`Tick__10ai_managerFUi`** drives exactly five things: `ai_framerater`, `ai_sight_manager`
   (×2), `ai_panic_manager`, and `ai_unlock_manager` — all PS2-port-only or refactored away on PC.
   There is nothing left for a PC tick to do, and no PC function exists.
@@ -196,7 +212,7 @@ Both are `std::vector` members constructed by `ai_manager_ctor` and destroyed **
   consumers gate on `== 0` / `< 1` and spend by decrement; `ai_framerater::Tick` replenishes
   `+0x248` by frame-time tier (tier 0 → `−1`, tier ≥3 → `+2`, tier 4 → `+4` total). They are the
   budget half of the PS2's AI throttling layer and have no PC counterpart.
-- **Object size: PC ~0x130 / PS2 ~0x250.** The whole difference is the PS2-only tail — an
+- **Object size: PC 0x130 / PS2 ~0x250.** The whole difference is the PS2-only tail — an
   independent corroboration of the separate PS2-only findings for each of those subsystems.
 - **Destructor factoring.** PC out-lines each member destructor (reachable only through the
   unwind table; the normal path inlines them). PS2 inlines *everything* into
@@ -219,7 +235,4 @@ Both are `std::vector` members constructed by `ai_manager_ctor` and destroyed **
 
 | item | state |
 |---|---|
-| owner of `root+0x110` / `root+0x120` | no unwind funclet names them; the lever is their normal-path teardown in `ai_manager_dtor`, back-tracing the cursor register (§3b) |
-| is `+0x00` real? | the constructor never writes it and no funclet references it; padding, or a scalar left to static zero-init |
-| does anything read the root as a whole? | zero references to `0x00655218` outside the ctor/dtor thunks; if none exists, the PC build keeps the object purely as a lifetime container for its members |
-| PS2 `police_board` offset | PS2 `Init` reserves at root `+0x90`, but the board's own methods receive root `+0xb0`; either the `+0x90` reserve targets a different vector member and the board starts at `+0xb0`, or the methods receive an interior pointer (§4 ¹) |
+| owner of `root+0x110` | one 0x20-byte member of two vectors with no PC code (§3b); position and shape match PS2 `ai_sight_manager` (§4) [M]. No PC artifact names it further |

@@ -1,6 +1,6 @@
 # `GM_Component` — the GUI widget base and its 53 subclasses
 
-**Created** 2026-08-24 22:00 +0200 · **Modified** 2026-09-24 21:26 +0200
+**Created** 2026-08-24 22:00 +0200 · **Modified** 2026-10-04 19:20 +0200
 
 Companion to `structs/gui_screen.md`, which documents the *screen* class `GM_Menu`; this file
 documents the *widgets* a screen owns. The TU that follows this one — the ~30 `GM_Menu` screen
@@ -68,8 +68,8 @@ Read each slot from the vtable in `.rdata`, never from the order of functions in
 | 8 | `+0x20` | SetText | a no-op |
 | 9 | `+0x24` | **a GET accessor with an out-parameter** — see §3b | a no-op |
 
-¹ Only `'swnd'` and `'lstc'` override slot 7 — exactly the two classes that have a `Tick` on the
-PS2 (§6), which is what separates slot 7 (Tick) from slot 6 (mouse).
+¹ Only `'swnd'` and `'lstc'` override slot 7; §6a gives what separates slot 7 (Tick) from
+slot 6 (mouse).
 
 **Two shared activation handlers** cover most classes: `gui_widget_key_activate` (slot 5,
 scancodes `0x39` / `0x1c` / `0x9c`, 11 vtables) and `gui_widget_click_activate` (slot 6,
@@ -104,7 +104,11 @@ taking a pointer.
 ### 3c. Slot assignments that address order does not show
 
 * `gui_widget_save_slot_set_text` sits in **slot 8**, not slot 3 — `'load'` slot 3 is
-  `stub_noop_cdecl_00574a40`, so that class has no `ForceUpdate` at all.
+  `stub_noop_cdecl_00574a40`, so that class has no `ForceUpdate` at all. It asks the text
+  database for textdb `0xae`, `0xaf` and `0xb0` and drops all three results before tail-jumping
+  to the thumbnail interface. The lookup is a pure binary search with no side effect; `0xaf` is
+  formatted by `gui_load_game_tick`, and `0xae` and `0xb0` are referenced nowhere else in the
+  binary.
 * `'pbar'` and `'pbrt'` carry stubs in slots 5 and 6, so the progress bars are inert.
 * The edit boxes carry `stub_ret0_args20_005757f0` in slot 6, so they have **no mouse handler**.
 * `'list'` carries a *different* no-op symbol in slot 7 (`stub_noop_args4_00461180`) — an ICF
@@ -117,7 +121,11 @@ tag is the class identity and it is a **PC fact**: it is a literal in the switch
 in the shipped `tables/menu.def`.
 
 **Uses** = occurrences in the shipped `tables/menu.def` (809 records, 72 designs). A count
-of 0 means the class is only ever built from code.
+of 0 means the shipped file never builds the class. Code builds eleven tags through
+`gui_menu_add_component_from_template` — `'htxt'`, `'item'`, `'load'`, `'memi'`, `'mtxt'`,
+`'ntxt'`, `'pbar'`, `'pbrt'`, `'rari'`, `'seli'`, `'stxt'` — and nothing builds `'joys'` or
+`'edip'` at all: each FourCC occurs once in the image, as its factory compare, and each vtable
+once, in its factory arm.
 
 | tag | size | vtable | what it is | uses |
 |---|---|---|---|---|
@@ -168,12 +176,12 @@ of 0 means the class is only ever built from code.
 | `'scls'` | 0x38 | `0x0063d68c` | integer slider | 0 |
 | `'scln'` | 0x5c | `0x0063d664` | float slider showing its value | 0 |
 | `'sbig'` | 0x3c | `0x0063d6dc` | vertical scrollbar | 0 |
-| `'joys'` | 0x40 | `0x0063d934` | 2-axis pad | 0 |
+| `'joys'` | 0x40 | `0x0063d934` | two-handle range on one axis — **never built** | 0 |
 | `'rctv'` | 0x38 | `0x0063d754` | **vertical** two-colour gradient rect | 0 |
 | `'rctg'` | 0x38 | `0x0063d7a4` | **horizontal** two-colour gradient rect | 0 |
 | `'pbar'` | 0x38 | `0x0063d8bc` | progress bar | 0 |
 | `'load'` | 0x174 | `0x0063dce4` | savegame slot panel | 0 |
-| `'edip'` | 0x60 | `0x0063dd84` | IPv4 address entry | 0 |
+| `'edip'` | 0x60 | `0x0063dd84` | IPv4 address entry — **never built** | 0 |
 | - | 0x38 | `0x0063dbdc` | the `GM_Component` base itself | - |
 
 ¹ `gui_widget_edit_text_key_max10` caps at 10 characters, `gui_widget_edit_text_key_max31` at 31
@@ -250,6 +258,9 @@ difference:
 
 The slot-9 getter / slot-8 setter pairs of §3b are spelled `SetText`/`GetText`,
 `SetDword`/`GetDword`, `SetPointer`/`GetPointer` on the PS2.
+
+The two slot-7 overriders of §3, `'swnd'` and `'lstc'`, are exactly the two classes that have a
+`Tick` on the PS2, which is what separates slot 7 (Tick) from slot 6 (mouse).
 
 ### 6b. The three real behavioural differences
 
@@ -379,15 +390,5 @@ geometry exactly where the PS2 calls the widget's `SetRangeFloat`.
 
 ## 7. Open items
 
-* `gui_widget_save_slot_set_text` evaluates textdb `0xae`, `0xaf` and `0xb0` and **discards all
-  three results** before tail-jumping to the thumbnail interface. Verified by disassembly, so it
-  is not a decompiler artifact. Either the caption build was compiled out or it lives behind the
-  jump — unexplained.
 * `gui_widget_select_item_mouse` hover-activates when the widget's textdb id is exactly `0x7d3`.
   Which screen relies on it is not observed in game.
-* `'joys'` (`gui_widget_axis_range_draw`) has **0 uses in `menu.def`**, so it is built from code
-  only and nothing traced constructs it. Its two handles behave exactly like a dead-zone and a
-  saturation bound, but the gameplay noun is unproven — hence the neutral name.
-* `DAT_006f9528` is the global `g_engine`, but **23 callsites in the decomp still carry the
-  `DAT_` spelling**, one of them in this TU (`gui_widget_edit_text_key_max10`, whose sibling
-  `gui_widget_edit_text_key_max31` uses `g_engine`).

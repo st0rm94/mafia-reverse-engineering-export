@@ -1,6 +1,6 @@
 # `GM_Carcyclopedia` — the main-menu Carcyclopedia screen
 
-**Created** 2026-08-23 20:50 +0200 · **Modified** 2026-09-18 05:35 +0200
+**Created** 2026-08-23 20:50 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 PC prefix **`carcyclopedia_`**.
 
@@ -16,7 +16,7 @@ PC prefix **`carcyclopedia_`**.
 
 The **Carcyclopedia** — the in-game car encyclopedia, reached from the main menu. In-game
 label: textdb **110 / 4083 / 4087** = `"Carcyclopedia"` (de *Autozyklopädie*, cz *Auto
-encyklopedie*). It shows one car at a time on a rotating pedestal with its name, variant
+encyklopedie*). It shows one car at a time on a rotating pedestal with its name, colour
 name and description, and lets you page through every car your profile has unlocked and
 cycle its paint colours.
 
@@ -35,7 +35,8 @@ mission_close()
 
 🔑 **`autosalon` is the SCENE, not the class.** The screen runs inside a car-showroom set
 whose scene directory is `missions\autosalon\`; the frames `autosalon` and `autosalon2`
-are the showroom and its pedestal. The class is `GM_Carcyclopedia` on both builds.
+are the two camera placements the screen blends between, and `NGon02` is the turntable. The
+class is `GM_Carcyclopedia` on both builds.
 
 ## 2. Field map of the 0x9c-byte screen object
 
@@ -45,23 +46,23 @@ Conf: **H** measured on ≥2 independent sites · **M** one site, unambiguous ·
 |---|---|---|---|
 | `+0x00` | vptr → `0x0063d378` | H | installed by `carcyclopedia_ctor`; 6 slots (§3) |
 | `+0x18` | **the PARENT screen** (`GM_Menu` base field) | H | the framework's slot-4 default `gui_menu_close` assigns `this->+0x18` to `g_gui_active_screen` on close and then notifies it through slot 3; every screen constructor in this family is called as `ctor(g_gui_active_screen, …)`; `carcyclopedia_on_exchange` forwards the rebuild UP to it ¹ |
-| `+0x40` | framework flag word | H | ctor clears bit `0x00010000` (`&= 0xfffeffff`); the PS2 clears the same bit on its `+0x24` |
+| `+0x40` | framework flag word | H | ctor clears bit `0x00010000` (`&= 0xfffeffff`) (§6g) |
 | `+0x48` | **selected car index** | H | written by `carcyclopedia_tick`, read by `carcyclopedia_refresh_display`, passed to `carcyclopedia_refresh_car` |
 | `+0x4c` | **paint-colour index** | H | clamped against `car_database_get_max_color_index` in `carcyclopedia_refresh_car`; cycled by the left/right arrows |
 | `+0x50` | showroom car model (I3D object) | H | created by the ctor through the I3D driver factory (type `9`); reloaded per car; released by `carcyclopedia_on_close` |
-| `+0x58` | the `NGon02` frame | M | ctor, frame-by-name lookup with mask `0xffff` |
-| `+0x5c` | the `autosalon` frame | M | ctor |
-| `+0x60` | the `autosalon2` frame (the pedestal) | M | ctor; its basis is re-normalised right after the lookup |
+| `+0x58` | the `NGon02` frame — **the turntable** | H | ctor, frame-by-name lookup with mask `0xffff`; `carcyclopedia_tick` sets its direction from the yaw `+0x64` every frame |
+| `+0x5c` | the `autosalon` frame — camera placement at blend 1 | H | ctor; `carcyclopedia_tick` reads its world position (`+0x6c`) |
+| `+0x60` | the `autosalon2` frame — camera placement at blend 0 | H | ctor, which re-normalises its basis right after the lookup; `carcyclopedia_tick` reads its world position and axis (`+0x6c`) |
 | `+0x64` | **turntable yaw, degrees** | H | `carcyclopedia_tick` wraps it into `[0, 360)` and feeds `sin`/`cos` of `yaw * 0.017453292` |
-| `+0x68` | `60.0f` | U | ctor constant `0x42700000`; no traced reader |
-| `+0x6c` | `1.0f` | U | ctor constant `0x3f800000`; no traced reader |
-| `+0x70` | `16.666f` | U | ctor constant `0x41855555`; no traced reader |
+| `+0x68` | `60.0f`, **write-only** | H | the ctor stores `0x42700000`; a sweep of the class's own code finds no other access, and the `GM_Menu` base fields end at `+0x44` |
+| `+0x6c` | **camera blend**, 0..1 | H | ctor `1.0f`; `carcyclopedia_tick` clamps it, moves it on the up / down arrow keys and a vertical drag (0.005 per pixel), and places the active camera (`I3D_scene+0x17c`) between the `+0x60` (0) and `+0x5c` (1) frame positions |
+| `+0x70` | **turntable spin speed**, degrees per second | H | ctor `16.666f`; `carcyclopedia_tick` adds `speed · dt` to the yaw `+0x64`, relaxes the speed back toward 16.67, sets it from a horizontal drag, and sets +100 / −100 while the right / left arrow key is held |
 | `+0x74` | framework creation flag | M | set to 1 by the ctor and re-passed to the element builder by `carcyclopedia_on_exchange` |
 | `+0x78` | `std::vector<car_id>` object | H | MSVC `{allocator, first, last, end}`; the allocator byte is written by the ctor |
 | `+0x7c`/`+0x80`/`+0x84` | that vector's begin / end / cap | H | filled by `carcyclopedia_build_car_list`; freed second by `carcyclopedia_dtor` |
 | `+0x88` | `std::vector<char*>` object (car names) | H | same shape |
 | `+0x8c`/`+0x90`/`+0x94` | that vector's begin / end / cap | H | filled by `carcyclopedia_build_car_list`; freed FIRST by `carcyclopedia_dtor` |
-| `+0x98` | byte, zeroed by the ctor | U | no traced reader; it is what makes the object `0x9c` |
+| `+0x98` | **roof toggle** (byte) | H | ctor 0; widget command `0x79` flips it and calls `car_set_roof_visible` with it, and `carcyclopedia_refresh_car` re-applies it to every car it shows |
 
 ¹ The field holds the parent, not a child: nothing in this class releases a child screen
 through it. `structs/multiplayer.md` §7.
@@ -116,7 +117,7 @@ CONFIRMED:
 |---|---|---|
 | `0x14` | `carcyclopedia_refresh_display`, `carcyclopedia_tick` | the scrolling car list; its backing list is the name vector at `+0x88` |
 | `0x32` | `carcyclopedia_refresh_car` | the car name (`car_database_get_car_name`) |
-| `0x33` | `carcyclopedia_refresh_car` | the variant / second-name string id |
+| `0x33` | `carcyclopedia_refresh_car` | the colour name (`car_database_get_color_name_id`) |
 | `0x34` | `carcyclopedia_refresh_car` | the description string id, read from the detail record's `+0xc4` |
 | `0x66` | `carcyclopedia_refresh_car` | the repaint control — **enabled only when the car has more than one colour** |
 
@@ -214,10 +215,13 @@ PS2 emits into this file by COMDAT (`OnBeforeExchange`, `OnExchange`, `OnCreate`
 `OnCreateChild`, `OnCloseChild`, `OnChange`, `MartinovaKlavesa`). None of these is claimed
 inlined; they are simply framework code that the PC emits elsewhere.
 
+### 6g. The framework flag word
+
+PC `+0x40` is PS2 `+0x24`: both constructors clear bit `0x00010000` in it.
+
 ## 7. Open items
 
 | item | state |
 |---|---|
-| `+0x68` `60.0f`, `+0x6c` `1.0f`, `+0x70` `16.666f`, `+0x98` byte | written by the ctor, no traced reader |
 | does the repaint control grey out for single-colour cars (element `0x66`)? | not tested in game |
 | does the car list contain exactly the cars unlocked for Free Ride? | not tested in game |

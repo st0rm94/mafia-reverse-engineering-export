@@ -1,6 +1,6 @@
 # Mafia script-VM opcodes — verified
 
-**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-09-17 17:52 +0200
+**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Per-command evidence for the runtime dispatcher `program_process_command` (`0x005bb2d0`, jump
 table at `0x005c7700`, opcode range `1..0x186`).
@@ -53,7 +53,7 @@ Column conventions for every table below: **Opcode** = hex / decimal = dispatche
 | Opcode | Command | Handler | Behaviour | Evidence |
 |---|---|---|---|---|
 | `0x07` / 7 | `dim_flt xx` | - | Reallocates the `flt[]` register file (`param_1[0x12]` / `[0x14]` block), sized by the int arg. | Body reallocs the block; Mafia Script Data Reference: *"reserves xx memory slots for float variables"*. |
-| `0x0a` / 10 | `rnd xx, yy, zz` | `rand_range` | Stores a `rand_range` result into the destination `flt[]` slot. | `rand_range` + the `LAB_005c76d4` float-write idiom; Mafia Script Data Reference: *"random integer from an interval"*. |
+| `0x0a` / 10 | `rnd xx, yy, zz` | `rand_range` | Stores a `rand_range` result into the destination `flt[]` slot. | `rand_range` + the shared `script_flt_write` tail; Mafia Script Data Reference: *"random integer from an interval"*. |
 | `0x0d` / 13 | `findframe` | `I3D_scene` vtable `+0x58` | Looks up a scene frame **by name** into the FRAME register file ¹. | Bounds against `param_1[0x15]`, writes `param_1[0x14] + slot*4`; keyword table places `FINDFRAME` at `0x0d`. |
 | `0x11` / 17 | `findactor xx, yy` | `i3d_frame_get_name` | Looks up an actor **by name** into the ACTOR register file ². | Bounds against `param_1[0x17]` (ACTOR table length); Mafia Script Data Reference: *"finds an object by name"*. |
 
@@ -86,8 +86,7 @@ word at singleton `+0x90a4` is compass visibility.
 ² `hud_timer_set_time(ww, xx, yy)` writes `+0x9150/+0x9154/+0x9158`; `hud_timer_set_interval(zz)`
 writes the ms count at `+0x9168` and recomputes the hand fractions at `+0x915c/+0x9160` with `/60`
 arithmetic; then `hud_show_element(8)` and `pedestrian_manager_end_all_taxi_waves()`.
-³ No explicit stop call: whether the countdown stops or only its display is hidden is not visible in
-the case body.
+³ No explicit stop call (§6).
 ⁴ The same HUD message ring the police system uses for offence texts (ids 2100–2110, 2200, …).
 ⁵ Sets fade-overlay bit `0x8000` of `+0x90a4` and the `+0x9468..+0x9474` state block. The same
 overlay drives the arrest / mission-fail end screen and the `game_cheat_check` acknowledgement flash.
@@ -154,7 +153,7 @@ world-frame list at `*(g_act_mission+0x24) + 0x144/+0x148`; `1` = the static lis
 `&g_actor_global_list_alloc` (via `LAB_0055922e`), a wider object set. The writer runs two passes
 for both variants — pass 1 keeps `obj_type ∈ {4, 8}` (type 4 = the actor's vehicle, resolved
 against the `manager+0xa0` stride-8 pair table), pass 2 everything else — both gated by
-`obj+0x65 == 0`.
+`obj+0x65 == 0` (the `C_actor` save-exclusion byte, `structs/actor.md` §1b).
 
 ### 3.5 Police manager
 
@@ -163,12 +162,12 @@ against the `manager+0xa0` stride-8 pair table), pass 2 everything else — both
 | `0x86` / 134 | `policemanager_on [xx, yy]` | `police_manager_apply_state` (enable = 1) | Enables the police system and registers the player ¹. | Body reads both args without an arg-count check; `+0x34` has no reader in the police manager range; the `yy` pool effect is confirmed in game. |
 | `0x87` / 135 | `policemanager_add "name"` | `police_manager_register_actor` | Registers an actor, by **name**, for offence detection like the player ². | Name loop: `vec_index_addr_stride_0x4` + `i3d_frame_get_name` + `__strcmpi`. |
 | `0x88` / 136 | `policemanager_del "name"` | `police_manager_unregister_actor` | Unregisters an actor added by `policemanager_add` ³. | Same name loop; no second-arg branch. |
-| `0x89` / 137 | `policemanager_setspeed xx, yy` | `police_manager_set_speed_thresholds` | Sets the fine (`xx`) and arrest (`yy`) speed thresholds, in km/h ⁴. | `* 0.2777778` (km/h → m/s) fingerprint + `game_get_police_block`. |
+| `0x89` / 137 | `policemanager_setspeed xx, yy` | `police_manager_set_speed_thresholds` | Sets the fine (`xx`) and arrest (`yy`) speed thresholds, in km/h ⁴. | `* 0.2777778` (km/h → m/s) fingerprint + `game_get_police_manager`. |
 | `0x8a` / 138 | `policemanager_forcearrest xx, yy, zz` | `police_manager_escalate_handcuffs_with_optional_wanted` | Not an arrest: forces a handcuffs escalation on actor `xx`, optionally with the wanted substate ⁵. | In game: `0,1,0` → handcuffs, no wanted substate; `0,1,1` → handcuffs with the wanted substate. |
 | `0x12c` / 300 | `policeitchforplayer xx` | `police_manager_count_officers_alive_for_target` | Writes 1 when the cops know who the player is, 0 while the player is still anonymous ⁶. | Mission scripts loop `policeitchforplayer 0; if flt[0]=1, -1, 2` to hold a dialog while the cops know the player. |
-| `0x15e` / 350 | `police_support ww, xx [, yy]` | `police_manager_spawn_patrol_car_reinforcements_at_radius` | Spawns an armed NPC group around actor `xx` and registers it as a pursuit group on it ⁷. | Own arm `0x005c64a6`. The Mafia Script Data Reference lists the name with the gloss *"police support ???"*; no shipped script calls it. |
+| `0x15e` / 350 | `police_support ww, xx [, yy]` | `police_manager_spawn_patrol_car_reinforcements_at_radius` | Spawns one patrol car crewed by two cops near actor `xx` and engages it as a squad on him ⁷. | Own arm `0x005c64a6`. The Mafia Script Data Reference lists the name with the gloss *"police support ???"*; no shipped script calls it. |
 | `0x173` / 371 | `police_speed_factor xx, yy` | writes `g_police_speed_factor` (`0x006552d0`) | Sets the global police-car chase speed coefficient, clamped to `[0.0, 1.0]` ⁸. | The `[0, 1]` clamp matches the documented float range `<0,1>`. |
-| `0x183` / 387 | `m7_zastavzkurvenepolise` | `police_board_release_all_group_vehicles` | Mission-7 helper (Czech: "stop the fucking police"), no args: halts every pursuit group's chase vehicle ⁹. | Case `0x183` is the **only** caller; verified in game. Used in mission `MISE07B-CHULIGANI`, script `detector_konec` (2 calls) before the ending animation. |
+| `0x183` / 387 | `m7_zastavzkurvenepolise` | `police_board_release_all_group_vehicles` | Mission-7 helper (Czech: "stop the fucking police"), no args: halts every squad's chase vehicle ⁹. | Case `0x183` is the **only** caller; verified in game. Used in mission `MISE07B-CHULIGANI`, script `detector_konec` (2 calls) before the ending animation. |
 
 ¹ `xx` is stored at `police_manager+0x34` and never read (shipped value 980000). `yy` is booleanized
 to `+0x39` and selects the vehicle pool: `0` = `poli00` / `polimFor00` / `polimTud00`, non-zero =
@@ -176,14 +175,14 @@ to `+0x39` and selects the vehicle pool: `0` = `poli00` / `polimFor00` / `polimT
 branch, so `yy` affects only reinforcements that spawn during an active wanted substate; ordinary
 patrol traffic always uses `poli00`. The worker is idempotent (bails when already enabled).
 ² Optional second arg (type 4 = string) → `police_manager_link_target_to_vehicle`, which also sets
-`*(second_arg+0x2035) = 1` and calls `actor_get_world_position`. The register walks the pursuit-group
-array at `*(this+0x40)..*(this+0x44)`. In the shipped scripts the command is commented out wherever
+`*(second_arg+0x2035) = 1` and calls `actor_get_world_position`. The register walks the records vector
+at `*(this+0x40)..*(this+0x44)`. In the shipped scripts the command is commented out wherever
 it targets a non-player actor.
 ³ Walks `*(this+0x40)..*(this+0x44)` for the target's record, then the officer sub-array
 `record+0x74..+0x78`, before dropping the target. Commented out for non-player actors in the shipped
 scripts.
-⁴ Writes `*(this+0xc)` = fine m/s, `*(this+0x10)` = arrest m/s. Gameplay defaults: ~18 m/s
-(65 km/h) → fine, ~28 m/s (100 km/h) → arrest.
+⁴ Writes `*(this+0xc)` = fine m/s, `*(this+0x10)` = arrest m/s. Defaults, seeded by
+`police_manager_game_init`: 17 m/s (61 km/h) → fine, 28 m/s (101 km/h) → arrest.
 ⁵ `xx` = actor index (validated against `param_1[0x16]`, `folded_get_dword_0x10()` = 2 or `0x1b`;
 always 0 = player in shipped scripts); `yy` = enable; `zz` = also raise the wanted substate (read only
 when enabling). The worker finds the record for `target_actor` in `*(this+0x40)..*(this+0x44)`, sets
@@ -191,26 +190,29 @@ bit 14 (`0x40` at `record+9`) on enable / clears it on disable, and on enable wi
 to `record+0x50`. The state decays normally and is **not** re-applied by the command: mission
 `MISE16-MESTO`, script `detekce playera v kradenym aute` loops the command with `goto` until the
 player re-enters the car.
-⁶ Branch on the number of officers currently seeing the player (`police_manager_count_officers_alive_for_target`).
-**None seeing:** result = `police_board_is_busted_cutscene_active()` = manager `+0x2c`, set only by
-the arrest/fine capture cutscene (`entity_action_tick` case `0x21`) after the pursuit group is
-disbanded. **At least one seeing:** result = `police_manager_target_identity_pending() == 0`; the
+⁶ Branch on the number of living officers assigned to the player
+(`police_manager_count_officers_alive_for_target`, `pursuit_record+0x74`), not on who currently
+sees him. **None assigned:** result = `police_board_is_busted_cutscene_active()` = board `+0x2c`,
+set only by the arrest/fine capture cutscene (`entity_action_tick` case `0x21`) after the squad is
+disbanded. **At least one assigned:** result = `police_manager_target_identity_pending() == 0`; the
 helper returns 1 while identity is pending (record `+0x51 != 0` and manager `+0x38 == 0`; `+0x51` is
-written as `(police_board_target_matches == '\0')`). So `flt[xx] = 1` iff (seen ∧ identity known) ∨
-(unseen ∧ capture cutscene animating); a player under pursuit who is unseen and not being arrested
-reads 0 (§6). The Mafia Script Data Reference cross-references `vlvp` and glosses *"gives 1 if cops know who you are,
+written as `(police_board_target_matches == '\0')`). So `flt[xx] = 1` iff (officers assigned ∧ identity known) ∨
+(none assigned ∧ capture cutscene animating); whether the assigned officers currently see the
+player does not enter (§6). The Mafia Script Data Reference cross-references `vlvp` and glosses *"gives 1 if cops know who you are,
 even when the icon is transparent"*.
 ⁷ `ww` = spawn radius (float, passed through); `xx` = target actor (bounds against `param_1[0x17]`,
 `folded_get_dword_0x10()` = 2 or `0x1b`); `yy` optional, mapped `(yy != 0) ? 0 : 4` into the
-worker's mode parameter. Sequence: `game_get_police_block()` (actor `+0x2da0`) →
-`police_manager_spawn_patrol_car_reinforcements_at_radius(target, mode, radius)`, which picks a
-navmesh point at least `radius * 0.66` away, spawns an NPC group with weapon id `0x1e` and registers
-it as a pursuit group via `police_board_create_and_engage`. Return value discarded. Listed on body
-evidence; the Mafia Script Data Reference gives no behaviour to match (§6).
+worker's mode parameter, which is the new squad's opening tier: 0 = gun, 4 = handcuffs
+(`structs/police-action.md` §3). Sequence: `game_get_police_manager()` (`C_game+0x2da0`, the
+`police_manager`) → `police_manager_spawn_patrol_car_reinforcements_at_radius(target, mode, radius)`,
+which picks a navmesh point at least `radius * 0.66` away, deploys a pooled patrol car, seats two
+pooled cops in it (pump shotgun `0x0b` and S&W revolver `0x08`, 30 reserve rounds each) and engages
+the car as a squad via `police_board_create_and_engage`. Return value discarded. Listed on body
+evidence; the Mafia Script Data Reference gives no behaviour to match.
 ⁸ Pre-clears the global to 0.0. `xx == -1` → `yy` is the literal float; otherwise reads `flt[xx]`
 (out-of-range index leaves 0.0). The value is the last argument of
 `pursuit_event_dispatch_pursuit_vehicle` (8 callsites).
-⁹ For every pursuit group owning a chase vehicle: riding officers → act state 2, the vehicle's
+⁹ For every squad owning a chase vehicle: riding officers → act state 2, the vehicle's
 pursuit order is cancelled (`pursuit_event_remove_vehicle`), it is detached from its waypath and its
 dynamics are stopped, so it stops ramming the player. It does not despawn cars. Works on any map
 where `policemanager_on` was called. Name string `s_M7_ZASTAVZKURVENEPOLISE_0064e4dc`, referenced at
@@ -225,16 +227,17 @@ where `policemanager_on` was called. Name string `s_M7_ZASTAVZKURVENEPOLISE_0064
 | `0xb0` / 176 | `get_pm_firetime xx, yy` | `police_manager_get_firetime_for_target` | `flt[yy]` = time since actor `xx` last fired (`record+0x10`); 0 without a record. | Same skeleton as `0xaf`. |
 | `0xb1` / 177 | `get_pm_numpredators xx, yy` | `police_manager_count_officers_for_target` | `flt[yy]` = number of cops chasing actor `xx`, with no line-of-sight or identification filter ². | Returns `(record+0x78 − record+0x74) >> 2`; the Mafia Script Data Reference: *"0 → no one is chasing, >0 → at least one predator is chasing"*. |
 | `0xb2` / 178 | `get_pm_humanstate xx, yy` | `police_manager_get_committed_police_state` | Reports whether actor `xx` is in any police state ³. | Helper returns the committed police-state level at `record+0x3c`; case sits in the `0xae–0xb2` `get_pm_*` cluster. |
-| `0x122` / 290 | `vlvp xx` | `police_board_has_recent_sighting` | 1 if any pursuit group on this target has an officer who saw the player within the last 2000 ms, else 0. | Mafia Script Data Reference: *"Returns whether the police see the player during an offence"*. |
+| `0x122` / 290 | `vlvp xx` | `police_board_has_recent_sighting` | 1 if any squad on this target has an officer who saw the player within the last 2000 ms, else 0. | Mafia Script Data Reference: *"Returns whether the police see the player during an offence"*. |
 
 ¹ `xx` = actor (0 = player), `yy` = output slot, `zz` = offence type 1..13. The helper returns
 `bits_a | bits_b` (`pursuit_record+0x08/+0x0a`); the body pre-clears `flt[yy]`, validates the actor
 type (2 or `0x1b`) and tests `script_argv[2] & bits`. The operand reaching the AND is the pre-shifted
-mask `1 << zz`. Type map: 1 shooting `0x02`, 2 speeding `0x04`, 3 vehicle contact `0x08`, 4 crash
+mask, built at script load by `program_decode_params` case `0xae` as `1 << min(zz, 12)` (a negative
+`zz` gives mask 1), so `zz` ≥ 13 reads bit 12. Type map: 1 shooting `0x02`, 2 speeding `0x04`, 3 vehicle contact `0x08`, 4 crash
 `0x10`, 5 run-over pedestrian `0x20`, 6 sidewalk `0x40`, 9 assault on police `0x200`, 11 car theft
 `0x800`, 12 traffic sign `0x1000`. Each bit decays (timers ~4–60 s): `police-system/artifacts/offences.md`
 §3.1.
-² The count is 0 iff no pursuit group exists for the target — both with no police state at all and
+² The count is 0 iff no squad exists for the target — both with no police state at all and
 once the wanted bar has entered its decaying phase (the group is dropped as soon as decay starts).
 `flt[yy]` is pre-cleared before the type check, so a failed check leaves 0.
 ³ Levels: 0 no record, 1 fine, 2 handcuffs, 3 gun; the Mafia Script Data Reference documents a 0/1 result (§6).
@@ -352,9 +355,6 @@ loop, autoplay), positions it at the player via `act_mission_get_game`, finalise
 `DETECTOR_CREATEDYNCOLL`, `DETECTOR_ERASEDYNCOLL`, `HUMAN_CANDIE`. `END` (`0x6`), `SETEVENT` (`0x49`)
 and `DOOR_LOCK` (`0x26`) each have their own arm.
 
-Not listed in §3 because the Mafia Script Data Reference gives no opcode-level match yet: `CLEARDIFFERENCES` (`0x44`,
-body `game_clear_differences`) and `RECUNLOAD` (`0x2e`, body tail-calls `game_clear_film_music`).
-
 ## 4. PC vs PS2
 
 | PC command | PS2 corroboration |
@@ -381,16 +381,14 @@ body `game_clear_differences`) and `RECUNLOAD` (`0x2e`, body tail-calls `game_cl
 
 | item | state |
 |---|---|
-| `policeitchforplayer` while pursued, unseen and not arrested | the body gives 0 (manager `+0x2c` is only set by the capture cutscene); the Mafia Script Data Reference's *"even when the icon is transparent"* suggests 1. Test: get chased, break line of sight without being arrested, run `policeitchforplayer 0`, read `flt[0]`. A 1 means `+0x2c` has another writer |
-| `get_pm_state` — where `1 << zz` is produced | the AND operand is the shifted mask, so the shift happens earlier (script compile or VM argument decode); the site is not pinned |
+| `policeitchforplayer` while pursued, unseen and not arrested | the body gives 1 while living officers are assigned and the identity is known, seen or not, which agrees with the Mafia Script Data Reference's *"even when the icon is transparent"*; it gives 0 when no living officer is assigned outside a capture cutscene (board `+0x2c` is set only there). Test: get chased, break line of sight without being arrested, run `policeitchforplayer 0`, read `flt[0]` |
 | `get_pm_humanstate` result value | the helper returns level 0..3 and the float write is dropped by Ghidra; whether scripts see 0/1 (as the Mafia Script Data Reference documents) or 0..3 is unread |
 | `get_pm_crashtime` / `get_pm_firetime` units | ms or game ticks — not established |
 | `policemanager_del` with cops already spawned | reported to misbehave; not verified |
-| `police_support` mode selector | `(yy != 0) ? 0 : 4` — meaning of 0 / 4 unknown; no in-game test |
 | `wingman_setindicator` — which actor the indicator tracks | `xx` is not stored; the live source is elsewhere. The setter of `player+0x5e` is not traced |
 | `wingman_delindicator` clearing every slot's pin | intentional or a bug — undetermined |
 | `timeroff` | whether hiding the stopwatch also stops the countdown; and why `timeron` calls `pedestrian_manager_end_all_taxi_waves` |
 | `frameistelephone` on an alarm frame | the helper ignores the `+0x08` type bit, so alarms should also return 1; whether registration filters them first is not located |
 | `dan_internal_1` finalisation | whether the player is placed into the spawned car is not confirmed in game |
 | `pm_setprogress` fill | in game it works only once per game start, and the first-call fill does not follow the clamp (§3.2 note ⁹) |
-| `CLEARDIFFERENCES` (`0x44`) / `RECUNLOAD` (`0x2e`) | bodies read; Mafia Script Data Reference match not recorded |
+| `CLEARDIFFERENCES` (`0x44`) / `RECUNLOAD` (`0x2e`) | bodies read (`game_clear_differences`; a tail call to `game_clear_film_music`); no Mafia Script Data Reference match recorded, so neither is in §3 |

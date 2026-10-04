@@ -1,6 +1,6 @@
 # The seagull flock — entity kind `0x17`, PC-only, never constructed
 
-**Created** 2026-08-16 22:24 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-08-16 22:24 +0200 · **Modified** 2026-10-04 11:52 +0200
 
 A complete, working actor class that the shipped game never builds.
 
@@ -70,21 +70,23 @@ the hit timer near the end of the record.
 The TU's other three starts are helpers: `vec3_cross_of_edges`, `vec_count_stride_0x5c`,
 `stl_fill_n_stride_0x5c`.
 
-## 2. No construction path is located
+## 2. Nothing constructs it
 
 Two routes build an actor in this engine. Both dead-end — the same shape as `bendable_plant.md` §5.
 
 **(a) Direct C++ construction.** `seagull_flock_ctor` has **exactly one callsite in the whole
 decomp, and it is `case 0x17:` of the entity factory.** No direct creator exists.
 
-**(b) The factory `actor_new_by_kind(kind)`.** Its seven callsites are enumerated in
-`bendable_plant.md` §5 and none can produce `0x17`: the scene loader takes the kind from the scene's
-`0xAE22` special-object type, the savegame path only replays what a scene created,
+**(b) The factory `mission_create_actor(kind)`.** Its eight callsites are enumerated in
+`bendable_plant.md` §5 and none produces `0x17`: `mission_open_bin` takes the kind from a scene's
+`0xAE22` object kind and `game_load_differences` from a `.chg` difference file, and neither data
+set ever names `0x17`; the savegame only replays actors a running game created,
 `program_process_command` copies an existing actor's kind, and the three remaining sites push
 hard-coded literals (2, 4, 4).
 
 **The scene census.** Special type `0x17` occurs **0 times across all 79 shipped `scene2.bin`**,
-`missions/INTRO` included — whose special types are only `{1, 2, 5}`. A per-scene census is a
+`missions/INTRO` included — whose special types are only `{1, 2, 5}` — and none of the 92 `.chg`
+difference files holds it either. A per-scene census is a
 **lower bound**, not a verdict: ten certainly-live kinds appear in no scene either, because C++ code
 spawns them. It is (a) that carries the weight here. The census still reproduces every known figure
 as a control (`0x1c` = 26 in MISE06-AUTODROM, `0x8` = 810 across 25 scenes, `0x18` and `0x1e` = 2
@@ -95,8 +97,9 @@ each in MISE15-PRISTAV, `0x1d` = 0).
 `racek.i3d`, `racek.4ds`, `gull.i3d` or `gull.4ds` — even though `models/racek.4ds`,
 `models/gull.4ds`, `maps/gull.bmp` and `maps/2gull.bmp` all ship, as orphan assets.
 
-⇒ **Not observed during gameplay; most likely unused in the shipped game.** Not "cut" — that is a
-claim about reachability, and nothing here proves the class unreachable.
+⇒ **Never constructed in the shipped game:** every route that builds an actor is enumerated, and
+none produces kind `0x17` from the shipped code and data. Whether the designers meant to use it is
+not recoverable from the binary.
 
 ### 2a. What you actually hear — and why that is not this class
 
@@ -153,8 +156,8 @@ outright would assert a role the body contradicts.
 ⇒ Every row in this class is graded from the PC body alone, and **no `PS2 twin:` line is stamped on
 any of the 11 functions.**
 
-**Related:** `structs/entity.md` §1 (kind `0x17`) · `structs/bendable_plant.md` §5 (the same "no
-construction path" shape) · `structs/railway.md` (the TU immediately before this one).
+**Related:** `structs/entity.md` §1 (kind `0x17`) · `structs/bendable_plant.md` §5 (the same shape:
+nothing constructs it) · `structs/railway.md` (the TU immediately before this one).
 
 ## 5. Open items
 

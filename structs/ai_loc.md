@@ -1,6 +1,6 @@
 # `ai_loc` — the per-character navigation-locality cache
 
-**Created** 2026-07-30 12:49 +0200 · **Modified** 2026-09-17 13:45 +0200
+**Created** 2026-07-30 12:49 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 An `ai_loc` answers one question for one character, cheaply and repeatedly: **"where am I in the
 navigation world, and what map geometry is around me?"** It caches the character's resolved
@@ -48,9 +48,10 @@ typedef struct ai_loc {                      // 0x34 bytes; embedded in C_human 
     /* +0x18 */ uint32_t  flags;             // [H] see §1a
     /* +0x1c */ uint32_t  last_refresh_ms;   // [H] mission clock at the last refresh; drives the
                                              //     5000 ms interval
-    /* +0x20 */ uint8_t   _alloc;            // [M] MSVC std::vector empty-allocator member,
-                                             //     padded to 4 - the same shape check_seg
-                                             //     documents at its own +0x00 (check_seg.md §1a)
+    /* +0x20 */ uint8_t   _alloc;            // [H] MSVC std::vector empty-allocator byte,
+                                             //     padded to 4: human_ctor stores it
+                                             //     (mov [esi+0x744],al) and then zeroes
+                                             //     +0x24..+0x2c; the shape check_seg has at +0x00
     /* +0x24 */ ai_seg_stat *stats_begin;    // [H] vector<ai_seg_stat> - the nearby specials
     /* +0x28 */ ai_seg_stat *stats_end;      // [H] count = (end - begin) >> 4
     /* +0x2c */ ai_seg_stat *stats_cap;      // [H] freed by `vector_dispose_at_0x24`, an ICF
@@ -66,14 +67,17 @@ typedef struct ai_loc {                      // 0x34 bytes; embedded in C_human 
 
 ### 1a. The flag word at `+0x18`
 
-Assembled by `ai_loc_update` and never read by this class — the consumers are elsewhere.
+Assembled by `ai_loc_update` and never read by this class. Its consumer, with `node_a` and
+`node_b`, is `ai_wayfind_plan_directed_route_v3`, which reads `C_human+0x730`, `+0x734` and
+`+0x73c` directly.
 
 | bits | written when |
 |---|---|
 | `0x01` | a node was resolved successfully [H] |
 | `0x02` | set together with `0x01` (as `\| 3`) when the position is **not** inside a connection corridor [H] |
 | `0x10` | set together with `0x01` (as `\| 0x11`) when the position **is** inside a connection corridor, alongside `connection_idx` [H] |
-| others | [U] |
+
+`ai_loc_update`'s stores to `+0x18` are `0`, `1`, `| 0x11` and `| 3`; no other bit is set.
 
 ### 1b. `ai_seg_stat` — one observed special (`0x10` bytes)
 
@@ -144,8 +148,12 @@ The sole caller is `human_update`. The body is a chain of cheap exits before any
 
 **Step 5 is the only `check_seg_get_special` consumer that does not discriminate on the special's
 type code.** Every other consumer tests `== 1` or `== 2`, so `ai_loc`'s list is the one place where
-a type-4 or type-8 special is *recorded* — and no function on either build is known to read that
-list (§6).
+a type-4 or type-8 special is *recorded* — and **nothing reads that list**. A displacement census
+of `.text` for `C_human+0x724..+0x750`, including the interior-pointer forms reached from
+`entity+0xa9c`, finds only `human_ctor`, `human_dtor` and the three method calls that pass
+`lea ecx,[reg+0x724]` (`human_update`, `human_game_init`, `human_activate`). The vector is
+maintained by `ai_loc`'s own methods and consumed by nothing; on PS2 the symbol `ai_seg_stat`
+occurs only in its `insert` / `erase` instantiations.
 
 ## 4. Related
 
@@ -195,6 +203,4 @@ list (§6).
 
 | item | state |
 |---|---|
-| who reads the `ai_seg_stat` list? | nothing found on either build. On PS2 the string `ai_seg_stat` occurs 4 times, all `insert`/`erase` template instantiations. Candidates: an inlined loop in a `C_human` or AI method that walks `this+0x748` (= `+0x724 + 0x24`) directly, or a consumer Ghidra renders through a register. This is the remaining route to the type-4/8 payload meanings |
-| `+0x20` allocator byte | [M], inferred from the `check_seg` precedent (MSVC's empty allocator member padded to 4) and the absence of such a gap on PS2; byte-proving it needs the disassembly |
 | the 4000-vs-5000 ms asymmetry (§1b) | deliberate hysteresis or not; needs an in-game observation |

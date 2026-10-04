@@ -1,6 +1,6 @@
 # `C_I3D_cache<T>` — the three engine resource caches
 
-**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-09-17 13:46 +0200
+**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-10-04 17:00 +0200
 
 Three file-scope objects of one class template, constructed by the `Main.cpp` initializer block
 `[0x005f79a0, 0x005f8370]` — the **model**, **sound** and **animation-set** caches. Each is a
@@ -49,8 +49,12 @@ typedef struct {                     /* sizeof = 0x28 */
 } C_I3D_cache;
 ```
 
-`S_itm` is an **8-byte** record — `{T *object, char *name}` — which is what the destructor's
-`(end - begin) >> 3` and its stride-8 teardown loop measure. The directory vector is a plain
+`S_itm` is an **8-byte** record — `{T *object, C_string name}` — which is what the destructor's
+`(end - begin) >> 3` and its stride-8 teardown loop measure. The name is a `C_string`, a
+one-pointer handle to a refcounted block (`structs/string.md`): the shared stride-8 helpers
+`std_vector8_insert_one`, `array_copy_refcounted8`, `array_copy_backward_refcounted8`,
+`copy_elem_stride_8_with_string` and `refcounted8_scalar_deleting_dtor` copy the object pointer
+plainly and bump or release the block's refcount at `+0x00`. The directory vector is a plain
 `vector<char*>`; the anim cache's is seeded with the literal `"Anims"`.
 
 ### 2a. Field evidence
@@ -76,10 +80,10 @@ slots:
 | sound | `0x0063ec70` | `0x0063eca0` | `0x0063ecd4` |
 | anim | `0x0063ed08` | `0x0063ed38` | `0x0063ed6c` |
 
-The constructor installs the **derived** table; the destructor installs the **mid** table on
-entry and the **base** table on exit. That is a three-level hierarchy with the derived
-destructor elided — the scalar deleting destructor at derived slot 5 calls the mid-level
-destructor directly.
+The constructor installs the **derived** table; the destructors install the **mid** table on
+entry and the **base** table on exit. That is a three-level hierarchy whose derived level adds no
+members, so the derived destructor reached from derived slot 5 is a statement-identical copy of
+the mid one (§4a).
 
 ### 3a. The complete slot map — all 13 slots, all three levels
 
@@ -223,14 +227,17 @@ The PS2's nine tables were read out of the `SLUS_206.71` ELF `.symtab`.
 | `0x005f7d50` | `i3d_model_cache_dtor` | `__dt__17C_I3D_model_cacheFv` ¹ | CONFIRMED |
 | `0x005f7e70` | `i3d_model_cache_ctor` | - ² | STRUCTURAL |
 | `0x005f7eb0` | `i3d_model_cache_scalar_deleting_dtor` | - ³ | - |
-| `0x005f7f10` | `i3d_sound_cache_dtor` | `__dt__23C_I3D_cache<9I3D_sound>Fv` | CONFIRMED |
+| `0x005f7f10` | `i3d_sound_cache_dtor` | `__dt__17C_I3D_sound_cacheFv` ¹ | CONFIRMED |
 | `0x005f8020` | `i3d_sound_cache_ctor` | - ² | STRUCTURAL |
-| `0x005f80c0` | `i3d_anim_cache_dtor` | `__dt__32C_I3D_cache<17I3D_animation_set>Fv` | CONFIRMED |
+| `0x005f80c0` | `i3d_anim_cache_dtor` | `__dt__16C_I3D_anim_cacheFv` ¹ | CONFIRMED |
 | `0x005f81d0` | `i3d_anim_cache_ctor` | - ² | STRUCTURAL |
 
-¹ The DERIVED destructor: derived slot 5 calls it, and the PS2's derived slot 8 holds
-`__dt__17C_I3D_model_cacheFv` (`0x00378430`). The MID symbol `__dt__23C_I3D_cache<9I3D_model>Fv`
-belongs to `i3d_cache_model_dtor` (`0x005fda50`). ² Inlined into `__sinit_Main.cpp` (§6c).
+¹ The DERIVED destructors, reached from derived slot 5 and from each global's exit destructor;
+the PS2's derived slot 8 holds `__dt__17C_I3D_model_cacheFv` (`0x00378430`). Each PS2 derived
+destructor stores its own vtable, a dead store, and then runs the template destructor inline; the
+PC copy is that sequence without the dead store. The MID symbols `__dt__23C_I3D_cache<9I3D_model>Fv`,
+`__dt__23C_I3D_cache<9I3D_sound>Fv` and `__dt__32C_I3D_cache<17I3D_animation_set>Fv` belong to
+`i3d_cache_model_dtor`, `i3d_cache_sound_dtor` and `i3d_cache_anim_dtor`. ² Inlined into `__sinit_Main.cpp` (§6c).
 ³ MSVC-only shape.
 
 ### 6a. What the destructor diff established
@@ -281,28 +288,42 @@ The PC emits **three** destructors and three scalar-deleting destructors per cac
 PS2 merges each `__dt__` with its delete flag, so every PC pair is a **2 → 1 fold** in the
 PS2 direction (which is why the base-dtor size ratio is 0.09).
 
+### 6f. `I3D_animation_set` (§7)
+
+Every PC offset of §7 is the PS2 offset + 4: the PC class is polymorphic, while the PS2 class has
+no vtable symbol and calls `Release` directly. The PS2 class body supplies the field evidence:
+
+* **refcount** (PS2 `+0x00`) — the PC cache-hit `inc dword [set+4]` at `0x0047fb9a` sits where the
+  PS2 twin does `++*(int *)set`; the PS2 ctor seeds it to 1 and `Release__17I3D_animation_setFv`
+  decrements and deletes at 0.
+* **default `I3D_ANIMOPTIONS`** (PS2 `+0x04`) — `SetAnimation__11I3D_IPolSet...` reads it as
+  `if (options == 0) options = set->[+4];`. The PS2 ctor seeds it to **1**.
+* **`delete[]`-owned array** (PS2 `+0x08`) — freed by `Close__17I3D_animation_setFv`.
+* **animation blob** (PS2 `+0x0c`) — `NumAnimations` reads its first `u16`, `GetEndTime` its second
+  `* 0x28`, `GetAnims` skips 4 bytes; `LoadAnimation__FPCcUi...` fills it.
+* **What `I3D_ANIMOPTIONS == 2` means** — `Tick__11I3D_IPolSetFi` decodes it. When a track's clock
+  passes the clip's end time the options word stored for that track is tested: `== 2` wraps the
+  clock by ±`GetEndTime`, i.e. loops; anything else clears the track's playing flag, i.e. stops.
+
 ---
 
 ## 7. `I3D_animation_set` — the cached clip set
 
 The element type of `C_I3D_cache<17I3D_animation_set>`. Reached from script code only
-through the cache, so its layout is decoded from the cache's own twin pair plus the PS2
-class body.
+through the cache, so its layout is decoded from the cache's own twin pair (§6f).
 
 | PC offset | PS2 offset | field | evidence |
 |---|---|---|---|
-| `+0x00` | - | vtable | the PC class is polymorphic (`Release` is virtual index 0, called as `(**(code **)*set)(set)` at `0x005bfd2a`); the PS2 class has no vtable symbol and calls `Release` directly |
-| `+0x04` | `+0x00` | **refcount** | the PC cache-hit path does `inc dword [set+4]` at `0x0047fb9a` where the PS2 twin does `++*(int *)set`; the PS2 ctor seeds it to 1 and `Release__17I3D_animation_setFv` decrements and deletes at 0 |
-| `+0x08` | `+0x04` | **default `I3D_ANIMOPTIONS`** | `SetAnimation__11I3D_IPolSet...` reads it as `if (options == 0) options = set->[+4];`. The PS2 ctor seeds it to **1**; `i3d_animation_set_set_default_options` writes **2** |
-| `+0x0c` | `+0x08` | a `delete[]`-owned array | freed by `Close__17I3D_animation_setFv` |
-| `+0x10` | `+0x0c` | the loaded animation blob | `NumAnimations` reads its first `u16`, `GetEndTime` its second `* 0x28`, `GetAnims` skips 4 bytes; `LoadAnimation__FPCcUi...` fills it |
+| `+0x00` | - | vtable | the PC class is polymorphic: `Release` is virtual index 0, called as `(**(code **)*set)(set)` at `0x005bfd2a` |
+| `+0x04` | `+0x00` | **refcount** | the PC cache-hit path does `inc dword [set+4]` at `0x0047fb9a` (§6f) |
+| `+0x08` | `+0x04` | **default `I3D_ANIMOPTIONS`** | `i3d_animation_set_set_default_options` writes **2** (§6f) |
+| `+0x0c` | `+0x08` | a `delete[]`-owned array | §6f |
+| `+0x10` | `+0x0c` | the loaded animation blob | §6f |
 
 ### 7a. What `I3D_ANIMOPTIONS == 2` means
 
-`Tick__11I3D_IPolSetFi` decodes it. When a track's clock passes the clip's end time the
-options word stored for that track is tested: **`== 2` wraps the clock by ±`GetEndTime`**,
-i.e. loops; anything else clears the track's playing flag, i.e. stops. The constructor's
-default of 1 is therefore play-once, and `MODEL_PLAYANIM` overriding it to 2 is what makes a
+**`== 2` loops the clip; anything else plays it once** (§6f). The default of 1 is therefore
+play-once, and `MODEL_PLAYANIM` overriding it to 2 is what makes a
 scripted model animation loop until `MODEL_STOPANIM` — which matches every shipped use
 (mission `EXTREME`, script `detector_ufo01`: the hovering UFO; mission `EXTREME`, script
 `godzila`: the walk cycle).
@@ -319,9 +340,3 @@ back.
   `E8` callers on the PC and no PS2 counterpart, so nothing says who dispatches it or when.
 * **In game:** asking for 257 distinct `.i3d` models should evict, because the cap is 256 on the PC
   (1024 on the PS2) — a PC-only pressure point. Not tested.
-* **The sound and anim destructor twins.** §6's model row maps the derived destructor to the
-  derived symbol `__dt__17C_I3D_model_cacheFv`, while the sound and anim rows map their derived
-  destructors to the MID symbols `__dt__23C_I3D_cache<9I3D_sound>Fv` /
-  `__dt__32C_I3D_cache<17I3D_animation_set>Fv`, which by the same slot logic belong to
-  `i3d_cache_sound_dtor` / `i3d_cache_anim_dtor`. The function registry lists the MID symbol for
-  all six. Which is right for sound and anim is not re-measured.

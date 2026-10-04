@@ -1,6 +1,6 @@
 # Force feedback — the manager, the effect class family, and the effects the game plays
 
-**Created** 2026-08-13 23:54 +0200 · **Modified** 2026-09-27 17:33 +0200
+**Created** 2026-08-13 23:54 +0200 · **Modified** 2026-10-04 11:49 +0200
 
 Two classes live here and this file covers both:
 
@@ -51,7 +51,7 @@ for that immediate (80 callsites).
 | `+0x20` | next effect handle | H | `handle = (*+0x20)++`; reset by `..._reset_handle_counter` and by `..._game_init` |
 | `+0x24` | tick accumulator | H | `+= 1000` per tick |
 | `+0x28` | tick period | H | constructed to **1000** |
-| `+0x2c` | **`g_force_feedback_enabled`** (`0x006f920c`) | H | filled from binding **1**; the flag every on-foot rumble site tests |
+| `+0x2c` | **`g_force_feedback_human_enabled`** (`0x006f920c`) | H | filled from binding **1**; the flag every on-foot rumble site tests |
 | `+0x2d` | **`g_force_feedback_car_enabled`** (`0x006f920d`) | H | filled from binding **0x26**; the CAR half of the pair (§2b) |
 
 ### 2a. Where the singleton is defined
@@ -67,8 +67,7 @@ initializer block:
 | `0x005f8390` | `force_feedback_manager_register_atexit_dtor` | `atexit(&…_static_dtor)` |
 | `0x005f83a0` | `force_feedback_manager_static_dtor` | `mov ecx, 0x6f91e0; jmp force_feedback_manager_dtor` |
 
-That is the ninth and last slot of a nine-of-nine ordered lockstep against the PS2
-`__sinit_Main.cpp` (§6c). The same TU defines the joy device vector. The receiver is
+The cross-build placement is in §6c. The same TU defines the joy device vector. The receiver is
 byte-proven from both stubs' `mov ecx, 0x6f91e0`; the dtor is reached only as
 `atexit(&force_feedback_manager_static_dtor)`.
 
@@ -85,10 +84,10 @@ The consumer census settles it. The two flags are read in exactly four places, a
 partition cleanly by subsystem:
 
 ```
-game_init:  if (g_force_feedback_enabled)      human_create_force_feedback_effects();
-            if (g_force_feedback_car_enabled)  car_create_force_feedback_effects();
-game_done:  if (g_force_feedback_enabled)      human_release_force_feedback_effects();
-            if (g_force_feedback_car_enabled)  car_release_force_feedback_effects();
+game_init:  if (g_force_feedback_human_enabled) human_create_force_feedback_effects();
+            if (g_force_feedback_car_enabled)   car_create_force_feedback_effects();
+game_done:  if (g_force_feedback_human_enabled) human_release_force_feedback_effects();
+            if (g_force_feedback_car_enabled)   car_release_force_feedback_effects();
 ```
 
 `+0x2c` additionally gates every human rumble site in the engine; `+0x2d` is read
@@ -97,9 +96,6 @@ nowhere else at all. `force_feedback_manager_is_enabled(sel)` returns `+0x2d` wh
 
 ⇒ Binding **1** is an on-foot control and binding **0x26** a driving control, and the
 two bytes are the force-feedback capability of the device bound to each.
-
-Method worth reusing: when two writes differ only in provenance, census the readers — the
-producer had been read twice and could not answer the question.
 
 ---
 
@@ -179,7 +175,7 @@ derived vtable, so the base default is never dispatched.
 | Offset | Field | Conf | Notes |
 |---|---|---|---|
 | `+0x00` | vtable | H | one of the five above |
-| `+0x04`..`+0x13` | **a 16-byte member with its own ctor** | U | §7 |
+| `+0x04`..`+0x13` | **a 16-byte member with its own ctor** | U | written once, by `force_feedback_effect_zero_member_at_0x04` from `force_feedback_effect_ctor`, and read nowhere in `Game.exe`: every effect access is in this TU or in `car_update`, which only asks `force_feedback_effect_is_playing` (`+0x30`). It never reaches `ijoy.dll` either, because `force_feedback_effect_create_on_device` passes literal zeros where a DirectInput-shaped call takes the envelope and the start delay. What the member was meant to hold is not recoverable |
 | `+0x14` | type | H | 0 Constant · 1 Ramp · 2–6 Periodic · 7–10 Condition · **0xc = unsupported** |
 | `+0x18` | direction | H | - |
 | `+0x1c` | gain | H | - |
@@ -230,7 +226,7 @@ options slider, pushed into widget id `0xbbe`.
 | `g_ff_car_effect_lateral_spring` | 7 (Condition) | **300** | condition blocks from the car's local lateral axis `car+0x1f80`; gain `car+0x1f84 × load` |
 | `g_ff_car_effect_impact` | 0 (Constant), 220 ms | 201 | the change of the car-space velocity `car+0x1f7c` against `g_car_ff_prev_velocity` (horizontal part, × 0.2, clamped to 1.0) scales the gain; direction from `vec2_signed_angle_diff() + π` — a short directional jolt |
 | `g_ff_car_effect_speed_vibration` | 2 (Periodic) | 200 | **period** re-set each frame from `(car+0x688 − 3.0) × 0.04761905` clamped 0..1 |
-| `g_ff_car_effect_steady_vibration` | 2 (Periodic) | 0 | fixed 100 ms period; played only while `car+0xd18` is set |
+| `g_ff_car_effect_steady_vibration` | 2 (Periodic) | 0 | constant 100 ms period; played only while the engine runs (`car+0xd18` = `C_Vehicle+0xca8`, `structs/car.md` §1) |
 
 All five gains are `weight × g_ff_car_gain_master × <quantity>`, with per-effect weights
 `g_ff_car_gain_*` and two change-detect caches `g_ff_car_last_gain_*`. The whole block is
@@ -296,8 +292,9 @@ consequence: a PS2 method with no PC twin may simply be in a DLL.
 
 PS2's link order is `… C_DropOut · C_ff_manager · C_ff_manager::S_effect · C_grenade …`, and
 `__sinit_Main.cpp`'s ninth slot is `__ct__12C_ff_managerFv(0x50aa50)` — the statement matching
-the PC singleton's static ctor (§2a), so the class exists on both builds and its instance is
-defined in the same source file.
+the PC singleton's static ctor (§2a), the ninth and last slot of a nine-of-nine ordered lockstep
+between the two builds' `Main.cpp` initializer blocks, so the class exists on both builds and its
+instance is defined in the same source file.
 
 The PC TU's own file name is a **CANDIDATE**, not settled. `.text` holds at least two
 alphabetical link runs of `C_*.cpp` objects, so a file's run membership is not decided by its
@@ -305,7 +302,10 @@ name. Run 2 reads `C_animations.cpp` → the `C_blood` / `C_blood_manager` TU
 (`[0x005adfb0, 0x005ae480)`) → the FF TU → `C_program.cpp`, with the FF vtables in run 2's own
 vtable sequence, monotone with run 2's `.text` order
 (`0x0059a12a → 0x005a63ee → 0x005ae4f9`). `C_ff_manager` sorts inside that window
-(`a < b < f < p`), so `C_ff_manager.cpp` is consistent with every measurement taken.
+(`a < b < f < p`), so `C_ff_manager.cpp` is consistent with every measurement taken. The binary
+cannot settle it further: `Game.exe` holds no source-file strings at all, and 26 PS2 source files
+sort inside the same window (`C_blood.cpp` to `C_player.cpp`), so the alphabet does not single out
+one name either.
 
 ---
 
@@ -313,8 +313,4 @@ vtable sequence, monotone with run 2's `.text` order
 
 | Item | State |
 |---|---|
-| 🥇 **the effect record's `+0x04` member** | 16 bytes with its own out-lined ctor (`force_feedback_effect_zero_member_at_0x04`), zeroed once, no located reader and no second writer, and not among the fields the device create call transmits — that call passes two trailing zeros where a DirectInput-shaped API takes `lpEnvelope` and `dwStartDelay`. An unused envelope block and an empty container both fit |
-| `car+0xd18` | gates `g_ff_car_effect_steady_vibration`; undocumented in `structs/car.md` |
-| `+0x2c` (`g_force_feedback_enabled`) | demonstrably the ON-FOOT half of a pair (§2b), so it arguably wants `_human` in its name; 20+ callsites |
-| the source file | §6c — `C_ff_manager.cpp` is a CANDIDATE, not settled |
 | in game | whether force feedback does anything without a rumble-capable pad, and whether the CAR flag `+0x2d` corresponds to a second settings toggle |

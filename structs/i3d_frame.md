@@ -1,6 +1,6 @@
 # `I3D_frame` — the LS3D scene node (and `I3D_scene`, which derives from it)
 
-**Created** 2026-08-30 19:07 +0200 · **Modified** 2026-09-17 22:52 +0200
+**Created** 2026-08-30 19:07 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 `I3D_frame` is the LS3D engine's **scene-graph node**: a transform, a visual, a name, a sector
 membership and a four-character type tag. Every `C_actor` owns one at `actor+0x68`
@@ -31,17 +31,18 @@ typedef struct I3D_frame {
     /* +0x9c */ S_quat   rot;           // [H] rotation quaternion, 4 floats +0x9c..+0xa8
     /* +0xac */ uint     flags;         // [H] validity + dirty bits, see §2
     /* +0x100*/ char    *name;          // [H] null -> g_empty_string (i3d_frame_get_name)
-    /* +0x110*/ int      visual_type;   // [H] 1 = model ('OBJ_'), 4 = SOUND, 5 = SECTOR,
-                                        //     6 = the +0x140 block, 9 = a model/driver frame,
-                                        //     0xe = AREA (a trigger volume). See §3a.
+    /* +0x110*/ int      visual_type;   // [H] the frame type, 1..17 (LS3DF.dll's names):
+                                        //     1 VISUAL, 2 LIGHT, 4 SOUND, 5 SECTOR, 6 DUMMY,
+                                        //     9 MODEL, 0xc OCCLUDER, 0xe AREA ... See §3a.
     /* +0x11c*/ int      child_count;   // [H] i3d_frame_get_child_count_ptr
     /* +0x120*/ I3D_frame *parent;      // [H] the PARENT frame, null for a root frame; see §3b
     /* +0x13c*/ void    *sector;        // [H] the visibility cell; frame->+0x13c == scene->+0x13c
                                         //     is the "same sector as the camera" predicate
     /* +0x140*/ int      _140;          // [H] on an I3D_camera this is the FOV
-                                        //     (i3d_camera_get_fov_ptr); on a visual-type-6 frame
-                                        //     it is a 0x18-byte block read out of the scene .bin
-                                        //     (i3d_frame_set_field_0x140_block) - see §10
+                                        //     (i3d_camera_get_fov_ptr); on a DUMMY frame (type 6)
+                                        //     it is the 0x18-byte bounding box, min then max
+                                        //     corner, read out of the scene .bin
+                                        //     (i3d_frame_set_field_0x140_block) - see §4
     /* +0x154*/ char    *model_name;    // [M] null -> g_empty_string (i3d_frame_get_model_name)
     /* +0x18c*/ int      sound_volume;  // [H] reached only when visual_type == 4
                                         //     (i3d_sound_get_volume_ptr)
@@ -53,10 +54,8 @@ typedef struct I3D_frame {
 
 ### 1a. `I3D_scene` derives from `I3D_frame`
 
-The PS2 `I3D_scene` class ships **eight-byte stub overrides** of exactly the `I3D_frame` virtuals a
-scene root has no use for — `LinkTo`, `SetDir`, `SetName`, `SetOn`, `Update`, `SetCallback`,
-`Duplicate` — which is what a derived class that suppresses its base's API looks like. That is why
-the scene and a frame can be compared on the *same* offset `+0x13c`.
+`I3D_scene` is an `I3D_frame` with part of the base API suppressed (§5). That is why the scene and
+a frame can be compared on the *same* offset `+0x13c`.
 
 ```c
 typedef struct I3D_scene /* : I3D_frame */ {
@@ -74,12 +73,12 @@ whose receiver is that pointer. Its vtable slot `+0xbc` is
 
 | bit | meaning | evidence |
 |---|---|---|
-| `0x1` | **[M]** "on" / enabled | `i3d_frame_is_on` returns it; the PS2 class has `SetOn__9I3D_frame`. No consumer read — the measurement is exact, the noun is not |
+| `0x1` | **[M]** "on" / enabled | `i3d_frame_is_on` returns it (§5, §10) |
 | `0x4` | local matrix valid | `i3d_frame_get_scaled_rot_matrix_ptr` returns early when set |
 | `0x8` | rotation quaternion valid | set by `i3d_frame_get_rotation_ptr` and `i3d_frame_set_orientation` |
 | `0x10` | rotation source is the matrix, not the quaternion | selects which branch rebuilds the 3x3 |
 | `0x20` | world matrix valid | cleared work is done by `I3D_frame::UpdateWMatrixProc` |
-| `0x80` (low byte sign) | guard tested by `i3d_frame_set_position_xyz_ptrs` before writing | |
+| `0x80` (low byte sign) | a write guard | tested by `i3d_frame_set_position_xyz_ptrs` before writing |
 
 Two composite rewrites recur across the engine and are useful as **shared magic constants** when
 matching functions across builds:
@@ -110,16 +109,26 @@ is the standard "is this a real model?" gate (`structs/player.md`, `structs/enti
 
 ### 3a. The `visual_type` values at `+0x110`
 
-Three of these are pinned by a script-VM dispatcher case that REFUSES to run unless the frame
-carries the type, which makes the value a guard the engine itself enforces.
+**The names come from `ls3df.dll`.** Its frame-type-name function (`0x10019760` in the DLL) is a
+jump table indexed by `type − 1` whose arms return the strings `FRAME_VISUAL` … `FRAME_EMITOR`, in
+this order: 1 VISUAL · 2 LIGHT · 3 CAMERA · 4 SOUND · 5 SECTOR · 6 DUMMY · 7 TARGET · 8 USER ·
+9 MODEL · 10 JOINT · 11 VOLUME · 12 OCCLUDER · 13 SCENE · 14 AREA · 15 SHADOW · 16 LANDSCAPE ·
+17 EMITOR.
+
+The rows below are the types the game's own code tests. Three of them are pinned by a script-VM
+dispatcher case that REFUSES to run unless the frame carries the type, which makes the value a
+guard the engine itself enforces; the scene-file arms of `mission_open_bin` (`structs/mission.md`
+§4a) gate on several more.
 
 | value | what | how it is established |
 |---:|---|---|
-| `1` | model / object frame | tested together with the `'OBJ_'` tag (§3) |
+| `1` | **VISUAL** — model / object frame | tested together with the `'OBJ_'` tag (§3) |
+| `2` | **LIGHT** | scene chunk `0x4040` (the light block) is applied only to a type-2 frame |
 | `4` | **SOUND** | `sound_getvolume` (dispatcher case `0x13f`) bails unless the type is 4, then reads through `i3d_sound_get_volume_ptr` |
 | `5` | **SECTOR** | `ispointinsector` (case `0x13c`) bails unless the type is 5, then calls the frame's own containment vtable slot `+0x68`. `frm_setpos` (case `0xf6`) tests the same value on the PARENT when deciding whether to re-home a frame |
-| `6` | the `0x18`-byte `+0x140` block read out of the scene `.bin` | `i3d_frame_set_field_0x140_block` (§4) |
-| `9` | a model / driver frame | `actor_duplicate` (case `0xda`) requires it before cloning; the I3D driver is asked for type 9 |
+| `6` | **DUMMY** — carries its bounding box at `+0x140` | `i3d_frame_set_field_0x140_block` (§4) stores it from scene chunk `0x4050`; its readers use it as a min / max corner pair — the car's `"TANK"` frame radius (`structs/car.md` §1a) and the `~DCC` boxes, which are built only on type-6 frames (`structs/car_extended.md` §2d) |
+| `9` | **MODEL** — a model / driver frame | `actor_duplicate` (case `0xda`) requires it before cloning; the I3D driver is asked for type 9 |
+| `0xc` | **OCCLUDER** | scene chunk `0x4083` (a vertex and triangle list) is applied only to a type-12 frame |
 | `0xe` | **AREA** — a scripted trigger volume | `ispointinarea` (case `0x13d`) bails unless the type is `0xe`, then calls containment vtable slot `+0x5c` |
 
 A sector and an area are DIFFERENT objects with different containment slots. The shipped scripts
@@ -152,7 +161,7 @@ reference. The rows in bold sit in the `C_program` translation unit's out-of-lin
 | PC VA | PC name | reads / writes | notes |
 |---|---|---|---|
 | `0x004029c0` | `i3d_frame_get_bound_points_2d` | - | the free `GetBoundPoints2D` overload: 4 world-space corners of the 2D bound rectangle |
-| `0x004251f0` | `i3d_frame_get_local_position_ptr` | `+0x80` | |
+| `0x004251f0` | `i3d_frame_get_local_position_ptr` | `+0x80` | - |
 | `0x00425200` | `i3d_frame_get_world_position_ptr` | `+0x40` | refreshes the world matrix first |
 | `0x00425220` | `i3d_frame_get_forward_normalized` | `+0x30..+0x38` | normalises the forward row |
 | `0x00453900` | `i3d_frame_build_scaled_rot_matrix` | `+0x50`, `+0x90` | void sibling of `0x005c83f0` |
@@ -160,7 +169,7 @@ reference. The rows in bold sit in the `C_program` translation unit's out-of-lin
 | `0x0045f040` | `i3d_frame_set_orientation` | `+0x9c` | 4 dwords + flag bit `0x8` |
 | `0x0045f090` | `i3d_frame_get_scale` | `+0x90` | the **WORLD** scale: copies the local triple out when the frame has no PARENT (`+0x120` null), else extracts it from the world matrix (§3b) |
 | `0x004f46c0` | `i3d_frame_get_world_matrix_ptr` | `+0x10` | refreshes first |
-| `0x005289c0` | `i3d_frame_get_local_direction_normalized` | - | |
+| `0x005289c0` | `i3d_frame_get_local_direction_normalized` | - | - |
 | `0x00528b70` | `i3d_frame_get_parent_ptr` | `+0x120` | the PARENT accessor, 30 uses (§3b) |
 | **`0x005c82a0`** | **`i3d_frame_get_type_ptr`** | `+0x110` | 41 callsites — the busiest in the tail |
 | **`0x005c82b0`** | `i3d_frame_set_position_xyz_ptrs` | `+0x80..+0x88` | three separate `float *` args |
@@ -171,17 +180,17 @@ reference. The rows in bold sit in the `C_program` translation unit's out-of-lin
 | **`0x005c83f0`** | **`i3d_frame_get_scaled_rot_matrix_ptr`** | `+0x50` | the `_ptr` sibling of `0x00453900` |
 | **`0x005c8510`** | **`i3d_frame_is_on`** | `+0xac & 1` | the noun is [M] |
 | **`0x005c8520`** | **`i3d_frame_get_name`** | `+0x100` | the name is an `I3D_frame` field, not a `C_actor` one: every disassembled callsite is `call folded_get_dword_0x68; mov ecx,eax; call <it>` |
-| **`0x005c8530`** | **`i3d_frame_get_child_count_ptr`** | `+0x11c` | the PS2 reaches the same quantity through the `GetNumChilds` virtual |
-| **`0x005c8580`** | **`i3d_frame_get_tag_ptr`** | `+0x1d4` | |
-| **`0x005c8590`** | **`i3d_frame_get_mesh_object_ptr`** | `+0x1e0` | |
-| **`0x005c85a0`** | **`i3d_camera_get_fov_ptr`** | `+0x140` | the receiver is an `I3D_camera`, so the field is a CAMERA field reached through the frame base; same 180/pi conversion on both builds |
+| **`0x005c8530`** | **`i3d_frame_get_child_count_ptr`** | `+0x11c` | - |
+| **`0x005c8580`** | **`i3d_frame_get_tag_ptr`** | `+0x1d4` | - |
+| **`0x005c8590`** | **`i3d_frame_get_mesh_object_ptr`** | `+0x1e0` | - |
+| **`0x005c85a0`** | **`i3d_camera_get_fov_ptr`** | `+0x140` | the receiver is an `I3D_camera`, so the field is a CAMERA field reached through the frame base |
 | **`0x005c85b0`** | **`i3d_frame_get_lmap_entry_ptr`** | `+0x220 + i*0x38` | noun from the caller's `'LMAP'` gate |
 | **`0x005c85d0`** | **`i3d_frame_get_model_name`** | `+0x154` | [M] — see §5 |
-| **`0x005c85e0`** | **`i3d_scene_get_active_camera_ptr`** | `+0x17c` | |
-| **`0x005c85f0`** | **`i3d_scene_get_root_frame_ptr`** | `+0x210` | passed to the same link virtual as the PS2's scene root |
-| **`0x005c8600`** | **`i3d_scene_set_frame_sector_pos`** | scene vtable `+0xbc` | |
+| **`0x005c85e0`** | **`i3d_scene_get_active_camera_ptr`** | `+0x17c` | - |
+| **`0x005c85f0`** | **`i3d_scene_get_root_frame_ptr`** | `+0x210` | - |
+| **`0x005c8600`** | **`i3d_scene_set_frame_sector_pos`** | scene vtable `+0xbc` | - |
 | **`0x005c8630`** | **`i3d_sound_get_volume_ptr`** | `+0x18c` | under the frame-type-4 gate |
-| `0x00606370` | `i3d_frame_set_field_0x140_block` | `+0x140` | stores a `0x18`-byte block read straight out of the scene `.bin`, so `+0x140` is at least `0x18` bytes wide and is FILE DATA. Its one callsite, in `mission_open_bin`, is guarded on `i3d_frame_get_type_ptr` returning visual type **6** |
+| `0x00606370` | `i3d_frame_set_field_0x140_block` | `+0x140` | stores the `0x18`-byte bounding box, minimum then maximum corner, that scene chunk `0x4050` carries for a DUMMY frame (`structs/mission.md` §4a). Its one callsite, in `mission_open_bin`, is guarded on `i3d_frame_get_type_ptr` returning type **6** |
 
 ## 5. PC vs PS2
 
@@ -210,6 +219,22 @@ reference. The rows in bold sit in the `C_program` translation unit's out-of-lin
   `IShow` (`basic/artifacts/script-opcode-dispatch.md` §10), a COM-style interface on both builds.
 - **`I3D_camera+0x140`** is PS2 `camera+0x120`; **`+0x18c`** (sound volume) is PS2 `frame+0x16c`;
   **`I3D_scene+0x210`** is PS2 `scene+0x1d8`.
+- **`I3D_scene` derives from `I3D_frame` (§1a).** The PS2 `I3D_scene` class ships **eight-byte stub
+  overrides** of exactly the `I3D_frame` virtuals a scene root has no use for — `LinkTo`, `SetDir`,
+  `SetName`, `SetOn`, `Update`, `SetCallback`, `Duplicate` — which is what a derived class that
+  suppresses its base's API looks like.
+- **Flag bit `0x1` (§2):** the [M] noun "on / enabled" rests on the PS2 class's `SetOn__9I3D_frame`.
+- **Three accessors of §4:** the PS2 reaches `i3d_frame_get_child_count_ptr`'s quantity through the
+  `GetNumChilds` virtual; `i3d_camera_get_fov_ptr`'s 180/pi conversion is the same on both builds;
+  the pointer `i3d_scene_get_root_frame_ptr` returns is passed to the same link virtual as the PS2's
+  scene root.
+- **The mesh chain (§9) is named from the PS2.** The PS2 `STREAM_CONNECT` arm is an empty stub, but
+  `glass_shatter_cut_mesh` walks the identical chain and its PS2 twin
+  `CutMesh__19C_Break_plain_glass…` is CONFIRMED, so laying the two side by side names every hop —
+  `GetLOD__15I3D_mesh_objectCFi`, `LockVertices__14I3D_mesh_levelFUi`,
+  `GetFGroup__14I3D_mesh_levelFi`, and `I3D_material::Duplicate` taking `*(u32 *)fgroup`. The PS2
+  hands `+0x1e0` to `GetLOD__15I3D_mesh_objectCFi` in the twins of `uv_scroll_channel_tick` and
+  `glass_shatter_cut_mesh`, at the same `+0x1e0` on both builds.
 
 ## 6. Related
 
@@ -240,14 +265,9 @@ I3D_frame (type 1, tag 'OBJ_')
                                               virtual 3  GetFaces(u32) -> u16 triples
 ```
 
-**How the classes are established**, given that the PS2 `STREAM_CONNECT` arm is an empty stub:
-`glass_shatter_cut_mesh` walks the identical chain and its PS2 twin
-`CutMesh__19C_Break_plain_glass…` is CONFIRMED, so laying the two side by side names every hop —
-`GetLOD__15I3D_mesh_objectCFi`, `LockVertices__14I3D_mesh_levelFUi`, `GetFGroup__14I3D_mesh_levelFi`,
-and `I3D_material::Duplicate` taking `*(u32 *)fgroup`. The two counts then fall out of `0x004fc8fd`,
-where each is the loop bound of the indexed getter it guards. The PS2 hands `+0x1e0` to
-`GetLOD__15I3D_mesh_objectCFi` in the twins of `uv_scroll_channel_tick` and
-`glass_shatter_cut_mesh`, at the same `+0x1e0` on both builds.
+**How the classes are established.** `glass_shatter_cut_mesh` walks the identical chain, and its
+CONFIRMED twin names every hop (§5). The two counts then fall out of `0x004fc8fd`, where each is
+the loop bound of the indexed getter it guards.
 
 ## 10. Open items
 
@@ -255,4 +275,3 @@ where each is the loop bound of the indexed getter it guards. The PS2 hands `+0x
 |---|---|
 | the `0x38`-stride table at `+0x220` | [U]; reached only under the `'LMAP'` tag |
 | `i3d_frame_is_on`'s noun | the bit is measured, the name "on / enabled" is [M] |
-| the `0x18`-byte `+0x140` block | file data from the scene `.bin` on a visual-type-6 frame; what it means is [U] |

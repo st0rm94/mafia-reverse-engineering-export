@@ -1,6 +1,6 @@
 # `soundArena` — the game-wide sound propagation ring
 
-**Created** 2026-07-16 20:47 +0200 · **Modified** 2026-09-17 13:52 +0200
+**Created** 2026-07-16 20:47 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 ⚠️ **Not to be confused with `C_sound_table`** (`structs/sound_table.md`), which sits in the same
 `tools.cpp` translation unit immediately above this one and shares the word "sound" and nothing else.
@@ -45,11 +45,11 @@ typedef struct soundArena {              // at C_game+0x2b3c
 } soundArena;                            // size >= 0x208
 ```
 
-**The per-slot record is only partly decoded.** `+0x04` (timestamp) and `+0x10` (source actor) are
-byte-proven from the GC sweep and the invalidate walk. The rest of the 0x20 record — position,
-loudness, range, type — is inferred from the *consumer* (`sound_arena_update_entity_sound_contacts`
-builds a 6-dword `{pos, base, range, source, intensity}` record from it), but the field order inside
-the slot is not pinned by disassembly (§6). The sibling `ai_sensors` sound-contact record is
+**The per-slot record.** `+0x04` (timestamp) and `+0x10` (source actor) are byte-proven from the
+GC sweep and the invalidate walk. The rest of the 0x20 record carries position, loudness, range and
+type — inferred from the *consumer*, `sound_arena_update_entity_sound_contacts`, which builds a
+6-dword `{pos, base, range, source, intensity}` record from a slot; their order inside the slot is
+open (§6). The sibling `ai_sensors` sound-contact record is
 mis-rendered by Ghidra (`structs/ai_sensors.md` §5), so decompiler offsets are not transcribed here.
 
 **The clock** is `C_game + 0x2b0c` — the same clock `ai_sensors_can_hear` and

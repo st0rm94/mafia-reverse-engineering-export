@@ -1,6 +1,6 @@
 # `ai_character` — the NPC personality / stat block
 
-**Created** 2026-07-16 10:28 +0200 · **Modified** 2026-09-17 13:46 +0200
+**Created** 2026-07-16 10:28 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c` and `Game.exe` disassembly, cross-checked
 against the non-stripped PS2 ELF (`SLUS_206.71`). This documents the PC build; the PS2 side
@@ -9,8 +9,8 @@ supplies the original developer names (§6), and every PC offset below is byte-d
 
 `ai_character` is a small **sub-object EMBEDDED in `C_entity` at `+0xebc`** holding the NPC's
 personality/sense stats. It is the "how good is this NPC at X" record: each stat is
-`shared_config[K] + per_instance_delta`, so a mission can nudge an individual NPC away from its
-NPC-type baseline without copying the whole config record.
+`owner_property[K] + per_instance_delta`, where the property block is the owning entity's own
+(§1).
 
 | | |
 |---|---|
@@ -27,16 +27,16 @@ NPC-type baseline without copying the whole config record.
 
 ```c
 typedef struct ai_character {           // embedded at C_entity+0xebc
-    /* +0x00 */ float    stat_delta_0;      // [U] zeroed by ai_character_init; no getter located
+    /* +0x00 */ float    stat_delta_0;      // [H] zeroed by ai_character_init; never read (§2)
     /* +0x04 */ float    intelligence_delta;// [H] per-instance delta; ai_character_get_intelligence
     /* +0x08 */ float    morale_delta;      // [H] per-instance delta; ai_character_get_morale
-    /* +0x0c */ float    stat_delta_3;      // [U] zeroed by ai_character_init; no getter located
+    /* +0x0c */ float    stat_delta_3;      // [H] zeroed by ai_character_init; never read (§2)
     /* +0x10 */ float    aggression_delta;  // [H] per-instance delta; ai_character_get_aggression
     /* +0x14 */ float    sight_delta;       // [H] per-instance delta; ai_character_get_sight
     /* +0x18 */ float    hearing_delta;     // [H] per-instance delta; ai_character_get_hearing
-    /* +0x1c */ float    stat_delta_7;      // [U] zeroed by ai_character_init; no getter located
-    /* +0x20 */ float    stat_delta_8;      // [U] zeroed by ai_character_init; no getter located
-    /* +0x24 */ void    *cfg;               // [H] -> shared stat CONFIG RECORD (NOT serialized).
+    /* +0x1c */ float    stat_delta_7;      // [H] zeroed by ai_character_init; never read (§2)
+    /* +0x20 */ float    stat_delta_8;      // [H] zeroed by ai_character_init; never read (§2)
+    /* +0x24 */ void    *cfg;               // [H] -> the OWNING C_entity (NOT serialized).
                                             //     Stored by ai_character_init(this, cfg).
 } ai_character;                             // size 0x28
 ```
@@ -48,21 +48,23 @@ writes — the config pointer is a live pointer and is restored by re-`Init` on 
 This independently corroborates both the sub-object identification and the savegame chain
 documented in `structs/entity.md` §4.
 
-### The shared config record (`*(this+0x24)`)
+### The config record (`*(this+0x24)`) is the owning entity
 
-Each getter reads `cfg[K]`. The record is reached only through `ai_character+0x24`; no
-writer/loader has been located (§7).
+Both callers of `ai_character_init` — `entity_game_init` and `entity_reset` — push the entity itself
+and set ECX to `entity+0xebc`, so `cfg` is the owning `C_entity`, and each getter reads a slot of the
+entity's **current-value property block** (`prop_cur`, `structs/human.md` §2b). That block is loaded
+from the scene by `human_load_stats_block_plain` / `_scaled` and changed by the script's
+`human_setproperty`.
 
-| cfg offset | stat |
-|---|---|
-| `+0x660` | aggression |
-| `+0x664` | intelligence |
-| `+0x66c` | sight |
-| `+0x670` | hearing |
-| `+0x67c` | morale |
+| cfg offset | stat | property slot |
+|---|---|---|
+| `+0x660` | aggression | 8 `Aggresivity` |
+| `+0x664` | intelligence | 9 `Intelligence` |
+| `+0x66c` | sight | 11 `Sight` |
+| `+0x670` | hearing | 12 `Hearing` |
+| `+0x67c` | morale | 15 — past the 15 named slots, so no script name reaches it; its maximum-side twin `+0x63c` is the constant 0.5 |
 
-The record is larger than these five fields: the offsets are sparse, and `0x668`, `0x674`,
-`0x678` are unclaimed within the same band, matching the four un-getter'd instance deltas above.
+No store with a literal displacement writes `C_entity+0x67c`.
 
 ---
 
@@ -75,8 +77,8 @@ The record is larger than these five fields: the offsets are sparse, and `0x668`
 | +0x10 | aggression_delta | H | `ai_character_init` (zero) | `ai_character_get_aggression` | **consumer-proven** by `ai_logs_compute_attitude` (§4) |
 | +0x14 | sight_delta | H | `ai_character_init` (zero) | `ai_character_get_sight` | **consumer-proven**: `entity_get_sight_range` = this × 200.0, compared against inter-entity distance by `ai_vis_logs_tick` |
 | +0x18 | hearing_delta | H | `ai_character_init` (zero) | `ai_character_get_hearing` | **consumer-proven**: `sound_arena_update_entity_sound_contacts` registers a sound contact iff attenuated loudness > `1.05 − this` |
-| +0x00, +0x0c, +0x1c, +0x20 | 4 unclaimed stat deltas | M | `ai_character_init` (zero) | - | zeroed + serialized, no getter located on either build |
-| +0x24 | cfg | H | `ai_character_init` | every `ai_character_get_*` | shared stat config record; **not serialized** (§1) |
+| +0x00, +0x0c, +0x1c, +0x20 | 4 unused stat deltas | H | `ai_character_init` (zero), `entity_load_character` (block restore) | - | never read and never set to anything but zero: all 16 pointers the image forms to `entity+0xebc` go to `ai_character_init`, a getter, or the `entity_save_character` / `entity_load_character` block copy, and no instruction addresses the four fields from the entity base. No getter on either build |
+| +0x24 | cfg | H | `ai_character_init` | every `ai_character_get_*` | the owning `C_entity`; **not serialized** (§1) |
 
 ---
 
@@ -113,9 +115,11 @@ scales **ANGER** as `anger = (aggression + 0.5) · (...)` — high aggression �
 two feed different outputs, each with the expected polarity, corroborates both glosses. See
 `structs/ai_logs.md` §3/§4.
 
-² The block is `{log[0x13], log[0x14], log[0x12], intelligence}` built from the `ai_logs` record of
-the current target; `ai_fight_modes_tick` multiplies `param_2[3]` into the active mode slot's
-`+0x0c` term while rescoring the six combat modes.
+² The block is `{anger (log+0x4c), fear (log+0x50), threat (log+0x48), intelligence}`, built from
+the `ai_logs` record of the current enemy. `ai_fight_modes_tick` weights intelligence by each mode's
+`+0x0c` constant: 0.1 for the normal fight, 0.75 for the crouch fight, 1.0 for the corner (cover)
+fight, 0 for the reset mode. A higher intelligence therefore shifts the NPC from the normal fight
+towards crouch and cover fighting (`structs/ai_fight_modes.md` §2a, §4).
 
 ---
 
@@ -161,12 +165,3 @@ the current target; `ai_fight_modes_tick` multiplies `param_2[3]` into the activ
 * `GetMoralka__12ai_character` and `GetAgresivita__12ai_character` are called in that order at the
   head of `ComputeAttitude__7ai_logs`, matching `ai_logs_compute_attitude`.
 
----
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| the shared config record (`ai_character+0x24`) | writer and load source unknown; likely a per-NPC-type baseline from a `.def` file (`def-files-docs/`). The loader would name the whole `cfg[0x660..0x67c]` band and the four unclaimed deltas |
-| the four unclaimed stat deltas (`+0x00`, `+0x0c`, `+0x1c`, `+0x20`) | zeroed and serialized on both builds, no getter on either: dead spares or inlined access |
-| intelligence | read by `entity_ai` into the fight-mode scoring (§4); what the term means for tactic choice is not traced, so the gloss is the developer's word, not a proven behaviour |

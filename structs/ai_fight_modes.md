@@ -1,6 +1,6 @@
 # `ai_fight_modes` — the NPC combat-mode scorer
 
-**Created** 2026-07-16 20:30 +0200 · **Modified** 2026-09-18 05:52 +0200
+**Created** 2026-07-16 20:30 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 | | |
 |---|---|
@@ -39,10 +39,7 @@ callsite in the disassembly:
    That reaches the same object from a different base, through a field whose meaning is already
    independently documented.
 
-Corroboration: a one-line PC accessor returns `this+0xf64`; and the PS2 build places the class at
-`C_entity+0x114c`, a delta of `0x1e8` — exactly the `C_entity` band delta that
-`ai_logs_compute_attitude`'s three tuning fields confirm independently (PS2 `+0x111c`/`+0x1104`/
-`+0x1110` ↔ PC `+0xf34`/`+0xf1c`/`+0xf28`).
+Corroboration: a one-line PC accessor returns `this+0xf64` (the PS2 placement: §6).
 
 The object is one of the `C_entity` AI sub-objects listed in `structs/entity.md` §6c, alongside
 `ai_character` (`+0xebc`), `ai_sensors` (`+0xbb4`), `ai_logs` (`+0xe88`) and `ai_vis_logs` (`+0xb04`).
@@ -106,7 +103,24 @@ weight — plus `viability = 1.0f`, and zeroes the rest of the slot:
 
 Mode 2 is also the only slot that gets a heap block: `operator_new(0x24)` stored at slot `+0x30`,
 absolute `+0x98`, which the tick hands to `ai_wayfind_find_nearest_hide_corner` — so mode 2 is the
-cover-seeking mode.
+cover-seeking mode. The block is an **`ai_corner_hide_info`** (`structs/check_seg.md` §1g: corner,
+approach position, facing, side, distance), and the tick reads its `+0x20` distance.
+
+**The four scoring inputs** are built by `entity_ai`, the tick's only caller (3 callsites): `{anger
+(log+0x4c), fear (log+0x50), threat (log+0x48), intelligence}`, from the `ai_logs` record of the
+current enemy plus `ai_character_get_intelligence` (`structs/ai_logs.md`,
+`structs/ai_character.md`). So the columns of the table above weight anger, fear, threat and
+intelligence in that order.
+
+**What the modes are**, from `ai_fight_modes_enact_active_mode`'s switch:
+
+| mode | action installed |
+|---:|---|
+| 0 | normal fight (type `0x1e`), aggression 2.0 unarmed / 5.0 armed, plus a car-jump modifier |
+| 1 | crouch fight (type `0x1d`), `15.0`, with `8` when the enemy is in a car, plus a car-jump modifier |
+| 2 | corner fight (type `0x1c`) on the slot's `ai_corner_hide_info`, plus a car-jump modifier |
+| 3, 4 | no arm — nothing is installed, and their totals are always 0 on the PC (§4) |
+| 5 | no action: clears the job queue and every mode's hit statistic, re-seeds the preferences (mode 1 = 10.0, mode 2 = −10.0) and writes the owner's ANGER ramp (`C_entity+0xf1c` = 2.0, rate −0.0001/ms, for 10 000 ms; `structs/entity.md`) |
 
 ## 3. Field evidence
 
@@ -194,7 +208,9 @@ rows. Rows are ordered by PC VA, which is also PS2 emission order.
   is unusual here (the `C_entity` bands drift by `0x14c` / `0x1d4` / `0x1e4` / `0x1e8`), and seven
   independent body-diffs all landing on identical offsets is itself corroboration.
 * **The owner offset does differ**, like the rest of the `C_entity` bands: PC `+0xf64` ↔ PS2
-  `+0x114c`, delta `0x1e8` (§1a).
+  `+0x114c`, delta `0x1e8` — exactly the `C_entity` band delta that `ai_logs_compute_attitude`'s
+  three tuning fields confirm independently (PC `+0xf34`/`+0xf1c`/`+0xf28` ↔ PS2
+  `+0x111c`/`+0x1104`/`+0x1110`).
 * **PS2 guards the score write.** `PrefferMode__14ai_fight_modes` takes a 4th `bool` parameter the PC
   signature lacks and only stamps a mode when
   `(bool_param == 0) || (0.0 <= current_score) || (mission_clock − pref_at > 9999)`.
@@ -219,14 +235,13 @@ rows. Rows are ordered by PC VA, which is also PS2 emission order.
 * `structs/entity.md` §6c — the `C_entity` AI sub-object map, including `ai_fight_modes` at `+0xf64`.
 * `structs/ai_logs.md` — `ai_logs_event` calls `ai_fight_modes_apply_hit` directly, and the `ai_logs`
   owner backpointer is one of the two paths that byte-prove `+0xf64`.
+* `structs/ai_action_manager.md` — the action queue `ai_fight_modes_enact_active_mode` installs into,
+  embedded at `C_entity+0x1164`.
+* `structs/ai_space_coverage.md` — the four functions at `0x00439f70`..`0x0043a150`, in the same PC
+  region after `ai_talkman`, belong to `ai_space_coverage`, not to this class.
 
 ## 8. Open items
 
 | item | state |
 |---|---|
-| what the six modes *are* | mode 0 is a normal fight with a car-jump modifier, mode 2 is cover-seeking (the hide-corner query and its work block), modes 3 and 4 score 0 in the PC build. The remaining identities come from `ai_fight_modes_enact_active_mode`'s switch arms, which are not yet enumerated |
-| the `0x24`-byte block at slot 2 `+0x30` | allocated by `ai_fight_modes_init`, freed by `ai_fight_modes_destroy`, passed to `ai_wayfind_find_nearest_hide_corner` and read back at its `+0x20` as a distance; its full layout is not decoded |
-| the four floats of the tick's input block | the caller-supplied `float *` the input weights multiply; the producer is not traced |
-| the PS2 sticky-score prediction (§6) | derived from the guard in `PrefferMode__14ai_fight_modes`; not observed in play on either build |
-| the `dir8_score_ring_*` helpers | sit in the same PC region and may belong to this class; not body-diffed, so not claimed |
-| is `ai_action_manager` the same object as `npc_task_subsystem`? | PS2 `Select` reaches the action manager as `owner + 0x1348`; `npc_task_subsystem` is documented at `C_human+0x1164`, and `0x1348 − 0x1e8 = 0x1160` — four bytes off. Needs its own body-diff |
+| the PS2 sticky-score prediction (§6) | 🎮 **IN GAME** (PS2) — derived from the guard in `PrefferMode__14ai_fight_modes`; not observed in play |

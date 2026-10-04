@@ -1,6 +1,6 @@
 # `C_string` / `C_str_base` — the refcounted string class
 
-**Created** 2026-07-29 20:59 +0200 · **Modified** 2026-09-18 05:38 +0200
+**Created** 2026-07-29 20:59 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`string_`**.
 
@@ -38,9 +38,8 @@ typedef struct C_str_base {               // 9 + length bytes, heap
 ### 1a. 🔑 `strlen + 9` is the family fingerprint
 
 Every allocation in this family is `operator_new(strlen + 9)` — 4 refcount + 4 length + the
-bytes + the NUL. **It is identical on both builds**, and it is what identifies `string_format`
-against a near-identical sibling that allocates nothing of the sort (§4). When you meet an
-unknown `operator_new(n + 9)` next to a `strlen`, this is the class.
+bytes + the NUL. When you meet an unknown `operator_new(n + 9)` next to a `strlen`, this is the
+class; §4 uses the same fingerprint to map `string_format`.
 
 ### 1b. The NULL handle is a first-class state
 

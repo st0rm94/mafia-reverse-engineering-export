@@ -1,6 +1,6 @@
 # `ai_logs` — the NPC's per-target attitude log
 
-**Created** 2026-07-16 21:10 +0200 · **Modified** 2026-09-27 13:44 +0200
+**Created** 2026-07-16 21:10 +0200 · **Modified** 2026-10-04 11:54 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c` + `Game.exe` disassembly, cross-checked against the
 non-stripped PS2 ELF. PS2 material is in §5; the coverage tables in §3 are PC↔PS2 twin tables.
@@ -14,7 +14,7 @@ scored by fear / anger / threat / death, and hands the AI the current worst offe
 - **PC location:** **`C_entity + 0xe88`** — byte-proven: `lea ecx,[esi+0xe88]` at all 20 callsites of
   `ai_logs_tick`.
 - **Coverage: 14/14 `ai_logs` methods CONFIRMED + 7/7 `ai_character_log`, every row body-diffed on
-  both builds. Zero CANDIDATE rows.**
+  both builds. Zero CANDIDATE rows.** Plus one PC-only function, `ai_logs_clear_all_logs` (§3).
 
 **Confidence tags:** **[H]** writer and reader both read · **[M]** inferred from one side · **[U]** not observed.
 
@@ -24,16 +24,22 @@ scored by fear / anger / threat / death, and hands the AI the current worst offe
 
 ```c
 typedef struct ai_logs {                 // embedded at C_entity+0xe88
-    /* +0x00 */ uint32_t hdr[9];         // [M] the first 0x24 bytes, zeroed wholesale by ai_logs_init
+    /* +0x00 */ uint32_t hdr[8];         // [H] 0x20 bytes: zeroed by ai_logs_init, saved and loaded
+                                         //     as 8 dwords by entity_save_logs / entity_load_logs;
+                                         //     read by no method on either build
+    /* +0x20 */ uint8_t  _alloc;         // [H] the vector's MSVC allocator byte: ai_logs_event and
+                                         //     entity_load_logs pass this+0x20 as the vector object
     /* +0x24 */ ai_character_log *begin; // [H] the LOG VECTOR (begin) = C_entity+0xeac, the
                                          //     "ai_logs list" of structs/entity.md. Freed by the
                                          //     shared fold vector_dispose_at_0x24 ¹
     /* +0x28 */ ai_character_log *end;   // [H] one past the last log. Count = (end - begin) / 0x54.
                                          //     ai_logs_init empties the vector with `end = begin`.
+    /* +0x2c */ ai_character_log *cap;   // [M] the MSVC vector's capacity word
     /* +0x30 */ C_entity *owner;         // [H] owner backpointer, stored by ai_logs_init. Every method
                                          //     that needs the owner's stats, frame or sub-objects
                                          //     reaches them through here.
-} ai_logs;                               // partial — only the init/teardown band is pinned
+} ai_logs;                               // 0x34 - the next C_entity member, ai_character,
+                                        //   starts at C_entity+0xebc
 ```
 
 ¹ `vector_dispose_at_0x24` is an identical-COMDAT fold shared with `ai_loc`'s own `+0x24` vector, so
@@ -66,7 +72,8 @@ typedef struct ai_character_log {       // 0x54 bytes; element of the ai_logs ve
     /* +0x24 */ uint32_t last_seen;     // [H] ai_logs_tick, when ai_sensors_can_see fires
     /* +0x28 */ uint32_t last_heard;    // [H] ai_logs_tick, when ai_sensors_can_hear fires
     /* +0x2c */ uint32_t last_smelled;  // [H] ai_logs_tick, when ai_sensors_can_smell fires
-    /* +0x30 */ uint32_t last_aimed;    // [H] visible AND target armed (+0x1e5); the 6250 ms weight
+    /* +0x30 */ uint32_t last_aimed;    // [H] visible AND target aiming (C_human+0x1e5, the aimed
+                                        //     stance flag); the 6250 ms weight
     /* +0x34 */ uint32_t last_shot;     // [H] heard AND target fired <250 ms ago; the 25000 ms weight
     /* +0x38 */ uint32_t next_poll_ts;  // [H] sense re-poll gate; ai_logs_tick pushes it +250 ms
     /* +0x3c */ float    attitude_bias; // [H] input bias; snapshotted from +0x40 on each new contact
@@ -90,18 +97,21 @@ writes exactly indices `0 .. 0x14` (= `+0x00 .. +0x50`), and every scan in the c
 
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
-| +0x00..+0x23 | hdr | M | `ai_logs_init` | - | not decoded |
-| +0x24 / +0x28 | log vector begin/end | H | `ai_logs_init`, `ai_logs_event`, `ai_logs_destroy_log_for_actor`, `ai_logs_tick` | `ai_logs_has_log`, `ai_logs_get_log_for_actor`, `ai_logs_get_max_angry`, `ai_logs_get_max_fear`, `ai_logs_get_max_death`, `ai_logs_get_max_threat_score`, `ai_logs_reset_stale_logs`, `entity_save_logs`, `entity_load_logs` | = `C_entity+0xeac`. Elements are `ai_character_log` (§1a) |
+| +0x00..+0x1f | hdr | H | `ai_logs_init`, `entity_load_logs` | `entity_save_logs` | 8 dwords, saved and loaded as a block; no method reads them |
+| +0x20 | vector allocator byte | H | - | - | the MSVC allocator member; `ai_logs_event` and `entity_load_logs` pass `this+0x20` as the vector |
+| +0x24 / +0x28 | log vector begin/end | H | `ai_logs_init`, `ai_logs_event`, `ai_logs_destroy_log_for_actor`, `ai_logs_tick`, `ai_logs_clear_all_logs` | `ai_logs_has_log`, `ai_logs_get_log_for_actor`, `ai_logs_get_max_angry`, `ai_logs_get_max_fear`, `ai_logs_get_max_death`, `ai_logs_get_max_threat_score`, `ai_logs_reset_stale_logs`, `entity_save_logs`, `entity_load_logs` | = `C_entity+0xeac`. Elements are `ai_character_log` (§1a) |
 | +0x30 | owner | H | `ai_logs_init` | `ai_logs_event`, `ai_logs_compute_attitude`, `ai_logs_reset_stale_logs` | the owning C_entity; how the class reaches morale/aggression, the I3D_frame and `ai_fight_modes` |
 
 **Serialized size is VARIABLE** (`entity_get_logs_size` loops the list) — unlike the other three
-C_entity sub-blocks, whose sizes are constants (`structs/entity.md` §4).
+C_entity sub-blocks, whose sizes are constants (`structs/entity.md` §4). It is `0x24` — a 4-byte
+count and the 0x20-byte header — plus `0x70` per log whose target is not save-excluded
+(`C_actor+0x65`): a 0x20-byte target name and 20 dwords.
 
 ---
 
-## 3. Method family — PC ↔ PS2 (14 methods)
+## 3. Method family — PC ↔ PS2 (14 methods + 1 PC-only)
 
-**PC-first, ordered by PC VA.** Every row is body-diffed on BOTH builds.
+**PC-first, ordered by PC VA.** Every row with a PS2 twin is body-diffed on BOTH builds.
 
 | PC VA | PC name | PS2 twin (mangled) | Status | Role |
 |---|---|---|---|---|
@@ -119,6 +129,9 @@ C_entity sub-blocks, whose sizes are constants (`structs/entity.md` §4).
 | 0x00401fa0 | `ai_logs_get_max_threat_score` | `GetMaxOhrozeni__7ai_logsFv` | **CONFIRMED** | Worst by THREAT among **living** logs (`+0x04 != 0x29a`). Returns the **SCORE** — the only picker that does |
 | 0x00402030 | `ai_logs_destroy_log_for_actor` | `Destroy__7ai_logsFP7C_actor` | **CONFIRMED** | Drop one actor's log |
 | 0x004020d0 | `ai_logs_reset_stale_logs` | `LooseDistant__7ai_logsFv` | **CONFIRMED** | Wipe the contact window + attitude of any log tripping ≥3 of 4 staleness gates |
+| 0x005c8f70 | `ai_logs_clear_all_logs` | - | **PC-ONLY** | Empties the log vector (`end = begin`) and leaves the header untouched. One caller: `GROUP_DISBAND` phase 2 (`program_process_command` case `0x17b`), for every member of the group, next to `ai_sensors_init` and `ai_vis_logs_init` ¹ |
+
+¹ No PS2 method corresponds: the PS2 `GROUP_DISBAND` clears the vector directly (§5).
 
 ### 3a. `ai_character_log` — the record's own methods (7/7)
 
@@ -142,15 +155,15 @@ No standalone PC function performs this copy.
 ## 4. How the system behaves
 
 1. **Creation.** `ai_logs_event` is the only way a log is born. On first contact it computes a
-   **relationship class 0..3** from the owner's AI mode crossed with the target's kind, and that class
-   is fixed for the life of the log — it selects which row of `g_ai_logs_exposure_table` (§4c) the
+   **relationship class 0..3** from the owner's type group crossed with the target (§4d). A hit, a friend's
+   reported hit or event `0x14` can change it later — it selects which row of `g_ai_logs_exposure_table` (§4c) the
    threat blend uses.
 2. **Accumulation.** Nine event ids feed the log: three damage channels (hit me / hit my enemy / hit
    my friend), two contact channels (sight / sound), a friend-damage bump, a force-hostile flag, an
    escalation broadcast, and the death event.
 3. **Perception refresh.** `ai_logs_tick` re-polls the three senses at most every 250 ms and stamps
    `last_seen` / `last_heard` / `last_smelled`, plus the two derived stamps `last_aimed` (visible AND
-   armed) and `last_shot` (heard AND fired within 250 ms).
+   aiming) and `last_shot` (heard AND fired within 250 ms).
 4. **Scoring.** `ai_logs_compute_attitude` runs on every live log every tick and produces four numbers:
    `attitude` (morale-shaped), `threat` (the exposure blend), `anger` (aggression-driven) and `fear`
    (low-morale and own-wounds-driven). **Anger and fear come from different personality stats** — an
@@ -211,6 +224,34 @@ float at `C_entity+0xf34`.
 A class-0 log never builds threat, whatever the target does; class 1 weighs every share the most,
 and class 3 ignores the remainder and discounts aiming and shooting.
 
+### 4d. The relationship matrix — how a log gets its class
+
+`ai_logs_event` picks the class from the owner's type group (`C_entity+0xf4c`, `structs/entity.md`
+§4) and a target selector: `0` for the player (kind 2), the target's own `+0xf4c` group for a
+`C_entity` (kind `0x1b`), and for any other kind the target pointer itself, which is out of range
+and takes the default arm. Decoded from the five jump tables at `0x0040173c`..`0x004017ac`:
+
+| owner group | target 0 | 1 | 2 | 3 | 4 | 5 | 6 | any other kind |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0 | 0 | 3 | 3 | 1 | 2 | 2 | 3 |
+| 1 | 3 | 3 | 3 | 3 | 3 | 3 | 3 | 3 |
+| 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
+| 3 | 3 | 3 | 0 | 0 | 3 | 3 | 3 | 3 |
+| 4 | 1 | 3 | 2 | 3 | 0 | 1 | 2 | 3 |
+| 5 | 3 | 3 | 2 | 3 | 1 | 0 | 2 | 3 |
+| 6 | 2 | 3 | 2 | 3 | 2 | 2 | 0 | 3 |
+
+An owner group above 6 gives class 3 for every target. Who is in each group, measured from the
+shipped scenes (group 1 the civilians, group 2 the police, and so on), is in `structs/entity.md`
+§4e.
+
+What the classes do, measured: **class 0** builds no threat (§4c) and sits on the diagonal of every
+row but 1 and 2. **Class 1** is the top tier: event `0x14` forces it, and a hit
+(`ai_character_log_event_hit`) or a friend's reported hit (`ai_character_log_event_friend_hit`)
+promotes a class 2 or 3 log to it. A hit on a class 0 log creates a grudge only when the log's
+attitude exceeds `1.25` (class 1) or `1.125` (class 2). **Class 3** is the default for every pair
+the matrix does not list.
+
 ---
 
 ## 5. PC vs PS2
@@ -232,8 +273,19 @@ and class 3 ignores the remainder and discounts aiming and shooting.
   (MSVC CRT intrinsics).
 - **The exposure table** is PS2 `EXPOSURE_TABLE` (`undefined1[48]`, 4 × 3 floats); `ComputeAttitude`
   reads it in the same statement, row `relation * 0xc`, with the same column-to-share mapping.
-- **`ai_logs_event`'s relationship matrix differs in two cells.** PS2 handles owner modes `1` and
-  `2` explicitly; the PC build folds them into the default arm. Both builds agree on modes 0 and 3–6.
+- **`ai_logs_event`'s relationship matrix differs from the PC's (§4d) in three ways.** PS2 gives a
+  target in group 1 class 0 for every owner, where the PC gives 3 for owners 1 and 3–6. PS2's
+  owner-1 row gives groups 1 and 2 class 0 (PC: 3 throughout), and its owner-2 row gives the player
+  class 2 and every other target class 0 (PC: 2 throughout). And PS2 creates **no log** for a
+  target that is neither the player nor a `C_entity`: its selector starts at `0x29a` and the event
+  returns, where the PC's selector is the target pointer and the default arm logs it. Every other
+  cell of owner rows 0 and 3–6 agrees.
+- **The header is 0x20 bytes on both builds.** PS2 `Init` does `memset(this, 0, 0x20)`, keeps its
+  vector at `+0x20` and `SaveLogs` writes the same 8 dwords at `ai_logs+0x00`.
+- **`last_aimed` reads the same aimed stance flag**, PS2 `C_human+0x391` (PC `+0x1e5`).
+- **`ai_logs_clear_all_logs` has no PS2 counterpart method.** At the same point of `GROUP_DISBAND`
+  the PS2 calls `clear__Q23std74__vector_deleter<>Fv` on `ai_logs+0x20` itself; the PC emits a
+  one-line `ai_logs` function for it.
 - **No PS2-only methods in either class.** All 14 `ai_logs` methods and 6 of 7 `ai_character_log`
   methods have PC twins; the seventh is the inlined `operator=` (§3a).
 - **`vector_insert_stride_0x54`'s PS2 twin is [STRUCTURAL]**, not CONFIRMED: PS2 emits one
@@ -248,13 +300,3 @@ and class 3 ignores the remainder and discounts aiming and shooting.
 - `structs/ai_character.md` — the stat block `ai_logs_compute_attitude` reads.
 - `structs/ai_fight_modes.md` — `ai_logs_event` credits/debits it directly; `+0xf64`.
 
----
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| the `ai_logs` header `+0x00..+0x23` | undecoded — `ai_logs_init` zeroes it wholesale and no method in the class reads it; likely a base or the vector's allocator block |
-| what each relationship class `0..3` is | the exposure rows (§4c) rank them 1 > 2 > 3 > 0 and class 0 never builds threat; naming them needs `ai_logs_event`'s owner-mode × target-kind matrix decoded cell by cell |
-| `ai_logs_event`'s two divergent matrix cells | PC folds owner modes 1 and 2 into the default arm (§5); the gameplay effect is not established |
-| the target's `+0x1e5` armed byte | used by `ai_logs_tick`'s `last_aimed` gate; not documented in `structs/human.md` |

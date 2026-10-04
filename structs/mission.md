@@ -1,6 +1,6 @@
 # `C_mission` — the mission singleton
 
-**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-09-24 13:55 +0200
+**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-10-01 08:56 +0200
 
 The object every `g_act_mission` dereference in the decomp lands on. Its translation unit
 `Mission.cpp` = `[0x005fe4f0, 0x00608390)`; `[0x005fe550, 0x00607f70]` holds **84 function
@@ -57,8 +57,9 @@ typedef struct {                        /* at C_mission + 0x90, sizeof = 0x1c */
 | `+0xa4` | `+0x14` | `mission_settings_set_shadow_quality` | `mission_settings_get_shadow_quality_idx` | idx 0 … 5 |
 | `+0xa8` | `+0x18` | `mission_settings_set_particles_quality` | - | 0 … 2 |
 
-`+0x98` has no accessor: `mission_open_bin` writes `0x437a0000` (250.0f) into it twice and
-`mission_update_settings` hands it to the scene's `+0x17c` object together with `0.05f`.
+`+0x98` has no accessor. `mission_open_bin` seeds it with `0x437a0000` (250.0f), and then scene
+chunk `0x3011` replaces it with the scene's own view distance (§4a); `mission_update_settings` hands
+it to the scene's `+0x17c` object, the active camera, together with `0.05f`.
 
 Two of the six were decoded independently of the accessor family and agree exactly: `+0x9c`
 is the **weather detail** level (it scales the weather particle count by `/0x14`, `>>3`, or
@@ -74,6 +75,7 @@ Recorded here only so the offsets are in one place; each is documented where it 
 
 | offset | what | where |
 |---|---|---|
+| `+0x00` / `+0x04` | **the scene identity pair**, copied from scene chunk `0xAFFF`; `race_net_load_sync`, `net_session_post_scene_done` and `net_deactivate_actors_of_peer` compare it with a peer's | §4a |
 | `+0x08` | cleared by `mission_open` before the teardown | §7 |
 | `+0x0c` | **the "a mission is open" flag** — `mission_open` sets it, `mission_close` gates on it and clears it | §4 |
 | `+0x10` | the `I3D_scene` | `structs/i3d_frame.md`, `structs/program.md` |
@@ -243,6 +245,99 @@ pairs. That address is a generic `std::vector<8-byte>::operator[]` with 377 call
 image-wide; the script VM indexes `{opcode, args}` through the same address, so the sharing
 is an ICF fold of two different element types (`structs/program.md` §6).
 
+### 4a. The `scene2.bin` chunk vocabulary
+
+`mission_open_bin` reads `missions\<mission>\scene2.bin` through a stack `C_chunk`
+(`structs/chunk.md` §4). The *shipped* column counts occurrences in the 79 shipped files;
+an id the reader handles that no shipped file contains shows 0. Frame types are named by the
+type-name function of `LS3DF.dll` (`structs/i3d_frame.md` §3a).
+
+**The root chunk `0x4c53`:**
+
+| Id | Shipped | Payload | What `mission_open_bin` does |
+|---|---:|---|---|
+| `0x0001` | 79 | `u16` major, `u16` minor, a text banner | the file version; every shipped file is 5.10. Later arms gate on it: `0x40a0` needs a major above 2, `0xb110` a major of at least 5, and a light's flag word gains `0x40` when `major × 100 + minor` is below 510 |
+| `0x3010` | 79 | float, radians | the active camera's vtable `+0x50`; 70° (1.2217) in 50 scenes |
+| `0x3011` | 79 | float | the view distance: the active camera's vtable `+0x58(0.05, value)` and `C_mission+0x98` (§2); 300 in 38 scenes |
+| `0x3012` | 0 | - | the active camera's vtable `+0x64(1)` |
+| `0x3013` | 0 | dword | the active camera's vtable `+0x60` |
+| `0x3200` | 79 | 3 floats, an RGB colour | read and discarded: the arm then stores `(0, 0, 0)` at `I3D_scene+0x220`; 7 scenes carry a non-black colour |
+| `0x3211` | 79 | 2 floats | `I3D_scene` vtable `+0xb8(a, b)`; `(1, 1000)` in 49 scenes |
+| `0x4000` | 79 | the frame block | one `0x4010` record per frame (below) |
+| `0xAE02` | 3 | `0xAE03` records | UV-scroll channels: each `{u16 channel, float, float, u32 length, frame name}` looks the frame up and, when it is a VISUAL tagged `'LMAP'` or `'OBJ_'`, adds a channel through `uv_scroll_channel_init` and `uv_scroll_add_channel` (`structs/uv_scroll.md`) |
+| `0xAE20` | 78 | `0xAE21` records | the object definitions (below) |
+| `0xAE40` | 0 | - | `web_path_load_nodes`; the shipped graphs are in `check.bin` (`structs/web_path.md` §4) |
+| `0xAE41` | 0 | - | `roads_load_data`; the shipped data is in `road.bin` (`structs/roads.md`) |
+| `0xAE50` | 73 | `0xAE51` records | the global scripts: each builds a `C_program` (`program_ctor`, then `program_load_source_code` over the serialised form of `structs/chunk.md` §4c) and pushes it onto the global-script vector `C_mission+0x54` (§3a) |
+| `0xAEF0` | 4 | `(u32 id, u32 value)` pairs, ids 0..13 | weather parameters, `I3D_scene` vtable `+0xe8(id, value)`; only the four MISE09 scenes |
+| `0xAEF1` | 4 | `u32` count, then `(u32 length, name)` entries | each DUMMY frame named is handed to `I3D_scene` vtable `+0xf4`; the shipped frames are `sem_neprsi…` (roughly "no rain here") |
+| `0xAFFF` | 79 | 8 bytes | copied into `C_mission+0x00..+0x07`, the scene identity pair the network code compares between peers (§3) |
+
+**The frame record `0x4010`** (133 801 shipped):
+
+| Id | Shipped | Payload | What `mission_open_bin` does |
+|---|---:|---|---|
+| `0x0010` | 133 801 | name | finds the frame by name; when it does not exist, creates it through the I3D driver as the type in `0x4011` (a VISUAL through the driver's `+0x48` with the FourCC of `0x4012`, any other type through `+0x4c`) and names it |
+| `0x4011` | 97 730 | dword | the frame type |
+| `0x4012` | 0 | FourCC | the class a VISUAL is created with |
+| `0x0020` | 99 643 | vec3 | the local position |
+| `0x0022` | 98 700 | 4 floats | the rotation quaternion |
+| `0x002c` | 98 805 | vec3 | the position used instead of `0x0020` when the parent named in `0x4020` is not found |
+| `0x002d` | 99 168 | vec3 | the scale, default `(1, 1, 1)` |
+| `0x4020` | 93 193 | a `0x0010` name | the parent frame |
+| `0x4033` | 713 | empty | marks the frame to be switched off (record flag `0x10000`; `structs/cache_base_block.md` §4a); ignored on a SOUND frame |
+| `0x2012` | 72 585 | name | the model file of a MODEL frame, opened through `i3d_cache_model_open` with `.i3d` appended |
+| `0x4040` | 9 095 | the light block | on a LIGHT frame (below) |
+| `0x4050` | 2 378 | `0x18` bytes | on a DUMMY frame, stored by `i3d_frame_set_field_0x140_block`: the frame's bounding box, minimum then maximum corner (`structs/i3d_frame.md` §4) |
+| `0x4060` | 5 254 | the sound block | on a SOUND frame (below) |
+| `0x4083` | 7 188 | `u32` n, n × 12-byte vertices, `u32` m, m × 6-byte triangles | on an OCCLUDER frame, passed to the frame's vtable `+0x50` |
+| `0x4090` | 31 671 | FourCC | on a VISUAL whose tag differs, a visual of that class is created through the driver's `+0x48` and takes over the frame's name, children and place; the shipped values are `'LMAP'` 31 175, `'LENS'` 495 and `'MRPH'` 1 |
+| `0x40a0` | 31 175 | lightmap data | on an `'LMAP'` visual, streamed through the frame's vtable `+0x94` with the file's dta handle |
+| `0xB100` | 0 | - | skipped |
+| `0xB110` | 495 | sub-chunks `0xB112..0xB117` | on a `'LENS'` visual, six values into its `+0x220`, `+0x21c`, `+0x228` (converted from a float), `+0x254`, `+0x258` and `+0x274` |
+| `0xB151` | 493 | as `0x4083` | on an AREA frame, passed to the frame's vtable `+0x50` |
+| `0xB400` | 0 | `(id, dword)` sub-chunks | on a SECTOR frame, each passed to the sector's vtable `+0x60(id, value)` |
+| `0xB401` | 1 073 | sub-chunks `0x00..0x15` | on a SECTOR frame, each passed to the sector's vtable `+0x60(id, value)`; ids `0x14` and `0x15` carry a vec3, the others a dword |
+
+**The light block `0x4040`** (on a LIGHT frame; the arm first detaches the light from every
+sector it is in):
+
+| Id | Shipped | Payload | Consumer |
+|---|---:|---|---|
+| `0x0026` | 9 095 | vec3 | the colour, the light's vtable `+0x58` |
+| `0x4041` | 9 095 | dword | the light's vtable `+0x50` |
+| `0x4042` | 9 095 | float | the light's vtable `+0x5c` |
+| `0x4043` | 9 095 | 2 floats | the light's vtable `+0x68` |
+| `0x4044` | 9 095 | 2 floats | a range pair, the light's vtable `+0x64`; a near value below 1e-8 becomes 0.1, and a far value below the near one becomes near + 0.1 |
+| `0x4045` | 9 095 | dword | the flag word, the light's vtable `+0x60` |
+| `0x4046` | 12 554 | name | a SECTOR the light is added to (sector vtable `+0x50`); deferred to the end of the file when the sector is not loaded yet |
+
+**The sound block `0x4060`** (on a SOUND frame; the arm first switches the frame off and calls
+the sound's vtable `+0x6c(0)`):
+
+| Id | Shipped | Payload | Consumer |
+|---|---:|---|---|
+| `0x0010` | 5 254 | name | the sound file: taken from the sound cache when a cached name matches it, otherwise opened through the sound's vtable `+0x50` and cached |
+| `0x4061` | 5 254 | dword | the sound's vtable `+0x58` |
+| `0x4062` | 5 254 | dword | the sound's vtable `+0x68` |
+| `0x4063` | 5 254 | dword | the sound's vtable `+0x64` |
+| `0x4064` | 5 254 | 2 floats | the sound's vtable `+0x60(a, b)` |
+| `0x4065` | 0 | vec3 | the sound's vtable `+0x5c(x, y, z, 1.0)` |
+| `0x4066` | 3 416 | empty | the sound's vtable `+0x6c(1)` |
+| `0x4067` | 5 206 | empty | skipped |
+| `0x4068` | 5 254 | 4 dwords | the sound's vtable `+0x5c(a, b, c, d)`, the four-value form of `0x4065` |
+| `0xB200` | 8 091 | name | a SECTOR the sound is added to (sector vtable `+0x58`); deferred like a light's |
+| `0xB201` | 212 | name | an AREA the sound is linked to (area vtable `+0x54`); deferred likewise |
+| `0xB800` | 5 254 | dword | the sound's vtable `+0x74` |
+
+**The object definition `0xAE21`** (13 631 shipped, 78 scenes):
+
+| Id | Shipped | Payload | What `mission_open_bin` does |
+|---|---:|---|---|
+| `0xAE23` | 13 631 | name | the frame the object binds to, looked up by name |
+| `0xAE22` | 13 631 | dword | the entity kind: `mission_create_actor(kind)`, the actor's vtable `Init` with the frame, then `actor_mark_scene_placed` and `mission_add_actor` |
+| `0xAE24` | 13 631 | bytes | the kind's own data, handed to the actor's `LoadData` slot |
+
 ## 5. PC vs PS2
 
 PS2 class `C_mission`; the static object is at `0x00509b10`, constructed by
@@ -317,23 +412,28 @@ The two field maps differ by a constant `0xc2c` in the tail, and that number has
 **PS2 `C_mission` embeds a `C_ParticleManager` at `+0x64`**, spanning to about `+0xcb0`
 (`__ct__17C_ParticleManagerFv((int)param_1 + 100)` in the constructor,
 `__dt__17C_ParticleManagerFv(iVar2 + 100, …)` in the destructor). The PC has no such member
-— its particle manager lives at `C_game + 0x6c` (`structs/particle.md`). The delta is
+— its particle manager is the pointer at `C_mission + 0x6c` (§3, `structs/particle.md`). The delta is
 `0xcb0 − 0x64 = 0xc4c`, which is why every PS2 offset above the manager sits roughly
 `0xc2c` higher than its PC counterpart.
 
 Do **not** rebase a PS2 `C_mission` offset onto the PC by a constant. Below `+0x64` the two
 maps agree; above it they do not.
 
-### 5d. The 33 PS2 methods with no PC counterpart
+### 5c. The new-mission request block (§6a)
 
-An inventory of what is left, not a closed verdict on any single method.
+The PS2 symbol table names every global of the request block, with sizes, and the PC layout
+matches field for field. The PS2 gives `NewMission_ROT` a size of 32 and `NewMissionActors` a
+size of 8; the PC's `S_matrix::SetDir3(dir, up)` call and the script arm's own loop bound
+`< 0x6f9578` prove the same splits independently.
+
+### 5d. The 33 PS2 methods with no PC counterpart
 
 | group | count | why it is very likely PS2-only |
 |---|---|---|
 | `InterCity_*` (Prebuffering, Init, Done, GameInit, GameDone, GameDoneInGameDone, ActorsToMission, ActorsFromMission, ChangeMission, SetMissionName, RepairDirName, AddGlobalActor, DelGlobalActor, PicaDelActors, SaveLoadInit, SaveLoadDone, RepairActorActState, AddTempAct, DelTempAct, TickTempAct) + `IsInterCityGlobalActor` | 21 | the confirmed city-part streaming subsystem; `InterCity` appears 127× on PS2 and **0×** on PC |
 | `LoadFQLPath` / `UnloadFQLPath` / `GetFQLPath` / `OpenFQLFile` / `CloseFQLFile` | 5 | the FQL path/index family; `mission_open` calls nothing at the rank where PS2 `Open` calls `OpenFQLFile` |
 | `LoadAnimationPath` / `UnloadAnimationPath` / `GetAnimationPath` | 3 | the same family, animation half |
-| `Garage_AddCar` / `Garage_DelCar` / `Freeride_ChangeCar` | 3 | the PC has a `garage_*` family in its own TU; not searched from here |
+| `Garage_AddCar` / `Garage_DelCar` / `Freeride_ChangeCar` | 3 | the PC has a `garage_*` family in its own TU (§7) |
 | `ClearFramesRefBuff` | 1 | a CONTAINER difference, not an absence — §5e |
 
 Two PS2 **free** functions in the band are also PS2-only on the same argument:
@@ -341,10 +441,9 @@ Two PS2 **free** functions in the band are also PS2-only on the same argument:
 `MC_DeleteData` / `MC_LoadData` / `MC_Format`, immediately before the constructor, are the
 memory-card layer.
 
-Three PS2 free functions in the band are plausible PC inlinings but are **not** proven:
-`ReadVector3__FR7C_chunk`, `ReadQuatOld__FR7C_chunk` and
-`ReadBBoxOld__FR7C_chunkR8I3D_bbox`. The PC reads the same records with inline
-`chunk_read(buf, N)` calls, and no distinctive constant survives to prove the match.
+The PC reads the records of the PS2 free functions `ReadVector3__FR7C_chunk`,
+`ReadQuatOld__FR7C_chunk` and `ReadBBoxOld__FR7C_chunkR8I3D_bbox` with inline
+`chunk_read(buf, N)` calls (§7).
 
 ### 5e. The frames-ref buffer is a CONTAINER difference
 
@@ -389,8 +488,7 @@ block of file-scope globals, raises `g_reload_pending`, and the next iteration o
 
 ### 6a. The request block
 
-The PS2 symbol table names every one of these, with sizes, and the PC layout matches
-field for field.
+The PS2 twins and their sizes are compared in §5c.
 
 | PC address | PC name | PS2 symbol | what it holds |
 |---|---|---|---|
@@ -403,9 +501,9 @@ field for field.
 | `0x006f9570` | `g_new_mission_actors` (`pointer[2]`) | `NewMissionActors` | the 2-slot carried-actor array |
 | `0x006f9578` | `g_new_mission_speed_kmh` | `NewMissionSpeed` | arrival speed, **km/h** |
 
-The PS2 gives `NewMission_ROT` a size of 32 and `NewMissionActors` a size of 8; the PC's
-`S_matrix::SetDir3(dir, up)` call and the script arm's own loop bound `< 0x6f9578` prove
-the same splits independently. The speed's unit is proven by
+The PC's `S_matrix::SetDir3(dir, up)` call splits the rotation block into its two vectors, and
+the script arm's own loop bound `< 0x6f9578` bounds the 2-slot actor array (§5c). The speed's
+unit is proven by
 `car_reset(value * 0.2777778, 1)` — 1/3.6.
 
 ### 6b. What `engine_new_mission` does
@@ -428,8 +526,10 @@ Two paths, chosen by whether `g_new_mission_entry` is empty:
 |---|---|
 | `[0x00608390, …)` — the tail of the TU | not enumerated. The swept range stops at `0x00607f70`; the six functions between it and the next `.CRT$XCU` initializer are the `frame_map_*` primitives, all named, but nothing beyond `0x00608390` was looked at |
 | `C_mission + 0x08` | [M] — one writer and one reader inside `mission_open` / `mission_tick`, no decoded meaning |
-| `I3D_frame + 0x140` | [U] — at least `0x18` bytes, loaded from the scene file for visual-type-6 frames, and no more (`structs/i3d_frame.md`) |
 | the two UV channels of `C_tshift` | [M] — `structs/uv_scroll.md` §6 |
+| the 33 PS2 methods of §5d | an inventory by group, not a closed verdict on any single method |
+| `Garage_AddCar` / `Garage_DelCar` / `Freeride_ChangeCar` (§5d) | not searched against the PC `garage_*` family |
+| `ReadVector3` / `ReadQuatOld` / `ReadBBoxOld` (§5d) | plausible PC inlinings, not proven: no distinctive constant survives to prove the match |
 | `Tick__8C_tshiftFUi` | body not read, so `uv_scroll_tick`'s twin rests on callsite position alone and is not stamped |
 | in game | streamed-in city geometry should fade up over ~0.7 s rather than popping — `mission_fade_in_object`, §3b |
 | in game | a car placed by the scene `.bin` should survive a mission change while one spawned by script should not — the `C_actor + 0x66` `scene_placed` flag, §3c and `structs/actor.md` |

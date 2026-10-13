@@ -1,6 +1,6 @@
 # `C_irenka` — the police spike strip (entity kind `0x1f`, PC prefix `spike_strip_`)
 
-**Created** 2026-08-14 09:10 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-14 09:10 +0200 · **Modified** 2026-10-13 17:48 +0200
 
 This documents the PC build. All cross-build material is confined to §6.
 
@@ -74,8 +74,8 @@ body diff: **13** AI · **14** Update · **15** NetDirect · **16** sdd · **17*
 `actor_subclass_init_require_frame` (`0x004ae890`) realises this class's `Init` at slot 18 (the
 body match is in §6) — but a scan of `.rdata` for the address as a pointer puts it at **slot 18 of
 six vtables**:
-`0x0063b7c0` (`C_airplane`), `0x0063c0d0` (`C_dog`), `0x0063c568` (this class), plus `0x0063ca58`,
-`0x0063cc98` and `0x0063cee0` (§7).
+`0x0063b7c0` (`C_airplane`), `0x0063c0d0` (`C_dog`), `0x0063c568` (this class), `0x0063ca58`
+(`C_pumper`), `0x0063cc98` (the seagull flock) and `0x0063cee0` (`C_turnout`).
 
 So it is named for the **family** and carries **no `PS2 twin:` line** — a docblock cannot say
 "one of six". It is a second, disjoint identical-code fold of the same body as
@@ -138,15 +138,12 @@ So it is named for the **family** and carries **no `PS2 twin:` line** — a docb
 * **The container lever names the pool record.** `C_shvestky::S_road_block_iris` is the
   element type of the vec3 at `police_manager+0x60` — independent corroboration of the whole
   spike-strip reading, and a type name `structs/police_manager.md` carries untyped.
-* **PS2 has no acquire method.** `FreeTempIris__10C_shvestkyFP8C_irenka` exists;
-  `GetTempIris` does not, although `GetTempCar` and `GetTempEnemy` do. So the PS2 deploy
-  path is inlined or structured differently — which is consistent with `spike_strip_activate`
-  having no PS2 rank.
-
----
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| vtables `0x0063ca58`, `0x0063cc98`, `0x0063cee0` | carry `actor_subclass_init_require_frame` at slot 18; their classes are unidentified |
+* **The PS2 never deploys a strip from the police side.** `FreeTempIris__10C_shvestkyFP8C_irenka`
+  exists; `GetTempIris` does not, although `GetTempCar` and `GetTempEnemy` do. The PS2 instantiates
+  no `insert` for `std::vector<C_shvestky::S_road_block_iris>`, only its allocator constructor,
+  `clear` and destructor, so the pool is never filled (a vector that is filled, such as the
+  `C_I3D_cache<I3D_model>` item vector, carries an `insert` instantiation). The PS2 roadblock
+  builder `BugZamrdanychTesteruZTepleDve_410__10C_shvestkyFP7C_humaniR18S_police_interface`
+  spawns cars and officers and places no strip. So `police_manager_spike_strip_pool_pop` and
+  `police_manager_deploy_temp_spike_strip` have no PS2 counterpart, which is consistent with
+  `spike_strip_activate` having no PS2 rank.

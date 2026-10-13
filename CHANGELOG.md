@@ -3,6 +3,80 @@
 One section per export version (date tag). Counts are measured on the annotated decompilation
 `ghidra/Game-ghidra.exe.annotated.c` against Ghidra's default auto-analysis of `Game.exe` 1.0.
 
+## 2026.10.13 — review batches 19-33, physics and collision findings, Ghidra names synced
+
+- 296 more tracked open questions closed.
+- Function renames (47; each docblock and registry row rewritten):
+  - the `C_I3D_cache` item-vector helpers joined to their owner: `uninit_copy_range_stride_8`,
+    `copy_elem_stride_8_with_string`, `assign_elem_stride_8_with_string`, `refcount_release_at_0x4`,
+    `destroy_range_stride8`, `std_vector8_uninit_fill_n`, `std_vector8_assign_range`,
+    `std_vector8_insert_one`, `array_copy_refcounted8`, `array_copy_backward_refcounted8`,
+    `refcounted8_scalar_deleting_dtor`, `std_vector8_erase_at` → `i3d_cache_items_uninit_copy_range`,
+    `_copy_construct_one`, `_copy_assign_one`, `_destroy_one`, `_destroy_range`, `_uninit_fill_n`,
+    `_copy_assign_range`, `_insert_one`, `_copy_range`, `_copy_backward_range`,
+    `_scalar_deleting_dtor`, `_erase_at`;
+  - static destructors named after the object they free: `crt_static_dtor_004f62e0` …
+    `crt_static_dtor_004f6560` → `traffic_adopted_elements_static_dtor`,
+    `traffic_bridge_slots_static_dtor`, `traffic_car_registry_static_dtor`,
+    `traffic_parking_cars_static_dtor`, `traffic_stolen_cars_static_dtor`,
+    `traffic_mafia_crews_static_dtor`; `crt_atexit_free_rail_schedule_log` /
+    `_rail_semaphore_list` / `_railway_list` / `_rail_clamp_candidates` →
+    `rail_schedule_log_static_dtor`, `rail_semaphore_list_static_dtor`, `railway_list_static_dtor`,
+    `rail_clamp_candidates_static_dtor`;
+  - misnomers: `vec3_dist` / `vec3_dist_sq` → `vec3_length` / `vec3_length_sq`, `vector_clear` →
+    `chunk_open_stack_free`, `copy_elem_stride_0x3c` → `ai_path_node_construct_copy`,
+    `game_get_temp_actor_list_a` → `game_get_active_actor_list`, `string_append_cstr` →
+    `string_concat_cstr`, `human_car_launched_into_air` → `human_die_in_exploding_car`,
+    `recorder_sync_clock_from_system` → `recorder_set_clock`,
+    `speech_channel_attach_accessory_frame` → `speech_channel_set_look_at_frame`,
+    `speech_update_accessory_frames` → `speech_update_look_at_targets`, `speech_preload_for_record` →
+    `speech_apply_recorder_key`, `game_item_table_get` → `inventory_get_left_hand_item_def`,
+    `garage_generate_cars` / `garage_release_cars` → `garage_request_add_last_stolen` /
+    `garage_request_show_results`, `garage_set_stolen_car` → `garage_set_last_entered_car`,
+    `mission_set_sound_restore_stage` / `mission_get_sound_restore_stage` →
+    `mission_set_frame_skip_count` / `mission_get_frame_skip_count`,
+    `vehicle_controller_set_field_0x65` → `actor_set_save_excluded`, `vehicle_set_light_bit_0x80` →
+    `vehicle_set_emergency_lights`, `vehicle_controller_set_field_0x214c` →
+    `car_set_remove_at_game_done`, `player_set_wingman_indicator` → `human_set_wingman_indicator`,
+    `i3d_frame_set_field_0x140_block` → `i3d_dummy_set_bound_box`, `game_subobject_0x208_dtor` →
+    `glass_shatter_dtor`;
+  - two shared vector-pair destructors that were filed under one owner: `force_feedback_manager_dtor`
+    and `game_subobject_0x240_dtor` → `folded_vector_pair_free_at_0x04_0x14` /
+    `folded_vector_pair_free_at_0x04_0x14_00607500`.
+- Data names (22 renamed, 6 new): `g_hud_2intbenal_texture` → `g_hud_low_fuel_lamp_texture`; the
+  `LS3D_setup` bytes named from the shipped `Setup.exe` dialog (`g_ls3d_setup_refresh_rate`,
+  `_antialiasing`, `_multipass_rendering`, `_clip_always`, `_fullscreen`, `_hw_transform_lighting`,
+  `_vsync`, `_software_mixing_only`, `_speaker_config`, `_language`), and its two flag words split
+  into eight byte symbols (`_low_detail_textures`, `_compressed_textures`, `_triple_buffering`,
+  `_truecolor_textures`, `_truecolor_lightmaps`, `_suspend_when_inactive`, `_sound_disabled`,
+  `_eax_disabled`); nine `g_speech_channel_*` fields named (`_countdown_ms`, `_eye_target_frame`,
+  `_neck_target_frame`, `_viseme_param_0x28` … `_0x3c`).
+- PS2 twins: 2,590 → 2,602 functions mapped. New twins include `vec3_length` = `S_vector::Magnitude`,
+  five `police_board_*` functions = `ai_police_nastenka` methods, `string_assign_cstr` =
+  `C_str::operator=`, `engine_init` / `engine_shutdown` = `InitSystem` / `CloseSystem` and
+  `using_object_find_near_objects` = `C_using_object::FindNearObjects`; the two garage requests
+  re-paired to `AddLastStolen` / `ShowResults`; the `C_game::S_hlp$…` helper symbols spelled with
+  their `$`.
+- Annotated decompilation:
+  - every docblock that carried only its provenance line now describes the function (among them
+    `winmain`, `police_manager_set_speed_thresholds`, `vehicle_wheel_contact_solve` and
+    `collision_load_level`); `police_board_has_recent_sighting` re-read from the disassembly (the
+    receiver is the officer's sighting log at `officer+0xe88`, window 2000 ms);
+  - 133 section references that read `SS<n>` restored to `§<n>`.
+- Documentation: 96 docs updated, two new topic docs:
+  `basic/artifacts/racing/lap-gates-and-lap-glitch.md` (the race lap gates and the mission 6 lap
+  glitch, with 11 figures in `racing/img/`) and `basic/artifacts/garage/storing-cars-in-the-garage.md`
+  (the four ways a car is banked in the garage). New findings include the collision-triangle flags
+  read from a parse of all 81 shipped `tree.klz` files, the `ai_fight_manager` member order codes and
+  what each makes the member do, the car physics sub-step (`+0xca0`, 0.028 s) and the wheel spring,
+  bump and rebound terms, gear -1 = reverse and the brake / reverse light bits, the box cylinder flag
+  and density, the player control lock, the odometer, which parser arm of the script dispatcher
+  handles each command, and the `RenamePoliceCar` twin in `structs/police_manager.md` §6.
+- Ghidra database `ghidra/Game.exe.gzf`: every rename above imported (47 functions, 28 data labels);
+  the two `LS3D_setup` flag words retyped to bytes; a `CALL_RETURN` flow override at `0x006283e5`
+  and `0x00628471` removes the two `jmp [ebx]` jump-table warnings in the x87 math dispatchers.
+- README: the documentation list includes the two topic subdirectories.
+
 ## 2026.10.04 — open-item review, name corrections, Ghidra names re-imported
 
 - 334 tracked open questions closed (18 review batches plus the Ghidra name import); the answers

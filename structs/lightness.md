@@ -1,6 +1,6 @@
 # The lightness subsystem — `C_game`'s per-object shading, shoot lights and light cache
 
-**Created** 2026-09-02 19:51 +0200 · **Modified** 2026-10-04 16:36 +0200
+**Created** 2026-09-02 19:51 +0200 · **Modified** 2026-10-05 11:16 +0200
 
 Not a class: three related **features of `C_game`**, built from one record type, one engine
 class and ten PC functions in the `g_game.cpp` translation-unit tail `[0x005f1090, 0x005f79a0)`.
@@ -31,7 +31,7 @@ constructor and confirmed by all five consumers:
 |---|---|---|---|
 | `+0x00` | 4 | `C_actor *owner` | the actor the frame belongs to |
 | `+0x04` | 4 | `I3D_frame *frame` | **the key** — `game_lightness_del` erases on this |
-| `+0x08` | 2 | `ushort flags` | bit 0 = apply recursively AND skip the tag filter |
+| `+0x08` | 2 | `ushort flags` | bit 0 = apply recursively AND skip the tag filter (§2f) |
 | `+0x0c` | 12 | `S_vector offset` | sampling offset from the frame origin |
 | `+0x18` | 4 | `float current` | the value actually applied this frame; eased toward `+0x1c` |
 | `+0x1c` | 4 | `float target` | the last sampled ambient value |
@@ -94,6 +94,26 @@ objects each is re-sampled every N frames, which is why the round-robin cursor e
 
 An exact mirror except for `human_death`, which has no add-side partner because the corpse
 keeps the registration its living form made.
+
+### 2f. The flags word in practice
+
+`game_lightness_add(owner, frame, flags, offset)` takes one `ushort` flags word and no other
+selector. Bit 0 is the only bit any code tests, in three places: `game_lightness_add` (skip the
+tag whitelist), and twice in `game_lightness_tick` (skip the ambient sample; apply through
+`game_lightness_apply_recursive`).
+
+Every caller passes **0**, read from the pushed operands at all four callsites:
+
+| caller | flags | sampling offset |
+|---|---|---|
+| `dog_game_init` | 0 | `(0, 0.5, 0.5)` |
+| `human_game_init` | 0 | `(0, 1, 0)` |
+| `human_change_model` | 0 | `(0, 1, 0)` |
+| `human_activate` | 0 | `(0, 1, 0)` |
+
+The function has no other reference in `Game.exe`: no tail jump reaches it and no stored pointer
+holds its address. So the tag whitelist always applies, and the recursive path of
+`game_lightness_apply_recursive` is never selected by a record.
 
 ## 3. `game_lightness_apply_recursive` is not an `I3D_frame` method
 
@@ -163,7 +183,15 @@ squared distance to the scene camera against `(light_radius + camera_range + 15.
 or disables the light through its own vtable `+0x24`. The countdown is cleared on both sides of
 the pass, so every call recomputes.
 
-Both entry points are reached from `program_process_command`, i.e. they are script commands.
+Both entry points are reached from `program_process_command`. `game_use_light_cache_system` is
+the script command `use_lightcache`; `game_recompute_light_cache` runs at the shared tail of the
+`camera_lock` / `camera_unlock` arms.
+
+**Seven shipped scenes arm the cache**, found by a byte search of every shipped mission file:
+`FREERIDENOC`, `MISE01`, `MISE05-MESTO`, `MISE07-SARA`, `MISE09-MESTO`, `MISE11-MESTO` and
+`MISE16-MESTO`. In each the `GameInitStart` script runs `game_nightmission 1` and then
+`use_lightcache` on the next line. The other 17 night scenes, which also run
+`game_nightmission 1`, never arm it.
 
 ## 6. PC vs PS2
 
@@ -182,6 +210,10 @@ MIPS symbol can mean several things):
 light-cache methods are real. **Here the PS2 method count is a lower bound, not an upper one.**
 A row whose PS2 side is one of the three stubs can be matched as a *symbol* but never as a
 *body*, so it is graded STRUCTURAL.
+
+The five PS2 calls of `LightnessAdd` pass flags 0 as well: `GameInit__5C_dogFv`,
+`GameInit__7C_humanFv`, `_intern_ChangeModel__7C_humanFPcb`, `Activate__7C_humanFv` and
+`VystrcPero__7C_humanFv` (§2f).
 
 ### 6b. The PC↔PS2 map
 
@@ -239,6 +271,4 @@ feature) · `basic/artifacts/dll.md` (why `SetLightnessHR` is not in `Game.exe`)
 
 | item | state |
 |---|---|
-| `game_lightness_add`'s `kind`/`flags` parameters | the mangled PS2 signature carries a `ushort`; only bit 0 is decoded |
 | object lightness in game | not tested. In the retail game no actor should darken, because the pass is gated off (§2d); with `actorlightnesson` executed, an actor in a dark alley should darken over ~0.25 s once within 40 units of the camera and stop updating beyond it |
-| which missions arm the light cache | it is armed only by a script command; the missions that use it are untraced |

@@ -1,6 +1,6 @@
 # `C_car` — the car entity
 
-**Created** 2026-07-23 10:48 +0200 · **Modified** 2026-10-01 08:56 +0200
+**Created** 2026-07-23 10:48 +0200 · **Modified** 2026-10-13 17:51 +0200
 
 **Subject:** the **PC** `Game.exe` class the reconstruction calls `car_*`. The car ENTITY: it owns
 the physics/drivetrain sub-object `C_Vehicle` (`structs/vehicle.md`) embedded at **`car+0x70`**,
@@ -32,7 +32,7 @@ PC offsets, off the `C_car` base. PS2-equivalent offsets are in §6, not here.
 |---|---|---|---|
 | +0x10 | entity kind (= **4** for a car) | H | standard entity kind (`structs/entity.md` §1) |
 | +0x70 | embedded `C_Vehicle` (physics/drivetrain) | H | `lea ecx,[car+0x70]` at the `vehicle_set_engine_on` / `vehicle_get_engine_rpm` callsites |
-| +0x294 | the `C_Vehicle` master flag word (`C_Vehicle+0x224`, `structs/vehicle.md` §1). Bit 25 (`0x2000000`) = **the last physics step made a contact whose collision record carries flag `0x10000`** | H | `vehicle_update_visuals` sets `0x2000001` when `C_Vehicle+0x28` is set and clears bit 25 otherwise; `+0x28` is raised by `vehicle_wheel_contact_solve` and `vehicle_body_coll_resolve` on such a contact. Readers: `human_find_blocking_drawbridge` (`car+0x294 >> 0x19 & 1`, the drawbridge exit-block) and two arms of `vehicle_wheel_contact_solve` |
+| +0x294 | the `C_Vehicle` master flag word (`C_Vehicle+0x224`, `structs/vehicle.md` §1). Bit 25 (`0x2000000`) = **the last physics step made a contact whose collision record carries flag `0x10000`** | H | `vehicle_update_visuals` sets `0x2000001` when `C_Vehicle+0x28` is set and clears bit 25 otherwise; `+0x28` is raised by `vehicle_wheel_contact_solve` and `vehicle_body_coll_resolve` on such a contact. Readers: `human_find_blocking_drawbridge` (`car+0x294 >> 0x19 & 1`, the drawbridge exit-block) and two arms of `vehicle_wheel_contact_solve`. `0x10000` is bit 16 of a static collision primitive's flag dword, loaded unchanged from `missions\<mission>\tree.klz` by `collision_load_level`. A parse of all 81 shipped `tree.klz` files finds it only on box primitives (kind `0x83`): five per leaf on the drawbridge leaves `LLsklap01` / `LLsklap02` and `sklapx01` / `sklapx02` in every city scene (the east leaves are named `sklap01` / `sklap02` in three scenes), plus four single boxes in three other scenes. So bit 25 marks a contact with a drawbridge leaf |
 | +0x634 | **engine revs per second** = `C_Vehicle+0x5c4` | H | written by the drivetrain (`vehicle_update_motor_revs`) and, on a remote car, by `car_recompute_velocity` from the received 16-bit value × `+0x1f88`; `vehicle_get_engine_rpm` returns it × 60 while the engine runs; `car_extended_update` builds its rev fraction from it (`structs/vehicle.md` §1) |
 | +0x6d8 | **idle revs per second** = `C_Vehicle+0x668` | H | `vehicle_apply_carinit_params` sets it from the CARINIT `idling rpm` ÷ 60 (`def-files-docs/vehicles-bin.md`); the drivetrain and `vehicle_update_strips` measure the revs above it |
 | +0xd18 | **engine running** (byte) = `C_Vehicle+0xca8` | H | `vehicle_set_engine_on` writes it; `car_recompute_velocity` sets it on a remote car while the received revs are at least 1 per second. Read by `car_update` (four times, the steady-vibration force-feedback effect among them), `car_extended_update`, `player_ai_drive`, `player_do_action_button_in_car` and `traffic_car_take_over_cruising_car` |
@@ -41,9 +41,12 @@ PC offsets, off the `C_car` base. PS2-equivalent offsets are in §6, not here.
 | +0x1f7c..+0x1f84 | velocity vec3 (vehicle-space) | H | `car_recompute_velocity` writes it, `car_get_actor_speed` copies it out; the wheel-contact proximity helpers use it |
 | +0x1f88 | max engine revs/sec = `C_Vehicle+0x1f18` | H | `vehicle_apply_carinit_params` sets it from the CARINIT `maximum rpm` ÷ 60; the HUD normalises RPM as `vehicle_get_engine_rpm / (car+0x1f88 * 60)` (`basic/artifacts/hud_elements.md` §6b) |
 | +0x1f8c | fuel-tank capacity | H | denominator of the HUD fuel-needle ratio |
+| +0x1f90 | odometer reading (float) | H | `car_game_init` stores `251000 + 150 × crt_rand()` and nothing else writes it; `player_ai` and `player_ai_drive` pass it to `hud_speedometer_set_values`, which shows the five low digits of ⌊value × 0.1⌋ (`basic/artifacts/hud_elements.md` §6b) |
+| +0x1ff2 | **police-model flag** (byte) | H | `car_ctor` clears it; `car_init` sets it when the uppercased model name `+0x20cc` matches one of the four police model strings `POLI`, `POLCAD`, `POLIMFOR`, `POLIMTUD` (`basic/artifacts/vehicle-movement.md` §5.1). Readers: `police_manager_tick` and `garage_game_done`, which never banks such a car (`basic/artifacts/garage/storing-cars-in-the-garage.md`). A different field from `+0x2044` |
 | +0x1ff4.. | 6-field CARINIT scratch block | H | `car_set_model_level` copies 6 dwords here from the level record `+0x1124`; `+0x1ffc` is the maximum of damage pool 2 (§1b) |
-| +0x2004 | **damage pool 2, current value** | H | `car_hit` and `car_on_collision_apply_damage` subtract damage from it and clamp at 0; `car_get_condition_fraction` channel 2 reads it against `+0x1ffc`; `car_set_model_level` preserves it around the block copy, so a boost swap keeps the damage; `car_init`, `car_game_init`, `car_reset` and `car_explosion` write it |
+| +0x2004 | **damage pool 2, current value** | H | `car_hit` and `car_on_collision_apply_damage` subtract damage from it and clamp at 0; `car_get_condition_fraction` channel 2 reads it against `+0x1ffc`; `car_set_model_level` preserves it around the block copy, so a boost swap keeps the damage; `car_init`, `car_game_init`, `car_reset` and `car_explosion` write it. Nothing else reads it, and nothing selects channel 2 (§1b) |
 | +0x2020 | derived power/mass ratio | H | `car_set_model_level` writes `(+0x660·+0x564)/(+0x6e0·+0x69c)` |
+| +0x2031 | **show-damage flag** (byte) | H | written only by `car_set_show_damage`, the script command `showcardamage` (dispatcher case `0xd5`, six shipped calls); cleared by `car_game_init`, saved by `car_save_game_save`. Its one reader is `player_show_car_damage_bar`, so the car-damage bar appears only for cars a script marked |
 | +0x2036 | **must-steal flag** (byte) — the lock must be forced before the car can be entered | H | setter `car_set_must_steal` (script `car_muststeal`, dispatcher case `0xc5`). Also written `1` by `traffic_car_activate_elements` and by `police_action_tick` / `police_action_dispatch_officer_commands` when a stopped chase car's crew is ordered out (event `0xf`); cleared by `human_movement` and `human_do_throw_occupant_from_car`; saved by `car_save_game_save`. Read three times by `player_do_action_button_on_foot`, which takes its ordinary enter-car path only while the flag is 0 |
 | +0x2038 | chase-flag word (`0xC00`) | H | pursuit dispatch / remove (§1a) |
 | +0x2044 | **is-police-car flag** | H | task seed; read by the police-car sighting/assault path. `police_action_tick` **clears** it just before handing the car to `traffic_car_adopt_car_with_new_driver`, so a released chase car stops being a police car |
@@ -134,9 +137,9 @@ separate damage pool; arm 3 is one deform zone's integrity.
 
 | Channel | Formula (PC offsets) | Notes |
 |---|---|---|
-| 0 | `+0x2dc / +0x2e0` (`C_Vehicle+0x26c / +0x270`) | `car_hit` subtracts from it and clamps at 0; `car_is_usable` requires it above 0 |
+| 0 | `+0x2dc / +0x2e0` (`C_Vehicle+0x26c / +0x270`) | **the gearbox pool.** `car_hit` subtracts from it and clamps at 0; `car_is_usable` requires it above 0. With damage enabled (`C_Vehicle+0xce4` bit `0x4000`) an empty pool makes `vehicle_set_gear` refuse every gear change and stops the automatic shift in `vehicle_tick_drivetrain`; `vehicle_update_visuals` tests the same gate |
 | **1** | `+0x2a4 / +0x2a8` (`C_Vehicle+0x234 / +0x238`) | **the engine pool.** `car_hit` subtracts from it and then derives `+0x2a0 = +0x29c + (1 − +0x29c)·(pool/max)` (`C_Vehicle+0x230` from `+0x22c`), the factor `vehicle_compute_motor_force` multiplies the motor force by; `vehicle_apply_damage` drains it the same way and latches `C_Vehicle+0x66c` once it is empty (`structs/vehicle.md` §2a); `car_is_usable` requires the pool above 0. **This is the channel the chase AI uses** |
-| 2 | `+0x2004 / +0x1ffc` | `car_hit` and `car_on_collision_apply_damage` subtract from it (the collision path touches this pool only); the one pool `car_set_model_level` preserves across a boost swap |
+| 2 | `+0x2004 / +0x1ffc` | `car_hit` and `car_on_collision_apply_damage` subtract from it (the collision path touches this pool only); the one pool `car_set_model_level` preserves across a boost swap. **No consumer:** a census of every instruction in `.text` with displacement `0x2004` finds only its updaters and this arm, and no code selects channel 2 — the channel is 3 after `car_game_init`, and every override sets 1 |
 | 3 | `zone+0x20 / zone+0x18` of the **last** `DEFORM BODY` zone (type 1) in the deform-zone table `+0x308` (§4c) | `1.0f` when the car has no body zone |
 | default | `1.0f` | - |
 
@@ -190,7 +193,7 @@ carrying the reason there is no PC function.
 | 0x00465d30 | `car_release_force_feedback_effects` | - | - | PC-only | Releases all five car force-feedback effects, `0x0064b73c` included |
 | 0x00465d90 | `car_game_init` | `GameInit__5C_carFv` | 0x001303d0 | CONFIRMED | Per-scene car init: `vehicle_enable_sounds(0)` → base-class actor `GameInit` → model level `-1` → `car_set_model_level(0)` → randomise |
 | 0x00466680 | `car_game_done` | `GameDone__5C_carFv` | 0x00131370 | CONFIRMED | `EnableSounds(0)`, `vehicle_game_done`, `actor_game_done`, the seat `DelObject` loop, claim mask 0, `ShadowCarOn(0)`, `hud_radar_remove_car`. Forced 1:1 gap; 448 vs 568 B. This diff identified `vehicle_game_done` |
-| 0x00466840 | `car_ai_tick` | `AI__5C_carFUi` | 0x001315b0 | CONFIRMED | Ambient/traffic-car AI tick, gated on the traffic flag `+0x20bd`: brake ×0.7/×0.4, steer ±0.2 (`0xbe4ccccd`/`0x3e4ccccd`), `rand()%200` / `%300+100` stall timer. Byte-exact |
+| 0x00466840 | `car_ai_tick` | `AI__5C_carFUi` | 0x001315b0 | CONFIRMED | The per-frame tick of every car: the traffic block gated on `+0x20bd` (brake ×0.7/×0.4, steer ±0.2 = `0xbe4ccccd`/`0x3e4ccccd`), the `rand()%200` / `%300+100` stall timer, then `vehicle_tick_drivetrain` unconditionally (`basic/artifacts/vehicle-movement.md` §3). Byte-exact |
 | 0x00466b80 | `car_update` | `Update__5C_carFUi` | 0x00131a90 | CONFIRMED | The primary per-frame vtable tick: Reset-flag velocity guard, `0x53` dt-clamp, distance² LOD/cull flags `+0xd54`, inlined path-node management, tail `SetPower`/`SetBrake`/`IsCarUsable`. Head statement-for-statement against the PS2 |
 | 0x00468970 | `car_recompute_velocity` | - | - | PC-only | Derives the velocity vec3 at `+0x1f7c` from the position delta ÷ dt; a `car_update` callee. Inlined into `Update` on the PS2 |
 | 0x00468bc0 | `car_explosion` | `CarExplosion__5C_carFUi` | 0x00134270 | CONFIRMED | Turns the car's lights and indicators off by progressively clearing the light-flag word `car+0x20c` (= PS2 `car+0x5f8`) plus the `code*` callback `+0x3f8`; `car_update` calls it as `(0)` |
@@ -551,8 +554,8 @@ one contiguous cluster*. `car_apply_net_event_msg` sits 1.1 MB away from the res
 |---|---|---|---|
 | 0x0059abc0 | `car_net_snapshot_state` | 39 | Latches the transform as the dead-reckoning baseline |
 | 0x0059ad60 | `car_net_apply_remote_state` | 15 | `NetDirect(Ui)` — extrapolates a REMOTE car between state messages. 4928 B |
-| 0x0059c0a0 | `car_broadcast_state_net_event_msg` | - | Walks `g_net_session+0xb4`, one snapshot per peer, at half rate |
-| 0x0059c200 | `car_post_reduced_state_net_event_msg` | - | The cheap payload for far peers |
+| 0x0059c0a0 | `car_broadcast_state_net_event_msg` | - | On the host, the full snapshot to every near peer (`g_net_session+0xb4`) and, on one call in three, the reduced one to every far peer (`+0xc4`); a client sends to the host only. `car_update` calls it when bit 1 of `+0x2198` is set or the session's update interval runs out |
+| 0x0059c200 | `car_post_reduced_state_net_event_msg` | - | The cheap payload for far peers, types `0x21` / `0x23` (`structs/net_event_msg.md` §4) |
 | 0x0059c3a0 | `car_post_state_net_event_msg` | - | Builds one type-`0x1e`/`0x1f` snapshot |
 | 0x0059c690 | `car_apply_net_event_msg` | 38 | Receive: applies types `0x29` / `0x2a` / `0x2b` and the glass arms ¹ |
 | 0x0059d2f0 | `car_post_break_glass_net_event_msg` | - | Type `0x27`, from `car_break_glass` |
@@ -571,7 +574,7 @@ one contiguous cluster*. `car_apply_net_event_msg` sits 1.1 MB away from the res
 `+0x2170` linear velocity, `+0x217c` quaternion, `+0x218c` correction accumulator, `+0x219c`
 snap-back threshold, `+0x21a8` angular velocity, `+0x21b4` damping coefficients, `+0x21c0`
 received velocity, `+0x21cc` message timestamp, `+0x21d0` extrapolation window, `+0x21e4`
-correction velocity, `+0x21f0` half-rate alternation byte.
+correction velocity, `+0x21f0` the broadcast counter that raises bit `0x100` of `+0x2198` on one call in three.
 
 **Slot 15 is `NetDirect(Ui)` family-wide** — `structs/bottle.md` §3a byte-proves the role on
 `C_airplane`, whose slot 15 is a bare `ret 4`. It extrapolates a remotely-owned car; the velocity
@@ -594,7 +597,8 @@ across 719 589 instructions.
 `event_msg_car_state_serialize`: the body quaternion from `frame+0x9c`, a door/window bitmask
 built from the part flags `0x10`/`0x20` over `car+0xd24`, the gear index `car+0x648`,
 `car_pack_light_state`, the GUID `car+0x18`, and two velocity triples scaled by `car+0x20b4`. The
-type is chosen bit-wise from `car+0x2198`, giving `0x1e` or `0x1f`.
+type is chosen bit-wise from `car+0x2198`: `0x1f` on the one call in three that also feeds the far
+peers, `0x1e` otherwise.
 
 Full write-up of the message layer: `structs/net_event_msg.md`.
 
@@ -604,6 +608,4 @@ Full write-up of the message layer: `structs/net_event_msg.md`.
 
 | item | state |
 |---|---|
-| `+0x294` bit 25 | set when the last physics step made a contact whose collision record carries flag `0x10000` (§1); which collision faces carry that flag is not decoded |
-| damage pools 0 and 2 (§1b) | pool 1 is the engine (it scales the motor force); no consumer names what pools 0 and 2 stand for |
 | PS2 door drop-outs (§6) | attributed to model data because no shipped PC model carries a `[DEFORM DOOR]` tag; the PS2 model archives were not examined |

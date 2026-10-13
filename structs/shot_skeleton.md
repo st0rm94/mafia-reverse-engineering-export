@@ -1,6 +1,6 @@
 # `C_ShotSkeleton` — the per-limb hit locator (PC prefix `shot_skeleton_*`)
 
-**Created** 2026-08-26 11:13 +0200 · **Modified** 2026-09-17 13:44 +0200
+**Created** 2026-08-26 11:13 +0200 · **Modified** 2026-10-11 10:44 +0200
 
 `C_ShotSkeleton` answers one question: *when a shot ray passes near a person, which body part
 did it hit?* It does that by wrapping the character's animated skeleton in **ten capsules**,
@@ -29,7 +29,7 @@ six callsites of the two methods, read from the disassembly, settles it:
 | `human_change_model` | `lea ecx,[esi + 0x2dc]` | same |
 | `human_ai` | `lea ecx,[edi + 0x2dc]` | same |
 | `game_tick_shoot` | `lea ecx,[edi + 0x2dc]` | same |
-| `pedestrian_crowd_hit` ×2 | `lea ecx,[esp + 0x48]` / `[esp + 0x50]` | a STACK temporary — the ambient crowd builds one on the fly rather than owning one |
+| `pedestrian_crowd_hit` ×2 | `lea ecx,[esp + 0x48]` / `[esp + 0x50]` | a STACK temporary — the ambient crowd builds one on the fly rather than owning one. Both forms address the same object once the pushes are counted: `shot_skeleton_init` runs on it with the struck pedestrian's model, then the test |
 
 **Corroboration from a different direction.** The object is `0x40` (16 joint handles) +
 10 × `0x18` (the capsule table) = **`0x130`** bytes, so it spans `+0x2dc..+0x40c` — and
@@ -93,7 +93,8 @@ the head capsule runs `0.5 .. 3.0` along `back3 → neck`, i.e. it starts halfwa
 bone and extends to **three times** its length — that is how a head with no head joint gets a
 hit volume.
 
-The body-part ids are what the shooting code consumes; the class itself never interprets them.
+The body-part ids are what the shooting code consumes; the class itself never interprets them
+(§4a).
 
 ## 4. The two methods
 
@@ -113,6 +114,14 @@ the search distance. The return is `bone[i].body_part`, so **0 means no hit**.
 The `+0.01 * i` term added to the hit parameter inside the loop is a tie-break bias, not a
 distance: it makes later capsules lose to earlier ones at equal range, which is what keeps a
 torso hit from stealing an arm hit.
+
+### 4a. What the body part decides
+
+| caller | what it does with the result |
+|---|---|
+| `game_tick_shoot` (a bullet) | passes the part to the victim's `Hit` (vtable slot 31). For a gunshot `human_hit` scales the damage by it — arms x0.3, legs x0.5, torso x1.0, head x1.5 — subtracts the scaled damage from the matching limb health (part 1 `EnergyHandR` `+0x64c`, 2 `EnergyHandL` `+0x648`, 3 `EnergyLegR` `+0x654`, 4 `EnergyLegL` `+0x650`; `structs/human.md`) and then from `cur_health` `+0x644` |
+| `human_ai` (a melee strike) | uses the test only as hit or miss: the part it then passes to the victim's `Hit` is `5 + rand_range(2)`, torso or head at random |
+| `pedestrian_crowd_hit` (a hit on an ambient pedestrian) | passes the part to `pedestrian_hit`, which picks the hit-reaction animation stored at `+0x164` from it, two clips per part chosen by the hit angle; the pedestrian's damage does not depend on the part |
 
 ## 5. PC vs PS2
 
@@ -146,10 +155,3 @@ name states that rather than transliterating.
 
 `structs/human.md` §4d (the embedding, from the `C_human` side) ·
 `structs/anim_machine.md` §1 · `ghidra/Game-ghidra.exe.functions.md` (the function registry).
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| consumer of the returned body-part id | `human_ai` and `game_tick_shoot` both call `TestCollision`; what they do with 1..6 (damage scaling, a hit reaction, a sound variant) is unread |
-| how `pedestrian_crowd_hit` fills its stack instance | it must fill it itself; whether it calls `shot_skeleton_init` on the temporary or copies a prepared one is unchecked |

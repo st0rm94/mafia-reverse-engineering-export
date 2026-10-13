@@ -1,6 +1,6 @@
 # `C_racecam` — the race-track camera actor (kind `0x1c`)
 
-**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-10-06 19:14 +0200
 
 PC prefix **`racecam_`** (distinct from the `race_` prefix of `race_compare_position` and its
 siblings: the fifth character differs).
@@ -60,16 +60,15 @@ typedef struct C_racecam {           /* extends C_actor */
 
     /* ── G_RaceCamera, 0x18 bytes — the whole of C_racecam's own state ── */
     /* +0x70 */ I3D_frame *frame;    // [H] the camera frame
-    /* +0x74 */ float      param_a;  // [M] designer default 70.0f
-    /* +0x78 */ float      param_b;  // [M] designer default 70.0f
-    /* +0x7c */ float      weight;   // [M] designer default 1.0f
+    /* +0x74 */ float      param_a;  // [H] designer value 70.0f; never read
+    /* +0x78 */ float      param_b;  // [H] designer value 70.0f; never read
+    /* +0x7c */ float      param_c;  // [H] designer value 1.0f; never read
     /* +0x80 */ int32_t    gate_a;   // [H] index of the gate before the camera; -1 at the lap wrap
     /* +0x84 */ int32_t    gate_b;   // [H] index of the gate after the camera; 0 at the lap wrap
 } C_racecam;
 ```
 
-Confidence: **[H]** measured · **[M]** measured, meaning inferred from defaults · **[U]** role
-unknown.
+Confidence: **[H]** measured.
 
 The record's type name `G_RaceCamera` types a PC structure: the PC decompiler renders the record as
 six anonymous dwords, while the PS2 mangled symbol `AddRaceCamera__8G_CameraFP12G_RaceCamera`
@@ -80,9 +79,9 @@ states the parameter type outright.
 | offset | field | conf | writer(s) | reader(s) | notes |
 |---|---|---|---|---|---|
 | `+0x70` | camera frame | H | `racecam_init`, `racecam_load_data`, `racecam_game_init`, `racecam_duplicate_from` | `camera_add_race_camera`, `camera_remove_race_camera` | seeded from the actor's frame `+0x68`; re-bound after load ¹ |
-| `+0x74` | designer float A | M | `racecam_init` (70.0f), `racecam_load_data`, `racecam_duplicate_from` | - | no reader inside the class; consumed by `G_Camera` |
-| `+0x78` | designer float B | M | same | - | same value, same writers (§5) |
-| `+0x7c` | weight | M | `racecam_init` (1.0f), `racecam_load_data`, `racecam_duplicate_from` | - | named for its 1.0f default and position (§5) |
+| `+0x74` | designer float A | H | `racecam_init` (70.0f), `racecam_load_data`, `racecam_duplicate_from` | - | ³ |
+| `+0x78` | designer float B | H | same | - | ³ |
+| `+0x7c` | designer float C | H | `racecam_init` (1.0f), `racecam_load_data`, `racecam_duplicate_from` | - | ³ |
 | `+0x80` | gate A | H | `racecam_init` (0), `racecam_game_init` (0), `racecam_load_data`, `racecam_duplicate_from`, `camera_init_race_cameras` | - | ² |
 | `+0x84` | gate B | H | same | - | ² |
 
@@ -95,7 +94,22 @@ the `C_circuit` race-camera node (`+0xcc` vector) nearest to each camera frame, 
 `circuit_determine_race_cams` ordered them. When the first gate is gate 0 and the second is the
 last gate, the pair is written as `-1` / `0` instead, so the camera straddles the start/finish line.
 
-The three floats have no located reader on either build; they are read inside `G_Camera` (§5).
+³ No instruction reads the three floats. A record reaches code outside the class only through
+the `G_Camera` vector at `+0x7c` and `g_active_race_camera`, and every reader there uses the frame
+(`+0x70`) and the two gate indices only: the race-camera mode `0x14` of `camera_tick`,
+`camera_init_race_cameras`, `camera_remove_race_camera` and the multiplayer caller of
+`camera_get_race_camera_at`. The three values are constructed, loaded, duplicated and saved, and
+nothing else. All 26 race cameras of mission 6 carry 70.0, 70.0 and 1.0 in the scene file.
+
+### 2b. The camera nodes in the navigation web
+
+`circuit_load_gates_from_scene` pairs each camera with the track through the mission's
+navigation web (`check.bin`): a race-camera node is a web node whose two-bit category (bits 2
+and 3 of the category word `C_web_node+0x0c`, `structs/web_node.md` §1a) has the value 2, that
+is bit `0x8`. In mission 6, 26 of the 860 nodes carry it, one per `C_racecam` actor, each with
+two connections; the other 834 nodes have category value 1. The node file is produced by the
+developers' web editor, which the PC build does not contain (§4), so nothing in the shipped
+files names the tool that set the bit.
 
 ## 3. Method coverage
 
@@ -137,11 +151,7 @@ documents as the `G_Camera` sub-object.
 * **Field delta:** a uniform `+0x10` inside the class band — `save_excluded` PC `+0x65` ↔ PS2 `+0x69`,
   `own_frame` `+0x68` ↔ `+0x70`, the `G_RaceCamera` record `+0x70..+0x84` ↔ `+0x80..+0x94`.
 * **Receiver path:** PS2 reaches the `G_Camera` object as `*(act_mission+0x20)+0x70`.
-
-## 5. Open items
-
-| item | state |
-|---|---|
-| the two 70.0f floats and the 1.0f weight | designer defaults with no reader inside this class on either build; consumed by `G_Camera`, whose reader of the record is not traced |
-| field of view against activation distance | which of the two 70.0f floats is which; the mission 6 cameras are the observable case (§1) |
-| the scene side | `circuit_load_gates_from_scene` finds race-camera nodes by testing bit `0x8` of a web-path node's flag word, starting from node id `0x27c`; which scene authoring tool sets that bit, and what the node's sub-type `2` means, are not traced |
+* **The floats are unread on the PS2 too:** its `activeRaceCam` readers in `Tick__8G_CameraFUi`
+  use the frame and the two gate indices only.
+* **The node file writer** is `SaveNodes__10C_web_path`, a PS2 symbol with no PC counterpart
+  (`structs/web_path.md` §5).

@@ -1,6 +1,6 @@
 # The ambient pedestrian crowd — `C_traffic_element` + `C_traffic_generator` + `C_don_ocas`
 
-**Created** 2026-08-14 17:51 +0200 · **Modified** 2026-10-01 08:56 +0200
+**Created** 2026-08-14 17:51 +0200 · **Modified** 2026-10-12 19:38 +0200
 
 | | |
 |---|---|
@@ -56,8 +56,9 @@ platform, and the four taxi methods are pedestrians hailing and riding taxis.
 
 ### 1a. Every element is a humanoid — measured
 
-* `pedestrian_create_model` attaches an `I3D_pose` to the frame **`neck`** and reads a
-  two-digit height scale off the user-property tag of the frame **`back1`** (×0.01) —
+* `pedestrian_create_model` attaches an `I3D_pose` to the frame **`neck`** and reads the
+  user-property tag of the frame **`back1`**, three letters and three digits such as `ABA095`
+  (§2: the letters give `+0x158` / `+0x159` / `+0x15a`, the digits the scale `+0x154`) —
   **unconditionally, for every element**.
 * Every element owns a `C_animations_machine_de_luxe`, taken from the parallel pool
   `g_pedestrian_anim_list`.
@@ -71,7 +72,10 @@ platform, and the four taxi methods are pedestrians hailing and riding taxis.
   `traffic_car_*` family.
 
 The one "special" element type is a **foot cop** (`+0x15a` ∈ {1, 3}) — still a
-pedestrian, and the population `pedestrian_manager_spawn_cop_from_pedestrian` draws from.
+pedestrian, and the population `pedestrian_manager_spawn_cop_from_pedestrian` draws from. The
+three tag bytes are written only for a six-character tag, and `pedestrian_create_model` does not
+clear them first, so a model whose tag fails that test keeps what the record's memory held
+(`basic/artifacts/game-loop.md` §10).
 
 ## 2. `C_traffic_element` — the pedestrian record (PC, stride `0x200`)
 
@@ -84,21 +88,25 @@ pedestrian, and the population `pedestrian_manager_spawn_cop_from_pedestrian` dr
 | `+0x10..+0x18` | world position | H | `pedestrian_tick` | the whole TU |
 | `+0x1c..+0x24` | motion direction | H | `pedestrian_tick` | `pedestrian_crowd_is_possible_coll` |
 | `+0x40` | `I3D_model*` | H | `pedestrian_set_model` | everywhere |
-| `+0x48` | cull distance (`90.0` seeded) | M | `pedestrian_set_model` | - |
+| `+0x48` | cull distance: `90.0` seeded, then the generator's `+0x88` | H | `pedestrian_set_model`, `pedestrian_manager_game_init` | - |
 | `+0x54` | squared distance to player | H | `pedestrian_manager_tick_pedestrians` | `pedestrian_tick` |
 | `+0x60`/`+0x64`/`+0x68`/`+0x6c`/`+0x70`/`+0x7c` | previous / current path node id, node position, node speed | M | `pedestrian_set_panic`, `pedestrian_advance_to_next_node` | idem |
 | `+0x80..+0x88` | current move target | H | `pedestrian_advance_to_next_node`, `pedestrian_manager_release_pedestrians_from_car` | `pedestrian_tick` |
 | `+0x98..+0xa0` | saved move target (restored on car release) | H | `pedestrian_activate*` | `pedestrian_manager_release_pedestrians_from_car` |
 | `+0xb0` | path state / node countdown (`< 0` = no path) | H | `pedestrian_advance_to_next_node` | `pedestrian_avoid_obstacle`, the car-release map |
-| `+0xb8` | child frame selected by the `'SNGM'` / `'SMMR'` magic | M | `pedestrian_create_model` | - |
-| `+0xc4..+0x10c` | 0x12 dwords zeroed by the ctor | U | `pedestrian_ctor` | - |
-| `+0xd4..+0xdc` | cached head point (frame origin, Y `+0.9`) | H | `pedestrian_update_model` | - |
-| `+0x15a` | category — `0`=civilian, `1`=patrol cop, `3`=mission cop, `4`=U | H | `pedestrian_activate` | `pedestrian_manager_ai`, `pedestrian_set_panic`, `pedestrian_manager_spawn_cop_from_pedestrian` |
-| `+0x15c` | model scale (`1.0` default, `back1` tag overrides) | H | `pedestrian_create_model` | `pedestrian_set_mega_panic` gate `>= 0.1` |
+| `+0xb8` | the model's `"base"` sub-frame, kept only when it is a visual (type 1) of visual type `'SNGM'` or `'SMMR'`, which `LS3DF.dll`'s type table names `I3D_VISUAL_SINGLEMESH` and `I3D_VISUAL_SINGLEMORPH` | H | `pedestrian_set_model`, `pedestrian_create_model` | `pedestrian_set_alpha` (frame vtable `+0x84`) |
+| `+0xc4..+0x10b` | the pedestrian's **`tDynamicCollObject`** (0x12 dwords), type `0x40`: box `+0xe8` / `+0xf4` = (-0.5, 0, -0.5)..(0.5, 1.8, 0.5), model `+0xc8`, owner `+0x108` = the crowd proxy at `C_game+0x2a1c` | H | `pedestrian_ctor` (zeroed), `pedestrian_set_model`, `pedestrian_create_model` | `pedestrian_activate_free`, `pedestrian_set_anim` (`collision_dyn_insert`), `pedestrian_tick` (`collision_dyn_update`, `_erase`, `_set_next_owner`), `pedestrian_deactivate`, `pedestrian_hit` (`collision_dyn_erase`) |
+| `+0xd4..+0xdc` | the collision object's sphere centre: the frame origin with Y `+0.9`; its radius `+0xe0` is `+0x154` x 1.15 | H | `pedestrian_set_model`, `pedestrian_create_model`, `pedestrian_update_model` | the collision queries |
+| `+0x10c..+0x14b` | the collision object's inverse world matrix (16 floats), pointed at by `+0x104` | H | `pedestrian_set_model`, `pedestrian_create_model`, `pedestrian_update_model` | the type-`0x40` query arm |
+| `+0x154` | model scale: `1.0`, then the `back1` tag's three digits × 0.01 | H | `pedestrian_set_model`, `pedestrian_create_model` | `pedestrian_tick`, `pedestrian_hit`, `pedestrian_manager_try_send_pedestrian_to_parked_car`, the collision radius `+0xe0` |
+| `+0x158` | first letter of the `back1` tag minus `'A'`: `1` (`B`) in every `Czena*` model, `0` in every male one; it selects the female animation set | H | `pedestrian_set_model`, `pedestrian_create_model` | `pedestrian_set_anim`, `pedestrian_activate`, `pedestrian_activate_free`, `pedestrian_advance_to_next_node`, `pedestrian_wave_at_taxi`, `pedestrian_spawn_gang_on_hit`, `pedestrian_manager_spawn_cop_from_pedestrian`, `pedestrian_manager_railway_in_station` |
+| `+0x159` | second letter of the `back1` tag minus `'A'` | H | `pedestrian_set_model`, `pedestrian_create_model` | none among the pedestrian functions |
+| `+0x15a` | category: third letter of the `back1` tag minus `'A'` — `0` civilian, `1` patrol cop (`pol01`-`pol03`), `2` some `civil*` models (no reader tests it), `3` mission cop (`pol11`-`pol13`), `4` gang (`FREEgang01` / `FREEgang02`) | H | `pedestrian_set_model`, `pedestrian_create_model`; `police_manager_free_temp_enemy` stores `1` | `pedestrian_hit` (`4` spawns a gang), `pedestrian_activate`, `pedestrian_manager_ai`, `pedestrian_set_panic`, `pedestrian_manager_spawn_cop_from_pedestrian` |
+| `+0x15c` | health: `-1.0` = dead | H | `pedestrian_activate`, `pedestrian_activate_free`, `pedestrian_hit`, `pedestrian_manager_save_game_load` | `pedestrian_set_mega_panic` gate `>= 0.1`, `pedestrian_tick`, `pedestrian_set_anim`, `pedestrian_crowd_collision`, `pedestrian_crowd_hit` |
 | `+0x164`/`+0x168` | panic animation id pair | H | `pedestrian_set_mega_panic` | the anim machine |
 | `+0x184` | `I3D_pose*` on the `neck` frame | H | `pedestrian_create_model` | `pedestrian_destroy_model` |
 | `+0x188` | look-at target frame (the player's `neck`) | H | `pedestrian_manager_make_pedestrian_watch_player_on_weapon_drawn` | `pedestrian_tick` |
-| `+0x190` | report delay, `3000` ms | M | `pedestrian_advance_to_next_node` | - |
+| `+0x190` | **wait timer** (ms): while it is positive `pedestrian_tick` counts it down by the frame time and returns early. Set to 500 + random, 1000, 3000 (the witness path) or 10000 | H | `pedestrian_advance_to_next_node`, `pedestrian_tick`, `pedestrian_activate`, `pedestrian_activate_free`, the savegame load | `pedestrian_tick`, the savegame save |
 | `+0x19c` | `panicking` (byte) | H | `pedestrian_set_panic` | `pedestrian_manager_try_send_pedestrian_to_parked_car` |
 | `+0x19e` | panic-once latch | H | `pedestrian_set_panic` | `pedestrian_manager_is_car_claimed_by_pedestrian` |
 | `+0x1a0` | panic expiry, `rand + 20000` ms | H | `pedestrian_set_panic` | - |
@@ -125,7 +133,10 @@ unproven · `-` no reader located.
 | `+0x7c` | pedestrian arena base (stride `0x200`) | H | `pedestrian_manager_game_init` allocates |
 | `+0x80` | live pedestrian count | H | budget comparison in `_ai` |
 | `+0x84` | arena slot count | H | sum of the per-name spawn counts |
-| `+0x88`/`+0x8c`/`+0x90`/`+0x94` | designer floats `100.0` / `50.0` / `90.0` / `50.0` | H | saved (§8) |
+| `+0x88` | cull distance handed to each pedestrian (`+0x48`); designer, default `100.0` | H | `pedestrian_manager_game_init` |
+| `+0x8c` | minimum spawn distance; designer, default `50.0` | H | `_ai` passes it to `pedestrian_activate`, which places the pedestrian at a random distance between it and `+0x90` (5.0 replaces it on the initial fill); both are scaled at entry by a factor read from `C_game+0x2a0c` |
+| `+0x90` | maximum spawn distance; designer, default `90.0` | H | the same |
+| `+0x94` | designer float, default `50.0`; never read | H | constructed, duplicated, saved and loaded only |
 | `+0x98` | model-name array (`char*`, each `0x11` bytes) | H | designer table |
 | `+0x9c` | model-name count | H | idem |
 | `+0xa0` | per-name spawn-count array (dwords) | H | idem |
@@ -133,7 +144,7 @@ unproven · `-` no reader located.
 | `+0xa8` | population budget (`10` seeded, scaled by `g_traffic_ratio_all`) | H | - |
 | `+0xac` | designer budget, saved across the scene | H | restored by `_game_done` |
 | `+0xb0` | round-robin spawn cursor | H | `_ai` |
-| `+0xb4` | cop-slot boundary index | M | `_ai` restricts categories 1/3 to slots ≤ this |
+| `+0xb4` | cop-slot boundary: the arena index of the last foot-cop slot (category 1 or 3) allowed to spawn, `-1` for none | H | `pedestrian_manager_game_init` allows round(cop slots x `g_traffic_ratio_police`); `_ai` restricts categories 1/3 to slots ≤ this |
 
 **Savegame record:** `0xbc` bytes per live pedestrian, plus a 10-byte header
 (`pedestrian_manager_save_game_get_size`).
@@ -184,6 +195,7 @@ default set. It owns no pedestrian state at all; `+0x65` is the only field it wr
 | address | name | what it is |
 |---|---|---|
 | `0x0064c058` | `g_traffic_ratio_all` | population multiplier applied to the designer budget |
+| `0x0064c05c` | `g_traffic_ratio_police` | multiplier on the number of foot-cop slots allowed to spawn (§3 `+0xb4`) |
 | `0x00656084` | `g_pedestrian_scream_enabled` | the crowd's shout permission — a STATIC MEMBER of `C_traffic_generator` ¹ |
 | `0x00656085` | `g_traffic_player_in_taxi` | set by `pedestrian_manager_player_in_taxi` |
 | `0x00656086` | `g_traffic_taxi_driver_enabled` | sole writer `pedestrian_manager_enable_taxi_driver` |
@@ -266,11 +278,12 @@ switch.
 | - | - | `Init` (32 B, tail-calls the base) | PS2-ONLY ¹ |
 | - | - | `IsPossibleColl` · `Collision` · `Hit` · `Update` · `NetDirect` · `DetachMesh` (8 B each) | FOLDED ² |
 | - | - | `ChangeSceneInit` · `ChangeSceneDone` | PS2-ONLY ³ |
-| - | - | `InvalidateActor` | not located |
+| - | - | `InvalidateActor` | PS2-ONLY ⁴ |
 
 ¹ The PC vtable slot points straight at `actor_init`.
 ² Folded onto shared PC stubs.
 ³ The city-streaming pair (§7).
+⁴ No PC counterpart: `game_invalidate_actor` has no kind-`0x12` arm (§7).
 
 ### 6c. `C_traffic_element` — 22/26
 
@@ -299,10 +312,10 @@ switch.
 | `0x004be250` | `pedestrian_drop_umbrella` | `DropUmbrella__17C_traffic_elementFv` | CONFIRMED |
 | `0x004be390` | `pedestrian_spawn_gang_on_hit` | `CreateMafianos__17C_traffic_elementF10E_hit_type…` | CONFIRMED |
 | - | - | `__dt__17C_traffic_elementFv` (68 B) | not located ¹ |
-| - | - | `HitFall` · `HitGun` · `HitStroke` (file-local) | not located ² |
+| - | - | `HitFall` · `HitGun` · `HitStroke` | INLINED ² |
 
 ¹ Trivial; no PC start in the gap.
-² Most likely inlined into `pedestrian_hit` (§8).
+² Inlined into `pedestrian_hit`, a 4 -> 1 fold with `Hit`; the evidence is in §7.
 
 ### 6d. Foreign helpers emitted inside the TU
 
@@ -329,6 +342,9 @@ Everything cross-build lives here.
 | `C_traffic_element` polymorphism | no vtable | `__vt__17C_traffic_element` occurs **0 times** — non-polymorphic on both builds, so the vtable link-order channel can never show it |
 | mega-panic animation ids | `0x14a`/`0x14b`, `0x14d`/`0x14e`, `0x150`/`0x151` | `0x118`/`0x119`, `0x11b`/`0x11c`, `0x11e`/`0x11f` — rebased per build; the **pairing** is the build-invariant |
 | CRT string routines | intrinsics (`rep movsb`) | newlib calls (`strcpy`, `strcat`, `strcasecmp`), visible in `GeneratePassengerForTaxi` — a size ratio there measures library style, not a different implementation |
+| `InvalidateActor` | `game_invalidate_actor` sends kinds `0xc` and `0x12` to the exit of its kind switch; the kinds it does handle match the PS2 set | `C_game::InvalidateActor` calls `InvalidateActor__13C_traffic_car` for kind `0xc` and `InvalidateActor__19C_traffic_generator` for kind `0x12`; the latter walks the pedestrian array clearing element `+0x248` and `+0x208` when they reference the dying actor |
+| `HitFall` / `HitGun` / `HitStroke` | inlined in `pedestrian_hit`: `HitFall`'s `collision_dyn_erase` and 45° / 135° tests (`0.785398` / `2.356194`), `HitStroke`'s `pedestrian_manager_new_panic_at_position` call, `HitGun`'s 90° test, `human_get_anim_id_for_death` call and scream | three `C_traffic_element` methods (760, 640 and 476 B) called by `Hit` |
+| generator `+0x94` | never read | `+0xa4`, never read either |
 
 ### 7a. Cross-build evidence that settled PC-side questions
 
@@ -373,13 +389,6 @@ on PC neither does (§8).
 
 | item | state |
 |---|---|
-| 🥇 `InvalidateActor__19C_traffic_generator` | no PC function in the TU: the gap between `_clear_pedestrians` and `_get_pedestrian_from_frame` holds exactly 6 starts and all 6 are body-matched to other methods, so it is genuinely absent from this cluster — **not located**, not "inlined". Look for a second cluster before tagging it |
-| `HitFall` / `HitGun` / `HitStroke` | PS2 file-local; the PC gap between `pedestrian_set_anim` and `pedestrian_set_panic` is empty and `pedestrian_hit` is 1.43× the PS2 `Hit`. Consistent with inlining; **not proven** |
-| the four designer floats `+0x88..+0x94` | saved, loaded and duplicated, but no reader is traced for any of them individually |
-| `+0xb4`, the cop-slot boundary | `pedestrian_manager_ai` restricts categories 1/3 to slots at or below it; who writes it is untraced |
-| `+0xc4..+0x10c` | 0x12 dwords the ctor zeroes with no located reader |
-| `+0x190` = `3000` | written on the witness path; no located reader |
-| the `'SNGM'` / `'SMMR'` child-frame magic | `pedestrian_create_model` stores the matching child frame at `+0xb8`; what it selects is unproven |
 | in game | does `g_traffic_scream_budget` audibly cap crowd screams during a shoot-out? A grenade in a busy street should hit the `> 100` refusal |
 | the taxi model table | why the hot-rods and `blackdragon` are among the models the passenger generator accepts is not established (§3a) |
 | in game | does a `hotrodp3` or a `thunderbird` generate Free-Ride taxi passengers on PS2 and not on PC (§7c)? One in-game test settles it |

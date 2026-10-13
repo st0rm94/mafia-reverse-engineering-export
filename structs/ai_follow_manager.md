@@ -1,6 +1,6 @@
 # `ai_follow_manager` / `ai_follow_group` — escort and follower behaviour
 
-**Created** 2026-08-01 20:14 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-01 20:14 +0200 · **Modified** 2026-10-13 19:12 +0200
 
 Cross-build material is in §4; the method tables in §2 are PC↔PS2 twin tables.
 
@@ -305,7 +305,7 @@ it is true: at the callsite.
 - **The `2000` ms heartbeat and the `6000` ms task deadline are identical on both platforms**, as
   are the state codes, the flag bits and the `mustLeave` truth table.
 - **`ai_follow_manager` is a singleton on PS2 at `0x50917c`** and on PC at `0x00655304`; both
-  are sub-objects of the AI root object (`structs/ai_fight_manager.md` §5 for the root layout).
+  are sub-objects of the AI root object (`structs/ai_fight_manager.md` §4 for the root layout).
   🔑 All **34** callsites in `.text` that load `0x00655304` into ECX (`mov ecx, 0x655304`) resolve
   to exactly the **15** functions in §2a and nothing else. That confirms the §2a mapping without
   any body-diff, corroborates the COMDAT-folded `mustEnter` stub (`0x0043e0a0` is in the census,

@@ -1,6 +1,6 @@
 # `C_box` — the PC-only legacy rigid-body box
 
-**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-10-12 15:08 +0200
 
 A `C_actor` subclass carrying **its own complete rigid-body solver**: force accumulation,
 semi-implicit integration into a double-buffered state, an OBB-vs-OBB separating-axis test, a
@@ -50,7 +50,7 @@ typedef struct C_box {                    /* extends C_actor */
     /* +0x80  */ int        state_read_idx;   // [H] index of the live state buffer
     /* +0x84  */ int        state_write_idx;  // [H] index of the back buffer
     /* +0x88  */ S_vector   corner_local[8];  // [M] local corner points; box_ai_tick transforms
-                                              //     them into +0x614 and +0x674 (2 if +0xc90)
+                                              //     them into +0x614 and +0x674 (2 for a cylinder)
     /* +0xe8  */ C_box     *resting_on[];     // [H] boxes stacked on this one
     /* +0xfc  */ int        resting_count;    // [H] cleared by box_wake_resting_bodies
     /* +0x104 */ int        sleep_counter;    // [H] set to 5 on any external impulse
@@ -78,12 +78,12 @@ typedef struct C_box {                    /* extends C_actor */
     /* +0xb69 */ char       just_woke;        // [H] read by box_track_record_key
     /* +0xc34 */ tDynamicCollObject dyn_coll; // [H] 0x12 dwords; collision_dyn_erase target
     /* +0xc7c */ I3D_frame *dyn_coll_frame;   // [H] the `dyn*` frame it was built from
-    /* +0xc80 */ float      tunable_a;        // [H] default 50.0
+    /* +0xc80 */ float      density;          // [H] default 50.0; mass = volume * density (§1e)
     /* +0xc84 */ float      tunable_b;        // [H] default 0.4
     /* +0xc88 */ float      tunable_c;        // [H] default 2.5
     /* +0xc8c */ float      restitution;      // [H] default 0.6; every solver uses -(e+1)
-    /* +0xc90 */ char       tensor_valid;     // [M] gates box_build_inverse_inertia_tensor;
-                                              //     set = 2 corner points instead of 8 (§1d)
+    /* +0xc90 */ char       is_cylinder;      // [H] set = an upright cylinder, not a box (§1e);
+                                              //     0 in shipped play
     /* +0xc94 */ float      bound_radius;     // [H] |half_extent|, from box_game_init
     /* +0xc9c */ S_vector   net_pos;          // [H] replication band, see §1c
     /* +0xca8 */ S_vector   net_lin_vel;      // [H]
@@ -94,6 +94,9 @@ typedef struct C_box {                    /* extends C_actor */
     /* +0xcdc */ int        unused_cdc;       // [H] zeroed by box_init; nothing reads it
 } C_box;                                       /* >= 0xce0 bytes */
 ```
+
+`+0xcdc` is zeroed by `box_init` next to `+0xcd4`; of the 24 `disp32 0xcdc` operands in `.text`
+this is the only one on a `C_box`, so nothing reads it.
 
 ### 1a. The double-buffered state record (`+0x130`, stride 200 = 0xc8)
 
@@ -120,17 +123,6 @@ across frames is what makes a stack of boxes settle instead of jittering — the
 warm-starting trick for a sequential-impulse solver. `box_contact_slot_release` zeroes a slot
 by index.
 
-### 1d. The corner arrays `+0x614` / `+0x674`
-
-`box_ai_tick` runs two identical loops over the local corner table at `+0x88`: each corner goes
-through a vector × matrix transform with two different matrices, and the results land in
-`+0x614` and `+0x674` (stride `0xc`). The loop count is `+0xc90 ? 2 : 8`, and the copy length
-`count × 12`, so each array holds 8 vec3 — `+0x614 + 8 × 0xc = +0x674` and `+0x674` ends at
-`+0x6d4`. `box_resolve_contacts` indexes `+0x674` with `ecx*4` (three floats per corner).
-
-`+0xcdc` is zeroed by `box_init` next to `+0xcd4`; of the 24 `disp32 0xcdc` operands in `.text`
-this is the only one on a `C_box`, so nothing reads it.
-
 ### 1c. The replication band `+0xc9c..+0xcd8`
 
 Written by `box_game_init` (seed), `box_write_state_to_frame` (mirror, only when `+0x20` says
@@ -144,6 +136,35 @@ this machine is authoritative) and `box_apply_net_event_msg` (remote update); re
 | `0x8` | `box_apply_net_event_msg` type `0x1b` | a remote state arrived |
 | `0x10` | same, from the payload's sleep byte | remote body is asleep (cleared when awake) |
 | `0xfffffffe` (OR) | `box_init` | all bits but 0 set at construction |
+
+### 1d. The corner arrays `+0x614` / `+0x674`
+
+`box_ai_tick` runs two identical loops over the local corner table at `+0x88`: each corner goes
+through a vector × matrix transform with two different matrices, and the results land in
+`+0x614` and `+0x674` (stride `0xc`). The loop count is 8, or 2 for a cylinder (§1e), and the
+copy length `count × 12`, so each array holds 8 vec3 — `+0x614 + 8 × 0xc = +0x674` and `+0x674`
+ends at `+0x6d4`. `box_resolve_contacts` indexes `+0x674` with `ecx*4` (three floats per corner).
+
+### 1e. The cylinder flag `+0xc90` and the density `+0xc80`
+
+`+0xc90` turns the box into an upright cylinder. `box_recompute_dimensions_from_frame` computes
+the mass and the inertia from the half-extents `hx`, `hy`, `hz` (`+0x70..+0x78`):
+
+| `+0xc90` | mass | inertia |
+|---|---|---|
+| 0 | `8 · hx · hy · hz · [+0xc80]`, the box volume times `+0xc80` | `m · (a² + b²) / 3` per axis, the solid box |
+| set | `2π · r² · hy · [+0xc80]`, with `r` the mean of `hx` and `hz`, which replaces both | `m · (3r² + 4hy²) / 12` about the two cross axes |
+
+Both branches multiply a volume by `+0xc80`, so that field is a **density** (default 50.0). The
+other readers follow the same split: `box_ai_tick` transforms two corner points instead of eight
+(§1d), and `box_build_inverse_inertia_tensor`, `box_accumulate_forces`, `box_on_collision`,
+`box_collect_contacts`, `box_resolve_contacts` and `box_game_init` branch on it.
+
+**The flag is 0 in shipped play.** The five fields `+0xc80..+0xc90` form one `0x14`-byte
+parameter block: `box_init` writes the defaults 50.0, 0.4, 2.5, 0.6 and 0,
+`box_recompute_dimensions_from_frame` clamps the floats, and `box_save_data` / `box_load_data`
+copy the whole block in savegame chunk `0x11`. No other instruction in `.text` writes `+0xc90`,
+so the cylinder branches run only from a savegame that carries a non-zero byte.
 
 ## 2. Method coverage — 55/55 function starts
 
@@ -326,5 +347,4 @@ neighbouring class, and the template for the network-pair argument in §2b) ·
 
 | item | state |
 |---|---|
-| what `+0xc90` is | it gates `box_build_inverse_inertia_tensor` and also cuts the corner loops from 8 points to 2 (§1d); the name `tensor_valid` covers only the first role, and no writer that sets it is traced |
 | is `C_box` instantiated by any mission? | needs an in-game observation or a mission-file scan; the `dyn*` frame-name convention of `box_build_dyn_collision_from_frame` is what to search the level data for |

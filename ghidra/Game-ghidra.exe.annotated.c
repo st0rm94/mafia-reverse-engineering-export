@@ -2475,7 +2475,7 @@ undefined *g_gui_widget_vt_window_invisible;
 undefined *g_gui_widget_vt_window_scroll;
 undefined *g_gui_widget_vt_window_titled;
 undefined g_hit_permission_matrix;  // 0x0064ba78 - 11x11 byte matrix: may attacker_type hit victim_type? Indexed [a*11+b] by C_human+0x5fc (human_type, a SINGLE-BIT mask; index = trailing zeros). Ghidra never made a DAT_ symbol here - the address was only ever a computed-index base.
-undefined4 *g_hud_2intbenal_texture;
+undefined4 *g_hud_low_fuel_lamp_texture;
 undefined4 *g_hud_blood_overlay_texture;
 undefined g_hud_blood_splat_verts;
 char g_hud_car_damage_bar_enabled;
@@ -2560,16 +2560,22 @@ undefined1 g_ls3d_setup_bpp;
 undefined4 g_ls3d_setup_details_scale;
 undefined4 g_ls3d_setup_draw_distance_scale;
 undefined4 g_ls3d_setup_effects_quality;
-undefined1 g_ls3d_setup_field_0x0e;
-char g_ls3d_setup_field_0x12;
-char g_ls3d_setup_field_0x13;
-char g_ls3d_setup_field_0x14;
-char g_ls3d_setup_field_0x15;
-char g_ls3d_setup_field_0x16;
-char g_ls3d_setup_field_0x17;
-char g_ls3d_setup_field_0x20;
-uint g_ls3d_setup_flag_bytes_0x18;
-uint g_ls3d_setup_flag_bytes_0x1c;
+undefined1 g_ls3d_setup_refresh_rate;
+char g_ls3d_setup_antialiasing;
+char g_ls3d_setup_multipass_rendering;
+char g_ls3d_setup_clip_always;
+char g_ls3d_setup_fullscreen;
+char g_ls3d_setup_hw_transform_lighting;
+char g_ls3d_setup_vsync;
+char g_ls3d_setup_software_mixing_only;
+char g_ls3d_setup_low_detail_textures;
+char g_ls3d_setup_triple_buffering;
+char g_ls3d_setup_truecolor_lightmaps;
+char g_ls3d_setup_compressed_textures;
+char g_ls3d_setup_truecolor_textures;
+char g_ls3d_setup_sound_disabled;
+char g_ls3d_setup_eax_disabled;
+char g_ls3d_setup_suspend_when_inactive;
 int g_ls3d_setup_height;
 undefined4 g_ls3d_setup_particles_quality;
 undefined4 g_ls3d_setup_shadow_quality_idx;
@@ -2711,21 +2717,21 @@ undefined g_sound_group_cap;
 undefined4 g_sound_group_end;
 int *g_sound_mgr;
 undefined *g_sound_table_vt;
-undefined4 g_speech_channel_extra_frame_a;
-undefined4 g_speech_channel_extra_frame_b;
-undefined4 g_speech_channel_field_0x28;
-undefined4 g_speech_channel_field_0x2c;
-undefined4 g_speech_channel_field_0x30;
-undefined4 g_speech_channel_field_0x34;
-undefined4 g_speech_channel_field_0x38;
-undefined4 g_speech_channel_field_0x3c;
+undefined4 g_speech_channel_eye_target_frame;
+undefined4 g_speech_channel_neck_target_frame;
+undefined4 g_speech_channel_viseme_param_0x28;
+undefined4 g_speech_channel_viseme_param_0x2c;
+undefined4 g_speech_channel_viseme_param_0x30;
+undefined4 g_speech_channel_viseme_param_0x34;
+undefined4 g_speech_channel_viseme_param_0x38;
+undefined4 g_speech_channel_viseme_param_0x3c;
 undefined4 g_speech_channel_field_0x40;
 undefined4 g_speech_channel_morph_frame;
 undefined4 g_speech_channel_owner_frame;
 undefined4 g_speech_channel_sound;
 undefined4 g_speech_channel_state;
 undefined4 g_speech_channel_state_at15;
-undefined4 g_speech_channel_stop_flag;
+undefined4 g_speech_channel_countdown_ms;
 undefined4 g_speech_channel_time_ms;
 undefined4 g_speech_channels;
 undefined1 g_speech_morph_objects_alloc;
@@ -2868,10 +2874,10 @@ undefined crashreport_map_stream_static_dtor;
 undefined crashreport_symbol_compare_by_address;
 undefined crashreport_unhandled_exception_filter;
 undefined crt_atexit_free_collision;
-undefined crt_atexit_free_rail_clamp_candidates;
-undefined crt_atexit_free_rail_schedule_log;
-undefined crt_atexit_free_rail_semaphore_list;
-undefined crt_atexit_free_railway_list;
+undefined rail_clamp_candidates_static_dtor;
+undefined rail_schedule_log_static_dtor;
+undefined rail_semaphore_list_static_dtor;
+undefined railway_list_static_dtor;
 undefined crt_atexit_free_textdb;
 undefined crt_atexit_noop_dtor_0060b700;
 undefined crt_atexit_noop_dtor_006248a7;
@@ -2879,12 +2885,12 @@ undefined crt_eh_catch_guard_handler;
 undefined crt_eh_translator_guard_handler;
 undefined crt_forcdecpt;
 undefined crt_seh_unwind_collision_handler;
-undefined crt_static_dtor_004f62e0;
-undefined crt_static_dtor_004f6360;
-undefined crt_static_dtor_004f63e0;
-undefined crt_static_dtor_004f6460;
-undefined crt_static_dtor_004f64e0;
-undefined crt_static_dtor_004f6560;
+undefined traffic_adopted_elements_static_dtor;
+undefined traffic_bridge_slots_static_dtor;
+undefined traffic_car_registry_static_dtor;
+undefined traffic_parking_cars_static_dtor;
+undefined traffic_stolen_cars_static_dtor;
+undefined traffic_mafia_crews_static_dtor;
 undefined detector_count_dynb_frames;
 undefined folded_vector_ctor_at_0x04_0044a120;
 undefined force_feedback_manager_static_dtor;
@@ -4785,6 +4791,8 @@ vec3_set_xyz(undefined4 *param_1,undefined4 param_2,undefined4 param_3,undefined
  *
  * Evidence: VA 0x004026e0 (originally `FUN_004026e0`). This is the
  *   ACTUAL subtraction; the builder `vec3_set_xyz` (0x004026c0) only stores.
+ * PS2 twin: - (inlined: the PS2 `S_vector` exports no `operator-` and builds
+ *  `S_vector(a.x - b.x, ...)` inline).
  */
 void __thiscall vec3_sub(float *param_1,float *param_2,float *param_3)
 
@@ -5286,9 +5294,11 @@ uint __fastcall i3d_frame_get_bound_points_2d(int param_1,I3D_frame *param_2)
  *   single direct `E8` caller is BY DESIGN (the call is what pushes the address it pops).
  *   A scan for the exact 12-byte pattern found exactly ONE occurrence binary-wide, so it
  *   is not a thunk family.
- * ⚠️ It looks UNREACHABLE: its only caller is the 7-byte block at 0x00403079, and nothing
- *   branches to or calls that block (the function above it ends in `ret 4`). Most likely an
- *   orphaned COMDAT fragment the linker left in place. Recorded, not asserted.
+ * ⚠️ UNREACHABLE: its only caller is the 7-byte block `push ecx; push eax; call` at
+ *   0x00403079, which sits in the padding after a `ret 4`, and nothing branches to it.
+ *   For that caller the slot it loads is `0x00403080 + 0x953b = 0x0040c5bb`, itself in the
+ *   padding after a `ret 0xc`; the slot holds `0x02a0ff1e`, a pointer outside the image
+ *   written before the dump (`exe-re/basic/artifacts/crack.md` §5f).
  * PS2 twin: none possible - an x86/MSVC construct.
  * Evidence: VA 0x00402cd4. Renamed from `FUN_00402cd4`.
  */
@@ -6042,7 +6052,7 @@ void __thiscall vec3_div_scalar_in_place(float *param_1,float param_2)
  *     return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
  *
  *   Generic vec2/vec3 math library member. Companion to:
- *     vec3_dist_sq           (VA 0x004250f0 — squared 3D distance)
+ *     vec3_length_sq           (VA 0x004250f0 — squared 3D distance)
  *     vec3_is_near_zero      (VA 0x005cc9a0 — magnitude² < 1e-16)
  *     vec3_set_xyz              (vec3 constructor)
  *     vec3_sub               (3D subtract)
@@ -14154,10 +14164,10 @@ int __thiscall std_vector3c_insert_at(int param_1,undefined4 *param_2,undefined4
     pvVar3 = operator_new(iVar2 * 0x3c);
     pvVar8 = pvVar3;
     for (puVar11 = *(undefined4 **)(param_1 + 4); puVar11 != param_2; puVar11 = puVar11 + 0xf) {
-      copy_elem_stride_0x3c();
+      ai_path_node_construct_copy();
       pvVar8 = (void *)((int)pvVar8 + 0x3c);
     }
-    copy_elem_stride_0x3c();
+    ai_path_node_construct_copy();
     uninit_copy_range_stride_0x3c(param_2,*(undefined4 *)(param_1 + 8),(int)pvVar8 + 0x3c);
     stub_noop_args8_00575c00(*(undefined4 *)(param_1 + 4),*(undefined4 *)(param_1 + 8));
     operator_delete_wrapper(*(undefined4 *)(param_1 + 4));
@@ -14577,14 +14587,25 @@ void uninit_fill_n_stride_0x3c(undefined4 *param_1,int param_2,undefined4 *param
 }
 
 /*
- * copy_elem_stride_0x3c - copies a single 0x3c-byte element (15 dwords), null-guarded
+ * ai_path_node_construct_copy - copy-construct one ai_path_node in place
  *
- * What it does: copies a single 0x3c-byte element (15 dwords), null-guarded.
- * Parameters: as rendered; this is compiler-generated container machinery.
- * Returns: see the signature.
- * Evidence: VA 0x0040f6c0. Renamed from `FUN_0040f6c0`.
+ * What it does: when the destination is not null, copies the `0x3c`-byte source record over
+ *  it (15 dwords, `rep movsd`): the element copy of the `ai_path` normal-waypoint vector.
+ * Parameters:
+ *  param_1 (ECX): the destination slot; null writes nothing.
+ *  param_2 (EDX): the source record.
+ * Returns: void.
+ * PS2 twin: `__ct__12ai_path_nodeFRC12ai_path_node`  [STRUCTURAL]
+ * Evidence: VA 0x0040f6c0. Its only callers are the two copies inside
+ *  `std_vector3c_insert_at`, whose only caller is `ai_wayfind_build_optimal_path`; the PS2
+ *  `GetOptimalPath` copies its path node with this constructor after `reserve`. The PC null
+ *  test sits in this helper, the PS2 one in the caller; the record is `0x3c` bytes on the PC
+ *  and `0x50` on the PS2.
+ * Renamed from `FUN_0040f6c0`.
+ * Class layout: `exe-re/structs/ai_path.md`
  */
-void __fastcall copy_elem_stride_0x3c(undefined4 *param_1,undefined4 *param_2)
+
+void __fastcall ai_path_node_construct_copy(undefined4 *param_1,undefined4 *param_2)
 
 {
   int iVar1;
@@ -19532,7 +19553,7 @@ c00_install_nav_follower:
           local_c94 = 0.0;                                  // Flatten Y to 0 — convert 3D distance-vec into XZ-plane-only.
         }
         local_ca8 = *(float **)(iVar18 + 0x18);             // local_ca8 = secondary radius (inner+0x18, as a packed float-as-int).
-        fVar28 = (float10)vec3_dist_sq();                   // Compute squared distance of the (possibly-flattened) vector.
+        fVar28 = (float10)vec3_length_sq();                   // Compute squared distance of the (possibly-flattened) vector.
         if (fVar28 < (float10)(float)local_ca8 * (float10)(float)local_ca8)   // Within radius²?
         goto switchD_004187c8_default;                      // Yes ⇒ jump to outer-default tail = return 1 = task complete (pop).
       }
@@ -19550,7 +19571,7 @@ c00_install_nav_follower:
         local_c7c = 0.0;                                    // Force .y=0 (consistent with the XZ-plane convention above).
         iVar20 = *(int *)(*(int *)(iVar18 + 0x1c) + 0x98);  // iVar20 = dynamic-target-tracker ptr.
         local_ca8 = *(float **)(iVar20 + 0x30);             // local_ca8 = tracker's radius² gate at tracker+0x30.
-        fVar28 = (float10)vec3_dist_sq();                   // Squared distance to tracker pos.
+        fVar28 = (float10)vec3_length_sq();                   // Squared distance to tracker pos.
         if (fVar28 < (float10)(float)local_ca8 * (float10)(float)local_ca8) {   // Inside the tracker's radius?
           if (*(int *)(iVar20 + 0x2c) == 0) {               // Tracker entity-resolved slot at +0x2c still null?
             uVar21 = mission_find_actor_by_name(iVar20 + 0xc);   // Resolve entity by frame-name string at tracker+0x0c.
@@ -19601,7 +19622,7 @@ c00_install_nav_follower:
         local_c94 = pfVar17[1];                               // .y
         local_c90 = pfVar17[2];                               // .z
         local_ca8 = (float *)piVar14[1];                      // Pull broadcast radius (float at inner+4) — stored as int-cast bits.
-        fVar28 = (float10)vec3_dist_sq();                     // Squared distance between actor and subscriber.
+        fVar28 = (float10)vec3_length_sq();                     // Squared distance between actor and subscriber.
         if (fVar28 < (float10)(float)local_ca8 * (float10)(float)local_ca8) {
           // Within radius² ⇒ broadcast delivered to subscriber, complete the task.
           ai_follow_manager_del_follower(*piVar14);
@@ -19750,7 +19771,7 @@ c01_commit_zone_probe_flag:
       local_c8c = *pfVar17;
       local_c88 = pfVar17[1];
       local_c84 = pfVar17[2];
-      fVar28 = (float10)vec3_dist_sq();                       // Squared distance.
+      fVar28 = (float10)vec3_length_sq();                       // Squared distance.
       if (fVar28 < ((float10)(float)piVar14[1] + (float10)0.3) *
                    ((float10)(float)piVar14[1] + (float10)0.3)) {
         // Within (radius + 0.3)² ⇒ subscriber considered reached.
@@ -19804,7 +19825,7 @@ c01_postplan_state_guard:
       local_c98 = *pfVar17;
       local_c94 = pfVar17[1];
       local_c90 = pfVar17[2];
-      fVar28 = (float10)vec3_dist_sq();                       // d²
+      fVar28 = (float10)vec3_length_sq();                       // d²
       local_c68 = (float *)(float)fVar28;                     // Stash d² for reuse below.
       fVar30 = (float)piVar14[1] * (float)piVar14[1];         // radius²
       local_c40 = (float)CONCAT31(local_c40._1_3_,1);         // Default follower-tick flag = 1 (full speed).
@@ -19847,7 +19868,7 @@ c01_close_range_altpath:
             local_c98 = *pfVar17;
             local_c94 = pfVar17[1];
             local_c90 = pfVar17[2];
-            fVar28 = (float10)vec3_dist_sq();                 // Distance² between last-segment endpoint and subscriber.
+            fVar28 = (float10)vec3_length_sq();                 // Distance² between last-segment endpoint and subscriber.
           }
           if ((float10)(float)piVar14[1] * (float10)(float)piVar14[1] < fVar28) {
             // Last-segment endpoint farther than radius from current subscriber-pos ⇒ subscriber MOVED, REPLAN.
@@ -19880,7 +19901,7 @@ c01_close_range_altpath:
             local_c78 = pfVar17[2];
             iVar18 = *(int *)(piVar14[4] + 0x98);             // tracker ptr.
             local_ca8 = *(float **)(iVar18 + 0x30);           // tracker.radius (float as int bits).
-            fVar28 = (float10)vec3_dist_sq();                  // d² of actor ↔ tracker delta.
+            fVar28 = (float10)vec3_length_sq();                  // d² of actor ↔ tracker delta.
             if (fVar28 < (float10)(float)local_ca8 * (float10)(float)local_ca8) {
               // Within tracker radius ⇒ if resolved-entity not yet bound, resolve it by frame-name now.
               if (*(int *)(iVar18 + 0x2c) == 0) {
@@ -20018,7 +20039,7 @@ c06_invehicle_target_pickup:
         local_ca4 = *pfVar17;
         local_ca0 = pfVar17[1];
         local_c9c = pfVar17[2];
-        fVar28 = (float10)vec3_dist_sq();                     // d² of the (player − cop) delta.
+        fVar28 = (float10)vec3_length_sq();                     // d² of the (player − cop) delta.
         if (fVar28 < (float10)4.0) {
           // d² < 4 (≈2m) ⇒ swap to the other vehicle seat (driver→passenger or vice-versa) and chain-cancel.
           human_do_climb_in_car_lr();
@@ -20175,13 +20196,13 @@ c06_no_target_record_default:
       local_c64 = (float *)(float)fVar28;
       fVar28 = (float10)entity_weapon_get_max_range();
       local_c64 = (float *)(float)(fVar28 * (float10)(float)local_c64);
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       fVar28 = (float10)(float)local_c64 - fVar28;            // (radius² - dist²) — positive ⇒ in range.
     }
     else {
       // Bit 0 set ⇒ radius² = (payload[0])²
       local_c64 = (float *)(*pfVar17 * *pfVar17);
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       fVar28 = (float10)(float)local_c64 - fVar28;
     }
     local_c3c = (byte *)0x0;                                  // Aim-marker (bone-name ptr) — 0 = use computed pos.
@@ -20522,7 +20543,7 @@ c06_clearbit0_ret3:
         local_c98 = *pfVar17;
         local_c94 = pfVar17[1];
         local_c90 = pfVar17[2];
-        fVar28 = (float10)vec3_dist_sq();                     // d² entity↔target.
+        fVar28 = (float10)vec3_length_sq();                     // d² entity↔target.
         if (fVar28 < (float10)(float)puVar19[4]) goto tail_return1_task_complete;   // d² < radius² (entity reached target) ⇒ tail_return1_task_complete = return 1 (TASK_COMPLETE / pop).
       }
       iVar18 = actor_get_vehicle();
@@ -20676,7 +20697,7 @@ joined_r0x0041644b:
         local_c80 = *pfVar17;
         local_c7c = pfVar17[1];
         local_c78 = pfVar17[2];
-        fVar28 = (float10)vec3_dist_sq();                     // d² entity ↔ last waypoint.
+        fVar28 = (float10)vec3_length_sq();                     // d² entity ↔ last waypoint.
         if (fVar28 < (float10)1.0) {
           // Entity is at the last waypoint (within 1m²) ⇒ dispatch the interaction.
           uVar34 = 0;
@@ -20710,7 +20731,7 @@ c08_arm_deployed:
         local_c80 = *pfVar17;
         local_c7c = pfVar17[1];
         local_c78 = pfVar17[2];
-        fVar28 = (float10)vec3_dist_sq();                     // d² last waypoint ↔ target attach.
+        fVar28 = (float10)vec3_length_sq();                     // d² last waypoint ↔ target attach.
         if (fVar28 < (float10)1.0) {
           // Path endpoint still within 1m² of target attach ⇒ just tick follower (no replan needed).
           ai_path_tick(param_3,param_1,1,1);
@@ -20970,7 +20991,7 @@ c0a_early_complete_ret1:
         local_c94 = pfVar17[1];
         local_c90 = pfVar17[2];
         local_c40 = (float)puVar19[1];                        // radius (from inner+4).
-        fVar28 = (float10)vec3_dist_sq();                     // d² entity ↔ target.
+        fVar28 = (float10)vec3_length_sq();                     // d² entity ↔ target.
         if ((float10)local_c40 * (float10)local_c40 <= fVar28) {
           // d² ≥ radius² ⇒ out of range ⇒ return 2 = chain-cancel BOTH child lists (consumer RESULT 2).
           ExceptionList = local_c;
@@ -21173,7 +21194,7 @@ c0a_schedule_type12_retry_10s:
         local_c94 = pfVar17[1];
         local_c90 = pfVar17[2];
         local_c40 = (float)puVar19[1];                        // Radius.
-        fVar28 = (float10)vec3_dist_sq();                     // d² entity ↔ target.
+        fVar28 = (float10)vec3_length_sq();                     // d² entity ↔ target.
         if ((float10)local_c40 * (float10)local_c40 <= fVar28) {
           // Out of range. Bit 3 set ⇒ early-complete.
           if ((*(byte *)(puVar19 + 3) & 8) != 0) goto c0a_early_complete_ret1;
@@ -21196,7 +21217,7 @@ c0a_schedule_type12_retry_10s:
         local_c78 = pfVar17[2];
         iVar18 = *(int *)(puVar19[7] + 0x98);
         local_ca8 = *(float **)(iVar18 + 0x30);               // tracker.radius (float as int bits).
-        fVar28 = (float10)vec3_dist_sq();                     // d² vs tracker radius.
+        fVar28 = (float10)vec3_length_sq();                     // d² vs tracker radius.
         if (fVar28 < (float10)(float)local_ca8 * (float10)(float)local_ca8) {
           // Within tracker radius ⇒ resolve entity-id if unbound, then release tracker.
           if (*(int *)(iVar18 + 0x2c) == 0) {
@@ -21441,7 +21462,7 @@ c0c_exit_cleanup_clear_pursuit:
     local_c98 = *pfVar17;
     local_c94 = pfVar17[1];
     local_c90 = pfVar17[2];
-    fVar28 = (float10)vec3_dist_sq();                             // fVar28 = dist² between this-actor world-pos and inner+0 (source vec3).
+    fVar28 = (float10)vec3_length_sq();                             // fVar28 = dist² between this-actor world-pos and inner+0 (source vec3).
     if (fVar28 < (float10)(float)puVar19[5]) {                    // Inner+0x14 = radius²; this-actor inside radius ⇒ arrival branch.
       if ((*(byte *)(puVar19 + 7) & 2) == 0) {                    // Inner+0x1c flag byte bit 1 = stay-running-when-arrived.
         // Bit 1 clear ⇒ arrival completes the task; tear down follower then return 2.
@@ -21547,7 +21568,7 @@ c10_replan_continuation:
       local_c84 = pfVar17[2];
       act_mission_get_game();
       uVar7 = game_get_frame_time_ms();                        // uVar7 = world clock-ms.
-      if (((uint)param_2[4] < uVar7) && (fVar28 = (float10)vec3_dist_sq(), (float10)4.0 < fVar28))
+      if (((uint)param_2[4] < uVar7) && (fVar28 = (float10)vec3_length_sq(), (float10)4.0 < fVar28))
                                                                   // Deadline expired AND target moved > 2.0 units ⇒ replan.
       goto c10_replan_continuation;
 c10_dynamic_target_tracker_check:
@@ -21561,7 +21582,7 @@ c10_dynamic_target_tracker_check:
         local_c78 = pfVar17[2];
         iVar18 = *(int *)(puVar19[8] + 0x98);                     // iVar18 = tracker ptr.
         local_ca8 = *(float **)(iVar18 + 0x30);                   // Tracker+0x30 = tracker-radius (float, packed as ptr).
-        fVar28 = (float10)vec3_dist_sq();                         // fVar28 = dist² actor↔tracker-anchor (cached at +0x10..+0x18 of tracker).
+        fVar28 = (float10)vec3_length_sq();                         // fVar28 = dist² actor↔tracker-anchor (cached at +0x10..+0x18 of tracker).
         uVar1 = (ushort)((float10)(float)local_ca8 * (float10)(float)local_ca8 < fVar28);   // r² < dist² ⇒ outside.
         uVar3 = (ushort)((float10)(float)local_ca8 * (float10)(float)local_ca8 == fVar28);  // ==.
         uVar7 = (uint)(ushort)(uVar1 << 8 | uVar3 << 0xe);        // Pack flags into uVar7 bits 8/14 (consumed as bit-8 arg below).
@@ -21775,7 +21796,7 @@ c11_enqueue_child_reset_clock:
         local_c98 = *pfVar17;
         local_c94 = pfVar17[1];
         local_c90 = pfVar17[2];
-        fVar28 = (float10)vec3_dist_sq();                         // fVar28 = dist² between this and target.
+        fVar28 = (float10)vec3_length_sq();                         // fVar28 = dist² between this and target.
         if ((float10)9.0 < fVar28) {                              // dist² > 9.0 ⇒ target > 3m away ⇒ task complete (target escaped).
           ExceptionList = local_c;
           return 1;
@@ -21934,7 +21955,7 @@ c14_firstplan_alloc_follower:
         *puVar19 = local_b90;                                     // Refresh cached seat pos from current seat lookup.
         puVar19[1] = local_b8c;
         puVar19[2] = local_b88;
-        fVar28 = (float10)vec3_dist_sq();                         // dist² between OLD cached pos and current seat pos.
+        fVar28 = (float10)vec3_length_sq();                         // dist² between OLD cached pos and current seat pos.
         if ((float10)(float)puVar19[4] < fVar28) goto c14_state4_retry_replan;   // Seat moved more than radius² ⇒ replan via state-4 tail.
         uVar29 = vec_count_stride_0x18();                               // Count of the stride-0x18 vector at this+4/+8 (0 if unallocated); high dword is a Ghidra artifact.
         uVar7 = (uint)((ulonglong)uVar29 >> 0x20);
@@ -21959,7 +21980,7 @@ c14_firstplan_alloc_follower:
           local_c78 = pfVar17[2];
           iVar18 = *(int *)(puVar19[9] + 0x98);                   // Tracker ptr.
           local_ca8 = *(float **)(iVar18 + 0x30);                 // Tracker+0x30 = radius (float packed as ptr).
-          fVar28 = (float10)vec3_dist_sq();
+          fVar28 = (float10)vec3_length_sq();
           if (fVar28 < (float10)(float)local_ca8 * (float10)(float)local_ca8) {
             // Inside tracker radius ⇒ resolve target name if not cached, then jump to shared tail.
             if (*(int *)(iVar18 + 0x2c) == 0) {
@@ -22262,7 +22283,7 @@ c15_quadrant_right_probe:
     local_c10 = *pfVar17;
     local_c0c = pfVar17[1];
     local_c08 = pfVar17[2];
-    fVar28 = (float10)vec3_dist_sq();                             // dist² from CACHED initial pos (*puVar19) to current pos.
+    fVar28 = (float10)vec3_length_sq();                             // dist² from CACHED initial pos (*puVar19) to current pos.
     if (fVar28 <= (float10)1.0) {                                 // Moved less than 1m ⇒ still stuck.
       if (param_2[4] != 0) {
         act_mission_get_game();
@@ -22408,7 +22429,7 @@ c16_patrol_movement_intent:
       local_ca4 = *pfVar17;
       local_ca0 = pfVar17[1];
       local_c9c = pfVar17[2];
-      fVar28 = (float10)vec3_dist_sq();                           // dist² actor↔cached POI.
+      fVar28 = (float10)vec3_length_sq();                           // dist² actor↔cached POI.
       if (fVar28 - (float10)*(float *)(iVar18 + 0xc) <= (float10)0.0) {
                                                                   // dist² ≤ radius² ⇒ still at POI, enter Mode-A time-cooldown flow.
         act_mission_get_game();
@@ -22687,7 +22708,7 @@ c18_fail_bias_commit:
       local_c8c = *pfVar13;                                                     // target-approach-pos.x
       local_c84 = pfVar13[2];                                                   // target-approach-pos.z
       local_c88 = 0.0;                                                          // (y zeroed — XZ-only dist² below)
-      fVar28 = (float10)vec3_dist_sq();                                         // XZ dist² self ↔ approach-pos
+      fVar28 = (float10)vec3_length_sq();                                         // XZ dist² self ↔ approach-pos
       local_c70 = (float *)(float)fVar28;
       local_ca0 = local_ca0 + 1.0;                                              // self.y + 1.0 (chest-height for LOS test below)
       fVar30 = pfVar17[0xf];                                                    // inner+0x3c = target-actor handle
@@ -22794,7 +22815,7 @@ c18_threat_low_no_transition:
         entity_do_shoot_timed(0,0,0);                               // CLOSE
       }
 c18_arrival_dist_check:
-      fVar28 = (float10)vec3_dist_sq();                                         // dist² self ↔ approach-pos (XZ-only, set above)
+      fVar28 = (float10)vec3_length_sq();                                         // dist² self ↔ approach-pos (XZ-only, set above)
       if (fVar28 < (float10)0.12) {                                             // < 0.346m² ⇒ ARRIVED ⇒
         pfVar17[0xd] = 2.8026e-45;                                              //   sub-stage → 2 (final-face)
       }
@@ -23319,7 +23340,7 @@ c1c_bias_commit_slot0:
       local_c80 = *pfVar17;
       local_c78 = pfVar17[2];
       local_c7c = 0.0;                                                          // XZ-only
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       if (fVar28 <= (float10)0.35) {                                            // ≤0.59m ⇒ ARRIVED ⇒
         *param_5 = *param_5 & 0xfffffffe;
         uVar21 = ai_action_new_corner_fire(piVar14[0x10],3,0,piVar14[0xf],0);  //   spawn 0x1b(target, 3, variant)
@@ -23347,7 +23368,7 @@ c1c_bias_commit_slot0:
       local_c80 = *pfVar17;
       local_c78 = pfVar17[2];
       local_c7c = 0.0;
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       if (fVar28 <= (float10)0.35) {                                            // ARRIVED ⇒
         *param_5 = *param_5 & 0xfffffffe;
         uVar21 = ai_action_new_corner_cover_fire(piVar14[0x10],3,0,piVar14[0xf],0);  //   spawn 0x1a child
@@ -23375,7 +23396,7 @@ c1c_bias_commit_slot0:
       local_c80 = *pfVar17;
       local_c78 = pfVar17[2];
       local_c7c = 0.0;
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       if (fVar28 <= (float10)0.35) {                                            // ARRIVED ⇒
         *param_5 = *param_5 & 0xfffffffe;
         uVar21 = ai_action_new_corner_look(piVar14[0x10],0,0,piVar14[0xf],0);  //   spawn 0x19 child (note: 2nd arg=0 vs 3 for 0x1a/0x1b)
@@ -23414,7 +23435,7 @@ c1c_bias_commit_slot0:
       local_c94 = pfVar17[1];
       local_c90 = pfVar17[2];
       // ----- INPUT 1: distance-decay factor (1.0 - dist²·0.01), clamped [0,1] -----
-      fVar28 = (float10)vec3_dist_sq();                                         // dist² (approach-pos)
+      fVar28 = (float10)vec3_length_sq();                                         // dist² (approach-pos)
       fVar28 = (float10)1.0 - fVar28 * (float10)0.01;                           // decay: 100m² ⇒ 0, 0 ⇒ 1
       local_c70 = (float *)(float)fVar28;
       if ((float10)0.0 <= fVar28) {
@@ -23427,7 +23448,7 @@ c1c_bias_commit_slot0:
       }
       *param_5 = *param_5 & 0xfffffffe;
       // ----- early-out: if too far from target (dist² > 0.25 = 0.5m), bounce back to sub-stage 8 -----
-      fVar28 = (float10)vec3_dist_sq();                                         // dist² (target — uses last loaded src/dst)
+      fVar28 = (float10)vec3_length_sq();                                         // dist² (target — uses last loaded src/dst)
       if ((float10)0.25 < fVar28) {                                             // > 0.5m ⇒
         piVar14[9] = 8;                                                         //   sub-stage → 8 (re-approach)
         ExceptionList = local_c;
@@ -23593,7 +23614,7 @@ c1c_bias_commit_slot0:
       local_ca4 = *pfVar17;
       local_c9c = pfVar17[2];
       local_ca0 = 0.0;
-      fVar28 = (float10)vec3_dist();                                            // dist (XZ)
+      fVar28 = (float10)vec3_length();                                            // dist (XZ)
       if ((float10)1.5 < fVar28) {                                              // > 1.5m ⇒
         piVar14[9] = 4;                                                         //   sub-stage → 4 (re-spawn 0x18 child)
         ExceptionList = local_c;
@@ -23623,7 +23644,7 @@ c1c_bias_commit_slot0:
       local_ca4 = *pfVar17;
       local_c9c = pfVar17[2];
       local_ca0 = 0.0;
-      fVar28 = (float10)vec3_dist();
+      fVar28 = (float10)vec3_length();
       if (fVar28 < (float10)0.35) {                                             // ≤0.35m ⇒ ARRIVED ⇒
         piVar14[9] = 7;                                                         //   sub-stage → 7 (arrival face)
         ExceptionList = local_c;
@@ -23733,7 +23754,7 @@ c1c_bias_commit_slot0:
         local_ca4 = *pfVar17;
         local_c9c = pfVar17[2];
         local_ca0 = 0.0;
-        fVar28 = (float10)vec3_dist();
+        fVar28 = (float10)vec3_length();
         local_c64 = (float *)(float)fVar28;
         if ((float10)1.0 < fVar28) {                                            //   > 1m away ⇒
           uVar31 = 0xc1200000;                                                  //     -10.0f
@@ -23920,7 +23941,7 @@ c1d_pursuit_handoff_fastpath:
     local_c8c = *pfVar13;                                                          // delta.x (will be normalized below)
     local_c88 = pfVar13[1];                                                        // delta.y
     local_c84 = pfVar13[2];                                                        // delta.z
-    fVar28 = (float10)vec3_dist_sq();
+    fVar28 = (float10)vec3_length_sq();
     local_c70 = (float *)(float)fVar28;                                            // dist² to target (scratch slot — repurposed in scoring stage)
 
     // -- STAGE B.1: GROUP-MEMBERSHIP gate — group-state-2 + leader-mismatch ⇒ seed cancel-score --
@@ -24131,7 +24152,7 @@ c1d_crouch_zone_probe:
     local_c4c = *pfVar13;
     local_c48 = pfVar13[1];
     local_c44 = pfVar13[2];
-    fVar28 = (float10)vec3_dist_sq();                                              // |probe - target|²
+    fVar28 = (float10)vec3_length_sq();                                              // |probe - target|²
     fVar28 = (float10)1.0 - fVar28 / (float10)pfVar17[6];                          // score = 1 - dist²/radius²  (radius² = inner+0x18)
     local_c70 = (float *)(float)fVar28;                                            // FWD score
     if (fVar28 < (float10)0.0) {
@@ -24143,7 +24164,7 @@ c1d_crouch_zone_probe:
     local_c4c = *pfVar13;
     local_c48 = pfVar13[1];
     local_c44 = pfVar13[2];
-    fVar28 = (float10)vec3_dist_sq();
+    fVar28 = (float10)vec3_length_sq();
     fVar28 = (float10)1.0 - fVar28 / (float10)pfVar17[6];
     local_c68 = (float *)(float)fVar28;                                            // REV score
     if (fVar28 < (float10)0.0) {
@@ -24155,7 +24176,7 @@ c1d_crouch_zone_probe:
     local_c4c = *pfVar13;
     local_c48 = pfVar13[1];
     local_c44 = pfVar13[2];
-    fVar28 = (float10)vec3_dist_sq();
+    fVar28 = (float10)vec3_length_sq();
     fVar28 = (float10)1.0 - fVar28 / (float10)pfVar17[6];
     local_c58 = (float *)(float)fVar28;                                            // SIDE-FWD score
     if (fVar28 < (float10)0.0) {
@@ -24167,7 +24188,7 @@ c1d_crouch_zone_probe:
     local_c4c = *pfVar13;
     local_c48 = pfVar13[1];
     local_c44 = pfVar13[2];
-    fVar28 = (float10)vec3_dist_sq();
+    fVar28 = (float10)vec3_length_sq();
     fVar28 = (float10)1.0 - fVar28 / (float10)pfVar17[6];
     local_c54 = (float)fVar28;                                                     // SIDE-REV score
     if (fVar28 < (float10)0.0) {
@@ -24923,7 +24944,7 @@ c1e_spawn_search_state10:
             // ALL of: target on-foot AND target's +0x618 < 0.5 AND dist² < 16 AND vehicle-mask-bit-2
             // AND NEVYHAZUJ (+0xf08 bit 0x80000) clear: no carjacking
             if ((((iVar18 == 0) && (fVar28 = (float10)vehicle_get_speed(), fVar28 < (float10)0.5)) &&
-                (fVar28 = (float10)vec3_dist_sq(), fVar28 < (float10)16.0)) &&
+                (fVar28 = (float10)vec3_length_sq(), fVar28 < (float10)16.0)) &&
                ((cVar5 = car_is_usable(2), cVar5 != '\0' &&
                 ((*(uint *)(param_1 + 0xf08) & 0x80000) == 0)))) {
               // ⇒ spawn case-0x23 (vehicle-pursuit child task; pos, 100.0f range, 0.3f weight, ttl=3)
@@ -24933,7 +24954,7 @@ c1e_spawn_search_state10:
               return 3;
             }
             // close-range fallback: dist²<25 AND NOT mask-bit-2 ⇒ seed score-slot 1 = 3.0f, set close-engage
-            fVar28 = (float10)vec3_dist_sq();
+            fVar28 = (float10)vec3_length_sq();
             if ((fVar28 < (float10)25.0) && (cVar5 = car_is_usable(2), cVar5 == '\0')) {
               uVar31 = 0x40400000;                                                       // 3.0f (close-engage score)
               uVar21 = 1;
@@ -24945,7 +24966,7 @@ c1e_spawn_search_state10:
         }
       }
       // -------- CLOSE-RANGE SUB-TASK SPAWN: dist²<1 AND no case-0x15/0x16 active ⇒ random spawn --------
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       local_c5c = (float)fVar28;
       if (((fVar28 < (float10)1.0) && (cVar5 = ai_action_manager_has_action(0x15,0,0), cVar5 == '\0')) &&
          (cVar5 = ai_action_manager_has_action(0x16,0,0), cVar5 == '\0')) {
@@ -25016,7 +25037,7 @@ LAB_0041d0dc:
           act_mission_get_game();
           fVar30 = (float)game_get_frame_time_ms();
           if (((uint)fVar30 <= (uint)pfVar17[10]) ||                                     // before deadline OR
-             (fVar28 = (float10)vec3_dist_sq(), fVar28 <= (float10)local_c5c)) {         // dist²-to-plan-dest ≤ tolerance
+             (fVar28 = (float10)vec3_length_sq(), fVar28 <= (float10)local_c5c)) {         // dist²-to-plan-dest ≤ tolerance
             // ⇒ tick navmesh follower (entity-mode, c71-aware soft-recompute)
             ai_path_tick(param_3,param_1,1,local_c71 == '\0');
             ai_path_revalidate_for_actor(param_1);
@@ -25040,7 +25061,7 @@ LAB_0041d0dc:
               local_c2c = pfVar13[2];
               iVar18 = *(int *)((int)pfVar17[0x14] + 0x98);
               local_c5c = *(float *)(iVar18 + 0x30);                                     // segment-radius
-              fVar28 = (float10)vec3_dist_sq();
+              fVar28 = (float10)vec3_length_sq();
               if (fVar28 < (float10)local_c5c * (float10)local_c5c) {                    // inside segment radius?
                 if (*(int *)(iVar18 + 0x2c) == 0) {                                      // entity-handle slot empty?
                   uVar21 = mission_find_actor_by_name(iVar18 + 0xc);                 // resolve frame-name → entity
@@ -25204,7 +25225,7 @@ c1e_no_follower_replan_tail:
         local_c8c = *pfVar11;
         local_c88 = pfVar11[1];
         local_c84 = pfVar11[2];
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         if (fVar28 < (float10)25.0) {                                                    // within 5m of cached pos?
           act_mission_get_game();
           uVar7 = game_get_frame_time_ms();
@@ -25470,7 +25491,7 @@ c1e_compute_forward_delta:
         local_ca4 = *pfVar11;
         local_ca0 = pfVar11[1];
         local_c9c = pfVar11[2];
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         if ((((float10)64.0 <= fVar28) || (local_ca0 <= -1.4)) || (1.4 <= local_ca0)) {
           // far (≥64m²) OR vertically out of band (|Y|≥1.4m) ⇒ fall through to normalize-fwd + ⇒ state 6
           act_mission_get_game();
@@ -25760,7 +25781,7 @@ c1e_spawn_search_state4:
       local_c7c = pfVar13[1];
       local_c78 = pfVar13[2];
       vec3_set_xyz(local_8d0,&local_ca4);                                                   // delta self→target (return discarded, sets vec3-scratch)
-      fVar28 = (float10)vec3_dist();                                                     // measured distance
+      fVar28 = (float10)vec3_length();                                                     // measured distance
       local_c64 = (float *)(float)fVar28;                                                // radius scales with dist
       cVar5 = ai_wayfind_plan_flee_route(&local_ca4,&local_c80,local_c64,pfVar17[0xf],local_c70);
       if (cVar5 != '\0') {
@@ -25977,7 +25998,7 @@ c1e_lost_track_audio_ret3:
       local_c98 = *pfVar11;
       local_c94 = pfVar11[1];
       local_c90 = pfVar11[2];
-      fVar28 = (float10)vec3_dist();
+      fVar28 = (float10)vec3_length();
       local_c70 = (float *)(float)(fVar28 + (float10)0.001);                             // dist + ε (avoid /0)
       local_ae4[0] = 1.0 / (float)local_c70;
       vec3_scale_in_place(local_ae4);                                                    // normalize delta in place (= 1/dist scale)
@@ -26051,7 +26072,7 @@ c1e_enter_state0_plan:
         local_c88 = pfVar13[1];
         local_c84 = pfVar13[2];
         local_c64 = (float *)pfVar17[9];                                                 // speed scalar
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         if ((float10)(float)local_c64 * (float10)(float)local_c64 < fVar28) {            // dist² > speed² ⇒ unreachable in 1 tick
           ai_path_destroy();
           if (pfVar17[0x14] != 0.0) {
@@ -26083,7 +26104,7 @@ c1e_enter_state0_plan:
           local_c2c = pfVar13[2];
           iVar18 = *(int *)((int)pfVar17[0x14] + 0x98);
           local_c5c = *(float *)(iVar18 + 0x30);                                         // segment radius
-          fVar28 = (float10)vec3_dist_sq();
+          fVar28 = (float10)vec3_length_sq();
           if (fVar28 < (float10)local_c5c * (float10)local_c5c) {
             if (*(int *)(iVar18 + 0x2c) == 0) {
               uVar21 = mission_find_actor_by_name(iVar18 + 0xc);
@@ -26151,7 +26172,7 @@ c1e_fallthrough_state10:
     local_c88 = pfVar17[1];
     local_c84 = pfVar17[2];
     local_c64 = *(float **)(iVar18 + 0x10);               // local_c64 = radius (treated as float)
-    fVar27 = (float10)vec3_dist_sq();                     // fVar27 = dist²(self, target)
+    fVar27 = (float10)vec3_length_sq();                     // fVar27 = dist²(self, target)
     fVar26 = (float10)(float)local_c64;
     fVar28 = (float10)(float)local_c64;                   // fVar26*fVar28 = radius² threshold
     act_mission_get_game();
@@ -26214,7 +26235,7 @@ c1e_fallthrough_state10:
       local_c98 = *pfVar17;
       local_c94 = pfVar17[1];
       local_c90 = pfVar17[2];
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       local_c70 = (float *)(float)fVar28;                 // local_c70 = dist²(self, target)
       fVar28 = (float10)entity_weapon_get_max_range();
       local_c64 = (float *)(float)fVar28;                 // local_c64 = threat-radius (from actor+0x11d4)
@@ -26332,7 +26353,7 @@ c1e_fallthrough_state10:
       local_c80 = *pfVar17;
       local_c78 = pfVar17[2];
       local_c7c = 0.0;                                    // (.y zeroed — XZ-planar dist)
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       if (fVar28 <= (float10)1.0) {                       // within 1.0m² of gate ⇒ stop + advance
         human_set_movement_intent_forward(0);             // (re-emit forward intent — keeps vehicle nudged into gate)
         *param_5 = *param_5 & 0xfffffffe;                 // clear bit 0 of script flag (signal "phase-1 done")
@@ -26404,7 +26425,7 @@ c1e_fallthrough_state10:
         local_c80 = *pfVar17;
         local_c78 = pfVar17[2];
         local_c7c = 0.0;
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         uVar21 = 0;
         if (fVar28 < (float10)0.09) {                     // within 0.3m of gate (0.09 = 0.3² m²) ⇒ FIRE INTERACTION
           uVar35 = 0;
@@ -26635,7 +26656,7 @@ c1e_fallthrough_state10:
       local_c8c = *pfVar13;
       local_c88 = pfVar13[1];
       local_c84 = pfVar13[2];
-      fVar28 = (float10)vec3_dist_sq();                                               // dist² from cop to target (computed via inner state, NOT local delta)
+      fVar28 = (float10)vec3_length_sq();                                               // dist² from cop to target (computed via inner state, NOT local delta)
       local_c68 = (float *)(float)fVar28;                                             // CACHED dist² (used throughout substate 1)
       // -- ABANDON GATE: too far (>16m² = >4m) OR squad not active for this target ⇒ exit early --
       if (((float10)16.0 <= fVar28) || (cVar5 = police_board_has_active_group_for_target(pfVar17[0x16]), cVar5 == '\0')) {
@@ -26654,7 +26675,7 @@ c1e_fallthrough_state10:
         else {
           (**(code **)(*(int *)pfVar17[0x16] + 0x70))(&local_c98);                    // pure target-handle path
         }
-        fVar28 = (float10)vec3_dist();                                                // dist (linear) cop ↔ target
+        fVar28 = (float10)vec3_length();                                                // dist (linear) cop ↔ target
         // -- VIEW-CONE + DOT-PRODUCT GATE: target close enough AND in front-cone ⇒ FINE-15s-drag ⇒ raise_handcuffs(2) / pursuit-broadcast --
         if ((float10)0.5 < fVar28 + (float10)0.0001) {                                // >0.5m (avoid divide-by-zero)
           // -- Normalise (cop→target) delta vector in local_c4c/c48/c44 (vec3_normalize_in_place idiom) --
@@ -26944,7 +26965,7 @@ c21_enter_substate0:
             fVar30 = (float)game_get_frame_time_ms();
             // -- "Target moved + deadline elapsed" check: nav-plan deadline expired AND drift > abandon² ⇒ replan from scratch --
             if (((uint)pfVar17[10] < (uint)fVar30) &&
-               (fVar28 = (float10)vec3_dist_sq(), (float10)(float)local_c68 < fVar28)) {
+               (fVar28 = (float10)vec3_length_sq(), (float10)(float)local_c68 < fVar28)) {
               if ((pfVar17[0x17] != 0.0) && (ai_path_destroy(), pfVar17[0x17] != 0.0)) {
                 ai_path_scalar_deleting_dtor(1);
               }
@@ -26975,7 +26996,7 @@ c21_enter_substate0:
               local_c2c = pfVar13[2];
               iVar18 = *(int *)((int)pfVar17[0x17] + 0x98);
               local_c64 = *(float **)(iVar18 + 0x30);                                 // dynamic-target radius²
-              fVar28 = (float10)vec3_dist_sq();
+              fVar28 = (float10)vec3_length_sq();
               if (fVar28 < (float10)(float)local_c64 * (float10)(float)local_c64) {   // within radius² ⇒ re-resolve entity
                 if (*(int *)(iVar18 + 0x2c) == 0) {                                   // no cached entity ⇒ look up by name
                   uVar21 = mission_find_actor_by_name(iVar18 + 0xc);
@@ -27095,7 +27116,7 @@ c21_enter_substate3_replan:
       local_c8c = *pfVar13;
       local_c88 = pfVar13[1];
       local_c84 = pfVar13[2];
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       if (fVar28 < (float10)25.0) {                                                    // < 5m² (close to cached) ⇒ check 8s deadline
         act_mission_get_game();
         uVar7 = game_get_frame_time_ms();
@@ -27900,7 +27921,7 @@ c21_postrotate_facing:                                                          
         local_c2c = pfVar13[2];
         iVar18 = *(int *)((int)pfVar17[0xc] + 0x98);
         local_c5c = *(float *)(iVar18 + 0x30);            // radius from descriptor
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         if (fVar28 < (float10)local_c5c * (float10)local_c5c) {   // within radius² ⇒ reached!
           if (*(int *)(iVar18 + 0x2c) == 0) {
             uVar21 = mission_find_actor_by_name(iVar18 + 0xc);   // (re)resolve target entity by frame-name
@@ -27936,7 +27957,7 @@ c21_postrotate_facing:                                                          
           local_c2c = pfVar13[2];
           iVar18 = *(int *)((int)pfVar17[0xc] + 0x98);
           local_c5c = *(float *)(iVar18 + 0x30);
-          fVar28 = (float10)vec3_dist_sq();
+          fVar28 = (float10)vec3_length_sq();
           if (fVar28 < (float10)local_c5c * (float10)local_c5c) {
             if (*(int *)(iVar18 + 0x2c) == 0) {
               uVar21 = mission_find_actor_by_name(iVar18 + 0xc);
@@ -28223,7 +28244,7 @@ c21_postrotate_facing:                                                          
         local_bd4 = *puVar10;
         local_bd0 = puVar10[1];
         local_bcc = puVar10[2];
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         // -- OUTER-RADIUS GATE: dist² > radius_a² ⇒ abandon (target too far).
         if ((float10)(float)puVar19[3] < fVar28) {
           ExceptionList = local_c;
@@ -28294,7 +28315,7 @@ c21_postrotate_facing:                                                          
               local_bd4 = *puVar10;
               local_bcc = puVar10[2];
               local_bd0 = 0;                                                        // zero Y for XZ-projected dist
-              fVar28 = (float10)vec3_dist_sq();
+              fVar28 = (float10)vec3_length_sq();
               local_c64 = (float *)(float)fVar28;                                   // stash for vertical check below
               if ((float10)(float)puVar19[4] < fVar28) {                            // still > inner-radius² to original goal?
                 fVar28 = (float10)vec2_length_sq();                                 // XZ component of same delta
@@ -28342,7 +28363,7 @@ c21_postrotate_facing:                                                          
                 local_c78 = pfVar17[2];
                 iVar18 = *(int *)(puVar19[9] + 0x98);                               // dynamic-target ptr
                 local_c64 = *(float **)(iVar18 + 0x30);                             // radius (squared once below via fVar²)
-                fVar28 = (float10)vec3_dist_sq();
+                fVar28 = (float10)vec3_length_sq();
                 if (fVar28 < (float10)(float)local_c64 * (float10)(float)local_c64) {
                   // Within squared-radius — rebind entity by frame-name if not yet bound, else drop target.
                   if (*(int *)(iVar18 + 0x2c) == 0) {
@@ -28536,7 +28557,7 @@ c22_compute_endpoint:                                             // shared with
     local_c98 = *pfVar13;                                 // (delta-vec scratch — input to dist² gate)
     local_c94 = pfVar13[1];
     local_c90 = pfVar13[2];
-    fVar28 = (float10)vec3_dist_sq();
+    fVar28 = (float10)vec3_length_sq();
     // -------- gate: only re-score if moved >0.5m (0.25 = 0.5²) AND a target_list is set --------
     if (((float10)0.25 < fVar28) && (ai_space_coverage_compute(&local_ca4), *(int *)(iVar18 + 0x80) != 0)) {
       uVar7 = 0;                                          // script-arg slot index (loop counter)
@@ -28699,7 +28720,7 @@ c22_compute_endpoint:                                             // shared with
       if (iVar18 == 0) {
         local_c68 = (float *)0x0;                         // local_c68 = selected-vehicle ptr (0 = none yet)
         act_mission_get_game();
-        local_c00 = (float)game_get_temp_actor_list_a();    // local_c00 = &C_game temp-actor vector A (+0xec); (float) cast is a Ghidra artifact, it holds the vector address
+        local_c00 = (float)game_get_active_actor_list();    // &C_game active actor list (+0xec)
         local_c64 = (float *)vec_count_stride_0x4();     // outer-loop counter (visibility list size)
         pfVar17 = (float *)0;                             // pfVar17 = match-flag (non-null when type-4 arg matched)
         do {
@@ -28724,7 +28745,7 @@ c22_compute_endpoint:                                             // shared with
               if ((ABS(local_bb8) <= 2.0) &&
                  (fVar28 = (float10)vehicle_get_speed(), (float10)0.7 <= fVar28)) {
                 local_ca8 = (float *)(float)(fVar28 * (float10)1.8);   // lookahead-dist = speed · 1.8s
-                fVar28 = (float10)vec3_dist();
+                fVar28 = (float10)vec3_length();
                 local_c5c = (float)fVar28;                // dist target→self
                 if (fVar28 <= (float10)(float)local_ca8) {   // within lookahead-distance ⇒ proceed to angle check
                   vehicle_get_velocity_ptr();           // vehicle.forward addr
@@ -28757,7 +28778,7 @@ c22_compute_endpoint:                                             // shared with
                 local_b6c = *puVar19;
                 local_b68 = puVar19[1];
                 local_b64 = puVar19[2];
-                fVar28 = (float10)vec3_dist_sq();
+                fVar28 = (float10)vec3_length_sq();
                 if (fVar28 <= (float10)(float)local_c58) goto c23_anim_commit_tail;   // accepted ⇒ COMMIT (jump to anim-dispatch tail)
                 pfVar17 = (float *)0x0;                   // rejected ⇒ clear match
                 local_c68 = (float *)0x0;
@@ -28794,7 +28815,7 @@ c23_commit_entry2:                                             // SHARED: ENTRY-
               local_b6c = *puVar19;
               local_b68 = puVar19[1];
               local_b64 = puVar19[2];
-              fVar28 = (float10)vec3_dist_sq();
+              fVar28 = (float10)vec3_length_sq();
               if (fVar28 <= (float10)(float)local_c58) {
                 if (pfVar17 != (float *)0x0) {
                   local_4 = 0xffffffff;                   // restore exception-frame
@@ -28865,7 +28886,7 @@ c23_anim_commit_tail:                                             // SHARED COMM
               if ((ABS(local_bb8) <= 2.0) &&
                  (fVar28 = (float10)vehicle_get_speed(), (float10)0.7 <= fVar28)) {
                 local_ca8 = (float *)(float)(fVar28 * (float10)1.8);
-                fVar28 = (float10)vec3_dist();
+                fVar28 = (float10)vec3_length();
                 local_c5c = (float)fVar28;
                 if (fVar28 <= (float10)(float)local_ca8) {
                   vehicle_get_velocity_ptr();
@@ -28974,7 +28995,7 @@ c23_anim_commit_tail:                                             // SHARED COMM
       local_c1c = *puVar19;                               // delta-vec self → target (3D)
       local_c18 = puVar19[1];
       local_c14 = puVar19[2];
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       if (fVar28 < (float10)16.0) {                       // within 4m (4² = 16) ⇒ enter arrival branch (advance phase 1→3)
 c26_arrive_tail:                                             // SHARED arrive-tail (also entered from phase 2 below)
         if ((*(int *)(iVar18 + 0x18) != 0) && (ai_path_destroy(), *(int *)(iVar18 + 0x18) != 0)) {
@@ -28994,7 +29015,7 @@ c26_arrive_tail:                                             // SHARED arrive-ta
       local_c1c = *puVar19;
       local_c14 = puVar19[2];
       local_c18 = 0;                                      // XZ-planar (.y = 0)
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       if (fVar28 < (float10)0.1) {                        // within 0.316m XZ ⇒ hold
         *(undefined4 *)(iVar18 + 0xc) = 2;                // phase 1 → 2 (hold/dwell)
         if ((*(int *)(iVar18 + 0x18) != 0) && (ai_path_destroy(), *(int *)(iVar18 + 0x18) != 0)) {
@@ -29031,7 +29052,7 @@ tail_no_tracked_target_actorstate_check:                                        
       local_c7c = 0.0;
       iVar20 = *(int *)(*(int *)(iVar18 + 0x18) + 0x98);
       local_c64 = *(float **)(iVar20 + 0x30);             // radius threshold from descriptor
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       fVar27 = (float10)(float)local_c64 * (float10)(float)local_c64;
 tail_replan_if_target_moved:                                             // SHARED (cases 0, 0x10, 0x26, 0x27): replan-if-target-moved
       if (fVar27 <= fVar28) goto tail_no_tracked_target_actorstate_check;            // target still within radius² ⇒ no replan needed
@@ -29059,7 +29080,7 @@ tail_clear_tracked_target_then_done:                                            
       local_c1c = *puVar19;
       local_c18 = puVar19[1];
       local_c14 = puVar19[2];
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       if (fVar28 < (float10)16.0) goto c26_arrive_tail;      // still within 4m ⇒ advance to phase 3 (arrive-action)
       break;                                              // drifted outside 4m ⇒ fall through to facing+door-breach tail
     // -------- PHASE 3: ARRIVE-ACTION (dot-product gate + vehicle-incoming sense + dodge/strafe) --------
@@ -29082,7 +29103,7 @@ tail_clear_tracked_target_then_done:                                            
       local_c18 = puVar19[1];
       local_c14 = puVar19[2];
       vec3_sub_in_place(&local_c1c);                      // local_c80 -= local_c1c ⇒ self→target normalized direction reused
-      fVar28 = (float10)vec3_dist();
+      fVar28 = (float10)vec3_length();
       local_ca8 = (float *)(float)fVar28;                 // local_ca8 = dist (not squared)
       vec3_div_scalar_in_place(local_ca8);                // normalize delta-vec by dist
       fVar28 = (float10)vec3_dot_product(&local_c8c);     // dot(self.forward, delta-dir-normalized)
@@ -29176,7 +29197,7 @@ tail_clear_tracked_target_then_done:                                            
         local_bc8 = *puVar19;
         local_bc4 = puVar19[1];
         local_bc0 = puVar19[2];
-        fVar28 = (float10)vec3_dist_sq();                 // dist² from self.pos → cached-target (follower's anchor)
+        fVar28 = (float10)vec3_length_sq();                 // dist² from self.pos → cached-target (follower's anchor)
         if (fVar28 < (float10)25.0) {                     // within 5.0m of target ⇒ stop pathing, advance to final-face
           if ((*(int *)(iVar18 + 0x18) != 0) && (ai_path_destroy(), *(int *)(iVar18 + 0x18) != 0)) {
             ai_path_scalar_deleting_dtor(1);   // tear down follower (cleanup-then-destroy idiom)
@@ -29208,7 +29229,7 @@ tail_clear_tracked_target_then_done:                                            
           local_c7c = 0.0;                                // (.y zeroed — XZ-planar comparison)
           iVar20 = *(int *)(*(int *)(iVar18 + 0x18) + 0x98);   // tracked-target descriptor ptr
           local_c64 = *(float **)(iVar20 + 0x30);         // radius² threshold from descriptor
-          fVar28 = (float10)vec3_dist_sq();               // XZ-dist² from self → tracked-target
+          fVar28 = (float10)vec3_length_sq();               // XZ-dist² from self → tracked-target
           fVar27 = (float10)(float)local_c64 * (float10)(float)local_c64;
           goto tail_replan_if_target_moved;                              // shared replan-or-continue tail (used by cases 0x00, 0x10, 0x27)
         }
@@ -29346,7 +29367,7 @@ tail_return3_keep_waiting:                                             // shared
         local_ca4 = *pfVar17;
         local_ca0 = pfVar17[1];
         local_c9c = pfVar17[2];
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         // Within 1m² ⇒ slot still valid, skip the scan-back. (Jump straight to FSM dispatch.)
         if (fVar28 <= (float10)1.0) goto c28_fsm_dispatch_entry;
       }
@@ -29374,7 +29395,7 @@ tail_return3_keep_waiting:                                             // shared
         local_ca4 = *pfVar17;
         local_ca0 = pfVar17[1];
         local_c9c = pfVar17[2];
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         if (fVar28 < (float10)1.0) break;                 // first slot within 1m² ⇒ adopt it
         iVar18 = iVar18 + -1;
         if (iVar18 < 0) {                                  // exhausted ⇒ task done (no viable slot)
@@ -29399,7 +29420,7 @@ c28_fsm_dispatch_entry:
         local_ca4 = *pfVar17;
         local_c9c = pfVar17[2];
         local_ca0 = 0.0;                                   // zero Y ⇒ XZ-projected distance check
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         // Arrived within 0.3m² (~0.55m) of PRIMARY ⇒ teardown follower, transition to state 2.
         if (fVar28 < (float10)0.09) {
           if ((piVar14[5] != 0) && (ai_path_destroy(), piVar14[5] != 0)) {
@@ -29425,7 +29446,7 @@ c28_fsm_dispatch_entry:
             local_c78 = pfVar17[2];
             iVar18 = *(int *)(piVar14[5] + 0x98);          // dynamic-target ptr
             local_c5c = *(float *)(iVar18 + 0x30);         // radius (squared once below)
-            fVar28 = (float10)vec3_dist_sq();
+            fVar28 = (float10)vec3_length_sq();
             if (fVar28 < (float10)local_c5c * (float10)local_c5c) goto c28_rebind_dynamic_target;  // → rebind in state 2 tail
           }
           goto c28_anim_clear_check;                               // → anim-state probe in state 2 tail
@@ -29492,7 +29513,7 @@ c28_planner_success_ret3:                                              // (share
       local_ca4 = *pfVar17;
       local_c9c = pfVar17[2];
       local_ca0 = 0.0;                                     // XZ-projected
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       // Outside 0.25m² (=0.5m XZ) ⇒ go back to state 2 (WALK-TO-SECONDARY for finer approach).
       if ((float10)0.25 < fVar28) {
         piVar14[3] = 2;
@@ -29534,7 +29555,7 @@ c28_planner_success_ret3:                                              // (share
       local_ca4 = *pfVar17;
       local_c9c = pfVar17[2];
       local_ca0 = 0.0;
-      fVar28 = (float10)vec3_dist_sq();
+      fVar28 = (float10)vec3_length_sq();
       // Arrived within 0.01m² (=0.1m) of SECONDARY ⇒ clear movement intent, → state 1 (FINE-XZ-FACE).
       if (fVar28 < (float10)0.01) {
         piVar14[3] = 1;
@@ -29596,7 +29617,7 @@ c28_replan_secondary:
         local_c78 = pfVar17[2];
         iVar18 = *(int *)(piVar14[5] + 0x98);              // dynamic-target ptr
         local_c5c = *(float *)(iVar18 + 0x30);             // radius
-        fVar28 = (float10)vec3_dist_sq();
+        fVar28 = (float10)vec3_length_sq();
         // Within radius² ⇒ rebind dynamic-target entity by frame-name (or drop it).
         if (fVar28 < (float10)local_c5c * (float10)local_c5c) {
 c28_rebind_dynamic_target:
@@ -29929,6 +29950,8 @@ switchD_004187c8_default:                                 // shared default-fall
  *
  * Paired inverse: `hud_hide_element` at VA 0x005c7db0.
  * Paired test:    `hud_element_is_visible` at VA 0x005c7dd0 (`return (mask & *(this+0x90a4)) != 0`).
+ * PS2 twin: — (inlined on the PS2: no Show/Hide method among its 84 HUD symbols;
+ *   structs/hud.md section 4)
  * Evidence: renamed from `FUN_00424e20` (original Ghidra id).
  */
 void __thiscall hud_show_element(int param_1,uint param_2)
@@ -30084,6 +30107,8 @@ float10 __fastcall vec2_length_sq(float *param_1)
  * Evidence: definition at VA 0x00424ec0. Renamed from `FUN_00424ec0`.
  * Member of the vec2/vec3 math helper
  *   cluster at VAs 0x00424ec0..0x00424fb0.
+ * PS2 twin: - (inlined: the PS2 traffic AI normalises `(dy, -dx)` inline where
+ *  `traffic_car_ai` calls this).
  */
 void __fastcall vec2_normalize_in_place(float *param_1)
 
@@ -30137,6 +30162,8 @@ void __fastcall vec2_normalize_in_place(float *param_1)
  * Evidence: definition at VA 0x00424f00. Renamed from `FUN_00424f00`.
  * Member of the vec2/vec3 math helper
  *   cluster at VAs 0x00424ec0..0x00424fb0.
+ * PS2 twin: - (inlined: `IsBlockInRange__18C_cache_base_blockFUi9S_vector2f` computes it at
+ *  the four positions where the inlined copy in `cache_base_block_tick` calls this).
  */
 float10 __thiscall vec2_signed_distance_to_line(float *param_1,float *param_2,float *param_3)
 
@@ -30444,12 +30471,17 @@ void __fastcall clear3_dwords_at(undefined4 *param_1)
 }
 
 /*
- * vec3_dist — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_00425070` (original Ghidra id). VA 0x00425070.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_00425070`.
+ * vec3_length - the length of a 3D vector, with two shortcuts.
+ * What it does: s = x*x + y*y + z*z; returns 0.0 when s < 1e-8 (tested on the float's bits),
+ *  exactly 1.0 when |s - 1| < 1e-8, otherwise sqrt(s). Reads only.
+ * Parameters: param_1 (float *, ECX): the vector {x, y, z}.
+ * Returns: float10 (ST0): the length.
+ * PS2 twin: `Magnitude__8S_vectorCFv`  [CONFIRMED]
+ * Evidence: VA 0x00425070; 44 callsites. Same zero gate, same 1.0 shortcut and same root as
+ *  the PS2 body. Renamed from `FUN_00425070`.
  */
-float10 __fastcall vec3_dist(float *param_1)
+
+float10 __fastcall vec3_length(float *param_1)
 
 {
   float fVar1;
@@ -30465,12 +30497,18 @@ float10 __fastcall vec3_dist(float *param_1)
 }
 
 /*
- * vec3_dist_sq — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_004250f0` (original Ghidra id). VA 0x004250f0.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_004250f0`.
+ * vec3_length_sq - the squared length of a 3D vector.
+ * What it does: returns x*x + y*y + z*z on the FPU stack. Reads only. The decompiler shows a
+ *  `void` body because the result travels in ST0 only.
+ * Parameters: param_1 (float *, ECX): the vector {x, y, z}.
+ * Returns: float10 (ST0): the squared length.
+ * PS2 twin: - (inlined: the PS2 `S_vector` exports `Magnitude` and `Dot` but no squared length;
+ *  `CheckDistance__9C_railwayFR8S_vector` squares inline where `railway_ai` calls this).
+ * Evidence: VA 0x004250f0, 31 bytes read in the disassembly; 91 callsites, 74 in
+ *  `entity_action_tick`. Renamed from `FUN_004250f0`.
  */
-void vec3_dist_sq(void)
+
+void vec3_length_sq(void)
 
 {
   return;
@@ -31101,7 +31139,7 @@ undefined4 stub_ret0_args4_00425420(void)
  *   Set to 1 by `human_activate` and by the C_actor init path (which writes the triple
  *   `+0x5e = 0; +0x5d = 1; +0x5f = 0`). Cleared to 0 by every death path: `human_force_death`,
  *   `human_hit`, `human_hit_in_car`, `human_movement`, `human_throw_from_car_truck`,
- *   `human_car_launched_into_air` — and in two of those the clear sits **immediately after
+ *   `human_die_in_exploding_car` — and in two of those the clear sits **immediately after
  *   `*(this + 0x644) = 0`**, i.e. right after `cur_health` is zeroed.
  *   Its neighbour `+0x5e` is the death-PROCESSED latch, not a second alive flag: a C_actor tick
  *   does `if (+0x5d) skip; if (+0x5e) skip; +0x5e = 1` — i.e. "not alive and not yet handled ⇒
@@ -31402,24 +31440,24 @@ int __fastcall game_get_camera(int param_1)
 }
 
 /*
- * game_get_temp_actor_list_a — return address of C_game's temp-actor vector A.
- * Renamed from `FUN_00425520` (original Ghidra id). VA 0x00425520.
- * CONFIRMED: the
- * receiver is the C_game game-world singleton, NOT an actor. Byte-proven by capstone disasm of the
- * sole callsite (0x422d9c in entity_action_tick): `mov ecx,[0x65115c]; call act_mission_get_game
- * (=> eax = C_game); mov ecx,eax; call this`. `this` is therefore C_game, and this trivial
- * `__fastcall` address-of accessor returns `this + 0xec` — the std::vector<actor*> begin/end/cap
- * triple that game.md's C_game field map documents at +0xec as "temp-actor vector A
- * (actor.act_state == 0)" (H confidence; PS2 +0x158; written by game_add_temporary_actor).
- * ⚠️ The caller's `(float)` cast into local_c00 and its "self.movement-state cache" comment are
- * Ghidra type/label artifacts — local_c00 holds the returned vector-A address, not a float.
+ * game_get_active_actor_list - the address of C_game's active actor list
  *
- * PS2 parallel: no named twin — a 1-line inline address-of accessor (inlined on PS2).
- *
- * @param param_1  the C_game game-world singleton (ECX / `this`).
- * @return         address of C_game's temp-actor vector A (param_1 + 0xec).
+ * What it does: returns `this + 0xec`, the std::vector<C_actor *> of every actor whose
+ *  act_state (+0x1c) is 0 (allocator +0xec, begin +0xf0, end +0xf4, cap +0xf8).
+ *  game_init fills it with the whole mission actor list, game_add_temporary_actor adds
+ *  runtime actors by act_state, and game_change_act_state moves actors between it and
+ *  the inactive list at +0xfc (act_state 1) and drops the ones switched off (2).
+ * Parameters: param_1 (ECX): the C_game singleton (`*(g_act_mission + 0x24)`).
+ * Returns: int: the address of the list object.
+ * Callers: entity_action_tick only (0x00422d9c: `mov ecx,[0x65115c]; call
+ *  act_mission_get_game; mov ecx,eax; call this`). The caller's `(float)` cast into
+ *  local_c00 is a decompiler typing artifact; the local holds the list address.
+ * PS2 parallel: no PS2 method; the PS2 reads its own list at +0x158 inline.
+ * Evidence: VA 0x00425520. Renamed from `FUN_00425520`.
+ * Class layout: exe-re/structs/game.md
  */
-int __fastcall game_get_temp_actor_list_a(int param_1)
+
+int __fastcall game_get_active_actor_list(int param_1)
 
 {
   return param_1 + 0xec;
@@ -31443,7 +31481,7 @@ int __fastcall game_get_temp_actor_list_a(int param_1)
  * Evidence: VA 0x00425530. The receiver chain was byte-read in Game.exe at 0x005bc438:
  *     mov ecx,[0x65115c]  ->  call act_mission_get_game  ->  mov ecx,eax  ->  call this
  *   so `this` is the C_game, not an actor; 34 of the 38 callsites share that exact shape, and
- *   the VA neighbour `game_get_temp_actor_list_a` (+0xec) is the same object.
+ *   the VA neighbour `game_get_active_actor_list` (+0xec) is the same object.
  *   Renamed from `FUN_00425530` (original Ghidra id).
  */
 undefined4 __fastcall game_get_player_actor(int param_1)
@@ -31457,7 +31495,7 @@ undefined4 __fastcall game_get_player_actor(int param_1)
  * Renamed from `FUN_00425540` (original Ghidra id). VA 0x00425540.
  * CONFIRMED: the
  * receiver is the C_game game-world singleton, NOT an actor. Byte-proven for the entity_action_tick
- * dodge block by the same idiom that fed game_get_temp_actor_list_a (`mov ecx,[0x65115c]; call
+ * dodge block by the same idiom that fed game_get_active_actor_list (`mov ecx,[0x65115c]; call
  * act_mission_get_game (=> C_game); mov ecx,eax; call this`); +0x2b0c is the well-known global
  * frame-timestamp offset relative to `*(g_act_mission+0x24)` (= C_game), used throughout the
  * police-task scheduler. Callers treat the result as a millisecond clock (e.g. `t + 1000` /
@@ -37998,7 +38036,7 @@ LAB_0042cb86:
         local_18c = (void *)*pfVar13;
         local_188 = pfVar13[1];
         local_184 = pfVar13[2];
-        fVar23 = (float10)vec3_dist();
+        fVar23 = (float10)vec3_length();
         if (fVar23 <= (float10)(float)puVar4[4]) {
           vec3_div_scalar_in_place((float)(fVar23 + (float10)0.0001));
           fVar23 = (float10)vec3_dot_product_0042dc90();
@@ -38061,7 +38099,7 @@ LAB_0042d4cb:
       local_18c = (void *)*pfVar13;
       local_188 = pfVar13[1];
       local_184 = pfVar13[2];
-      fVar23 = (float10)vec3_dist();
+      fVar23 = (float10)vec3_length();
       fStack_154 = (float)fVar23;
       if (fVar23 <= (float10)(float)local_160[4]) {
         vec3_div_scalar_in_place(fStack_154 + 0.0001);
@@ -39484,7 +39522,7 @@ LAB_0042e9eb:                                        // recursion re-entry point
       if ((((piVar5 == (int *)0x0) || (*(int *)(iVar6 + 8) - (int)piVar5 >> 2 == 0)) ||
           (*piVar5 == entity)) && (*(int *)(iVar6 + 0x5c) != 0)) {
         actor_del_frame_for_possible_coll();
-        pursuit_event_set_change_tables();
+        pursuit_event_set_change_tables();       // ECX = 1: arm the boost (boosting.md 6)
       }
       // If the group is in the vehicle-lost state (group+0x50 bit2 = 0x4), bail out unless
       // the entity is on foot (+0x98==0), alive (+0x5d), in action-state {1,2,9} (+0x40c),
@@ -45308,19 +45346,16 @@ uint __thiscall ai_action_manager_has_action(int param_1,int param_2,uint *param
 }
 
 /*
- * ai_action_manager_get_job_by_type — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_00432410` (original Ghidra id). VA 0x00432410.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_00432410`.
- *
+ * ai_action_manager_get_job_by_type - the last job of one type in the manager's job list.
+ * What it does: walks the job vector `+0x04..+0x08` from the back and returns the first job
+ *  whose first dword (its type id) equals `type_id`; 0 when none matches. Reads only.
+ * Parameters: param_1 (int, ECX): the `ai_action_manager`. param_2 (int): the job type id.
+ * Returns: undefined4: the job, or 0.
  * PS2 twin: `GetJob__17ai_action_managerFUi`  [CONFIRMED]
- *   ⚠️ OFF-FAMILY (`ai_action_manager`).
- *   Established via `entity_is_in_danger` <-> `IsInDanger__8C_entity` (CONFIRMED twins): both call
- *   this at the same points with the same `(manager, type_id)` arity, the same `!= 0` test, and the
- *   same payload compare, over the same shared type ids 0x1e / 0x1d.
- *   PS2 has TWO `GetJob` overloads — `Fv` (no args) and `FUi` (type id). This is the **FUi** one;
- *   the `Fv` overload is `ai_action_manager_get_top_job`. See structs/ai_action_manager.md §3b.
- *   The list it searches is specifically the JOBS list (+0x04).
+ *  Same backward walk and compare; the no-argument overload is `ai_action_manager_get_top_job`.
+ * Evidence: VA 0x00432410; 5 callsites. `entity_is_in_danger` and `IsInDanger__8C_entity`
+ *  call it at the same points with type ids 0x1e and 0x1d. `exe-re/structs/ai_action_manager.md`
+ *  §3b. Renamed from `FUN_00432410`.
  */
 undefined4 __thiscall ai_action_manager_get_job_by_type(int param_1,int param_2)
 
@@ -63942,7 +63977,7 @@ case5_foot_search_next:
           *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;     // clear the chase-order-active byte +0x51d
           police_action_broadcast_event(0,0xf,0);          // broadcast "exit the vehicle / converge" (0xf)
           *(undefined4 *)(param_1 + 0x34) = 1;             // on_foot_phase_flag (+0x34) = 1: enter the on-foot arrest phase
-          *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x2036) = 1;    // car +0x2036 = must-steal: the lock must be forced (structs/car.md SS1)
+          *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x2036) = 1;    // car +0x2036 = must-steal: the lock must be forced (structs/car.md §1)
         }
         break;
       case 2:                                              // status 2: abort -> disband the squad
@@ -64249,10 +64284,10 @@ void __thiscall police_action_tick_sighting_timers(int param_1,int param_2)
           bVar3 = true;
         }
       }
-      // Is the chase-event system actively tracking this car's target? The record must have
-    // mode (+0x24) == 1, flag +0x1c bit2 clear and +0x8 != 0, and it then returns record+0x28
-    // - a dead/reserved slot - so this is always 0, and the refresh below therefore always runs
-    // whenever the suspect is perceivable. See structs/pursuit-event-manager.md.
+      // Is the chase-event system actively hunting with this car? The record must have
+    // mode (+0x24) == 1, flag +0x1c bit2 clear and +0x8 != 0, and it then returns record+0x28,
+    // the mode timer pursuit_event_tick runs. While that timer is non-zero the refresh below
+    // is skipped. See structs/pursuit-event-manager.md.
     iVar5 = pursuit_event_record_is_chase_tracking_by_vehicle(*(undefined4 *)(param_1 + 0x5c));
       if ((bVar3) && (iVar5 == 0)) {                        // perceivable AND chase vehicle has no active engaged record
         *(undefined4 *)(param_1 + 0x40) =                   // refresh last-seen timestamp (+0x40)
@@ -64506,7 +64541,7 @@ void __fastcall police_action_dispatch_officer_commands(int param_1)
             police_action_broadcast_event(0,0xf,0);        // broadcast "exit the vehicle / converge"
             *(undefined4 *)(param_1 + 0x34) = 1;           // on_foot_phase_flag (+0x34) = 1
             bVar4 = true;                                  // only once per call
-            *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x2036) = 1;   // car +0x2036 = must-steal: the lock must be forced (structs/car.md SS1)
+            *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x2036) = 1;   // car +0x2036 = must-steal: the lock must be forced (structs/car.md §1)
           }
           uVar5 = uVar5 + 1;
         }
@@ -64804,6 +64839,8 @@ void __fastcall police_board_increment_counter(int param_1)
  *     near-universal prelude in its event-dispatch case handlers),
  *     `entity_ai` (2) and `entity_action_tick` (1).
  * Evidence: renamed from `FUN_00446b10` (original Ghidra id).
+ * PS2 twin: `CoVlastneRobimPlukovniku__18ai_police_nastenkaFP7C_actor`  [CONFIRMED]
+ *  Same nested squad / officer walk, same return of the squad (stride 0x6c on the PC, 0x80).
  */
 int __thiscall police_board_find_group_by_officer(int param_1,int param_2)
 
@@ -64911,6 +64948,9 @@ int __thiscall police_board_find_group_by_officer(int param_1,int param_2)
  *
  * Anchors: Game-ghidra.exe.functions.md carries the rename row.
  * Evidence: renamed from `FUN_00446ba0` (original Ghidra id).
+ * PS2 twin: `MamCisloDejAkci__18ai_police_nastenkaFUi`  [CONFIRMED]
+ *  Same walk and compare of the squad number `+0x30` (PS2 `+0x34`); callers `C_entity::AI`
+ *  and `ai_modifier::Tick` correspond to `entity_ai` and `entity_action_tick`.
  */
 int __thiscall police_board_find_group_by_session_id(int param_1,int param_2)
 
@@ -65265,7 +65305,7 @@ LAB_00446e74:
       pcVar3[0x35] = '\0';
       pcVar3[0x36] = '\0';
       pcVar3[0x37] = '\0';
-      pursuit_event_set_change_tables();
+      pursuit_event_set_change_tables();             // ECX = 1: arm the boost (boosting.md 6)
       local_24 = 0;                                  // zero delta-pos payload
       local_20 = 0;
       local_1c = 0;
@@ -65334,7 +65374,7 @@ LAB_00446e74:
       pcVar3[0x35] = '\0';
       pcVar3[0x36] = '\0';
       pcVar3[0x37] = '\0';
-      pursuit_event_set_change_tables();
+      pursuit_event_set_change_tables();             // ECX = 1: arm the boost (boosting.md 6)
       local_18 = 0;
       local_14 = 0;
       local_10 = 0;
@@ -65385,7 +65425,7 @@ LAB_00446e74:
       pcVar3[0x35] = '\0';
       pcVar3[0x36] = '\0';
       pcVar3[0x37] = '\0';
-      pursuit_event_set_change_tables();
+      pursuit_event_set_change_tables();             // ECX = 1: arm the boost (boosting.md 6)
       local_c = 0;
       local_8 = 0;
       local_4 = 0;
@@ -66104,7 +66144,7 @@ void __thiscall police_board_raise_gun_escalation(int param_1,int param_2)
       }
       // only while on_foot_phase_flag (+0x34) is 0
       if (*(int *)(*(int *)(param_1 + 0x14) + 0x34 + iVar3) == 0) {
-        pursuit_event_set_change_tables();
+        pursuit_event_set_change_tables();           // ECX = 0 here: DISARM the boost (boosting.md 6)
         pursuit_event_remove_vehicle(*(undefined4 *)(*(int *)(param_1 + 0x14) + 0x5c + iVar3));
         local_c = 0;                                       // zero payload vector
         iVar1 = *(int *)(param_1 + 0x14) + iVar3;
@@ -66206,7 +66246,7 @@ void __thiscall police_board_raise_handcuffs_escalation(int param_1,int param_2)
       }
       // only while on_foot_phase_flag (+0x34) is 0
       if (*(int *)(*(int *)(param_1 + 0x14) + 0x34 + iVar3) == 0) {
-        pursuit_event_set_change_tables();
+        pursuit_event_set_change_tables();           // ECX = 0 here: DISARM the boost (boosting.md 6)
         pursuit_event_remove_vehicle(*(undefined4 *)(*(int *)(param_1 + 0x14) + 0x5c + iVar3));
         local_c = 0;                                       // zero payload vector
         iVar1 = *(int *)(param_1 + 0x14) + iVar3;
@@ -66266,6 +66306,8 @@ void __thiscall police_board_raise_handcuffs_escalation(int param_1,int param_2)
  *
  * Anchors: Game-ghidra.exe.functions.md carries the rename row.
  * Evidence: renamed from `FUN_00447a90` (original Ghidra id).
+ * PS2 twin: `MamHoZmrdaUzHoNechte__18ai_police_nastenkaFP7C_actorP7C_actor`  [CONFIRMED]
+ *  Same backward walk, target `+0x60` (PS2 `+0x64`), `HosiKoncime(squad, sender, 1)` per hit.
  */
 void __thiscall police_board_disband_by_target(int param_1,int param_2,undefined4 param_3)
 
@@ -67013,62 +67055,19 @@ void __thiscall police_board_refresh_target_vehicle(int param_1,int param_2)
 }
 
 /*
- * police_board_has_recent_sighting(this=manager, target) —
- *     True iff `target` was sighted within the last 2000ms by any
- *     officer attached to a police_action targeting `target`.
- *     Used as a "skip alarm" gate so the engine doesn't re-raise
- *     the wanted alarm on a target that was just sighted.
- *
- *   Walk: enumerates the police_action array at
- *   `manager+0x14..+0x18` (stride 0x6c). Snapshots the current
- *   clock once at entry as `*(*(g_act_mission + 0x24) + 0x2b0c)`.
- *   For each group with `+0x60 == target`:
- *     - Walks the officer roster at `group+0x04..+0x08` (ptr
- *       array, stride 4). For each officer:
- *         - Calls `ai_logs_get_log_for_actor(manager, target)`
- *           to look up the target's tracking record on the
- *           manager (per Game-ghidra.exe.functions.md).
- *         - If the record exists AND
- *           `current_clock - record+0x24 < 2000` (last-seen
- *           timestamp at +0x24 was touched within 2000ms),
- *           returns 1 immediately.
- *
- *   Returns 0 if no group/officer combination satisfies the
- *   sighting window OR the manager has no matching groups.
- *
- *   Subtle structure: `ai_logs_get_log_for_actor(manager, target)`
- *   does NOT take an officer argument — every per-officer
- *   iteration calls the same lookup with the same args and gets
- *   the same record. So the per-officer loop is effectively a
- *   "guard: does this group have ≥1 officer" check, not a
- *   per-officer scan. The function reduces to:
- *
- *     return (target has a record on the manager with
- *             current_clock - record+0x24 < 2000) AND
- *            (manager has ≥1 group targeting `target` AND that
- *             group has ≥1 officer in its roster).
- *
- *   This is likely an artifact of refactoring: the test was once
- *   per-officer (e.g. each officer carrying its own sighting
- *   timestamp), then centralized to the manager's record without
- *   collapsing the now-degenerate loop.
- *
- * Calling convention: `__thiscall` — `this` (manager) in ECX
- *     (hidden by Ghidra). `ai_logs_get_log_for_actor` likewise
- *     hides ECX=manager.
- *
- * Params:
- *   - param_1 (this) = police_board*.
- *   - param_2        = target — actor pointer; the lookup key
- *                      for `ai_logs_get_log_for_actor`.
- *
- * Returns: `undefined4` — 1 on hit, 0 on miss. Ghidra typed the
- *     return as `undefined4` because both branches return integer
- *     literals; semantically it is a bool.
- *
- * Anchors: Game-ghidra.exe.functions.md carries the rename row; this function is the
- *     consumer of `ai_logs_get_log_for_actor` that implements the 2000 ms window.
- * Evidence: renamed from `FUN_00448230` (original Ghidra id).
+ * police_board_has_recent_sighting - did an officer chasing `target` log it in the last 2 s?
+ * What it does: reads the game clock (`g_act_mission+0x24` -> `+0x2b0c`) once, then walks the
+ *  squad vector `+0x14..+0x18` (stride 0x6c). For every squad whose target `+0x60` is `target`
+ *  it walks the officer array `squad+0x04..+0x08` and looks `target` up in each officer's own
+ *  AI log (`ai_logs_get_log_for_actor`, ECX = officer + 0xe88). Returns 1 at the first entry
+ *  whose time `+0x24` is less than 2000 ms old. Reads only.
+ * Parameters: param_1 (int, ECX): the police board. param_2 (int): the target actor.
+ * Returns: undefined4 (bool in AL): 1 on a recent sighting, else 0.
+ * PS2 twin: `PanoveMateOciNaZmrdoviNeboCumitePoBabach__18ai_police_nastenkaFP7C_actor`
+ *  [CONFIRMED] Same squad and officer loops and the same per-officer `GetLog` (PS2 officer
+ *  + 0x1060); the PS2 window is 3000 ms.
+ * Evidence: VA 0x00448230, read in the disassembly (`lea ecx,[eax+0xe88]` per officer,
+ *  `cmp ecx,0x7d0`). `exe-re/structs/police-board.md` §3. Renamed from `FUN_00448230`.
  */
 undefined4 __thiscall police_board_has_recent_sighting(int param_1,int param_2)
 
@@ -67247,6 +67246,8 @@ uint __thiscall police_board_has_group_for_target(int param_1,int param_2)
  *   `police_board_has_group_for_target` docblock.
  *
  * Evidence: renamed from `FUN_00448350` (original Ghidra id).
+ * PS2 twin: `PanoveJaUzHoVarovalZmetka__18ai_police_nastenkaFP7C_actorP7C_actor`  [CONFIRMED]
+ *  Same walk, event 0x17 through `EventVsem(squad, sender, 0x17, target)` per hit.
  */
 void __thiscall police_board_broadcast_for_target(int param_1,int param_2,undefined4 param_3)
 
@@ -67978,8 +67979,8 @@ LAB_0044898c:
   ExceptionList = &pvStack_c;
   if (iVar4 != -1) {
     ExceptionList = &pvStack_c;
-    array_copy_refcounted8(param_1[2] + iVar4 * 8);
-    destroy_range_stride8(param_1[3] + -8,param_1[3]);
+    i3d_cache_items_copy_range(param_1[2] + iVar4 * 8);
+    i3d_cache_items_destroy_range(param_1[3] + -8,param_1[3]);
     param_1[3] = param_1[3] + -8;
   }
   for (local_2c = 0;
@@ -68087,7 +68088,7 @@ LAB_00448ac0:
       ExceptionList = pvStack_c;
       return iVar4;
     }
-    piVar8 = (int *)string_append_cstr(&param_4,param_3);
+    piVar8 = (int *)string_concat_cstr(&param_4,param_3);
     local_4 = 2;
     if (*piVar8 != 0) {
       piVar8 = (int *)(*piVar8 + 8);
@@ -68132,14 +68133,14 @@ LAB_00448bf0:
   iVar6 = param_1[3];
   iVar4 = param_1[2] + uVar9 * 8;
   while (iVar4 = iVar4 + 8, iVar4 != iVar6) {
-    assign_elem_stride_8_with_string(iVar4);
+    i3d_cache_items_copy_assign_one(iVar4);
   }
-  destroy_range_stride8(param_1[3] + -8,param_1[3]);
+  i3d_cache_items_destroy_range(param_1[3] + -8,param_1[3]);
   param_1[3] = param_1[3] + -8;
 LAB_00448c54:
   piStack_18 = (int *)0x0;
   local_4 = 3;
-  std_vector8_insert_one(param_1[3],&local_1c);
+  i3d_cache_items_insert_one(param_1[3],&local_1c);
   local_4 = 0xffffffff;
   if ((piStack_18 != (int *)0x0) && (*piStack_18 = *piStack_18 + -1, *piStack_18 == 0)) {
     operator_delete_wrapper(piStack_18);
@@ -68361,49 +68362,26 @@ int * __fastcall string_get_data(int *param_1)
 }
 
 /*
- * string_append_cstr — concatenate a refcounted-string handle with
- *     a C-string suffix into a fresh refcounted-string block. Reads the
- *     prefix from `*param_1` (the refcounted handle: data at +8, length
- *     at +4), measures the suffix via inline strlen on `param_3`,
- *     allocates one block sized `(prefix_len + suffix_len) + 9`, and
- *     copies both sides + NUL terminator. The new handle is written to
- *     `*param_2`. SEH-protected via `EHHandler_00635628`.
+ * string_concat_cstr - returns a new C_string holding *this followed by a C string
  *
- *     Body (SEH-framed):
- *       1. If `*param_1 == 0` (empty prefix): not handled in the read
- *          window — likely falls through with an early-out.
- *       2. Get prefix length `*( *param_1 + 4 )`.
- *       3. Inline strlen on `param_3` → suffix_len.
- *       4. `operator_new(prefix_len + suffix_len + 9)`. Block layout:
- *          `[0..3] = 1 (refcount)`, `[4..7] = prefix_len + suffix_len`,
- *          `[8..8+prefix_len-1] = prefix data`,
- *          `[8+prefix_len..8+total-1] = suffix data`,
- *          `[8+total] = 0`.
- *       5. `*param_2 = new_block`.
- *
- *     Copy loops use 32-bit dwords with byte-tail; the same pattern as
- *     `string_ctor_from_cstr` and `string_assign_cstr` — these
- *     three are stamped-out variations on the same MSVC inline-friendly
- *     refcounted-string ADT.
- *
- * Parameters:
- *   param_1 (`int *`, `this`): handle of the prefix refcounted string.
- *     Read-only.
- *   param_2 (`undefined4 *`): output slot for the new handle. Caller
- *     MUST ensure this is a fresh / null slot (no prior value is
- *     released here — this is the "construct" variant).
- *   param_3 (`char *`): the C-string suffix to append.
- *
- * Returns:
- *   `undefined4 *` — passes `param_2` back through (chain-style).
- *
- * Evidence: definition at VA 0x00448e40. Three
- *   callsites in `police_manager_apply_state` (one per spawn bucket,
- *   inside the entity-cache-miss i3d-load loop — used to compose the
- *   running filename + suffix before pushing into the cache).
- *   Renamed from `FUN_00448e40`.
+ * What it does: the C_string `operator+` with a `const char *`. *this is read, never
+ *  written. With a non-empty *this it allocates one block of
+ *  `len(this) + strlen(suffix) + 9` bytes (refcount 1, length, both texts, NUL) and
+ *  stores it in the result slot. With an empty *this the result is a fresh block
+ *  holding the suffix, or the empty (NULL) handle when the suffix is NULL. The
+ *  in-place append is the separate function string_append_cstr_in_place.
+ * Parameters: param_1 (ECX, C_string *): the left operand. param_2 (C_string *): the
+ *  hidden return slot that receives the new handle. param_3 (const char *): the suffix.
+ * Returns: C_string *: param_2.
+ * PS2 twin: none - the PS2 build inlines every C_string member except the four
+ *  listed in exe-re/structs/string.md.
+ * Evidence: VA 0x00448e40. `ret 8`: two stack arguments (the result slot and the
+ *  suffix). 63 E8 callsites; most of them compose a model or sound file name inside
+ *  the inlined C_I3D_cache open. Renamed from `FUN_00448e40`.
+ * Class layout: exe-re/structs/string.md
  */
-undefined4 * __thiscall string_append_cstr(int *param_1,undefined4 *param_2,char *param_3)
+
+undefined4 * __thiscall string_concat_cstr(int *param_1,undefined4 *param_2,char *param_3)
 
 {
   char cVar1;
@@ -68541,10 +68519,15 @@ int ascii_toupper(int param_1)
 }
 
 /*
- * string_format — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_00448fe0` (original Ghidra id). VA 0x00448fe0.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_00448fe0`.
+ * string_format - fill a string handle from a printf-style format (`C_fstring` constructor).
+ * What it does: zeroes the handle, formats into a 1024-byte stack buffer with `crt_vsnprintf`,
+ *  allocates `strlen + 9` bytes {refcount 1, length, characters, NUL} and stores the block. The
+ *  release of the previous block that follows never fires, because the handle was zeroed.
+ * Parameters: param_1 (int *): the handle. param_2 (char *): the format; arguments follow.
+ * Returns: int *: the handle.
+ * PS2 twin: `__ct__9C_fstringFPCce`  [CONFIRMED]
+ * Evidence: VA 0x00448fe0; 30 callsites. Statement for statement with the PS2 body.
+ *  `exe-re/structs/string.md` §2. Renamed from `FUN_00448fe0`.
  */
 int * string_format(int *param_1,undefined4 param_2)
 
@@ -68801,23 +68784,26 @@ void police_action_uninit_fill_n(undefined4 param_1,int param_2)
 }
 
 /*
- * uninit_copy_range_stride_8 — MSVC uninitialized_copy for an 8-byte {dword, C_string} element
+ * i3d_cache_items_uninit_copy_range - uninitialized_copy over C_I3D_cache<T>::S_itm
  *
- * What it does: Copy-constructs `[first, last)` into an uninitialised destination, one
- * `copy_elem_stride_8_with_string` call per element.
- * Parameters: param_1 (void *): first. param_2 (void *): last. param_3 (void *): destination.
- * Returns: void *: one past the last element written.
- * Evidence: VA 0x00449410. CONFIRMED — forward loop at stride 8 over the element copy-constructor. ⚠️ The name is deliberately MECHANICAL: the element is a PAIR whose second dword is a C_string, not a C_string, and the owning type is unidentified. Naming it string_* would assert membership of a class it is not a member of — the vector_insert_stride_0x54 discipline. No PS2 twin possible (MSVC STL vs Metrowerks). Renamed from `FUN_00449410`.
- * Layout and the full PC<->PS2 table: exe-re/structs/string.md
+ * What it does: copy-constructs [first, last) into uninitialised storage, one
+ *  i3d_cache_items_copy_construct_one call per 8-byte item.
+ * Parameters: param_1: first. param_2: last. param_3: destination.
+ * Returns: S_itm *: one past the last item written.
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x00449410. Three stack arguments, `ret 0xc`. Three E8 callsites, all
+ *  in i3d_cache_items_insert_one. Renamed from `FUN_00449410`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-int uninit_copy_range_stride_8(int param_1,int param_2,int param_3)
+
+int i3d_cache_items_uninit_copy_range(int param_1,int param_2,int param_3)
 
 {
   if (param_1 == param_2) {
     return param_3;
   }
   do {
-    copy_elem_stride_8_with_string();
+    i3d_cache_items_copy_construct_one();
     param_1 = param_1 + 8;
     param_3 = param_3 + 8;
   } while (param_1 != param_2);
@@ -69160,17 +69146,23 @@ void __fastcall police_action_copy_ctor(undefined1 *param_1,undefined1 *param_2)
 }
 
 /*
- * copy_elem_stride_8_with_string — copy-construct one 8-byte {dword, C_string} element
+ * i3d_cache_items_copy_construct_one - copy-constructs one C_I3D_cache<T>::S_itm
  *
- * What it does: Zero-initialises the destination's string slot, plain-copies the leading dword, bumps
- * the SOURCE string's refcount, releases whatever the destination held, then stores
- * the source's block pointer. NULL-safe on the destination.
- * Parameters: param_1 (void *): uninitialised destination. param_2 (const void *): source.
+ * What it does: S_itm is {T *object, C_string name} (8 bytes). Zeroes the destination's
+ *  name slot, copies the object pointer, adds a reference to the source's name block,
+ *  releases what the destination slot held and stores the source block. NULL-safe on
+ *  the destination.
+ * Parameters: param_1 (ECX): uninitialised destination item. param_2 (EDX): source item.
  * Returns: void.
- * Evidence: VA 0x00449930. CONFIRMED — the refcount is taken on slot **1** and slot 0 is copied plainly. ⚠️ Do not confuse with `string_ref_copy_construct` (0x00608370), which does the mirror image (refcounts slot 0) for a different element layout. The zero-init of the destination slot plus the NULL guard is what marks this as the CONSTRUCT half against `assign_elem_stride_8_with_string`. Renamed from `FUN_00449930`.
- * Layout and the full PC<->PS2 table: exe-re/structs/string.md
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x00449930. __fastcall, plain `ret`. Four E8 callsites, all inside the
+ *  item-vector helpers i3d_cache_items_insert_one (2), i3d_cache_items_uninit_fill_n
+ *  and i3d_cache_items_uninit_copy_range. The zero-init plus the NULL guard are what
+ *  separate it from i3d_cache_items_copy_assign_one. Renamed from `FUN_00449930`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-void __fastcall copy_elem_stride_8_with_string(undefined4 *param_1,undefined4 *param_2)
+
+void __fastcall i3d_cache_items_copy_construct_one(undefined4 *param_1,undefined4 *param_2)
 
 {
   int *piVar1;
@@ -69324,17 +69316,22 @@ LAB_00449abe:
 }
 
 /*
- * assign_elem_stride_8_with_string — assign one 8-byte {dword, C_string} element over another
+ * i3d_cache_items_copy_assign_one - C_I3D_cache<T>::S_itm::operator=
  *
- * What it does: Same refcount dance as the copy-constructor, but it neither zero-initialises nor
- * NULL-guards the destination (it is already alive) and it RETURNS the destination —
- * the `operator=` signature.
- * Parameters: param_1 (void *): live destination. param_2 (const void *): source.
- * Returns: void *: param_1.
- * Evidence: VA 0x00449b60. CONFIRMED — byte-for-byte the copy-constructor minus the zero-init and the NULL guard, plus the returned receiver. That three-way difference is the standard MSVC construct/assign pair. No PS2 twin possible (MSVC STL vs Metrowerks). Renamed from `FUN_00449b60`.
- * Layout and the full PC<->PS2 table: exe-re/structs/string.md
+ * What it does: copies the object pointer, adds a reference to the source's name block,
+ *  releases the destination's old block and stores the source's. Neither zeroes nor
+ *  NULL-guards the destination, which is a live item.
+ * Parameters: param_1 (ECX): the live destination item. param_2: the source item.
+ * Returns: S_itm *: param_1.
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x00449b60. __thiscall, `ret 4`. Ten E8 callsites, every one in the
+ *  cache code: the open and create paths of the model and sound caches and the cache
+ *  destructors, each the inlined erase that shifts the item vector at cache+0x08 /
+ *  +0x0c down over a removed entry. Renamed from `FUN_00449b60`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-undefined4 * __thiscall assign_elem_stride_8_with_string(undefined4 *param_1,undefined4 *param_2)
+
+undefined4 * __thiscall i3d_cache_items_copy_assign_one(undefined4 *param_1,undefined4 *param_2)
 
 {
   int *piVar1;
@@ -73624,10 +73621,13 @@ void __fastcall actor_del_frame_for_possible_coll(int param_1)
 }
 
 /*
- * rand_range — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_0044de50` (original Ghidra id). VA 0x0044de50.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_0044de50`.
+ * rand_range - a uniform random integer in [0, n).
+ * What it does: returns 0 when n < 1, otherwise `crt_rand() % n` (advances the CRT generator).
+ * Parameters: param_1 (int, ECX): n, the exclusive upper bound.
+ * Returns: int: a value in [0, n), or 0 when n < 1.
+ * PS2 twin: `rnd__Fi`  [CONFIRMED]
+ * Evidence: VA 0x0044de50; 208 callsites. Body-exact with the PS2.
+ *  Renamed from `FUN_0044de50`.
  */
 int __fastcall rand_range(int param_1)
 
@@ -74307,8 +74307,8 @@ LAB_0044e48c:
   ExceptionList = &pvStack_c;
   if (iVar4 != -1) {
     ExceptionList = &pvStack_c;
-    array_copy_refcounted8(param_1[2] + iVar4 * 8);
-    destroy_range_stride8(param_1[3] + -8,param_1[3]);
+    i3d_cache_items_copy_range(param_1[2] + iVar4 * 8);
+    i3d_cache_items_destroy_range(param_1[3] + -8,param_1[3]);
     param_1[3] = param_1[3] + -8;
   }
   for (uVar16 = 0;
@@ -74411,7 +74411,7 @@ LAB_0044e5ae:
       ExceptionList = pvStack_c;
       return iVar4;
     }
-    piVar8 = (int *)string_append_cstr(&param_4,piVar13);
+    piVar8 = (int *)string_concat_cstr(&param_4,piVar13);
     local_4 = 0;
     if (*piVar8 != 0) {
       piVar8 = (int *)(*piVar8 + 8);
@@ -74455,15 +74455,15 @@ LAB_0044e6de:
   iVar12 = param_1[3];
   iVar7 = param_1[2] + uVar16 * 8;
   while (iVar7 = iVar7 + 8, iVar7 != iVar12) {
-    assign_elem_stride_8_with_string(iVar7);
+    i3d_cache_items_copy_assign_one(iVar7);
   }
-  destroy_range_stride8(param_1[3] + -8,param_1[3]);
+  i3d_cache_items_destroy_range(param_1[3] + -8,param_1[3]);
   param_1[3] = param_1[3] + -8;
   piVar13 = param_3;
 LAB_0044e753:
   piStack_18 = (int *)0x0;
   local_4 = 1;
-  std_vector8_insert_one(param_1[3],&local_1c);
+  i3d_cache_items_insert_one(param_1[3],&local_1c);
   local_4 = 0xffffffff;
   if ((piStack_18 != (int *)0x0) && (*piStack_18 = *piStack_18 + -1, *piStack_18 == 0)) {
     operator_delete_wrapper(piStack_18);
@@ -74502,22 +74502,25 @@ LAB_0044e753:
 }
 
 /*
- * refcount_release_at_0x4 — drop one reference held at `this+4`, freeing the counter block at zero
+ * i3d_cache_items_destroy_one - destructor of one C_I3D_cache<T>::S_itm
  *
- * What it does: Reads the pointer at `+0x4`; if non-null, pre-decrements the int it points at and
- *   frees that block when the count reaches zero. The value at `+0x0` is not
- *   touched.
- * Parameters: param_1 (void *, ECX): the two-word element `{value, refcount *}`.
+ * What it does: releases the item's name: reads the C_string block pointer at +0x04 and,
+ *  when it is non-null, pre-decrements its refcount and frees the block at zero. The
+ *  object pointer at +0x00 is not touched.
+ * Parameters: param_1 (ECX): the 8-byte item {T *object, C_string name}.
  * Returns: void.
- * PS2 twin: none — see Evidence
- * Evidence: VA 0x0044e880. DELIBERATELY MECHANICAL. Receiver census: callers in SIX
- *   unrelated modules — `refcounted8_scalar_deleting_dtor`, `std_vector8_erase_at`, `i3d_cache_clear`,
- *   `i3d_cache_items_vector_destroy`, `i3d_cache_items_clear`, `i3d_cache_items_erase_range` — so the symbol belongs to no
- *   class and a class prefix would assert something false. No PS2 twin sought: this is
- *   compiler-emitted container code. Renamed from `FUN_0044e880`.
- * Class layout: exe-re/structs/actor.md
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x0044e880. Seven E8 callsites, all cache-item code:
+ *  i3d_cache_items_destroy_range, i3d_cache_items_scalar_deleting_dtor,
+ *  i3d_cache_items_erase_at, i3d_cache_clear, i3d_cache_items_vector_destroy,
+ *  i3d_cache_items_clear and i3d_cache_items_erase_range; and 60 Unwind_ funclets whose
+ *  FuncInfo owners are the functions that inline the cache Open (the callers of
+ *  i3d_cache_items_insert_one), each destroying that Open's temporary item.
+ *  Renamed from `FUN_0044e880`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-void __fastcall refcount_release_at_0x4(int param_1)
+
+void __fastcall i3d_cache_items_destroy_one(int param_1)
 
 {
   int *piVar1;
@@ -74558,32 +74561,25 @@ void actor_get_actor_speed(undefined4 *param_1)
 }
 
 /*
- * destroy_range_stride8 — destruct every 8-byte element in the half-open
- *     range `[param_1, param_2)`. Iterates `(end - begin) / 8` times,
- *     calling `refcount_release_at_0x4()` per slot (the destructor of the
- *     refcounted-pair element). Tail-destruct helper used by the
- *     `std_vector8_*` family.
+ * i3d_cache_items_destroy_range - destroys a range of C_I3D_cache<T>::S_itm
  *
- * Parameters:
- *   param_1 (`int`): begin of the range (inclusive).
- *   param_2 (`int`): end of the range (exclusive).
- *
- * Returns:
- *   `void` — side effects only.
- *
- * Evidence: definition at VA 0x0044e8c0. Three
- *   callsites in `police_manager_apply_state` (one per spawn bucket;
- *   the `g_i3d_model_cache_items_end -= 8` decrement after the entity pool
- *   loses an entry — destructs the tail slot before the pool shrinks).
- *   Also called from inside `std_vector8_insert_one`'s slow-path
- *   reallocation. Renamed from `FUN_0044e8c0`.
+ * What it does: for each 8-byte item in [param_1, param_2) releases its name block
+ *  through i3d_cache_items_destroy_one, the item destructor.
+ * Parameters: param_1: begin (inclusive). param_2: end (exclusive).
+ * Returns: void.
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x0044e8c0. 37 E8 callsites, all cache code: the cache destructors,
+ *  i3d_cache_set_size, engine_shutdown, i3d_cache_items_insert_one and the inlined
+ *  cache opens that drop the tail item after a failed load. Renamed from `FUN_0044e8c0`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-void destroy_range_stride8(int param_1,int param_2)
+
+void i3d_cache_items_destroy_range(int param_1,int param_2)
 
 {
   if (param_1 != param_2) {
     do {
-      refcount_release_at_0x4();
+      i3d_cache_items_destroy_one();
       param_1 = param_1 + 8;
     } while (param_1 != param_2);
   }
@@ -74591,26 +74587,25 @@ void destroy_range_stride8(int param_1,int param_2)
 }
 
 /*
- * std_vector8_uninit_fill_n — copy-construct N stride-8 refcounted elements into raw storage
+ * i3d_cache_items_uninit_fill_n - copy-constructs N copies of one C_I3D_cache<T>::S_itm
  *
- * What it does: Loops N times calling `copy_elem_stride_8_with_string`, i.e. the
- *   uninitialised-fill step of an insert into the stride-8 vector whose element
- *   is `{value, refcount *}`.
- * Parameters: param_1 (void *): the destination; param_2 (int): the element count.
+ * What it does: loops N times calling i3d_cache_items_copy_construct_one into
+ *  consecutive 8-byte slots of uninitialised storage.
+ * Parameters: param_1: the destination. param_2 (int): the item count. A third stack
+ *  argument, absent from the rendered signature, is the source item (`ret 0xc`).
  * Returns: void.
- * PS2 twin: none — see Evidence
- * Evidence: VA 0x0044e8f0. Promoted from a bare `FUN_` to the existing `std_vector8_*` family on a census:
- *   EXACTLY ONE caller, `std_vector8_insert_one`. It is that vector's private
- *   helper, not shared code — the opposite verdict from its neighbour
- *   `refcount_release_at_0x4`, and each was measured separately. Renamed from `FUN_0044e8f0`.
- * Class layout: exe-re/structs/actor.md
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x0044e8f0. One E8 callsite, in i3d_cache_items_insert_one.
+ *  Renamed from `FUN_0044e8f0`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-void std_vector8_uninit_fill_n(undefined4 param_1,int param_2)
+
+void i3d_cache_items_uninit_fill_n(undefined4 param_1,int param_2)
 
 {
   if (param_2 != 0) {
     do {
-      copy_elem_stride_8_with_string();
+      i3d_cache_items_copy_construct_one();
       param_2 = param_2 + -1;
     } while (param_2 != 0);
   }
@@ -74618,20 +74613,22 @@ void std_vector8_uninit_fill_n(undefined4 param_1,int param_2)
 }
 
 /*
- * std_vector8_assign_range — copy-assign a range of stride-8 refcounted elements
+ * i3d_cache_items_copy_assign_range - copy-assigns a range of C_I3D_cache<T>::S_itm
  *
- * What it does: Walks `[param_1, param_2)` copying from `param_3`, and for each element bumps the
- *   source refcount BEFORE releasing the destination's — the correct order for
- *   self-assignment.
- * Parameters: param_1 (void *): destination begin; param_2 (void *): destination end;
- *   param_3 (void *): source begin.
+ * What it does: walks the destination [param_1, param_2) copying from param_3: copies
+ *  the object pointer, adds a reference to the source name block BEFORE releasing the
+ *  destination's, then stores the source block - the order that is safe under
+ *  self-assignment.
+ * Parameters: param_1 (ECX): destination begin. param_2 (EDX): destination end.
+ *  param_3: source begin.
  * Returns: void.
- * PS2 twin: none — see Evidence
- * Evidence: VA 0x0044e920. Census: EXACTLY ONE caller, `std_vector8_insert_one`. Same promotion as
- *   `std_vector8_uninit_fill_n`; measured separately. Renamed from `FUN_0044e920`.
- * Class layout: exe-re/structs/actor.md
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x0044e920. One E8 callsite, in i3d_cache_items_insert_one.
+ *  Renamed from `FUN_0044e920`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-void __fastcall std_vector8_assign_range(undefined4 *param_1,undefined4 *param_2,undefined4 *param_3)
+
+void __fastcall i3d_cache_items_copy_assign_range(undefined4 *param_1,undefined4 *param_2,undefined4 *param_3)
 
 {
   int *piVar1;
@@ -79547,7 +79544,7 @@ void __thiscall bottle_net_apply_remote_state(int param_1,uint param_2)
   uVar5 = vec3_div_scalar(pfVar4,uVar5);
   vec3_add_in_place(uVar5);
   *(float *)(param_1 + 0x120) = local_78 * 0.01 + *(float *)(param_1 + 0x120);
-  vec3_dist();
+  vec3_length();
   S_quat::Make(local_50,(float)(param_1 + 0x98));
   S_quat::RotationMatrix();
   S_vector::operator*=((S_matrix *)(param_1 + 0x30));
@@ -80900,7 +80897,7 @@ box_solve_impulse_vs_box(int param_1,int param_2,float *param_3,float *param_4,f
   local_8c = (float)((float10)local_8c /
                     (fVar8 + (float10)(float)param_6[0x44] + (float10)*(float *)(iVar2 + 0x110)));
   vec3_scale_to_by_ptr(local_60,&local_8c);
-  vec3_dist();
+  vec3_length();
   local_8c = -(*(float *)(iVar2 + 0xc8c) + 1.0);
   vec3_scale_to_by_ptr(local_3c,&local_8c);
   uVar7 = vec3_scale_to_by_ptr(local_48,iVar2 + 0x110);
@@ -83390,10 +83387,23 @@ undefined4 __thiscall box_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 }
 
 /*
- * identity_thunk — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_0045aea0` (original Ghidra id). VA 0x0045aea0.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_0045aea0`.
+ * identity_thunk - returns its ECX argument unchanged (`mov eax, ecx; ret`)
+ *
+ * What it does: nothing but hand back the pointer it received in ECX.
+ * Parameters: param_1 (ECX): the object pointer.
+ * Returns: param_1.
+ * Evidence: VA 0x0045aea0. 67 `E8` callers in 14 functions, 40 of them in
+ *  `entity_action_tick`; a receiver census resolves all 67. The receivers are stack locals
+ *  constructed in runs at function entry, four `+0x24` members (`pumper_game_init` twice,
+ *  `railway_game_init`, `game_box_add`) and a register in `box_ctor` and
+ *  `glass_shatter_break_frame`, and no sampled caller reads the returned value: the shape of
+ *  an empty constructor emitted out of line. In `glass_shatter_break_frame` it is the
+ *  `S_DICE_OBJ` default constructor (PS2 `__ct__10S_DICE_OBJFv`, `return this`), called once
+ *  per shard with a stride of `0x34`; the stack-local and `+0x24` receivers are other types,
+ *  so the address serves several empty constructors. The same three bytes stand a second time
+ *  at `folded_return_this`, whose receivers belong to unrelated owners.
+ * PS2 twin: - (shared by several empty constructors; one is `__ct__10S_DICE_OBJFv`)
+ * Renamed from `FUN_0045aea0`.
  */
 undefined4 __fastcall identity_thunk(undefined4 param_1)
 
@@ -86095,6 +86105,8 @@ LAB_0045ed45:
  *  Return: void.
  * Evidence: renamed from `FUN_0045f000` (original Ghidra id).
  * Evidence: renamed from `FUN_0045f000` (original Ghidra id).
+ * PS2 twin: - (inlined: the PS2 `I3D_frame` exports only `SetWorldPos*`; the PS2 writes the
+ *  position inline with the same bit-7 test and `& 0xfffffedf | 0x40000000`).
  */
 void __thiscall i3d_frame_set_position(int param_1,undefined4 *param_2)
 
@@ -88524,8 +88536,8 @@ LAB_00461dae:
     piStack_368 = piVar12;
     (&g_steamboat_slot_frame)[slot * 9] = piVar12;   // slot = loop counter [esp+0x10]
     if (iVar17 != -1) {
-      array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar17 * 8);
-      destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+      i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar17 * 8);
+      i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
       g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
     }
     for (uVar27 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar27 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
@@ -88608,7 +88620,7 @@ LAB_00461eef:
     pcStack_338 = (char *)0x0;
     for (uVar27 = 0; (g_i3d_model_cache_dirs_begin != 0 && (uVar27 < (uint)(g_i3d_model_cache_dirs_end - g_i3d_model_cache_dirs_begin >> 2)));
         uVar27 = uVar27 + 1) {
-      piVar15 = (int *)string_append_cstr(&iStack_328,s_lodriver_i3d_0064b5fc);
+      piVar15 = (int *)string_concat_cstr(&iStack_328,s_lodriver_i3d_0064b5fc);
       pvStack_118._0_1_ = 3;
       if (*piVar15 != 0) {
         piVar15 = (int *)(*piVar15 + 8);
@@ -88645,14 +88657,14 @@ LAB_0046200e:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar27 * 8) + 4) == 1) {
       puVar10 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar27 * 8);
       (**(code **)*puVar10)(puVar10);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar27 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar27 * 8);
       break;
     }
   }
 LAB_00462047:
   uVar11 = clear1_dword_at_0x04();
   pvStack_118._0_1_ = 4;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar11);
   pvStack_118 = (void *)((uint)pvStack_118._1_3_ << 8);
   if (pIStack_360 != (I3D_frame *)0x0) {
     string_base_release();
@@ -89141,6 +89153,8 @@ void __thiscall bridge_set_steamboat_figures(int param_1,char param_2)
  *   callsites in `police_manager_apply_state` (one per spawn bucket,
  *   in the entity-cache-miss path that finalises the cache slot's
  *   filename string). Renamed from `FUN_004626b0`.
+ * PS2 twin: `__as__5C_strFPCc`  [CONFIRMED]
+ *  `C_str::operator=(const char *)`: the same steps in the same order, NULL included.
  */
 int * __thiscall string_assign_cstr(int *param_1,char *param_2)
 
@@ -90629,7 +90643,7 @@ LAB_00463b1e:
           } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar7) != piVar4);
         }
         if (iVar11 != -1) {
-          std_vector8_erase_at(g_i3d_model_cache_items_begin + iVar11 * 8);
+          i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + iVar11 * 8);
         }
         uVar13 = 0;
         iVar11 = vec_count_stride_0x8();
@@ -90656,7 +90670,7 @@ LAB_00463b1e:
         iVar11 = vec_count_stride_0x4();
         if (iVar11 != 0) {
           do {
-            string_append_cstr(aiStack_6c,iStack_a4);
+            string_concat_cstr(aiStack_6c,iStack_a4);
             iVar11 = *piVar4;
             local_4._0_1_ = 2;
             uVar6 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_28);
@@ -90702,14 +90716,14 @@ LAB_00463c8d:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar13 * 8) + 4) == 1) {
       puVar1 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       (**(code **)*puVar1)(puVar1);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
       break;
     }
   }
 LAB_00463cc7:
   uVar6 = clear1_dword_at_0x04();
   local_4._0_1_ = 3;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar6);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar6);
   local_4 = (uint)local_4._1_3_ << 8;
   if (iStack_10 != 0) {
     string_base_release();
@@ -91279,6 +91293,7 @@ LAB_00464b93:
  *   inside the entity-cache-miss path — used to construct the temporary
  *   filename handle that's then matched against the pool via
  *   `string_wildcard_match`). Renamed from `FUN_00464bd0`.
+ * PS2 twin: - (inlined: the PS2 string classes export only their two format constructors).
  */
 undefined4 * __thiscall string_ctor_from_cstr(undefined4 *param_1,char *param_2)
 
@@ -91874,6 +91889,8 @@ LAB_004653b4:
  *   inside the entity-cache-miss i3d-load loop — used to pattern-match
  *   the running `*.i3d` filename against the pool entries). Renamed
  *   from `FUN_004656b0`.
+ * PS2 twin: - (no counterpart: `i3d_cache_model_open` inlines this matcher where the PS2
+ *  `Open__23C_I3D_cache<9I3D_model>` calls `strcasecmp`).
  */
 uint __thiscall string_wildcard_match(int *param_1,int *param_2)
 
@@ -94024,7 +94041,7 @@ undefined4 __fastcall car_explosion(int *param_1)
       iVar8 = iVar13 + -1;
     } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar13 * 8) != piVar7);
     if (iVar13 + -1 != -1) {
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + (iVar13 + -1) * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + (iVar13 + -1) * 8);
     }
     uStack_84 = 0;
     iVar8 = vec_count_stride_0x8();
@@ -94050,7 +94067,7 @@ undefined4 __fastcall car_explosion(int *param_1)
     iVar8 = vec_count_stride_0x4();
     if (iVar8 != 0) {
       do {
-        string_append_cstr(&fStack_68,fStack_74);
+        string_concat_cstr(&fStack_68,fStack_74);
         iVar8 = *piVar7;
         pvStack_c = (void *)0x1;
         uVar10 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_60);
@@ -94085,14 +94102,14 @@ LAB_00469023:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar9 * 8) + 4) == 1) {
       puVar1 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar9 * 8);
       (**(code **)*puVar1)(puVar1);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar9 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar9 * 8);
       break;
     }
   }
 LAB_0046905d:
   uVar10 = clear1_dword_at_0x04();
   pvStack_c = (void *)0x2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar10);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar10);
   pvStack_c = (void *)0xffffffff;
   if (piVar6 != (int *)0x0) {
     string_base_release();
@@ -94170,7 +94187,7 @@ LAB_004690e2:
       *(int *)(pcVar15 + 0x1f7c) = param_1[0x7df];
       *(int *)(pcVar15 + 0x1f80) = param_1[0x7e0];
       *(int *)(pcVar15 + 0x1f84) = param_1[0x7e1];
-      fVar14 = (float10)vec3_dist();
+      fVar14 = (float10)vec3_length();
       *(float *)(pcVar15 + 0x688) = (float)fVar14;
       if (*(code **)(pcVar15 + 0x3f8) != (code *)0x0) {
         (**(code **)(pcVar15 + 0x3f8))();
@@ -94370,7 +94387,7 @@ LAB_004698fd:
       iVar13 = iVar13 + -0xa0;
       iVar3 = *(int *)(param_1[0x843] + 0x10 + iVar13);
       if ((iVar3 != 0) && ((iVar3 = *(int *)(iVar3 + 0x10), iVar3 == 2 || (iVar3 == 0x1b)))) {
-        human_car_launched_into_air(piStack_70);
+        human_die_in_exploding_car(piStack_70);
       }
       iVar8 = iVar8 + -1;
     } while (iVar8 != 0);
@@ -95385,7 +95402,7 @@ car_hit(int param_1,undefined4 param_2,S_matrix *param_3,S_matrix *param_4,undef
             uVar8 = vec3_scale_to_by_ptr(auStack_74,&uStack_b0);
             vec3_add_to(auStack_68,uVar8);
             vec3_sub(pfVar15,pfVar16);
-            fVar14 = (float10)vec3_dist();
+            fVar14 = (float10)vec3_length();
           }
           else {
             fVar14 = (float10)-1e+16;
@@ -105315,7 +105332,7 @@ undefined4 __fastcall crash_obj_create_crash_actors(I3D_frame *param_1,undefined
   } while (*(I3D_frame **)(g_i3d_model_cache_items_begin + -8 + iVar6 * 8) != this);
   if (iVar6 + -1 != -1) {
     pIStack_a0 = (I3D_frame *)(g_i3d_model_cache_items_begin + (iVar6 + -1) * 8);
-    std_vector8_erase_at();
+    i3d_cache_items_erase_at();
   }
   uVar9 = 0;
   pIStack_a0 = (I3D_frame *)0x477851;
@@ -105350,7 +105367,7 @@ undefined4 __fastcall crash_obj_create_crash_actors(I3D_frame *param_1,undefined
   if (iVar4 == 0) goto LAB_00477a5f;
   do {
     pIStack_a0 = param_3;
-    string_append_cstr();
+    string_concat_cstr();
     iVar4 = *(int *)this;
     pIStack_a0 = (I3D_frame *)&local_78;
     pvStack_c = (void *)0x1;
@@ -105389,7 +105406,7 @@ LAB_004779a8:
       pIStack_a0 = *(I3D_frame **)(g_i3d_model_cache_items_begin + uVar9 * 8);
       (*(code *)**(undefined4 **)pIStack_a0)();
       pIStack_a0 = (I3D_frame *)(g_i3d_model_cache_items_begin + uVar9 * 8);
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
@@ -105397,7 +105414,7 @@ LAB_004779e1:
   pIStack_a0 = (I3D_frame *)0x4779ea;
   pIStack_a0 = (I3D_frame *)clear1_dword_at_0x04();
   pvStack_c = (void *)0x2;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   pvStack_c = (void *)0xffffffff;
   if (iStack_6c != 0) {
     pIStack_a0 = (I3D_frame *)0x477a1f;
@@ -109348,7 +109365,7 @@ void dog_spawn_severed_head(void)
     iVar4 = iVar2 + -1;
   } while (*(I3D_frame **)(g_i3d_model_cache_items_begin + -8 + iVar2 * 8) != this);
   if (iVar2 + -1 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + (iVar2 + -1) * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + (iVar2 + -1) * 8);
   }
   uVar11 = 0;
   iVar4 = vec_count_stride_0x8();
@@ -109378,7 +109395,7 @@ void dog_spawn_severed_head(void)
     return;
   }
   do {
-    string_append_cstr(&stack0xffffffa8,s_hlavapsa_I3D_0064b91c);
+    string_concat_cstr(&stack0xffffffa8,s_hlavapsa_I3D_0064b91c);
     iVar4 = *(int *)this;
     pvStack_c = (void *)0x1;
     uVar6 = string_get_data(0x10,&i3d_open_notify_forward_cb,&local_4c);
@@ -109410,14 +109427,14 @@ LAB_0047b9af:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar11 * 8) + 4) == 1) {
       puVar9 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar11 * 8);
       (**(code **)*puVar9)(puVar9);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar11 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar11 * 8);
       break;
     }
   }
 LAB_0047b9e8:
   uVar6 = clear1_dword_at_0x04();
   pvStack_c = (void *)0x2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar6);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar6);
   pvStack_c = (void *)0xffffffff;
   if (iStack_3c != 0) {
     string_base_release();
@@ -112367,7 +112384,7 @@ LAB_0047fb60:
     pvStack_10 = param_5;
     for (; (pcVar10 = param_4, param_1[6] != 0 && (uVar11 < (uint)(param_1[7] - param_1[6] >> 2)));
         uVar11 = uVar11 + 1) {
-      piVar8 = (int *)string_append_cstr(&local_20,param_2);
+      piVar8 = (int *)string_concat_cstr(&local_20,param_2);
       local_4 = 2;
       if (*piVar8 != 0) {
         piVar8 = (int *)(*piVar8 + 8);
@@ -112417,17 +112434,17 @@ LAB_0047fca0:
   }
   puVar3 = *(undefined4 **)(param_1[2] + uVar11 * 8);
   (**(code **)*puVar3)(puVar3);
-  array_copy_refcounted8(param_1[2] + uVar11 * 8);
+  i3d_cache_items_copy_range(param_1[2] + uVar11 * 8);
   iVar9 = param_1[3];
   for (iVar6 = iVar9 + -8; iVar6 != iVar9; iVar6 = iVar6 + 8) {
-    refcounted8_scalar_deleting_dtor(0);
+    i3d_cache_items_scalar_deleting_dtor(0);
   }
   param_1[3] = param_1[3] + -8;
 LAB_0047fd02:
   uVar12 = 0;
   piStack_18 = (int *)0x0;
   local_4 = 3;
-  std_vector8_insert_one(param_1[3],&local_1c);
+  i3d_cache_items_insert_one(param_1[3],&local_1c);
   local_4 = 0xffffffff;
   if ((piStack_18 != (int *)0x0) && (*piStack_18 = *piStack_18 + -1, *piStack_18 == 0)) {
     operator_delete_wrapper(piStack_18);
@@ -112493,40 +112510,29 @@ void i3d_open_notify_forward_cb(int param_1,undefined4 param_2,undefined4 param_
 }
 
 /*
- * std_vector8_insert_one — single-element insert into a stride-8
- *     refcounted-pair `std::vector`. Fast path (capacity available):
- *     slides the tail of the vector right by one slot (8 bytes) via
- *     `uninit_copy_range_stride_8` + `std_vector8_uninit_fill_n`, writes the new pair through
- *     `std_vector8_assign_range(param_3)`, advances `_end` by 8, and returns a
- *     pointer to the inserted slot. Slow path (no capacity): allocates
- *     a fresh buffer of size `(old_count + max(1, old_count/2)) * 8` via
- *     `operator_new`, copies-with-refcount-fixup the prefix, writes the
- *     new pair, copies the suffix, destructs the old range via
- *     `destroy_range_stride8`, frees the old storage, and updates the
- *     vector header. Capacity heuristic doubles when `count >= 2`, else
- *     uses min-1 growth.
+ * i3d_cache_items_insert_one - inserts one C_I3D_cache<T>::S_itm into a cache's item
+ *  vector
  *
- *     The simpler sibling of `std_vector8_insert_at` — this variant
- *     always inserts a single pair, never a range.
- *
- * Parameters:
- *   param_1 (`int`, `this`): vector header — `_begin` at `+4`,
- *     `_end` at `+8`, `_cap_end` at `+0xc`.
- *   param_2 (`int`): insert position (`_begin <= pos <= _end`).
- *   param_3 (`undefined4`): pointer to the source pair to insert
- *     (an 8-byte `(value, refcount*)`).
- *
- * Returns:
- *   `void *` — pointer to the newly-inserted slot in the (possibly
- *   reallocated) vector. Distance from `_begin` matches
- *   `(param_2 - old_begin) / 8`.
- *
- * Evidence: definition at VA 0x0047fe60. Three
- *   callsites in `police_manager_apply_state` (one per spawn bucket,
- *   in the entity-cache-miss path after the new pool entry is appended).
- *   Renamed from `FUN_0047fe60`.
+ * What it does: with spare capacity, shifts the tail right by one item
+ *  (i3d_cache_items_uninit_copy_range, i3d_cache_items_uninit_fill_n), assigns the
+ *  new item over the gap (i3d_cache_items_copy_assign_range) and advances the end
+ *  pointer. Without capacity, allocates (count + max(1, count / 2)) * 8 bytes, copies
+ *  the prefix, the new item and the suffix, destroys the old range
+ *  (i3d_cache_items_destroy_range) and frees the old storage.
+ * Parameters: param_1 (ECX): the vector header at cache+0x04 (begin +0x04, end +0x08,
+ *  capacity +0x0c relative to it). param_2: the insert position. param_3: the source
+ *  item.
+ * Returns: S_itm *: the inserted slot in the (possibly reallocated) vector.
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x0047fe60. 60 E8 callsites, every one the add-item step of the
+ *  C_I3D_cache open, inlined into the model, sound and animation cache paths and their
+ *  many call sites (game_init, traffic_car_game_init, pumper_game_init, ...); each
+ *  passes g_i3d_model_cache_items_end, g_i3d_sound_cache_items_end or a cache's
+ *  +0x0c as the position. Renamed from `FUN_0047fe60`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-void * __thiscall std_vector8_insert_one(int param_1,int param_2,undefined4 param_3)
+
+void * __thiscall i3d_cache_items_insert_one(int param_1,int param_2,undefined4 param_3)
 
 {
   int iVar1;
@@ -112541,14 +112547,14 @@ void * __thiscall std_vector8_insert_one(int param_1,int param_2,undefined4 para
   iVar5 = param_2 - iVar2 >> 3;
   if (*(int *)(param_1 + 0xc) - iVar1 >> 3 != 0) {
     if (iVar1 - param_2 >> 3 == 0) {
-      uninit_copy_range_stride_8(param_2,iVar1,param_2 + 8);
-      std_vector8_uninit_fill_n(*(int *)(param_1 + 8),1 - (*(int *)(param_1 + 8) - param_2 >> 3),param_3);
+      i3d_cache_items_uninit_copy_range(param_2,iVar1,param_2 + 8);
+      i3d_cache_items_uninit_fill_n(*(int *)(param_1 + 8),1 - (*(int *)(param_1 + 8) - param_2 >> 3),param_3);
     }
     else {
-      uninit_copy_range_stride_8(iVar1 + -8,iVar1,iVar1);
-      array_copy_backward_refcounted8(*(undefined4 *)(param_1 + 8));
+      i3d_cache_items_uninit_copy_range(iVar1 + -8,iVar1,iVar1);
+      i3d_cache_items_copy_backward_range(*(undefined4 *)(param_1 + 8));
     }
-    std_vector8_assign_range(param_3);
+    i3d_cache_items_copy_assign_range(param_3);
     *(int *)(param_1 + 8) = *(int *)(param_1 + 8) + 8;
     return (void *)(*(int *)(param_1 + 4) + iVar5 * 8);
   }
@@ -112569,12 +112575,12 @@ void * __thiscall std_vector8_insert_one(int param_1,int param_2,undefined4 para
   pvVar3 = operator_new(iVar2 * 8);
   pvVar6 = pvVar3;
   for (iVar2 = *(int *)(param_1 + 4); iVar2 != param_2; iVar2 = iVar2 + 8) {
-    copy_elem_stride_8_with_string();
+    i3d_cache_items_copy_construct_one();
     pvVar6 = (void *)((int)pvVar6 + 8);
   }
-  copy_elem_stride_8_with_string();
-  uninit_copy_range_stride_8(param_2,*(undefined4 *)(param_1 + 8),(int)pvVar6 + 8);
-  destroy_range_stride8(*(undefined4 *)(param_1 + 4),*(undefined4 *)(param_1 + 8));
+  i3d_cache_items_copy_construct_one();
+  i3d_cache_items_uninit_copy_range(param_2,*(undefined4 *)(param_1 + 8),(int)pvVar6 + 8);
+  i3d_cache_items_destroy_range(*(undefined4 *)(param_1 + 4),*(undefined4 *)(param_1 + 8));
   operator_delete_wrapper(*(undefined4 *)(param_1 + 4));
   *(void **)(param_1 + 0xc) = (void *)((int)pvVar3 + iVar1 * 8);
   iVar1 = vec_count_stride_0x8();
@@ -112584,33 +112590,20 @@ void * __thiscall std_vector8_insert_one(int param_1,int param_2,undefined4 para
 }
 
 /*
- * array_copy_refcounted8 — generic refcounted `std::vector<T,8>` copy
- *     helper. Walks `[param_1, param_2)` and writes each element to
- *     `*param_3++`, where each element is an 8-byte `(value, refcount*)`
- *     pair (the same layout consumed by `std_vector8_insert_one` and
- *     `std_vector8_erase_at`). On every step:
- *       - Increment the src refcount: `if (param_1[1] != 0) *param_1[1] += 1`.
- *       - Decrement-and-maybe-free the dst's prior refcount:
- *         `if (param_3[1] != 0 && --(*param_3[1]) == 0) operator_delete_wrapper(param_3[1])`.
- *       - Copy the value (`*param_3 = *param_1`) and refcount pointer
- *         (`param_3[1] = param_1[1]`).
+ * i3d_cache_items_copy_range - std::copy over C_I3D_cache<T>::S_itm
  *
- * Parameters:
- *   param_1 (`undefined4 *`): src begin (8-byte stride pairs).
- *   param_2 (`undefined4 *`): src end (one past last pair).
- *   param_3 (`undefined4 *`): dst write head; must already be sized to
- *     hold `(param_2 - param_1) / 8` pairs.
- *
- * Returns:
- *   `undefined4 *` — the advanced dst pointer (one past the last pair
- *   written). Callers chain this back into the dst vector's `_end`.
- *
- * Evidence: definition at VA 0x0047ffe0. Three
- *   callsites in `police_manager_apply_state` (one per spawn bucket,
- *   inside the entity-cache-miss i3d-load loop). Renamed from
- *   `FUN_0047ffe0`.
+ * What it does: walks [param_1, param_2) forward and copy-assigns each 8-byte item
+ *  {T *object, C_string name} to *param_3++: copies the object pointer, adds a reference
+ *  to the source name block, releases the destination's old block and stores the source's.
+ * Parameters: param_1 (ECX): source begin. param_2 (EDX): source end. param_3: destination.
+ * Returns: S_itm *: one past the last item written.
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x0047ffe0. 28 E8 callsites, all cache code: the cache Open and Create
+ *  inlined at their call sites and engine_shutdown. Renamed from `FUN_0047ffe0`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-undefined4 * __fastcall array_copy_refcounted8(undefined4 *param_1,undefined4 *param_2,undefined4 *param_3)
+
+undefined4 * __fastcall i3d_cache_items_copy_range(undefined4 *param_1,undefined4 *param_2,undefined4 *param_3)
 
 {
   undefined4 *puVar1;
@@ -112639,23 +112632,23 @@ undefined4 * __fastcall array_copy_refcounted8(undefined4 *param_1,undefined4 *p
 }
 
 /*
- * array_copy_backward_refcounted8 — copy a run of refcounted 8-byte elements backwards
+ * i3d_cache_items_copy_backward_range - std::copy_backward over C_I3D_cache<T>::S_itm
  *
- * What it does: Walks a source range from its end to its start, copying each 8-byte
- *   element into a destination that also ends at a given point, taking a
- *   reference on the incoming pointer and dropping the reference the
- *   destination slot held. The backward direction is what makes it safe
- *   for an overlapping shift.
- * Parameters: param_1: source begin; param_2: source end; param_3: destination end.
- * Returns: the new destination begin.
- * PS2 twin: none — see Evidence
- * Evidence: VA 0x00480040. Compiler-emitted template code with exactly ONE caller,
- *   `std_vector8_insert_one`, so it belongs to no class (offset first, callsite census second).
- *   Graded STRUCTURAL because a mechanical name asserts nothing that needs a PS2 body to check. It
- *   is emitted in the C_dog TU only because that is where the instantiation landed. Renamed from
- *   `FUN_00480040`.
+ * What it does: walks the source range from its end to its start and copy-assigns each
+ *  item into a destination that ends at param_3, adding a reference to the incoming name
+ *  and releasing the one the slot held. The backward direction makes an overlapping
+ *  shift safe.
+ * Parameters: param_1 (ECX): source begin. param_2 (EDX): source end. param_3:
+ *  destination end.
+ * Returns: S_itm *: the new destination begin.
+ * PS2 twin: none - an MSVC STL helper; the PS2 links Metrowerks' STL.
+ * Evidence: VA 0x00480040. One E8 callsite, in i3d_cache_items_insert_one. Emitted in
+ *  the C_dog translation unit because that is where the instantiation landed.
+ *  Renamed from `FUN_00480040`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-undefined4 * __fastcall array_copy_backward_refcounted8(int param_1,int param_2,undefined4 *param_3)
+
+undefined4 * __fastcall i3d_cache_items_copy_backward_range(int param_1,int param_2,undefined4 *param_3)
 
 {
   int *piVar1;
@@ -112686,19 +112679,26 @@ undefined4 * __fastcall array_copy_backward_refcounted8(int param_1,int param_2,
 }
 
 /*
- * refcounted8_scalar_deleting_dtor — MSVC scalar deleting destructor of the 8-byte refcounted cache entry
+ * i3d_cache_items_scalar_deleting_dtor - scalar deleting destructor of one
+ *  C_I3D_cache<T>::S_itm
  *
- * What it does: Releases the refcounted object held at `+0x4` (the entry's name string),
- *   then frees the entry itself when bit 0 of the flag is set.
- * Parameters: param_1 (this): the 8-byte `{payload*, refcounted-name*}` entry; param_2 (byte): the MSVC free flag.
- * Returns: the entry pointer, as MSVC requires.
- * PS2 twin: none — see Evidence
- * Evidence: VA 0x004800a0. **Shared, no owner.** Zero .rdata datarefs and exactly two callers, in two unrelated modules: the eviction tail of `i3d_cache_anim_create` and the same tail in a sibling cache instantiation at `0x005fcfe4`. It is the entry type's destructor, not any cache's method. PS2 spells the same step out as `Release(); __dla__(name); erase()`, so there is no single symbol to twin. Renamed from `FUN_004800a0`.
+ * What it does: releases the item's name (i3d_cache_items_destroy_one), then frees the
+ *  item itself when bit 0 of the flag is set.
+ * Parameters: param_1 (ECX): the 8-byte item {T *object, C_string name}. param_2 (byte):
+ *  the MSVC free flag.
+ * Returns: the item pointer.
+ * PS2 twin: none - an MSVC-only shape; the PS2 spells the same step out as
+ *  Release, delete of the name and erase.
+ * Evidence: VA 0x004800a0. Two E8 callsites, both in the animation cache:
+ *  i3d_cache_anim_create and i3d_cache_anim_open, each in the eviction tail. No data
+ *  reference. Renamed from `FUN_004800a0`.
+ * Class layout: exe-re/structs/i3d_cache.md
  */
-undefined4 __thiscall refcounted8_scalar_deleting_dtor(undefined4 param_1,byte param_2)
+
+undefined4 __thiscall i3d_cache_items_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   if ((param_2 & 1) != 0) {
     operator_delete_wrapper(param_1);
   }
@@ -117772,7 +117772,7 @@ void __fastcall driver_predictive_sphere_lane_cross(int param_1)
     uVar5 = vec3_scale_to_by_ptr(local_18,&local_40);
     vec3_add_to(local_c,uVar5);
     vec3_sub(puVar10,uVar4);
-    fVar8 = (float10)vec3_dist();
+    fVar8 = (float10)vec3_length();
   }
   else {
     fVar8 = (float10)-1e+16;
@@ -124952,11 +124952,11 @@ LAB_0049070a:
   }
   iVar5 = *(int *)(param_1 + 0x98);
   if ((iVar5 != 0) && (*(int *)(iVar5 + 0x10) == 4)) {
-    garage_set_stolen_car(iVar5);
+    garage_set_last_entered_car(iVar5);
   }
   iVar5 = *(int *)(param_1 + 0x9c);
   if ((iVar5 != 0) && (*(int *)(iVar5 + 0x10) == 4)) {
-    garage_set_stolen_car(iVar5);
+    garage_set_last_entered_car(iVar5);
   }
   return 1;
 }
@@ -129050,13 +129050,16 @@ void __fastcall human_update_dyn_coll(int param_1)
 }
 
 /*
- * human_hit(human, hit_type, pos, dir, force, mag, attacker, flags, frame) -> void
+ * human_hit(human, hit_type, pos, dir, force, mag, attacker, body_part, frame) -> void
  * What it does: C_human override of Hit — the damage/hit handler; applies the hit,
  *   and (when the struck human is the player, g_act_mission+0x24+0xe4) fires the hit
  *   feedback effects.
  * Parameters: param_1 (C_human*, this); param_2 (E_hit_type); param_3..param_5
  *   (const S_vector& pos/dir/force); param_6 (float mag); param_7 (C_actor* attacker);
- *   param_8 (uint flags); param_9 (I3D_frame*).
+ *   param_8 (uint body_part): 1 right arm, 2 left arm, 3 right leg, 4 left leg, 5 torso,
+ *   6 head (structs/shot_skeleton.md); for hit type 0 (gunshot) it scales the damage (arms
+ *   x0.3, legs x0.5, head x1.5) and drains the matching limb-health field;
+ *   param_9 (I3D_frame*).
  * Returns: void.
  * Evidence: VA 0x00496710. C_human vtable slot 31 (=PS2 20 via +11 offset); 8-arg
  *   signature matches Hit__7C_human; player-struck effect path.
@@ -129068,9 +129071,10 @@ void __fastcall human_update_dyn_coll(int param_1)
  *   Proof: PS2 `Hit` calls NewScream zero times (all 11 of its NewScream calls are inside the helper
  *   bodies), yet this function calls `human_new_scream` 4x and `human_movement` 4x directly.
  *   The inline sites are marked with `// >>> INLINED PS2 ...` comments in the body, under a banner that
- *   documents each helper's scream/movement fingerprint. Only HitAgony is uniquely pinned (scream +0x5e);
- *   HitLanding / HitStroke / HitFall share an identical fingerprint and are NOT individually separable.
- *   Recorded terminal in structs/human.md §4 as `not located — INLINED`, so nobody re-hunts them.
+ *   maps each arm to its helper. Every arm is pinned by position (the PS2 dispatch order: landing,
+ *   agony, fall, stroke, else gun) and by its clip ids, which are the PS2 ids plus a band offset
+ *   (+0x22 for the landing and fall clips, +0x32 for the stroke clips). structs/human.md §4 lists
+ *   all six as INLINED.
  * Renamed from `FUN_00496710` (original Ghidra id).
  */
 undefined4 __thiscall
@@ -129661,19 +129665,17 @@ LAB_0049747b:
   //   bodies. Yet `human_hit` below calls `human_new_scream` 4x and `human_movement` 4x DIRECTLY.
   //   Those calls ARE the helpers' internals, sitting in this function's own body.
   //
-  // PER-HELPER FINGERPRINTS (from the PS2 bodies), used to label the sites below:
-  //   HitLanding : human_movement(1) + scream(+0x5c) + scream(+0x55)
-  //   HitStroke  : human_movement(1) + scream(+0x5c) + scream(+0x55)   <-- identical to HitLanding
-  //   HitFall    : human_movement(1) + scream(+0x5c) + scream(+0x55)   <-- identical to HitLanding
-  //   HitAgony   : human_movement(1) + scream(+0x5e)                   <-- UNIQUE, the only separable one
-  //   HitGun     : human_movement(1) + scream(+0x5c) + scream(+0x55) + scream(0x54)
-  //   HitGunHPT  : no scream, no movement (called only from inside HitGun)
+  // PER-ARM MAPPING (each arm's clip ids are the PS2 ids plus a band offset):
+  //   linked to a car with seat -1, or to a kind-8 object : HitGun with hpt = 0
+  //   param_9 set : HitLanding (landing clip 0x67 = PS2 0x45, band +0x22)
+  //   bVar3       : HitAgony   (scream +0x5e, used by no other helper)
+  //   param_5 set : HitFall    (clips 0x6a..0x6c = PS2 0x48..0x4a, band +0x22)
+  //   bVar4       : HitStroke  (clips 0xcd, 0xec..0xf0 = PS2 0x9b, 0xba..0xbe, band +0x32)
+  //   otherwise   : HitGun, with HitGunHPT inlined at the anim-slot switch
   //
-  // LIMIT OF THE ANALYSIS (do not over-read the labels below): HitLanding, HitStroke and HitFall have
-  // an IDENTICAL scream/movement fingerprint, so a site showing [movement, +0x5c, +0x55] cannot be
-  // attributed to one of the three from that evidence alone. Only HitAgony (+0x5e) is uniquely pinned.
-  // Also, the 5 PS2 helpers together contain 10 scream calls but this function makes only 4 — so NOT
-  // every dispatch arm got its helper inlined in full. The exact per-arm mapping is UNRESOLVED.
+  // The 5 PS2 helpers hold 10 scream calls and this function only 4: MSVC merged the identical
+  // scream tails, so the arms jump to three shared ones (LAB_004978c7 = rand + 0x5c,
+  // LAB_00497850 = rand + 0x55, LAB_004984c2 = a computed id).
   // ================================================================================
   if (param_1[0x26] != 0) {
     iVar14 = *(int *)(param_1[0x26] + 0x10);
@@ -129879,10 +129881,8 @@ LAB_00498497:
       *(undefined1 *)(param_1 + 0x92) = 0;
       param_1[0x103] = 6;
       param_1[0xa8] = 0;
-      // >>> INLINED PS2 Hit* helper — fingerprint [human_movement(1), scream(+0x5c), scream(+0x55)].
-      // >>> That fingerprint is shared by HitLanding, HitStroke and HitFall, so WHICH of the three this is
-      // >>> is NOT determined. Do not assume. (The same 3-call block appears in `human_throw_from_car_truck`,
-      // >>> where the PS2 caller proves it is HitFall — but that does not settle this site.)
+      // >>> INLINED PS2 `HitLanding__7C_humanFv`, its dead branch: death clip, mode 6,
+      // >>> human_movement(1), then the shared rand + 0x5c scream tail.
       human_movement(1);
 LAB_004978c7:
       iVar14 = rand_range();
@@ -130056,7 +130056,8 @@ LAB_00497cc3:
     (**(code **)(*(int *)param_1[0x1a] + 0x18))((int *)param_1[0x1a]);
     param_1[0x103] = 6;
     param_1[0xa8] = 0;
-    // >>> INLINED PS2 Hit* helper (movement-only fragment; no scream on this path). Helper not identified.
+    // >>> INLINED PS2 `HitFall__7C_humanFRC8S_vectorUi`: mode 6, human_movement(1), then the
+    // >>> shared scream tail (rand + 0x5c when dead, rand + 0x55 when alive).
     human_movement(1);
     if (*(char *)((int)param_1 + 0x5d) == '\0') goto LAB_004978c7;
     goto LAB_00497850;
@@ -130255,8 +130256,9 @@ LAB_004982a7:
     iVar14 = 0x54;
   }
 LAB_004984c2:
-  // >>> INLINED PS2 Hit* helper — a bare scream id. HitGun is the only helper that screams a CONSTANT
-  // >>> (0x54) rather than an offset from a base, so this is most likely the tail of HitGun. NOT proven.
+  // >>> INLINED PS2 `HitGun__7C_humanFRC8S_vectorUib` tail (also reached by the in-vehicle arm):
+  // >>> scream 0x54 for a type 3 or 4 hit with hpt set, else rand + 0x55; then mode 6 and
+  // >>> human_movement(1).
   human_new_scream(iVar14);
   param_1[0xa8] = 0;
   param_1[0x103] = 6;
@@ -134921,7 +134923,7 @@ void __fastcall human_change_weapon_model(int param_1)
   }
   iVar7 = 0;
   if (*(int *)(param_1 + 0x568) != 0) {
-    iVar7 = game_item_table_get();
+    iVar7 = inventory_get_left_hand_item_def();
   }
   piVar10 = *(int **)(param_1 + 0x6c0);
   *(undefined4 *)(param_1 + 0x1e8) = *(undefined4 *)(iVar3 + 0x5c);
@@ -135588,7 +135590,7 @@ LAB_004a0147:
         } while (*(I3D_frame **)(g_i3d_model_cache_items_begin + -8 + iVar9) != this);
       }
       if (iVar6 != -1) {
-        std_vector8_erase_at(g_i3d_model_cache_items_begin + iVar6 * 8);
+        i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + iVar6 * 8);
       }
       uVar15 = 0;
       iVar6 = vec_count_stride_0x8();
@@ -135616,7 +135618,7 @@ LAB_004a0147:
       pfVar4 = local_5c;
       if (iVar6 != 0) {
         do {
-          string_append_cstr(local_58,pfVar4);
+          string_concat_cstr(local_58,pfVar4);
           iVar6 = *(int *)this;
           uStack_4 = 1;
           uVar8 = string_get_data(0x10,&i3d_open_notify_forward_cb,local_58 + 1);
@@ -135656,14 +135658,14 @@ LAB_004a02ad:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar15 * 8) + 4) == 1) {
       puVar12 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar15 * 8);
       (**(code **)*puVar12)(puVar12);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar15 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar15 * 8);
       break;
     }
   }
 LAB_004a02e7:
   uVar8 = clear1_dword_at_0x04();
   uStack_4 = 2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar8);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar8);
   uStack_4 = 0xffffffff;
   if (iStack_48 != 0) {
     string_base_release();
@@ -137479,7 +137481,7 @@ LAB_004a28e4:
         hud_radar_add_car_with_color(iVar7,0xffffffff); //white color
         *(undefined4 *)(param_1 + 0xab8) = 0x3f800000;
         player_set_alpha(0x3f800000);
-        garage_set_stolen_car(iVar7);
+        garage_set_last_entered_car(iVar7);
         police_manager_npc_list_erase(iVar7);
       }
       inventory_set_in_car(1,0);
@@ -141352,8 +141354,8 @@ LAB_004a8c71:
       }
       piStack_84 = piVar7;
       if (iVar6 != -1) {
-        array_copy_refcounted8();
-        destroy_range_stride8();
+        i3d_cache_items_copy_range();
+        i3d_cache_items_destroy_range();
         g_i3d_sound_cache_items_end = g_i3d_sound_cache_items_end + -8;
       }
       for (local_8c = 0.0;
@@ -141439,7 +141441,7 @@ LAB_004a8da4:
       local_a0 = 0.0;
       for (uVar14 = 0; (g_i3d_sound_cache_dirs_begin != 0 && (uVar14 < (uint)(g_i3d_sound_cache_dirs_end - g_i3d_sound_cache_dirs_begin >> 2)));
           uVar14 = uVar14 + 1) {
-        piVar10 = (int *)string_append_cstr();
+        piVar10 = (int *)string_concat_cstr();
         uStack_4 = 4;
         if (*piVar10 != 0) {
           piVar10 = (int *)(*piVar10 + 8);
@@ -141498,14 +141500,14 @@ LAB_004a8f98:
 LAB_004a8edf:
     if (*(int *)(*(int *)(g_i3d_sound_cache_items_begin + uVar14 * 8) + 4) == 1) {
       (**(code **)**(undefined4 **)(g_i3d_sound_cache_items_begin + uVar14 * 8))();
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
 LAB_004a8f18:
   clear1_dword_at_0x04();
   uStack_4 = 5;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   uStack_4 = 0xffffffff;
   if (local_94 != (I3D_frame *)0x0) {
     string_base_release();
@@ -142437,27 +142439,32 @@ undefined4 __thiscall human_do_dead_body_pick_up(int param_1,int param_2)
 }
 
 /*
- * human_car_launched_into_air(this, car) -> void
- * What it does: C_human::EineMeineKleineAutoInLuft — react to the car the human is in being LAUNCHED INTO
- *   THE AIR (an explosion or a big ramp/impact sends it flying). Updates the occupant's act state
- *   (`actor_set_act_state`), pushes the resulting health to the HUD (`hud_set_player_health_value`,
- *   `hud_wingman_set_indicator_value_for_slot`) and unhooks the human from the tracking structures it was
- *   registered in. The PS2 name is a developer joke — mangled German, roughly "my little car in the air".
- * Parameters: this (ECX) = the C_human; param_2 = the C_car that went airborne.
- * Returns: void.
+ * human_die_in_exploding_car - a human seated in an exploding car dies in its seat
  *
- * Evidence: VA 0x004aab10. Body-diff vs PS2 `EineMeineKleineAutoInLuft__7C_humanFP5C_car` — CONFIRMED on
- *   signature (`void (this, C_car*)` — exact parameter count on both sides) and on the FORCED 1:1
- *   order-align slot.
- *   ⚠️ CAVEAT, recorded rather than hidden: the size ratio is 2.7 (PC 496 / PS2 1320), which is ABOVE the
- *   ~1.0-1.6 band this class's confirmed twins occupy. That normally means the ranks are shifted — here they
- *   are not (the gap is closed and its other member is independently confirmed), so the likeliest reading is
- *   that the PC build factored some of this out. The signature + slot carry the identification, but this is
- *   the weakest twin in Batch I. If a later pass finds a better candidate, revisit this one first.
- *   Renamed from `FUN_004aab10`.
- * PS2 twin: EineMeineKleineAutoInLuft__7C_humanFP5C_car  [CONFIRMED]
+ * What it does: only when the human sits in a car (+0x98 kind 4). It re-parents the
+ *  human's frame to the wreck's frame (+0x68), stores the wreck at +0x98, stops the
+ *  human's talk and swaps the model to the charred body `ohorelec01.i3d`. A living
+ *  human then dies: cur_health (+0x644) = 0, +0x5d = 0, the anim-machine lock
+ *  +0x1cc = 1, the Death virtual (+0x74), actor_set_act_state(2); the wingman
+ *  indicator is zeroed. It picks a seated death clip: 0x10d / 0x10e by seat side when
+ *  +0x5e4 is 2, else 0x10a for seat 0, 0x10c for a long gun (weapon_class 2 or 3),
+ *  0x10b otherwise. It
+ *  poses the clip at its last key frame through the frame's animation-set virtuals, pushes
+ *  health 0 to the HUD for the player and sets movement_mode (+0x40c) = 8.
+ * Parameters: param_1 (int *): the C_human (ECX). param_2 (int): the exploding car.
+ * Returns: void.
+ * Callers: car_explosion only, once per occupant of kind 2 or 0x1b.
+ * PS2 twin: `EineMeineKleineAutoInLuft__7C_humanFP5C_car` [CONFIRMED]
+ * Evidence: VA 0x004aab10. Statement for statement: the same guard, re-parent, kill
+ *  sequence, seat-clip choice (PS2 0xd8..0xdc = PC 0x10a..0x10e, band +0x32), the
+ *  same twelve animation-set calls and mode 8. The PS2 body is 2.7 times larger
+ *  because it inlines the animation-cache search that the PC factors into
+ *  i3d_cache_anim_create. The charred-model swap is PC-only.
+ *  Renamed from `FUN_004aab10`.
+ * Class layout: exe-re/structs/human.md
  */
-void __thiscall human_car_launched_into_air(int *param_1,int param_2)
+
+void __thiscall human_die_in_exploding_car(int *param_1,int param_2)
 
 {
   int *piVar1;
@@ -142548,7 +142555,7 @@ void __thiscall human_car_launched_into_air(int *param_1,int param_2)
  *   🔑 The call graph clinches it:
  *   PS2's two callers are `AI__8C_playerFUi` and
  *   `EineMeineKleineAutoInLuft__7C_humanFP5C_car`, and this function's callers
- *   include BOTH — `player_ai` and `human_car_launched_into_air` — plus
+ *   include BOTH — `player_ai` and `human_die_in_exploding_car` — plus
  *   `entity_action_tick`.
  *   ⚠️ PC-vs-PS2, two differences: PS2 CACHES the answer at `+0xbc0` behind a
  *   `Can_Aimed(1000)` max-age (an `ai_framerater`-family throttle), and PS2 lowers
@@ -144454,7 +144461,7 @@ uint __fastcall human_is_this_car_stealing(int param_1)
  *        filter collects the matching attach-point frames.
  *     2. For each returned frame, filter on `frame+0x110 == 9`
  *        (frame type 9 = MODEL in ls3df.dll's frame-type names,
- *        structs/i3d_frame.md SS3a; the sibling bone-
+ *        structs/i3d_frame.md §3a; the sibling bone-
  *        walking helpers `human_game_init`, `human_change_model`
  *        and `player_set_hand_scale` use the same
  *        `s_l_hand`/`s_r_hand` string pair). Collect matching
@@ -150764,7 +150771,7 @@ void pedestrian_manager_try_send_pedestrian_to_parked_car(void)
             uVar13 = vec3_scale_to_by_ptr(&local_54,&local_58);
             vec3_add_to(local_c,uVar13);
             vec3_sub(puVar19,puVar20);
-            fVar16 = (float10)vec3_dist();
+            fVar16 = (float10)vec3_length();
             if ((float10)5.0 <= fVar16) goto LAB_004b3c6a;
           }
           cVar8 = car_seat_get_attach_positions(0,*(int *)(g_pedestrian_list + iVar15 * 4) + 0x80,
@@ -152578,10 +152585,15 @@ bool __thiscall pedestrian_avoid_obstacle(int param_1,int param_2)
 }
 
 /*
- * vec2_length — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_004b6070` (original Ghidra id). VA 0x004b6070.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_004b6070`.
+ * vec2_length - the length of a 2D vector.
+ * What it does: returns sqrt(x*x + y*y); no zero gate. Reads only.
+ * Parameters: param_1 (float *, ECX): the vector {x, y}.
+ * Returns: float10 (ST0): the length.
+ * PS2 twin: - (inlined: `S_vector2` exports only its constructor, and
+ *  `IsBlockInRange__18C_cache_base_blockFUi9S_vector2f` takes the root inline at the four
+ *  places where `cache_base_block_is_block_in_range` calls this).
+ * Evidence: VA 0x004b6070; 10 callsites (cache blocks, pedestrians, racing gates).
+ *  Renamed from `FUN_004b6070`.
  */
 float10 __fastcall vec2_length(float *param_1)
 
@@ -152590,10 +152602,12 @@ float10 __fastcall vec2_length(float *param_1)
 }
 
 /*
- * vec2_dot — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_004b6090` (original Ghidra id). VA 0x004b6090.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_004b6090`.
+ * vec2_dot - the dot product of two 2D vectors.
+ * What it does: returns a.x*b.x + a.y*b.y. Reads only.
+ * Parameters: param_1 (float *, ECX): a. param_2 (float *): b.
+ * Returns: float10 (ST0): the dot product.
+ * PS2 twin: - (inlined: the same four `IsBlockInRange` positions compute it inline).
+ * Evidence: VA 0x004b6090; 10 callsites. Renamed from `FUN_004b6090`.
  */
 float10 __thiscall vec2_dot(float *param_1,float *param_2)
 
@@ -153763,7 +153777,7 @@ LAB_004b7ff1:
       vec3_set_xyz(*pfVar16 - *(float *)(param_1 + 0x34),
                    *(float *)(param_1 + 0x14) - *(float *)(param_1 + 0x38),
                    *(float *)(param_1 + 0x18) - *(float *)(param_1 + 0x3c));
-      fVar19 = (float10)vec3_dist_sq();
+      fVar19 = (float10)vec3_length_sq();
       if ((float10)0.0049 < fVar19) {
         collision_dyn_set_next_owner(param_1 + 0xc4,0);
         uVar28 = 0;
@@ -154343,7 +154357,7 @@ LAB_004b8a4a:
           uVar8 = vec3_scale_to_by_ptr(&local_b0,&local_e4);
           vec3_add_to(local_9c,uVar8);
           vec3_sub(pfVar25,pfVar16);
-          fVar19 = (float10)vec3_dist();
+          fVar19 = (float10)vec3_length();
         }
         else {
           fVar19 = (float10)-1e+16;
@@ -155264,7 +155278,7 @@ LAB_004b7f5b:
       vec3_set_xyz(*pfVar16 - *(float *)(param_1 + 0x34),
                    *(float *)(param_1 + 0x14) - *(float *)(param_1 + 0x38),
                    *(float *)(param_1 + 0x18) - *(float *)(param_1 + 0x3c));
-      fVar19 = (float10)vec3_dist_sq();
+      fVar19 = (float10)vec3_length_sq();
       if ((float10)0.0049 < fVar19) {
         collision_dyn_set_next_owner(param_1 + 0xc4,0);
         uVar28 = 0;
@@ -155596,7 +155610,16 @@ uint __thiscall pedestrian_set_model(int npc,undefined4 scene)
  * pedestrian_create_model — builds the pedestrian's model (`CreateModel`)
  *
  * VA 0x004bb240.
- * Loads the model named by the generator's name table, attaches an `I3D_pose` to the frame `neck` and reads a two-digit height scale off the user-property tag of the frame `back1` (x0.01), and checks the child-frame magic `'SNGM'` / `'SMMR'`. 🔑 Those two frame names are unconditional, which is the measurement that proves EVERY ambient pedestrian is a humanoid.
+ * Loads the model named by the generator's name table, attaches an `I3D_pose` to the frame
+ *   `neck`, reads the user-property tag of the frame `back1` and checks the child-frame magic
+ *   `'SNGM'` / `'SMMR'`. 🔑 Those two frame names are unconditional, which is the
+ *   measurement that proves EVERY ambient pedestrian is a humanoid.
+ * The `back1` tag is decoded only when it is exactly six characters (e.g. `ABA095`): after
+ *   `crt_strupr`, characters 0-2 minus 'A' go to `+0x158` / `+0x159` / `+0x15a` (gender,
+ *   variant, type) and `atoi` of characters 3-5 times 0.01 to the scale `+0x154`. Unlike
+ *   `pedestrian_set_model`, this function does not zero the three bytes first, so a tag that
+ *   fails the length test keeps what the record's memory held: the shipped `civil05.4ds` tag
+ *   is `ACA097` plus two CRLF pairs (`exe-re/basic/artifacts/game-loop.md` §10).
  * PS2 twin: `CreateModel__17C_traffic_elementFPcP19C_traffic_generator`  [CONFIRMED] - 2 args <-> 2.
  * Renamed from `FUN_004bb240`.
  * Class layout: exe-re/structs/pedestrian.md
@@ -156450,7 +156473,7 @@ LAB_004bc340:
         *(undefined4 *)(param_1 + 0x6c) = puVar11[2];
         vec3_copy_to();
         vec3_sub();
-        fVar16 = (float10)vec3_dist();
+        fVar16 = (float10)vec3_length();
         local_fc = (float)fVar16;
         vec3_copy_to();
         puStack_134 = (undefined1 *)0x4bc664;
@@ -156459,7 +156482,7 @@ LAB_004bc340:
         local_114 = *pfVar12;
         local_110 = pfVar12[1];
         local_10c = pfVar12[2];
-        fVar16 = (float10)vec3_dist();
+        fVar16 = (float10)vec3_length();
         local_108 = (float)fVar16;
         if ((float10)local_fc < fVar16) {
           local_108 = local_fc;
@@ -156518,7 +156541,7 @@ LAB_004bc340:
               fStack_f4 = *(float *)(iVar6 + 0x28);
               local_f0 = *(float *)(iVar6 + 0x2c);
               vec3_sub();
-              fVar16 = (float10)vec3_dist_sq();
+              fVar16 = (float10)vec3_length_sq();
               if (fVar16 < (float10)25.0) {
                 return 0;
               }
@@ -156542,7 +156565,7 @@ LAB_004bc340:
             }
             vec3_sub();
             fStack_f4 = 0.0;
-            fVar16 = (float10)vec3_dist();
+            fVar16 = (float10)vec3_length();
             if (fVar16 < (float10)local_100 * (float10)*(float *)(*(int *)(param_1 + 4) + 0x8c)) {
               return 0;
             }
@@ -156887,7 +156910,8 @@ void __fastcall pedestrian_deactivate(int npc)
  *   elem (ECX)  = the C_traffic_element (the pedestrian).
  *   hit_type    = E_hit_type (5 = struck by a vehicle/actor, as passed by the collision handler).
  *   hit_dir     = S_vector* — the hit direction/impulse vector.
- *   flags       = uint flag word (5 at the collision callsite).
+ *   flags       = the struck body part 1..6 (structs/shot_skeleton.md; 5 = torso at the
+ *                 collision callsite); it selects the hit-reaction animation at `+0x164`.
  *   attacker    = the C_actor that caused the hit (the car, or the actor). May be 0.
  *   damage      = the damage amount (the collision handler passes |impulse| * 4.2f).
  * Returns: void.
@@ -160720,7 +160744,7 @@ physical_object_accumulate_contact_impulse_diag(int param_1,float *param_2,float
     *param_3 = *param_3 - local_30;
     param_3[1] = param_3[1] - local_2c;
     param_3[2] = param_3[2] - local_28;
-    fVar6 = (float10)vec3_dist();
+    fVar6 = (float10)vec3_length();
     param_4 = (float *)(float)fVar6;
     if ((float10)*(float *)(param_1 + 0x330) < fVar6) {
       *(float **)(param_1 + 0x330) = param_4;
@@ -160856,7 +160880,7 @@ physical_object_accumulate_contact_impulse_matrix(int param_1,float *param_2,flo
     *param_3 = *param_3 - *pfVar3;
     param_3[1] = param_3[1] - pfVar3[1];
     param_3[2] = param_3[2] - pfVar3[2];
-    fVar6 = (float10)vec3_dist();
+    fVar6 = (float10)vec3_length();
     if ((float10)*(float *)(param_1 + 0x330) < fVar6) {
       *(float *)(param_1 + 0x330) = (float)fVar6;
       *(undefined2 *)(param_1 + 0x32c) = param_7._0_2_;
@@ -161236,7 +161260,7 @@ physical_object_on_collision(int param_1,undefined4 param_2,float *param_3,float
     actor_post_collision_event(param_2,param_3,param_4,param_5,param_6);
     *(uint *)(param_1 + 0x3a0) = *(uint *)(param_1 + 0x3a0) | 0x40;
   }
-  fVar9 = (float10)vec3_dist();
+  fVar9 = (float10)vec3_length();
   if ((-1 < *(int *)(param_1 + 0x30c)) && ((float10)*(float *)(param_1 + 0x330) < fVar9)) {
     *(undefined2 *)(param_1 + 0x32c) = 0;
     *(float *)(param_1 + 0x330) = (float)fVar9;
@@ -163870,8 +163894,8 @@ LAB_004c8007:
           } while (*(int **)(g_i3d_sound_cache_items_begin + -8 + iVar14) != piVar12);
         }
         if (iVar9 != -1) {
-          array_copy_refcounted8(g_i3d_sound_cache_items_begin + iVar9 * 8);
-          destroy_range_stride8(g_i3d_sound_cache_items_end + -8,g_i3d_sound_cache_items_end);
+          i3d_cache_items_copy_range(g_i3d_sound_cache_items_begin + iVar9 * 8);
+          i3d_cache_items_destroy_range(g_i3d_sound_cache_items_end + -8,g_i3d_sound_cache_items_end);
           g_i3d_sound_cache_items_end = g_i3d_sound_cache_items_end + -8;
         }
         uVar23 = 0;
@@ -163901,7 +163925,7 @@ LAB_004c8007:
         iVar9 = vec_count_stride_0x4();
         if (iVar9 != 0) {
           do {
-            string_append_cstr(&local_94,s_7b_zip_wav_0064c1cc);
+            string_concat_cstr(&local_94,s_7b_zip_wav_0064c1cc);
             iVar9 = *piVar12;
             local_4 = 5;
             uVar20 = string_get_data(0x10,&i3d_open_notify_forward_cb,&local_cc);
@@ -163940,14 +163964,14 @@ LAB_004c8197:
     if (*(int *)(*(int *)(g_i3d_sound_cache_items_begin + uVar23 * 8) + 4) == 1) {
       puVar11 = *(undefined4 **)(g_i3d_sound_cache_items_begin + uVar23 * 8);
       (**(code **)*puVar11)(puVar11);
-      std_vector8_erase_at(g_i3d_sound_cache_items_begin + uVar23 * 8);
+      i3d_cache_items_erase_at(g_i3d_sound_cache_items_begin + uVar23 * 8);
       break;
     }
   }
 LAB_004c81d1:
   uVar20 = clear1_dword_at_0x04();
   local_4 = 6;
-  std_vector8_insert_one(g_i3d_sound_cache_items_end,uVar20);
+  i3d_cache_items_insert_one(g_i3d_sound_cache_items_end,uVar20);
   local_4 = 0xffffffff;
   if (iStack_98 != 0) {
     string_base_release();
@@ -165393,7 +165417,8 @@ LAB_004caecf:
  *   - while on foot (+0x98 == 0), decrements the hint/fade timer pair
  *     (+0xadc counts down, +0xae0 is its armed flag); in a vehicle both are reset;
  *   - calls `human_ai(dt)` — the C_human base AI;
- *   - lerps an animation-blend weight (+0xab8 toward +0xabc by ~dt*0.003);
+ *   - fades the model: alpha +0xab8 moves toward the fade target +0xabc (0.0 while
+ *     camera_is_look_from_eyes, else 1.0) by dt*0.003 and goes to player_set_alpha;
  *   - when the player is on foot and its linked-vehicle kind is not 4/8, calls
  *     player_do_action_button_on_foot(player) — which gathers the nearby context
  *     interactions and runs/shows the choose-action menu.
@@ -168786,7 +168811,7 @@ LAB_004ce6b1:
   if (iVar11 != -1) {
     ppiStack_150 = (int **)(g_i3d_model_cache_items_begin + iVar11 * 8);
     ppiStack_154 = (int **)0x4ce6c5;
-    std_vector8_erase_at();
+    i3d_cache_items_erase_at();
   }
   for (uVar16 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar16 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
       uVar16 = uVar16 + 1) {
@@ -168820,7 +168845,7 @@ LAB_004ce6b1:
       ppiStack_154 = (int **)&ppiStack_128;
       ppiStack_150 = (int **)s_FMVcigareta2_I3D_0064c248;
       ppiStack_158 = (int **)0x4ce789;
-      string_append_cstr();
+      string_concat_cstr();
       piVar10 = *ppiVar5;
       ppiStack_150 = (int **)&ppiStack_124;
       ppiStack_154 = (int **)i3d_open_notify_forward_cb;
@@ -168873,7 +168898,7 @@ LAB_004ceb92:
       (*(code *)**ppiStack_174)();
       ppiStack_174 = (int **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       ppiStack_178 = (int **)0x4cebcc;
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
@@ -168883,7 +168908,7 @@ LAB_004cebcc:
   ppiStack_178 = (int **)g_i3d_model_cache_items_end;
   uStack_60 = 6;
   ppiStack_17c = (int **)0x4cebf2;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   uStack_60 = 0xffffffff;
   if (ppiStack_158 != (int **)0x0) {
     ppiStack_174 = (int **)0x4cec0a;
@@ -168912,7 +168937,7 @@ LAB_004cef01:
       (*(code *)**ppiStack_198)();
       ppiStack_198 = (int **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       ppiStack_19c = (int **)0x4cef3b;
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
@@ -168922,7 +168947,7 @@ LAB_004cef3b:
   ppiStack_19c = (int **)g_i3d_model_cache_items_end;
   uStack_84 = 10;
   ppiStack_1a0 = (int **)0x4cef61;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   uStack_84 = 0xffffffff;
   if (ppiStack_17c != (int **)0x0) {
     ppiStack_198 = (int **)0x4cef79;
@@ -168951,7 +168976,7 @@ LAB_004cf270:
       (*(code *)**pppiStack_1bc)();
       pppiStack_1bc = (int ***)(g_i3d_model_cache_items_begin + uVar13 * 8);
       pppiStack_1c0 = (int ***)0x4cf2aa;
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
@@ -168961,7 +168986,7 @@ LAB_004cf2aa:
   pppiStack_1c0 = (int ***)g_i3d_model_cache_items_end;
   uStack_a8 = 0xe;
   ppiStack_1c4 = (int **)0x4cf2d0;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   uStack_a8 = 0xffffffff;
   if (ppiStack_1a0 != (int **)0x0) {
     pppiStack_1bc = (int ***)0x4cf2e8;
@@ -168990,7 +169015,7 @@ LAB_004cf6d9:
       (*(code *)**pppiStack_1e4)();
       pppiStack_1e4 = (int ***)(g_i3d_anim_cache_items_begin + uVar13 * 8);
       ppppiStack_1e8 = (int ****)0x4cf712;
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
@@ -168999,7 +169024,7 @@ LAB_004cf712:
   pppiStack_1e4 = (int ***)clear1_dword_at_0x04();
   ppppiStack_1e8 = g_i3d_anim_cache_items_end;
   uStack_d0 = 0x12;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   uStack_d0 = 0xffffffff;
   if (ppiStack_1c8 != (int **)0x0) {
     pppiStack_1e4 = (int ***)0x4cf750;
@@ -169020,13 +169045,13 @@ LAB_004cfa98:
     if (*(int *)(*(int *)(g_i3d_anim_cache_items_begin + uVar13 * 8) + 4) == 1) {
       puVar9 = *(undefined4 **)(g_i3d_anim_cache_items_begin + uVar13 * 8);
       (**(code **)*puVar9)(puVar9);
-      std_vector8_erase_at(g_i3d_anim_cache_items_begin + uVar13 * 8);
+      i3d_cache_items_erase_at(g_i3d_anim_cache_items_begin + uVar13 * 8);
       break;
     }
   }
 LAB_004cfad1:
   uVar8 = clear1_dword_at_0x04();
-  std_vector8_insert_one(g_i3d_anim_cache_items_end,uVar8);
+  i3d_cache_items_insert_one(g_i3d_anim_cache_items_end,uVar8);
   if (pppiStack_1cc != (int ***)0x0) {
     string_base_release();
   }
@@ -169066,7 +169091,7 @@ LAB_004ce826:
       (*(code *)**ppiStack_150)();
       ppiStack_150 = (int **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       ppiStack_154 = (int **)0x4ce860;
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
@@ -169076,7 +169101,7 @@ LAB_004ce860:
   ppiStack_154 = (int **)g_i3d_model_cache_items_end;
   uStack_3c = 2;
   ppiStack_158 = (int **)0x4ce886;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   uStack_3c = 0xffffffff;
   if (ppiStack_134 != (int **)0x0) {
     ppiStack_150 = (int **)0x4ce89e;
@@ -169152,7 +169177,7 @@ LAB_004cea22:
   if (iVar11 != -1) {
     ppiStack_174 = (int **)(g_i3d_model_cache_items_begin + iVar11 * 8);
     ppiStack_178 = (int **)0x4cea36;
-    std_vector8_erase_at();
+    i3d_cache_items_erase_at();
   }
   uVar13 = 0;
   ppiStack_174 = (int **)0x4cea42;
@@ -169199,7 +169224,7 @@ LAB_004ced40:
       ppiStack_178 = &piStack_14c;
       ppiStack_174 = (int **)s_FMVcigara_i3d_0064c238;
       ppiStack_17c = (int **)0x4cead9;
-      string_append_cstr();
+      string_concat_cstr();
       piVar10 = *ppiVar5;
       ppiStack_174 = (int **)&uStack_148;
       ppiStack_178 = (int **)i3d_open_notify_forward_cb;
@@ -169292,7 +169317,7 @@ LAB_004ced91:
   if (iVar11 != -1) {
     ppiStack_198 = (int **)(g_i3d_model_cache_items_begin + iVar11 * 8);
     ppiStack_19c = (int **)0x4ceda5;
-    std_vector8_erase_at();
+    i3d_cache_items_erase_at();
   }
   uVar13 = 0;
   ppiStack_198 = (int **)0x4cedb1;
@@ -169340,7 +169365,7 @@ LAB_004cf0af:
       ppiStack_19c = apiStack_170;
       ppiStack_198 = (int **)s_FMVcigareta2_I3D_0064c248;
       ppiStack_1a0 = (int **)0x4cee48;
-      string_append_cstr();
+      string_concat_cstr();
       piVar10 = *ppiVar5;
       ppiStack_198 = apiStack_170 + 1;
       ppiStack_19c = (int **)i3d_open_notify_forward_cb;
@@ -169433,7 +169458,7 @@ LAB_004cf100:
   if (iVar11 != -1) {
     pppiStack_1bc = (int ***)(g_i3d_model_cache_items_begin + iVar11 * 8);
     pppiStack_1c0 = (int ***)0x4cf114;
-    std_vector8_erase_at();
+    i3d_cache_items_erase_at();
   }
   uVar13 = 0;
   pppiStack_1bc = (int ***)0x4cf120;
@@ -169481,7 +169506,7 @@ LAB_004cf41e:
       pppiStack_1c0 = (int ***)&piStack_194;
       pppiStack_1bc = (int ***)s_FMVcigara_i3d_0064c238;
       ppiStack_1c4 = (int **)0x4cf1b7;
-      string_append_cstr();
+      string_concat_cstr();
       ppiVar5 = *pppiVar7;
       pppiStack_1bc = &ppiStack_190;
       pppiStack_1c0 = (int ***)i3d_open_notify_forward_cb;
@@ -169651,7 +169676,7 @@ LAB_004cf329:
           do {
             ppppiStack_1e8 = &pppiStack_1bc;
             pppiStack_1e4 = pppiStack_1c0;
-            string_append_cstr();
+            string_concat_cstr();
             ppiVar5 = *pppiVar7;
             pppiStack_1e4 = &ppiStack_1b8;
             ppppiStack_1e8 = (int ****)i3d_open_notify_forward_cb;
@@ -169770,7 +169795,7 @@ LAB_004cf785:
       iVar11 = vec_count_stride_0x4();
       if (iVar11 != 0) {
         do {
-          string_append_cstr(&ppppiStack_1e8,ppiStack_1d8);
+          string_concat_cstr(&ppppiStack_1e8,ppiStack_1d8);
           ppiVar5 = *pppiVar7;
           uVar8 = string_get_data(0,i3d_open_notify_forward_cb,&pppiStack_1e4);
           puVar6 = (undefined1 *)(*(code *)ppiVar5[1])(pppiVar7,uVar8);
@@ -172310,33 +172335,26 @@ uint __fastcall pumper_script_can_pump(int param_1)
 }
 
 /*
- * std_vector8_erase_at — generic `std::vector<T,8>` erase-at-position
- *     helper for a stride-8 refcounted-pair element (a `(void*, refcount*)`
- *     pair the engine uses throughout entity/audio pools). Slides every
- *     element after `param_2` left by one slot (8 bytes), incrementing
- *     the refcount of the moved-in value and decrementing/freeing the
- *     refcount of the displaced value via `operator_delete_wrapper`. Then
- *     destructs the trailing slot via `refcount_release_at_0x4()` and decrements
- *     `_end` by 8.
+ * i3d_cache_items_erase_at - erase one item from a resource cache's item vector
  *
+ * What it does: shifts every 8-byte item after the erased slot down by one, taking a
+ *  reference on each moved name block before releasing the one it overwrites, destroys the
+ *  last slot through `i3d_cache_items_destroy_one` and lowers the end pointer by 8 - the
+ *  same erase step as the other `i3d_cache_items_` helpers (`structs/i3d_cache.md` 4b).
  * Parameters:
- *   param_1 (`int`, `this`): vector header `(begin, end, cap_end)` triple
- *     accessed at `+0`/`+4`/`+8`/`+0xc` in the standard MSVC `std::vector`
- *     layout. `_end` (at `+8`) is the field this function decrements.
- *   param_2 (`int`): pointer into the vector to the slot being erased.
- *     Must be in `[_begin, _end)`. Each pair is read as
- *     `puVar4[-2]/[-1]` (current slot value/refcount) and `puVar4[0]/[1]`
- *     (next slot's value/refcount).
- *
- * Returns:
- *   `int` — passes `param_2` (the erase position) back through, so
- *   callers can chain.
- *
- * Evidence: definition at VA 0x004d3330. Called
- *   three times in `police_manager_apply_state`'s spawn loops (the
- *   audio-slot-scan break paths). Renamed from `FUN_004d3330`.
+ *  param_1 (this, ECX): the item vector of one of the three caches, at cache `+0x04`
+ *   (begin `+0x04`, end `+0x08` relative to the vector).
+ *  param_2 (S_itm *): the slot to erase, inside `[begin, end)`.
+ * Returns: S_itm *: the erase position, passed back unchanged.
+ * Evidence: VA 0x004d3330. A receiver census of all 80 `E8` callsites (the whole `.text`,
+ *  funclets included) finds 80 of 80 loading an immediate: `0x6f941c` (model cache items),
+ *  `0x6f93cc` (anim cache items) or `0x6f93f4` (sound cache items). 0 datarefs, 0 `E9`
+ *  referrers. Each callsite is the erase step of a cache `Open` that MSVC inlined into the
+ *  caller.
+ * Renamed from `FUN_004d3330`.
  */
-int __thiscall std_vector8_erase_at(int param_1,int param_2)
+
+int __thiscall i3d_cache_items_erase_at(int param_1,int param_2)
 
 {
   undefined4 *puVar1;
@@ -172360,7 +172378,7 @@ int __thiscall std_vector8_erase_at(int param_1,int param_2)
   }
   iVar3 = *(int *)(param_1 + 8);
   for (iVar5 = iVar3 + -8; iVar5 != iVar3; iVar5 = iVar5 + 8) {
-    refcount_release_at_0x4();
+    i3d_cache_items_destroy_one();
   }
   *(int *)(param_1 + 8) = *(int *)(param_1 + 8) + -8;
   return param_2;
@@ -172709,14 +172727,14 @@ void crt_atexit_register_004d35e0(void)
 }
 
 /*
- * rail_seats_find_free_seat — picks a free seat of a category, optionally near a point
+ * rail_seats_find_free_seat — picks a free seat in one carriage, optionally near a point
  *
  * What it does: walks the rows and the seats within each row starting from a shared rotating cursor
- * so successive calls spread out, requires occupancy 0 and a matching category, and when a
+ * so successive calls spread out, requires occupancy 0 and a matching carriage, and when a
  * reference point is supplied prefers a seat on the correct side of it. Returns 0xffff when nothing
  * is free.
  * Parameters: param_1 (this): the `S_RailSeats` seat bank — {row count, row array}. param_2 (int):
- * the seat category. param_3: an optional reference point. param_4 (float): the comparison height.
+ * the carriage index. param_3: an optional reference point. param_4 (float): comparison height.
  * Returns: uint: the seat index, or 0xffff.
  * PS2 twin: `FindFreeSeat__11S_RailSeatsFUiP8S_vectorf` (0x001dfb50, 488 B)  [CONFIRMED]
  * Evidence: VA 0x004d35f0. Same rotating-cursor scan and the same `0xffff` failure value on both
@@ -172775,12 +172793,12 @@ int __thiscall rail_seats_find_free_seat(uint *param_1,int param_2,int param_3,f
 }
 
 /*
- * rail_seats_count_free — counts the free seats of a category
+ * rail_seats_count_free — counts the free seats of one carriage
  *
  * What it does: walks every row and every seat and counts those whose occupancy is 0 and whose row
- * category matches, `-1` meaning any category.
+ * carriage index matches, `-1` meaning any carriage.
  * Parameters: param_1 (this): the `S_RailSeats` seat bank — {row count, row array}. param_2 (int):
- * the seat category, or -1 for any.
+ * the carriage index, or -1 for any.
  * Returns: int: the number of free seats.
  * PS2 twin: `NumFreeSeats__11S_RailSeatsFi` (0x001dfd40, 148 B)  [CONFIRMED]
  * Evidence: VA 0x004d3740. Same double loop, same `-1` wildcard. Renamed from `FUN_004d3740`.
@@ -173207,7 +173225,8 @@ void __thiscall rail_seats_duplicate_rows(uint *param_1,int param_2)
  * rail_seats_init — builds the seat rows for a carriage
  *
  * What it does: reads the seat layout out of the vehicle description and builds one row per bench,
- * each with its start and end point, its base seat index, its seat count, its category and its
+ * each with its start and end point, its base seat index, its seat count, its carriage index
+ * (row index divided by the rows per carriage) and its
  * occupancy and owner arrays; replicates the rows per vagon.
  * Parameters: param_1 (this): the `S_RailSeats` seat bank — {row count, row array}. param_2: the
  * layout source.
@@ -175392,7 +175411,7 @@ void __fastcall crt_zero_init_rail_clamp_candidates(undefined4 param_1)
 /*
  * crt_atexit_register_004d7330 — registers the clamp-candidate-list destructor with crt_atexit
  *
- * What it does: calls `crt_atexit()` on `crt_atexit_free_rail_clamp_candidates` (taken by address).
+ * What it does: calls `crt_atexit()` on `rail_clamp_candidates_static_dtor` (taken by address).
  * Parameters: void.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC CRT)
@@ -175402,26 +175421,28 @@ void __fastcall crt_zero_init_rail_clamp_candidates(undefined4 param_1)
 void crt_atexit_register_004d7330(void)
 
 {
-  crt_atexit(&crt_atexit_free_rail_clamp_candidates);
+  crt_atexit(&rail_clamp_candidates_static_dtor);
   return;
 }
 
 // FUN_004d7340 @ VA 0x004d7340 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_atexit_free_rail_clamp_candidates — crt_atexit destructor for the movement-clamp candidate list
+ * rail_clamp_candidates_static_dtor - atexit destructor of `g_rail_clamp_candidates`
  *
- * What it does: frees the list and clears its three vector dwords. ⚠️ Unlike the other three groups
- * in this TU it carries NO guard bit.
- * Parameters: void.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC CRT)
- * Evidence: VA 0x004d7340. The freed address is the candidate list
- * `railway_clamp_movement_against_traffic` reads; nothing in the binary writes it (see the globals
- * table). Renamed from `FUN_004d7340`.
+ * What it does: with no guard bit, unlike the other three groups,
+ *  frees `g_rail_clamp_candidates`:
+ *  the list `railway_clamp_movement_against_traffic` reads; then clears its three vector dwords.
+ * Parameters: none.
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding)
+ * Evidence: VA 0x004d7340. One of the four static-init / `crt_atexit` groups of the rail
+ *  translation unit `[0x004d7300, 0x004d74e0)`; the freed address names the vector it owns.
+ * Renamed from `FUN_004d7340`.
  * Class layout: `exe-re/structs/railway.md`
  */
-void crt_atexit_free_rail_clamp_candidates(void)
+
+void rail_clamp_candidates_static_dtor(void)
 
 {
   operator_delete_wrapper(g_rail_clamp_candidates_begin);
@@ -175477,7 +175498,7 @@ void __fastcall crt_zero_init_rail_schedule_log(undefined4 param_1)
 /*
  * crt_atexit_register_004d7390 — registers the rail-schedule-log destructor with crt_atexit
  *
- * What it does: calls `crt_atexit()` on `crt_atexit_free_rail_schedule_log` (taken by address).
+ * What it does: calls `crt_atexit()` on `rail_schedule_log_static_dtor` (taken by address).
  * Parameters: void.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC CRT)
@@ -175487,25 +175508,28 @@ void __fastcall crt_zero_init_rail_schedule_log(undefined4 param_1)
 void crt_atexit_register_004d7390(void)
 
 {
-  crt_atexit(&crt_atexit_free_rail_schedule_log);
+  crt_atexit(&rail_schedule_log_static_dtor);
   return;
 }
 
 // FUN_004d73a0 @ VA 0x004d73a0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_atexit_free_rail_schedule_log — crt_atexit destructor for the global rail departure log
+ * rail_schedule_log_static_dtor - atexit destructor of `g_rail_schedule_log`
  *
- * What it does: guarded by bit 1 of the shared teardown word, frees the log and clears its three
- * vector dwords.
- * Parameters: void.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC CRT)
- * Evidence: VA 0x004d73a0. The freed address is the {node, last-departure} log
- * `railway_is_on_schedule` uses. Renamed from `FUN_004d73a0`.
+ * What it does: once only (mask 1 of `g_rail_static_teardown_flags`),
+ *  frees `g_rail_schedule_log`:
+ *  the departure log `railway_is_on_schedule` uses; then clears its three vector dwords.
+ * Parameters: none.
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding)
+ * Evidence: VA 0x004d73a0. One of the four static-init / `crt_atexit` groups of the rail
+ *  translation unit `[0x004d7300, 0x004d74e0)`; the freed address names the vector it owns.
+ * Renamed from `FUN_004d73a0`.
  * Class layout: `exe-re/structs/railway.md`
  */
-void crt_atexit_free_rail_schedule_log(void)
+
+void rail_schedule_log_static_dtor(void)
 
 {
   if ((g_rail_static_teardown_flags & 1) == 0) {
@@ -175564,7 +175588,7 @@ void __fastcall crt_zero_init_rail_semaphore_list(undefined4 param_1)
 /*
  * crt_atexit_register_004d7410 — registers the rail-semaphore-list destructor with crt_atexit
  *
- * What it does: calls `crt_atexit()` on `crt_atexit_free_rail_semaphore_list` (taken by address).
+ * What it does: calls `crt_atexit()` on `rail_semaphore_list_static_dtor` (taken by address).
  * Parameters: void.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC CRT)
@@ -175574,25 +175598,28 @@ void __fastcall crt_zero_init_rail_semaphore_list(undefined4 param_1)
 void crt_atexit_register_004d7410(void)
 
 {
-  crt_atexit(&crt_atexit_free_rail_semaphore_list);
+  crt_atexit(&rail_semaphore_list_static_dtor);
   return;
 }
 
 // FUN_004d7420 @ VA 0x004d7420 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_atexit_free_rail_semaphore_list — crt_atexit destructor for the global rail-semaphore list
+ * rail_semaphore_list_static_dtor - atexit destructor of `g_rail_semaphore_list`
  *
- * What it does: guarded by bit 2 of the shared teardown word, frees the list and clears its three
- * vector dwords.
- * Parameters: void.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC CRT)
- * Evidence: VA 0x004d7420. The freed address is the list `railway_is_semaphore_point` searches.
+ * What it does: once only (mask 2 of `g_rail_static_teardown_flags`),
+ *  frees `g_rail_semaphore_list`:
+ *  the list `railway_is_semaphore_point` searches; then clears its three vector dwords.
+ * Parameters: none.
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding)
+ * Evidence: VA 0x004d7420. One of the four static-init / `crt_atexit` groups of the rail
+ *  translation unit `[0x004d7300, 0x004d74e0)`; the freed address names the vector it owns.
  * Renamed from `FUN_004d7420`.
  * Class layout: `exe-re/structs/railway.md`
  */
-void crt_atexit_free_rail_semaphore_list(void)
+
+void rail_semaphore_list_static_dtor(void)
 
 {
   if ((g_rail_static_teardown_flags & 2) == 0) {
@@ -175651,7 +175678,7 @@ void __fastcall crt_zero_init_railway_list(undefined4 param_1)
 /*
  * crt_atexit_register_004d7490 — registers the railway-list destructor with crt_atexit
  *
- * What it does: calls `crt_atexit()` on `crt_atexit_free_railway_list` (taken by address).
+ * What it does: calls `crt_atexit()` on `railway_list_static_dtor` (taken by address).
  * Parameters: void.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC CRT)
@@ -175661,25 +175688,28 @@ void __fastcall crt_zero_init_railway_list(undefined4 param_1)
 void crt_atexit_register_004d7490(void)
 
 {
-  crt_atexit(&crt_atexit_free_railway_list);
+  crt_atexit(&railway_list_static_dtor);
   return;
 }
 
 // FUN_004d74a0 @ VA 0x004d74a0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_atexit_free_railway_list — crt_atexit destructor for the global railway list
+ * railway_list_static_dtor - atexit destructor of `g_railway_list`
  *
- * What it does: guarded by bit 4 of the shared teardown word, frees the list and clears its three
- * vector dwords.
- * Parameters: void.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC CRT)
- * Evidence: VA 0x004d74a0. One of the four identical static-init/crt_atexit groups in this TU; the
- * guard bit and the freed address identify which vector it owns. Renamed from `FUN_004d74a0`.
+ * What it does: once only (mask 4 of `g_rail_static_teardown_flags`),
+ *  frees `g_railway_list`:
+ *  every live rail vehicle; then clears its three vector dwords.
+ * Parameters: none.
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding)
+ * Evidence: VA 0x004d74a0. One of the four static-init / `crt_atexit` groups of the rail
+ *  translation unit `[0x004d7300, 0x004d74e0)`; the freed address names the vector it owns.
+ * Renamed from `FUN_004d74a0`.
  * Class layout: `exe-re/structs/railway.md`
  */
-void crt_atexit_free_railway_list(void)
+
+void railway_list_static_dtor(void)
 
 {
   if ((g_rail_static_teardown_flags & 4) == 0) {
@@ -176920,7 +176950,7 @@ void __thiscall railway_ai(int param_1,float param_2)
   vec3_set_xyz(*(float *)(this + 0x40) - *(float *)(param_1 + 0x90),
                *(float *)(this + 0x44) - *(float *)(param_1 + 0x94),
                local_10 - *(float *)(param_1 + 0x98));
-  fVar11 = (float10)vec3_dist_sq();
+  fVar11 = (float10)vec3_length_sq();
   iVar9 = *(int *)(param_1 + 0x2a8);
   if (fVar11 < (float10)250000.0) {
     if (iVar9 == 1) {
@@ -178449,7 +178479,7 @@ LAB_004db50c:
           } while (*(int **)(g_i3d_model_cache_items_begin + iVar25 * 8) != piStack_170);
         }
         if (iVar25 != -1) {
-          std_vector8_erase_at();
+          i3d_cache_items_erase_at();
         }
         for (uVar33 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar33 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
             uVar33 = uVar33 + 1) {
@@ -178472,7 +178502,7 @@ LAB_004db50c:
         iVar25 = vec_count_stride_0x4();
         if (iVar25 != 0) {
           do {
-            string_append_cstr();
+            string_concat_cstr();
             iVar25 = *piStack_170;
             uStack_4 = 1;
             uVar12 = string_get_data(0x10);
@@ -179115,8 +179145,8 @@ LAB_004dcb25:
     } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar11) != piVar14);
   }
   if (iVar25 != -1) {
-    array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar25 * 8);
-    destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+    i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar25 * 8);
+    i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
     g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
   }
   uVar33 = 0;
@@ -179144,7 +179174,7 @@ LAB_004dcb25:
   iVar25 = vec_count_stride_0x4();
   if (iVar25 != 0) {
     do {
-      string_append_cstr(&stack0xfffffe74,s_pumpar01_I3D_0064c5fc);
+      string_concat_cstr(&stack0xfffffe74,s_pumpar01_I3D_0064c5fc);
       iVar25 = *piVar14;
       uStack_1c = 7;
       uVar12 = string_get_data(0x10,i3d_open_notify_forward_cb,&piStack_168);
@@ -179177,14 +179207,14 @@ LAB_004dcb25:
 LAB_004db69c:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar33 * 8) + 4) == 1) {
       (**(code **)**(undefined4 **)(g_i3d_model_cache_items_begin + uVar33 * 8))();
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
 LAB_004db6d6:
   clear1_dword_at_0x04();
   uStack_4 = 2;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   uStack_4 = 0xffffffff;
   if (piStack_15c != (int *)0x0) {
     string_base_release();
@@ -179263,14 +179293,14 @@ LAB_004dd317:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar33 * 8) + 4) == 1) {
       puVar29 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar33 * 8);
       (**(code **)*puVar29)(puVar29);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar33 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar33 * 8);
       break;
     }
   }
 LAB_004dd351:
   uVar21 = clear1_dword_at_0x04();
   uStack_1c = 0xd;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar21);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar21);
   uStack_1c = 0xffffffff;
   if (local_174 != 0.0) {
     string_base_release();
@@ -179455,14 +179485,14 @@ LAB_004dce18:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar33 * 8) + 4) == 1) {
       puVar29 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar33 * 8);
       (**(code **)*puVar29)(puVar29);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar33 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar33 * 8);
       break;
     }
   }
 LAB_004dce52:
   uVar12 = clear1_dword_at_0x04();
   uStack_1c = 8;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar12);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar12);
   uStack_1c = 0xffffffff;
   if (local_174 != 0.0) {
     string_base_release();
@@ -179589,8 +179619,8 @@ LAB_004dd10a:
         } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar26) != piVar14);
       }
       if (iVar11 != -1) {
-        array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar11 * 8);
-        destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+        i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar11 * 8);
+        i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
         g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
       }
       uVar33 = 0;
@@ -179618,7 +179648,7 @@ LAB_004dd10a:
       iVar11 = vec_count_stride_0x4();
       if (iVar11 != 0) {
         do {
-          string_append_cstr(&stack0xfffffe78,uVar12);
+          string_concat_cstr(&stack0xfffffe78,uVar12);
           iVar11 = *piVar14;
           uStack_1c = 0xc;
           uVar21 = string_get_data(0x10,i3d_open_notify_forward_cb,&fStack_144);
@@ -182765,7 +182795,7 @@ LAB_004e328c:
  * What it does: takes a pedestrian model, builds an `S_rail_human`, reserves a seat through the
  * seat bank and links the record into the passenger list.
  * Parameters: param_1 (this): the `C_railway` rail vehicle (entity kind 8). param_2 (I3D_model*):
- * the passenger model. param_3, param_4 (int): the seat and category selectors.
+ * the passenger model. param_3, param_4 (int): the seat and carriage selectors.
  * Returns: S_rail_human*: the new passenger, or null.
  * PS2 twin: `AddPerson__9C_railwayFP9I3D_modelii` (0x001f1790, 796 B)  [CONFIRMED]
  * Evidence: VA 0x004e3b30. Four-parameter signature match and a forced rank between two
@@ -186892,7 +186922,8 @@ undefined4 railway_is_on_schedule(int *param_1)
  * `this+0x2b0` (the driver), and for each passenger whose `+0x18` matches the supplied cause calls
  * `rail_passenger_do_panic` with a randomised delay.
  * Parameters: param_1 (this): the `C_railway` rail vehicle (entity kind 8). param_2 (uint): the
- * timestamp. param_3 (int): the panic cause.
+ * timestamp. param_3 (int): the carriage index; only passengers whose `S_rail_human+0x18`
+ * equals it panic (`railway_hit` passes the carriage that was hit).
  * Returns: void: nothing.
  * PS2 twin: `DoPanic__9C_railwayFUiUi` (0x001f6780, 368 B)  [CONFIRMED]
  * Evidence: VA 0x004e8e50. Same skip of the embedded driver record — PC `this+0x2b0` ↔ PS2
@@ -188596,14 +188627,16 @@ void __fastcall seagull_flock_game_done(int param_1)
  *
  * What it does: walks the bird vector calling each bird frame's virtual slot 0 (Release), then
  * resets end to begin. Returns false.
- * Parameters: param_1 (this): the seagull-flock actor (entity kind 0x17).
+ * Parameters: param_1 (this): the seagull-flock actor (entity kind 0x17). The six Collision
+ *  arguments on the stack are not read.
  * Returns: bool: always false.
  * PS2 twin: — (PC-only class)
- * Evidence: VA 0x004eb100. Vtable `0x0063cc98` slot 30, the slot this actor family uses for
- * `Collision`. Zero `E8` callsites and zero `LAB_` references — its only reference is the vtable
- * dataref, so it is a genuine virtual override. ⚠️ The body destroys the flock rather than
- * answering a collision query; the name is the user's, and the row is graded STRUCTURAL for
- * that reason. Renamed from `FUN_004eb100`.
+ * Evidence: VA 0x004eb100. Vtable `0x0063cc98` slot 30, the actor family's `Collision` slot,
+ * and the signature matches it: six stack arguments (`ret 0x18`) and a bool in AL, like the
+ * shared `stub_retfalse_args24_00482690`. The engine calls slot 30 with six arguments from the
+ * contact paths of cars, humans, the railway, wagons and boxes. Zero `E8` callsites; the
+ * vtable dataref is its only reference. A contact with the flock releases every bird.
+ * Renamed from `FUN_004eb100`.
  * Class layout: `exe-re/structs/seagull_flock.md`
  */
 uint __fastcall seagull_flock_destroy_on_collision(int param_1)
@@ -192490,7 +192523,7 @@ LAB_004f115e:
               puVar34 = local_2f8;
               actor_get_world_position(local_130);
               vec3_sub(puVar34,uVar35);
-              fVar27 = (float10)vec3_dist_sq();
+              fVar27 = (float10)vec3_length_sq();
               if (((float10)(float)piVar1[0xe] < fVar27) &&
                  (fVar27 = (float10)vehicle_get_speed(), (float10)(float)piVar1[0xf] < fVar27)) {
                 puVar34 = local_2f8;
@@ -192824,7 +192857,7 @@ LAB_004f3dd4:
                             local_68c = pfVar14[2];
                             collision_test_line_horizontal(&local_688,&local_714,&local_694,0,0xd02,0);
                             vec3_sub(local_178,&local_694);
-                            fVar27 = (float10)vec3_dist_sq();
+                            fVar27 = (float10)vec3_length_sq();
                             if ((float10)16.0 < fVar27) {
                               folded_get_dword_0x68();
                               i3d_frame_get_world_matrix_ptr();
@@ -192940,7 +192973,7 @@ LAB_004f3dd4:
                             puVar34 = local_160;
                             actor_get_world_position(local_e8);
                             vec3_sub(puVar34,uVar35);
-                            fVar27 = (float10)vec3_dist_sq();
+                            fVar27 = (float10)vec3_length_sq();
                             if (fVar27 < (float10)25.0) {
                               vehicle_set_brake(0x3f800000);
                             }
@@ -193941,7 +193974,7 @@ LAB_004f3fbd:
               if ((float10)1.0 < fVar27) {
                 fVar27 = (float10)1.0;
               }
-              fVar28 = (float10)vec3_dist_sq();
+              fVar28 = (float10)vec3_length_sq();
             } while ((float10)(float)(fVar27 * (float10)2500.0) <= fVar28);
             vehicle_get_velocity_ptr();
             fVar29 = S_vector::AngleTo(local_2ec);
@@ -193972,7 +194005,7 @@ LAB_004f40e3:
               puVar34 = local_13c;
               actor_get_cached_world_pos(local_124);
               vec3_sub(puVar34,uVar35);
-              fVar27 = (float10)vec3_dist_sq();
+              fVar27 = (float10)vec3_length_sq();
               if ((fVar27 < (float10)1600.0) &&
                  (fVar28 = (float10)vehicle_get_speed(), (float10)14.0 < fVar28)) {
                 vehicle_set_brake(0x3f800000);
@@ -193991,7 +194024,7 @@ LAB_004f40e3:
             puVar34 = local_184;
             actor_get_cached_world_pos(local_16c);
             vec3_sub(puVar34,uVar35);
-            fVar27 = (float10)vec3_dist_sq();
+            fVar27 = (float10)vec3_length_sq();
             fVar29 = (float)fVar27;
             fVar27 = (float10)vehicle_get_speed();
             if (((float10)2.0 <= fVar27) || (900.0 <= fVar29)) {
@@ -194356,8 +194389,8 @@ I3D_frame * __fastcall i3d_frame_get_world_matrix_ptr(I3D_frame *param_1)
 
 /*
  * pursuit_event_record_is_chase_tracking_by_vehicle(this=event_mgr, vehicle) -> dword
- *     — gated predicate over the pursuit_event record's `chase_tracking_confirmed`
- *     slot (record+0x28). Back-to-front scans the pursuit_event_manager's stride-0x44
+ *     — gated read of the pursuit_event record's `+0x28` mode timer.
+ *     Back-to-front scans the pursuit_event_manager's stride-0x44
  *     event-record vector at `this+0x14`(begin)/`+0x18`(end) for the record whose first
  *     dword equals `vehicle`, then returns `record+0x28` ONLY when that record is
  *     actively tracking; otherwise returns 0.
@@ -194369,25 +194402,23 @@ I3D_frame * __fastcall i3d_frame_get_world_matrix_ptr(I3D_frame *param_1)
  *     - `record+0x08 != 0`  (target's vehicle is set = target riding a vehicle).
  *   Not-found scan falls through with index -1 (gate rejects) -> 0.
  *
- *   `chase_tracking_confirmed` (record+0x28, PS2 record+0x2c) is a RESERVED / never-written
- *   slot: `pursuit_event_dispatch_pursuit_vehicle` zeroes the whole 0x44 record at build
- *   and no method ever writes it (PS2 AddCarHunt/AddCarEscape/AddCarMoveTo memset it 0;
- *   Tick/TickDriver never touch +0x2c). The return is therefore a constant 0 and the
- *   function is used purely as a boolean "is the chase-event system actively tracking this
- *   vehicle's target". The name states the INTENDED role (inferred from the sole consumer);
- *   the payload is never populated.
+ *   record+0x28 (PS2 record+0x2c) is a millisecond mode timer. The builders zero it, and
+ *   pursuit_event_tick arms it to 1, adds the frame time to it, compares it against
+ *   +0x38 and against 2000 / 15000 ms, and resets it to 0; PS2 Tick does the same with
+ *   +0x2c. The return is therefore non-zero while that timer runs on an actively hunting
+ *   record, and 0 otherwise.
  *
  *   Consumer: `police_action_tick_sighting_timers` calls it on the group's chase vehicle
  *   (`group+0x5c`); a 0 return means "no active tracking" and lets the group refresh its
- *   proximity-based sighting timers. A non-0 return would suppress that shortcut -- but the
- *   field is dead, so it never fires.
+ *   proximity-based sighting timers. A non-0 return (the hunt timer is running) skips that
+ *   refresh.
  *
  * Calling convention: `__thiscall` -- `this` (event_mgr) in ECX; single visible arg = vehicle key.
  * Params:
  *   - param_1 (this) = pursuit_event_manager* (stride-0x44 record vector at +0x14/+0x18).
  *   - param_2        = vehicle -- lookup key matched against record+0x00.
- * Returns: undefined4 -- `record+0x28` (chase_tracking_confirmed, always 0) when an actively-
- *     tracking matching record exists, else 0. Used as a 0 / non-0 predicate.
+ * Returns: undefined4 -- `record+0x28` (the mode timer, ms) when an actively hunting
+ *     matching record exists, else 0. Used as a 0 / non-0 predicate.
  *
  * Renamed from `FUN_004f46e0`. The name reflects the gated-predicate role, from a full
  *   body-read.
@@ -196384,8 +196415,8 @@ void __thiscall smoke_trail_ai_tick(int param_1,undefined4 param_2)
 /*
  * smoke_trail_update — advances the smoke trail's visual each frame
  *
- * What it does: chains `bottle_update`, then dispatches slot `0x14` on the particle-effect object
- * held at `+0x68`.
+ * What it does: chains `bottle_update`, then calls `Tick` (slot `0x14`) on the actor's own model
+ * frame at `+0x68`, an `'OBJ_'` frame showing the `2stone.i3d` mesh.
  * Parameters: param_1 (this): the `C_smoke_trail` actor. param_2 (uint): the frame delta in ms.
  * Returns: void: nothing.
  * PS2 twin: `Update__13C_smoke_trailFUi` (0x00212010, 68 B)  [CONFIRMED]
@@ -196454,10 +196485,10 @@ void __fastcall smoke_trail_game_init(int param_1)
 }
 
 /*
- * smoke_trail_game_done — tears the smoke trail's particle effect down at scene end
+ * smoke_trail_game_done — releases the smoke trail's model frame at scene end
  *
- * What it does: chains `bottle_game_done`, then — when the effect object at `+0x68` exists — calls
- * its vtable slots `0x24`, `0x2c(0,0)` and `0x00` in that order.
+ * What it does: chains `bottle_game_done`, then - when the model frame at `+0x68` exists - calls
+ * its `SetOn(false)` (`0x24`), `LinkTo(0, 0)` (`0x2c`) and `Release` (`0x00`) in that order.
  * Parameters: param_1 (this): the `C_smoke_trail` actor (entity kind 0xf).
  * Returns: void: nothing.
  * PS2 twin: `GameDone__13C_smoke_trailFv` (0x002120d0, 108 B)  [CONFIRMED]
@@ -196591,7 +196622,7 @@ void __fastcall crt_static_ctor_004f62b0(undefined4 param_1)
  *
  * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
  * unit. This quartet owns the crew-record vector (`0x006561c0`) (records of `{car, C_driver*, two
- * occupants, anim machine}`). Single call: `crt_atexit(&crt_static_dtor_004f62e0)`.
+ * occupants, anim machine}`). Single call: `crt_atexit(&traffic_adopted_elements_static_dtor)`.
  * Parameters: none.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
@@ -196603,27 +196634,31 @@ void __fastcall crt_static_ctor_004f62b0(undefined4 param_1)
 void crt_atexit_register_004f62d0(void)
 
 {
-  crt_atexit(&crt_static_dtor_004f62e0);
+  crt_atexit(&traffic_adopted_elements_static_dtor);
   return;
 }
 
 // FUN_004f62e0 @ VA 0x004f62e0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_static_dtor_004f62e0 — crt_atexit destructor for the crew-record vector (`0x006561c0`).
+ * traffic_adopted_elements_static_dtor - atexit destructor of `g_traffic_adopted_elements`
  *
- * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
- * unit. This quartet owns the crew-record vector (`0x006561c0`) (records of `{car, C_driver*, two
- * occupants, anim machine}`). Frees the vector's buffer and zeroes begin/end/cap, once only.
+ * What it does: one of the six file-scope `std::vector` statics of the `C_traffic_car`
+ *  translation unit. This one owns `g_traffic_adopted_elements`:
+ *  the adopted `S_ELEMENT *` records. Once only (guard bit `0x01` of
+ *  `g_traffic_car_static_dtor_guard`), it frees the vector's buffer and zeroes
+ *  begin / end / cap.
  * Parameters: none.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding; the PS2 equivalent is inside
+ *  `__sinit_C_trf_c.cpp`.)
  * Evidence: VA 0x004f62e0. Quartet measured in full: the init calls the ctor then the registrar,
- * the registrar calls `crt_atexit`, and the destructor is guarded by bit `0x01` of the shared once-word
- * `g_traffic_car_static_dtor_guard`. Renamed from `FUN_004f62e0`.
+ *  the registrar calls `crt_atexit`, and this destructor tests and sets guard bit `0x01`.
+ * Renamed from `FUN_004f62e0`.
  * Class layout: `exe-re/structs/traffic_car.md`
  */
-void crt_static_dtor_004f62e0(void)
+
+void traffic_adopted_elements_static_dtor(void)
 
 {
   if ((g_traffic_car_static_dtor_guard & 1) == 0) {
@@ -196694,7 +196729,8 @@ void __fastcall crt_static_ctor_004f6330(undefined4 param_1)
  *
  * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
  * unit. This quartet owns `g_traffic_bridge_slots` (`0x006561ac`) (the stride-8 `S_BRIDGE` vector
- * read by `traffic_car_get_bridge_car_count`). Single call: `crt_atexit(&crt_static_dtor_004f6360)`.
+ * read by `traffic_car_get_bridge_car_count`). Single call:
+ * `crt_atexit(&traffic_bridge_slots_static_dtor)`.
  * Parameters: none.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
@@ -196706,28 +196742,31 @@ void __fastcall crt_static_ctor_004f6330(undefined4 param_1)
 void crt_atexit_register_004f6350(void)
 
 {
-  crt_atexit(&crt_static_dtor_004f6360);
+  crt_atexit(&traffic_bridge_slots_static_dtor);
   return;
 }
 
 // FUN_004f6360 @ VA 0x004f6360 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_static_dtor_004f6360 — crt_atexit destructor for `g_traffic_bridge_slots` (`0x006561ac`).
+ * traffic_bridge_slots_static_dtor - atexit destructor of `g_traffic_bridge_slots`
  *
- * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
- * unit. This quartet owns `g_traffic_bridge_slots` (`0x006561ac`) (the stride-8 `S_BRIDGE` vector
- * read by `traffic_car_get_bridge_car_count`). Frees the vector's buffer and zeroes begin/end/cap,
- * once only.
+ * What it does: one of the six file-scope `std::vector` statics of the `C_traffic_car`
+ *  translation unit. This one owns `g_traffic_bridge_slots`:
+ *  the stride-8 `S_BRIDGE` slots. Once only (guard bit `0x02` of
+ *  `g_traffic_car_static_dtor_guard`), it frees the vector's buffer and zeroes
+ *  begin / end / cap.
  * Parameters: none.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding; the PS2 equivalent is inside
+ *  `__sinit_C_trf_c.cpp`.)
  * Evidence: VA 0x004f6360. Quartet measured in full: the init calls the ctor then the registrar,
- * the registrar calls `crt_atexit`, and the destructor is guarded by bit `0x02` of the shared once-word
- * `g_traffic_car_static_dtor_guard`. Renamed from `FUN_004f6360`.
+ *  the registrar calls `crt_atexit`, and this destructor tests and sets guard bit `0x02`.
+ * Renamed from `FUN_004f6360`.
  * Class layout: `exe-re/structs/traffic_car.md`
  */
-void crt_static_dtor_004f6360(void)
+
+void traffic_bridge_slots_static_dtor(void)
 
 {
   if ((g_traffic_car_static_dtor_guard & 2) == 0) {
@@ -196797,7 +196836,7 @@ void __fastcall crt_static_ctor_004f63b0(undefined4 param_1)
  *
  * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
  * unit. This quartet owns `g_traffic_car_registry` (`0x0065619c`) (the `S_ELEMENT*` vector — the
- * cruising population itself). Single call: `crt_atexit(&crt_static_dtor_004f63e0)`.
+ * cruising population itself). Single call: `crt_atexit(&traffic_car_registry_static_dtor)`.
  * Parameters: none.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
@@ -196809,27 +196848,31 @@ void __fastcall crt_static_ctor_004f63b0(undefined4 param_1)
 void crt_atexit_register_004f63d0(void)
 
 {
-  crt_atexit(&crt_static_dtor_004f63e0);
+  crt_atexit(&traffic_car_registry_static_dtor);
   return;
 }
 
 // FUN_004f63e0 @ VA 0x004f63e0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_static_dtor_004f63e0 — crt_atexit destructor for `g_traffic_car_registry` (`0x0065619c`).
+ * traffic_car_registry_static_dtor - atexit destructor of `g_traffic_car_registry`
  *
- * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
- * unit. This quartet owns `g_traffic_car_registry` (`0x0065619c`) (the `S_ELEMENT*` vector — the
- * cruising population itself). Frees the vector's buffer and zeroes begin/end/cap, once only.
+ * What it does: one of the six file-scope `std::vector` statics of the `C_traffic_car`
+ *  translation unit. This one owns `g_traffic_car_registry`:
+ *  the `S_ELEMENT *` cruising population. Once only (guard bit `0x04` of
+ *  `g_traffic_car_static_dtor_guard`), it frees the vector's buffer and zeroes
+ *  begin / end / cap.
  * Parameters: none.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding; the PS2 equivalent is inside
+ *  `__sinit_C_trf_c.cpp`.)
  * Evidence: VA 0x004f63e0. Quartet measured in full: the init calls the ctor then the registrar,
- * the registrar calls `crt_atexit`, and the destructor is guarded by bit `0x04` of the shared once-word
- * `g_traffic_car_static_dtor_guard`. Renamed from `FUN_004f63e0`.
+ *  the registrar calls `crt_atexit`, and this destructor tests and sets guard bit `0x04`.
+ * Renamed from `FUN_004f63e0`.
  * Class layout: `exe-re/structs/traffic_car.md`
  */
-void crt_static_dtor_004f63e0(void)
+
+void traffic_car_registry_static_dtor(void)
 
 {
   if ((g_traffic_car_static_dtor_guard & 4) == 0) {
@@ -196900,7 +196943,8 @@ void __fastcall crt_static_ctor_004f6430(undefined4 param_1)
  *
  * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
  * unit. This quartet owns `g_traffic_parking_cars` (`0x0065618c`) (the parked-car container
- * returned by `traffic_car_get_parking_cars`). Single call: `crt_atexit(&crt_static_dtor_004f6460)`.
+ * returned by `traffic_car_get_parking_cars`). Single call:
+ * `crt_atexit(&traffic_parking_cars_static_dtor)`.
  * Parameters: none.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
@@ -196912,28 +196956,31 @@ void __fastcall crt_static_ctor_004f6430(undefined4 param_1)
 void crt_atexit_register_004f6450(void)
 
 {
-  crt_atexit(&crt_static_dtor_004f6460);
+  crt_atexit(&traffic_parking_cars_static_dtor);
   return;
 }
 
 // FUN_004f6460 @ VA 0x004f6460 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_static_dtor_004f6460 — crt_atexit destructor for `g_traffic_parking_cars` (`0x0065618c`).
+ * traffic_parking_cars_static_dtor - atexit destructor of `g_traffic_parking_cars`
  *
- * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
- * unit. This quartet owns `g_traffic_parking_cars` (`0x0065618c`) (the parked-car container
- * returned by `traffic_car_get_parking_cars`). Frees the vector's buffer and zeroes begin/end/cap,
- * once only.
+ * What it does: one of the six file-scope `std::vector` statics of the `C_traffic_car`
+ *  translation unit. This one owns `g_traffic_parking_cars`:
+ *  the parked-car container. Once only (guard bit `0x08` of
+ *  `g_traffic_car_static_dtor_guard`), it frees the vector's buffer and zeroes
+ *  begin / end / cap.
  * Parameters: none.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding; the PS2 equivalent is inside
+ *  `__sinit_C_trf_c.cpp`.)
  * Evidence: VA 0x004f6460. Quartet measured in full: the init calls the ctor then the registrar,
- * the registrar calls `crt_atexit`, and the destructor is guarded by bit `0x08` of the shared once-word
- * `g_traffic_car_static_dtor_guard`. Renamed from `FUN_004f6460`.
+ *  the registrar calls `crt_atexit`, and this destructor tests and sets guard bit `0x08`.
+ * Renamed from `FUN_004f6460`.
  * Class layout: `exe-re/structs/traffic_car.md`
  */
-void crt_static_dtor_004f6460(void)
+
+void traffic_parking_cars_static_dtor(void)
 
 {
   if ((g_traffic_car_static_dtor_guard & 8) == 0) {
@@ -197004,7 +197051,7 @@ void __fastcall crt_static_ctor_004f64b0(undefined4 param_1)
  *
  * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
  * unit. This quartet owns the stolen-car list (`0x0065617c`): the `C_car *` of every car the player
- * has stolen. Single call: `crt_atexit(&crt_static_dtor_004f64e0)`.
+ * has stolen. Single call: `crt_atexit(&traffic_stolen_cars_static_dtor)`.
  * Parameters: none.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
@@ -197016,27 +197063,31 @@ void __fastcall crt_static_ctor_004f64b0(undefined4 param_1)
 void crt_atexit_register_004f64d0(void)
 
 {
-  crt_atexit(&crt_static_dtor_004f64e0);
+  crt_atexit(&traffic_stolen_cars_static_dtor);
   return;
 }
 
 // FUN_004f64e0 @ VA 0x004f64e0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_static_dtor_004f64e0 — crt_atexit destructor for the stolen-car list (`0x0065617c`).
+ * traffic_stolen_cars_static_dtor - atexit destructor of `g_traffic_stolen_cars`
  *
- * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
- * unit. This quartet owns the stolen-car list (`0x0065617c`): the `C_car *` of every car the player
- * has stolen. Frees the vector's buffer and zeroes begin/end/cap, once only.
+ * What it does: one of the six file-scope `std::vector` statics of the `C_traffic_car`
+ *  translation unit. This one owns `g_traffic_stolen_cars`:
+ *  the `C_car *` of every car the player has stolen. Once only (guard bit `0x10` of
+ *  `g_traffic_car_static_dtor_guard`), it frees the vector's buffer and zeroes
+ *  begin / end / cap.
  * Parameters: none.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding; the PS2 equivalent is inside
+ *  `__sinit_C_trf_c.cpp`.)
  * Evidence: VA 0x004f64e0. Quartet measured in full: the init calls the ctor then the registrar,
- * the registrar calls `crt_atexit`, and the destructor is guarded by bit `0x10` of the shared once-word
- * `g_traffic_car_static_dtor_guard`. Renamed from `FUN_004f64e0`.
+ *  the registrar calls `crt_atexit`, and this destructor tests and sets guard bit `0x10`.
+ * Renamed from `FUN_004f64e0`.
  * Class layout: `exe-re/structs/traffic_car.md`
  */
-void crt_static_dtor_004f64e0(void)
+
+void traffic_stolen_cars_static_dtor(void)
 
 {
   if ((g_traffic_car_static_dtor_guard & 0x10) == 0) {
@@ -197107,7 +197158,7 @@ void __fastcall crt_static_ctor_004f6530(undefined4 param_1)
  *
  * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
  * unit. This quartet owns the sixth file-scope vector (`0x0065616c`) (element type not yet read —
- * deliberately left `DAT_`). Single call: `crt_atexit(&crt_static_dtor_004f6560)`.
+ * deliberately left `DAT_`). Single call: `crt_atexit(&traffic_mafia_crews_static_dtor)`.
  * Parameters: none.
  * Returns: void: nothing.
  * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
@@ -197119,27 +197170,31 @@ void __fastcall crt_static_ctor_004f6530(undefined4 param_1)
 void crt_atexit_register_004f6550(void)
 
 {
-  crt_atexit(&crt_static_dtor_004f6560);
+  crt_atexit(&traffic_mafia_crews_static_dtor);
   return;
 }
 
 // FUN_004f6560 @ VA 0x004f6560 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * crt_static_dtor_004f6560 — crt_atexit destructor for the sixth file-scope vector (`0x0065616c`).
+ * traffic_mafia_crews_static_dtor - atexit destructor of `g_traffic_mafia_crews`
  *
- * What it does: One of the six file-scope `std::vector` statics of the `C_traffic_car` translation
- * unit. This quartet owns the sixth file-scope vector (`0x0065616c`) (element type not yet read —
- * deliberately left `DAT_`). Frees the vector's buffer and zeroes begin/end/cap, once only.
+ * What it does: one of the six file-scope `std::vector` statics of the `C_traffic_car`
+ *  translation unit. This one owns `g_traffic_mafia_crews`:
+ *  the `S_MAFIAN` crew records. Once only (guard bit `0x20` of
+ *  `g_traffic_car_static_dtor_guard`), it frees the vector's buffer and zeroes
+ *  begin / end / cap.
  * Parameters: none.
- * Returns: void: nothing.
- * PS2 twin: — (MSVC static-init scaffolding; the PS2 equivalent is inside `__sinit_C_trf_c.cpp`.)
+ * Returns: void.
+ * PS2 twin: - (MSVC static-init scaffolding; the PS2 equivalent is inside
+ *  `__sinit_C_trf_c.cpp`.)
  * Evidence: VA 0x004f6560. Quartet measured in full: the init calls the ctor then the registrar,
- * the registrar calls `crt_atexit`, and the destructor is guarded by bit `0x20` of the shared once-word
- * `g_traffic_car_static_dtor_guard`. Renamed from `FUN_004f6560`.
+ *  the registrar calls `crt_atexit`, and this destructor tests and sets guard bit `0x20`.
+ * Renamed from `FUN_004f6560`.
  * Class layout: `exe-re/structs/traffic_car.md`
  */
-void crt_static_dtor_004f6560(void)
+
+void traffic_mafia_crews_static_dtor(void)
 
 {
   if ((g_traffic_car_static_dtor_guard & 0x20) == 0) {
@@ -198873,7 +198928,7 @@ LAB_004f8bc4:
             pcStack_1260 = (char *)((int)pcStack_1260 + -4);
             ppvStack_1250 = ppvStack_1250 + -3;
             vec3_sub(auStack_115c,iVar32 + 0x70 + (int)ppvStack_1250);
-            fVar37 = (float10)vec3_dist();
+            fVar37 = (float10)vec3_length();
             *(float *)(iVar32 + (int)pcStack_1260) = (float)fVar37;
             fStack_1270 = (float)((int)fStack_1270 - 1);
           } while (fStack_1270 != 0.0);
@@ -199517,7 +199572,7 @@ LAB_004fa91e:
       }
       fVar8 = *(float *)((int)this + 0x230);
       vec3_sub(auStack_115c,(int)this + 0x23c);
-      fVar37 = (float10)vec3_dist();
+      fVar37 = (float10)vec3_length();
       fVar39 = S_vector::AngleTo((S_vector *)((int)this + 0x248));
       if ((float10)1.571 <= (float10)fVar39) {
         fVar38 = (float10)0.7;
@@ -199994,7 +200049,7 @@ uint __thiscall traffic_car_get_next_pos_info(int param_1,ushort *param_2,ushort
       vec3_set_xyz(*pfVar10 - *(float *)(param_1 + 0x23c),pfVar10[1] - *(float *)(param_1 + 0x240),
                    *(float *)(*(int *)(iVar5 + 8) + 8 + (local_4c & 0xffff) * 0xec) -
                    *(float *)(param_1 + 0x244));
-      fVar12 = (float10)vec3_dist();
+      fVar12 = (float10)vec3_length();
       local_40 = (float)fVar12;
       fVar14 = S_vector::AngleTo(pSVar1);
       if ((float10)1.571 <= (float10)fVar14) {
@@ -200055,7 +200110,7 @@ LAB_004fb331:
             // Proof is the call count — this function makes 5 S_vector::AngleTo calls,
             // which is PS2 GetNewPosInfo's 3 plus FindNodesIndex's 2.
             vec3_sub(local_3c,param_1 + 0x23c);
-            fVar12 = (float10)vec3_dist();
+            fVar12 = (float10)vec3_length();
             fVar15 = S_vector::AngleTo((S_vector *)(param_1 + 0x248));
             if ((float10)1.571 <= (float10)fVar15) {
               fVar13 = (float10)0.7;
@@ -200077,7 +200132,7 @@ LAB_004fb4c5:
             }
             local_40 = *(float *)(param_1 + 0x230);
             vec3_sub(local_30,param_1 + 0x23c);
-            fVar12 = (float10)vec3_dist();
+            fVar12 = (float10)vec3_length();
             fVar14 = S_vector::AngleTo((S_vector *)(param_1 + 0x248));
             if ((float10)1.571 <= (float10)fVar14) {
               fVar13 = (float10)0.7;
@@ -200899,7 +200954,7 @@ LAB_004fc246:
             vec3_set_xyz(local_1e8 - *(float *)(param_1 + 0x23c),
                          local_1e4 - *(float *)(param_1 + 0x240),
                          local_1e0 - *(float *)(param_1 + 0x244));
-            fVar32 = (float10)vec3_dist();
+            fVar32 = (float10)vec3_length();
             iVar13 = local_268;
             local_26c = (bool *)(float)fVar32;
             if (-1 < local_268) {
@@ -202037,7 +202092,7 @@ LAB_004feaa6:
                   iVar21 = (int)local_254 + 100;
                   local_254 = (int *)((int)local_254 - 0xc);
                   vec3_sub(auStack_38,iVar21 + iVar13);
-                  fVar32 = (float10)vec3_dist();
+                  fVar32 = (float10)vec3_length();
                   *(float *)(local_26c + iVar13) = (float)fVar32;
                   uStack_22c = uStack_22c - 1;
                 } while (uStack_22c != 0);
@@ -203995,7 +204050,7 @@ void __fastcall traffic_car_game_init(int *param_1)
       iVar6 = vec_count_stride_0x4();
       if (iVar6 != 0) {
         do {
-          string_append_cstr(&piStack_148,local_15c);
+          string_concat_cstr(&piStack_148,local_15c);
           iVar6 = *piVar20;
           local_4 = 2;
           uVar11 = string_get_data(0,&i3d_open_notify_forward_cb,&uStack_9c);
@@ -204034,14 +204089,14 @@ LAB_0050177e:
     if (*(int *)(*(int *)(g_i3d_anim_cache_items_begin + uVar22 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_anim_cache_items_begin + uVar22 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_anim_cache_items_begin + uVar22 * 8);
+      i3d_cache_items_erase_at(g_i3d_anim_cache_items_begin + uVar22 * 8);
       break;
     }
   }
 LAB_005017b7:
   uVar11 = clear1_dword_at_0x04();
   local_4 = 7;
-  std_vector8_insert_one(g_i3d_anim_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_anim_cache_items_end,uVar11);
   local_4 = 0xffffffff;
   if (iStack_120 != 0) {
     string_base_release();
@@ -204059,14 +204114,14 @@ LAB_00501f4f:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uStack_164 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_model_cache_items_begin + uStack_164 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uStack_164 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uStack_164 * 8);
       break;
     }
   }
 LAB_00501f9f:
   uVar11 = clear1_dword_at_0x04();
   local_4 = 0xc;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar11);
   local_4 = 0xffffffff;
   if (iStack_40 != 0) {
     string_base_release();
@@ -204167,8 +204222,8 @@ LAB_00502314:
     }
     piVar23 = piVar20;
     if (iVar6 != -1) {
-      array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar6 * 8);
-      destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+      i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar6 * 8);
+      i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
       g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
     }
     uVar19 = 0;
@@ -204200,7 +204255,7 @@ LAB_00502314:
     iVar6 = vec_count_stride_0x4();
     if (iVar6 != 0) {
       do {
-        string_append_cstr(&iStack_f0,s_pol01_i3d_0064c724);
+        string_concat_cstr(&iStack_f0,s_pol01_i3d_0064c724);
         unaff_EBX = (int *)*piVar20;
         uStack_1c = 0x11;
         piVar20 = piVar23;
@@ -204261,8 +204316,8 @@ LAB_005035ea:
       } while (*(int **)(g_i3d_model_cache_items_begin + iVar6 * 8) != piVar20);
     }
     if (iVar6 != -1) {
-      array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar6 * 8);
-      destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+      i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar6 * 8);
+      i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
       g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
     }
     uVar19 = 0;
@@ -204290,7 +204345,7 @@ LAB_005035ea:
     iVar6 = vec_count_stride_0x4();
     if (iVar6 != 0) {
       do {
-        string_append_cstr(&uStack_158,pcVar15);
+        string_concat_cstr(&uStack_158,pcVar15);
         iVar6 = *piVar20;
         uStack_1c._0_1_ = 0x23;
         uVar11 = string_get_data(0x10,&i3d_open_notify_forward_cb,&local_13c);
@@ -204351,8 +204406,8 @@ LAB_00502c91:
     } while (*(int **)(g_i3d_model_cache_items_begin + iVar6 * 8) != piVar20);
   }
   if (iVar6 != -1) {
-    array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar6 * 8);
-    destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+    i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar6 * 8);
+    i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
     g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
   }
   uVar19 = 0;
@@ -204380,7 +204435,7 @@ LAB_00502c91:
   iVar6 = vec_count_stride_0x4();
   if (iVar6 != 0) {
     do {
-      string_append_cstr(&iStack_124,pcVar15);
+      string_concat_cstr(&iStack_124,pcVar15);
       iVar6 = *piVar20;
       uStack_1c._0_1_ = 0x1a;
       uVar11 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_a4);
@@ -204432,8 +204487,8 @@ LAB_0050311a:
       } while (*(int **)(g_i3d_model_cache_items_begin + iVar6 * 8) != unaff_EBX);
     }
     if (iVar6 != -1) {
-      array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar6 * 8);
-      destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+      i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar6 * 8);
+      i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
       g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
     }
     uStack_164 = 0;
@@ -204462,7 +204517,7 @@ LAB_0050311a:
     iVar6 = vec_count_stride_0x4();
     if (iVar6 != 0) {
       do {
-        string_append_cstr(&fStack_134,unaff_EBP);
+        string_concat_cstr(&fStack_134,unaff_EBP);
         iVar6 = *unaff_EBX;
         pvStack_c._0_1_ = 0x1e;
         uVar11 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_84);
@@ -204566,14 +204621,14 @@ LAB_005024fb:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar19 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar19 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
       break;
     }
   }
 LAB_0050254b:
   uVar11 = clear1_dword_at_0x04();
   uStack_1c = 0x12;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar11);
   uStack_1c = 0xffffffff;
   if (iStack_50 != 0) {
     string_base_release();
@@ -204644,8 +204699,8 @@ LAB_005027bf:
     } while (*(int **)(g_i3d_model_cache_items_begin + iVar6 * 8) != piVar20);
   }
   if (iVar6 != -1) {
-    array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar6 * 8);
-    destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+    i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar6 * 8);
+    i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
     g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
   }
   unaff_EBP = 0;
@@ -204673,7 +204728,7 @@ LAB_005027bf:
   iVar6 = vec_count_stride_0x4();
   if (iVar6 != 0) {
     do {
-      string_append_cstr(aiStack_e4,s_pol11_i3d_0064c708);
+      string_concat_cstr(aiStack_e4,s_pol11_i3d_0064c708);
       iVar6 = *piVar20;
       pvStack_c = (void *)0x15;
       uVar11 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_b4);
@@ -204707,14 +204762,14 @@ LAB_0050298c:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar19 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar19 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
       break;
     }
   }
 LAB_005029c6:
   uVar11 = clear1_dword_at_0x04();
   pvStack_c = (void *)0x16;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar11);
   pvStack_c = (void *)0xffffffff;
   if (iStack_38 != 0) {
     string_base_release();
@@ -204774,14 +204829,14 @@ LAB_005037a0:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar19 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar19 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
       break;
     }
   }
 LAB_005037da:
   uVar11 = clear1_dword_at_0x04();
   uStack_1c._0_1_ = 0x24;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar11);
   uStack_1c = CONCAT31(uStack_1c._1_3_,0x21);
   if (iStack_60 != 0) {
     string_base_release();
@@ -204847,14 +204902,14 @@ LAB_00502e50:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar19 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar19 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
       break;
     }
   }
 LAB_00502e8a:
   uVar11 = clear1_dword_at_0x04();
   uStack_1c._0_1_ = 0x1b;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar11);
   uStack_1c = CONCAT31(uStack_1c._1_3_,0x18);
   if (iStack_70 != 0) {
     string_base_release();
@@ -204908,14 +204963,14 @@ LAB_005032d5:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar19 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar19 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar19 * 8);
       break;
     }
   }
 LAB_0050330f:
   uVar11 = clear1_dword_at_0x04();
   pvStack_c._0_1_ = 0x1f;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar11);
   pvStack_c = (void *)CONCAT31(pvStack_c._1_3_,0x18);
   if (iStack_58 != 0) {
     string_base_release();
@@ -204933,14 +204988,14 @@ LAB_005015c5:
     if (*(int *)(*(int *)(g_i3d_anim_cache_items_begin + uVar22 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_anim_cache_items_begin + uVar22 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_anim_cache_items_begin + uVar22 * 8);
+      i3d_cache_items_erase_at(g_i3d_anim_cache_items_begin + uVar22 * 8);
       break;
     }
   }
 LAB_005015fe:
   uVar11 = clear1_dword_at_0x04();
   local_4 = 3;
-  std_vector8_insert_one(g_i3d_anim_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_anim_cache_items_end,uVar11);
   local_4 = 0xffffffff;
   if (iStack_120 != 0) {
     string_base_release();
@@ -204978,7 +205033,7 @@ LAB_00501506:
       uStack_80 = 0;
       for (uVar22 = 0; (g_i3d_anim_cache_dirs_begin != 0 && (uVar22 < (uint)(g_i3d_anim_cache_dirs_end - g_i3d_anim_cache_dirs_begin >> 2)));
           uVar22 = uVar22 + 1) {
-        piVar23 = (int *)string_append_cstr(&piStack_148,puStack_154);
+        piVar23 = (int *)string_concat_cstr(&piStack_148,puStack_154);
         local_4 = 6;
         if (*piVar23 != 0) {
           piVar23 = (int *)(*piVar23 + 8);
@@ -205273,8 +205328,8 @@ LAB_00501d6b:
                       }
                       local_160 = piVar20;
                       if (iVar6 != -1) {
-                        array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar6 * 8);
-                        destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+                        i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar6 * 8);
+                        i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
                         g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
                       }
                       uStack_164 = 0;
@@ -205304,7 +205359,7 @@ LAB_00501d6b:
                       iVar6 = vec_count_stride_0x4();
                       if (iVar6 != 0) {
                         do {
-                          string_append_cstr(&iStack_d4,auStack_2c);
+                          string_concat_cstr(&iStack_d4,auStack_2c);
                           iStack_150 = *piVar20;
                           local_4 = 0xb;
                           uVar11 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_94);
@@ -206180,7 +206235,7 @@ LAB_00504aa1:
               } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar15) != piVar10);
             }
             if (iVar11 != -1) {
-              std_vector8_erase_at(g_i3d_model_cache_items_begin + iVar11 * 8);
+              i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + iVar11 * 8);
             }
             iVar11 = vec_count_stride_0x8();
             if (iVar11 != 0) {
@@ -206205,7 +206260,7 @@ LAB_00504aa1:
             iVar11 = vec_count_stride_0x4();
             if (iVar11 != 0) {
               do {
-                string_append_cstr(&local_16c,auStack_114);
+                string_concat_cstr(&local_16c,auStack_114);
                 iVar11 = *piVar10;
                 local_c = (void *)0x1;
                 uVar13 = string_get_data(0x10,&i3d_open_notify_forward_cb,&local_168);
@@ -206252,14 +206307,14 @@ LAB_00504c01:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar17 * 8) + 4) == 1) {
       puVar4 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar17 * 8);
       (**(code **)*puVar4)(puVar4);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar17 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar17 * 8);
       break;
     }
   }
 LAB_00504c3b:
   uVar13 = clear1_dword_at_0x04();
   local_c = (void *)0x2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar13);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar13);
   local_c = (void *)0xffffffff;
   if (iStack_130 != 0) {
     string_base_release();
@@ -206716,7 +206771,7 @@ LAB_0050550d:
               } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar1) != piVar8);
             }
             if (iVar9 != -1) {
-              std_vector8_erase_at();
+              i3d_cache_items_erase_at();
             }
             uVar17 = 0;
             iVar9 = vec_count_stride_0x8();
@@ -206742,7 +206797,7 @@ LAB_0050550d:
             iVar9 = vec_count_stride_0x4();
             if (iVar9 != 0) {
               do {
-                string_append_cstr();
+                string_concat_cstr();
                 iVar16 = *piVar8;
                 local_c = (void *)0x1;
                 string_get_data();
@@ -206784,14 +206839,14 @@ LAB_0050550d:
 LAB_00505685:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar17 * 8) + 4) == 1) {
       (**(code **)**(undefined4 **)(g_i3d_model_cache_items_begin + uVar17 * 8))();
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
 LAB_005056bf:
   clear1_dword_at_0x04();
   local_c = (void *)0x2;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   local_c = (void *)0xffffffff;
   if (iStack_118 != 0) {
     string_base_release();
@@ -207237,7 +207292,7 @@ int * __fastcall traffic_car_take_over_cruising_car(int *param_1)
     iVar6 = iVar9 + -1;
   } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar9 * 8) != piVar5);
   if (iVar9 + -1 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + (iVar9 + -1) * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + (iVar9 + -1) * 8);
   }
   iVar6 = vec_count_stride_0x8();
   if (iVar6 != 0) {
@@ -207262,7 +207317,7 @@ int * __fastcall traffic_car_take_over_cruising_car(int *param_1)
   iVar6 = vec_count_stride_0x4();
   if (iVar6 == 0) goto LAB_0050673a;
   do {
-    string_append_cstr(&local_138,auStack_114);
+    string_concat_cstr(&local_138,auStack_114);
     iVar6 = *piVar5;
     local_c = (void *)0x1;
     uVar8 = string_get_data(0x10,&i3d_open_notify_forward_cb,&local_134);
@@ -207294,14 +207349,14 @@ LAB_005063e2:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar12 * 8) + 4) == 1) {
       puVar1 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar12 * 8);
       (**(code **)*puVar1)(puVar1);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar12 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar12 * 8);
       break;
     }
   }
 LAB_0050641c:
   uVar8 = clear1_dword_at_0x04();
   local_c = (void *)0x2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar8);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar8);
   local_c = (void *)0xffffffff;
   if (iStack_118 != 0) {
     string_base_release();
@@ -207351,7 +207406,7 @@ LAB_0050649d:
       unaff_EBP[0x7df] = *(int *)(iVar6 + 0x1f7c);
       unaff_EBP[0x7e0] = *(int *)(iVar6 + 0x1f80);
       unaff_EBP[0x7e1] = *(int *)(iVar6 + 0x1f84);
-      fVar13 = (float10)vec3_dist();
+      fVar13 = (float10)vec3_length();
       unaff_EBP[0x1a2] = (int)(float)fVar13;
       if ((code *)unaff_EBP[0xfe] != (code *)0x0) {
         (*(code *)unaff_EBP[0xfe])();
@@ -208111,7 +208166,7 @@ LAB_00506d5f:
           iVar16 = vec_count_stride_0x4();
           if (iVar16 != 0) {
             do {
-              string_append_cstr();
+              string_concat_cstr();
               iVar16 = *piVar13;
               local_4 = 3;
               uVar9 = string_get_data(0);
@@ -208168,7 +208223,7 @@ LAB_0050743c:
         local_2c = 0.0;
         for (uVar11 = 0; (g_i3d_anim_cache_dirs_begin != 0 && (uVar11 < (uint)(g_i3d_anim_cache_dirs_end - g_i3d_anim_cache_dirs_begin >> 2)));
             uVar11 = uVar11 + 1) {
-          string_append_cstr();
+          string_concat_cstr();
           iVar16 = *piVar13;
           local_4 = 6;
           uVar9 = string_get_data(0);
@@ -208208,14 +208263,14 @@ LAB_005070f9:
 LAB_005074fd:
     if (*(int *)(*(int *)(g_i3d_anim_cache_items_begin + uVar11 * 8) + 4) == 1) {
       (**(code **)**(undefined4 **)(g_i3d_anim_cache_items_begin + uVar11 * 8))();
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
 LAB_00507536:
   clear1_dword_at_0x04();
   local_4 = 4;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   local_4 = 0xffffffff;
   if (local_2c != 0.0) {
     string_base_release();
@@ -208232,14 +208287,14 @@ LAB_00507536:
 LAB_00507698:
     if (*(int *)(*(int *)(g_i3d_anim_cache_items_begin + uVar11 * 8) + 4) == 1) {
       (**(code **)**(undefined4 **)(g_i3d_anim_cache_items_begin + uVar11 * 8))();
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
 LAB_005076d1:
   clear1_dword_at_0x04();
   local_4 = 7;
-  std_vector8_insert_one();
+  i3d_cache_items_insert_one();
   local_4 = 0xffffffff;
   if (iStack_44 != 0) {
     string_base_release();
@@ -209453,7 +209508,8 @@ void __fastcall railway_switch_game_done(int param_1)
  * `+0x70`; in state 3 it ramps down to `-(+0x70)`. On reaching an end-stop the state becomes 0 or
  * 1, the two rail-piece frames swap visibility, and the navigation graph is rewired through
  * `railway_switch_get_web_nodes` — both edges disconnected from the common node, exactly one
- * reconnected — after which the tram recomputes its route. Every tick pushes the angle into the
+ * reconnected — after which `wagon_rebuild_all_forward_paths` rebuilds every kind-0x1e
+ * `C_wagon` path. Every tick pushes the angle into the
  * frame direction.
  * Parameters: param_1 (this, ECX): the `C_turnout` railway switch. param_2: the frame delta in ms.
  * Returns: void: nothing.
@@ -218876,7 +218932,8 @@ undefined4 __thiscall vehicle_get_carinit_params(int param_1,undefined4 *param_2
  * vehicle_set_gear(this=C_Vehicle, gear) -> bool -- selects a gear (range -1..gear_max +0x5e4):
  *   rejects out-of-range / reverse-while-in-drive-state-1, checks the gear-ratio speed limit, then
  *   stores the selected gear (+0x5dc) and clears the shift scratch (+0x510).
- * Parameters: param_1 (this, ECX) = C_Vehicle; param_2 = requested gear (-1 = neutral/reverse).
+ * Parameters: param_1 (this, ECX) = C_Vehicle; param_2 = requested gear (-1 = reverse,
+ *   0 = neutral, 1.. forward).
  * Returns: 1 on success (or no-op), 0 if rejected.
  * Evidence: VA 0x005173a0. Renamed from `FUN_005173a0`.
  *   PS2 body-diff CONFIRMED = C_Vehicle::SetGear (identical range check, ratio-speed gate, +0x5dc write).
@@ -218915,22 +218972,25 @@ undefined4 __thiscall vehicle_set_gear(int param_1,int param_2)
 
 /*
  * vehicle_set_power(this=C_Vehicle, power, bidir_flag) -> bool — set the AI engine power/gas.
- *   Clamps `power` to [0,1] (deadzone: < 0.05 -> 0), gated on the gear/drive state this+0x138
- *   (0/2 = forward drive, 1 = reverse/bidirectional). In forward drive with a selected gear it
- *   ramps the throttle: accum(this+0x448) += rate(this+0x544), clamped to max(this+0x444), then
- *   engine power this+0x634 = (accum/max) * power (or = power directly when this+0x526 set), and
- *   clears bit this+0x224 &= 0xfeffffff. The chase AI driver calls this from driver_tick's tail
- *   with speed_factor*max as the pedal — the g_police_speed_factor "utilization" point.
+ *   Clamps `power` to [0,1] (deadzone: < 0.05 -> 0), gated on the drive state this+0x138
+ *   (0/2 = normal drive, 1 = bidirectional). In normal drive the pedal goes to the throttle
+ *   this+0x420 while idling (this+0x548 clear) or in a forward gear. In the reverse gear
+ *   (this+0x5d8 < 0) it ramps instead: accum(this+0x448) += rate(this+0x544), clamped to
+ *   max(this+0x444), then this+0x634 = (accum/max) * power (or = power directly when
+ *   this+0x526 is set), and clears bit this+0x224 &= 0xfeffffff. In reverse the accelerator
+ *   therefore brakes; vehicle_set_brake is the mirror case. The chase AI driver calls this
+ *   from driver_tick's tail with speed_factor*max as the pedal — the g_police_speed_factor
+ *   "utilization" point.
  * param_3 (the "bidir" flag) is a POWER-CHANNEL selector that ONLY has an effect when the
  *   vehicle is in gear/drive state 1 (this+0x138 == 1, reverse/bidirectional):
  *     - param_3 != 0 (all callers pass 1) -> apply power to the FORWARD gas field this+0x420
  *       (PS2 this+0x6a8).
  *     - param_3 == 0 -> apply power to the REVERSE gas field this+0x424 (PS2 this+0x6ac).
- *   In forward drive (state 0/2) param_3 is IGNORED (the forward path always uses the ramp ->
- *   this+0x634 output). Every callsite in this binary passes param_3 = 1, so the reverse-channel
+ *   In normal drive (state 0/2) param_3 is IGNORED: the gear chooses the field.
+ *   Every callsite in this binary passes param_3 = 1, so the reverse-channel
  *   branch (param_3 == 0) is dead code here — the AI always drives the forward channel.
- *   power == 0 is the idiomatic "cut the gas / coast" call: it sets the engine-power output
- *   this+0x634 = ramp * 0 = 0 (7 of 9 callsites do this on teardown/reset/remove); only
+ *   power == 0 is the idiomatic "cut the gas / coast" call: it zeroes the throttle, or
+ *   this+0x634 in reverse (7 of 9 callsites do this on teardown/reset/remove); only
  *   driver_tick (speed_factor*max) and the vehicle-control applier at ~0x005192xx pass real power.
  * Params: param_1 (this, ECX) = C_Vehicle (the physics sub-object at C_car+0x80); param_2 =
  *   power/gas pedal in [0,1] (deadzone <0.05 -> 0; [-1,1] in reverse state 1); param_3 = channel flag.
@@ -219013,8 +219073,10 @@ undefined2 __thiscall vehicle_set_power(int param_1,float param_2,char param_3)
 
 /*
  * vehicle_set_brake(this=C_Vehicle, pedal) -> bool -- applies the brake pedal [0,1] (deadzone
- *   <0.05 -> 0) to the net drivetrain force field (+0x634) via the same ramp SetPower uses, but on the
- *   IN-GEAR / clutch drivetrain path (gear_drive_state != 1). Complements vehicle_set_power (neutral).
+ *   <0.05 -> 0) unless the drive state this+0x138 is 1. While idling (this+0x548 clear) or in a
+ *   forward gear (this+0x5d8 >= 0) it writes the net drivetrain force +0x634 through the same
+ *   ramp vehicle_set_power uses; in the reverse gear it drives the throttle +0x420 instead, so
+ *   in reverse the brake pedal moves the car (vehicle_set_power is the mirror case).
  * Parameters: param_1 (this, ECX) = C_Vehicle; param_2 = brake pedal [0,1].
  * Returns: 1 on success, 0 if out of range.
  * Evidence: VA 0x00517600. Renamed from `FUN_00517600`.
@@ -219361,12 +219423,16 @@ void __thiscall vehicle_enable_sounds(int param_1,char param_2)
 }
 
 /*
- * vehicle_set_cut_time(this=C_Vehicle, ms) -> bool -- stores the gear-shift ignition-cut time
- *   (+0xca0 = ms/1000) for ms in (4, 0x33).
- * Parameters: param_1 (this, ECX) = C_Vehicle; param_2 = cut time in ms (5..50).
- * Returns: 1 on success, 0 if out of range.
+ * vehicle_set_cut_time(this=C_Vehicle, ms) -> bool -- sets the physics sub-step length
+ *   (+0xca0 = ms/1000) for ms in 5..50.
+ * What it does: vehicle_substep_move runs one vehicle_move per frame when the frame time is
+ *   at most +0xca0, otherwise floor(dt / +0xca0) + 1 equal sub-steps. vehicle_ctor seeds
+ *   0.028 s; traffic_car_game_init and traffic_car_adopt_car_with_new_driver pass 42.
+ * Parameters: param_1 (this, ECX) = C_Vehicle; param_2 = sub-step length in ms (5..50).
+ * Returns: 1 on success, 0 if out of range (the field is left unchanged).
  * Evidence: VA 0x00517ae0. Renamed from `FUN_00517ae0`.
- *   PS2 body-diff CONFIRMED = C_Vehicle::SetCutTime (+0xca0 = int/1000, range 5..50).
+ *   PS2 body-diff CONFIRMED = C_Vehicle::SetCutTime (PS2 +0xefc = int/1000, range 5..50);
+ *   the PS2 Engine sub-steps by that field exactly as vehicle_substep_move does by +0xca0.
  * PS2 twin: SetCutTime__9C_VehicleFi  [CONFIRMED]
  */
 undefined4 __thiscall vehicle_set_cut_time(int param_1,int param_2)
@@ -220052,7 +220118,7 @@ void __thiscall vehicle_set_seat_mass(int param_1,float param_2,float param_3)
     *(undefined4 *)(param_1 + 0x474) = *puVar2;
     *(undefined4 *)(param_1 + 0x478) = puVar2[1];
     *(undefined4 *)(param_1 + 0x47c) = puVar2[2];
-    fVar5 = (float10)vec3_dist();
+    fVar5 = (float10)vec3_length();
     *(undefined1 *)(param_1 + 0xcdc) = 1;
     fVar5 = fVar5 * fVar5 * (float10)param_2;
     *(float *)(param_1 + 0x4b4) =
@@ -223246,7 +223312,9 @@ undefined4 __fastcall vehicle_body_coll_attach_to_parent(int param_1,int param_2
  * of both.
  * Parameters: param_1 (this, ECX): the record.
  * Returns: void: nothing.
- * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
+ * PS2 twin: ReleaseBodyColls__9C_VehicleFP14S_COLBODY_HEAD  [STRUCTURAL] — the PS2 frees the
+ *   same tree from linked lists inside a C_Vehicle method; the PC frees the vectors here,
+ *   reached from vehicle_dtor (structs/vehicle.md section 9).
  * Evidence: VA 0x0051d330. 6 callers, all inside this TU, plus `EHHandler_00636908`. PS2 emits no
  * `__dt__14S_COLBODY_HEAD` — it out-lines the equivalent as a `__vector_deleter<>` in the TU tail
  * instead. Renamed from `FUN_0051d330`.
@@ -231950,10 +232018,12 @@ LAB_0052a152:
 /*
  * vehicle_update_motor_particles — refreshes the engine-bay particle emitter.
  *
- * What it does: Gated on flag `+0xce4 & 0x200` and on the engine load thresholds
- * `+0x248`/`+0x24c`/`+0x250`; accumulates the frame delta into `+0x25c` and, once the emitter's own
- * period has elapsed, re-parameterises the motor smoke emitter from `g_vehicle_particles_begin`
- * scaled by `+0x130`.
+ * What it does: Gated on flag `+0xce4 & 0x200`. Emits engine-bay smoke once the engine damage
+ * pool `+0x234` drops below `+0x248` while the speed `+0x618` is below `+0x250`: the emitter is
+ * particle `+0x254`, or particle `+0x258` when that is set and the pool is also below `+0x24c`
+ * - the white-then-black smoke of a damaged car (structs/vehicle.md). Accumulates the frame
+ * delta into `+0x25c` and, once the emitter's own period has elapsed, re-parameterises that
+ * emitter (`g_vehicle_particles_begin`, scaled by `+0x130`).
  * Parameters: param_1 (this, ECX): the `C_Vehicle` physics sub-object at `C_car+0x70`. param_2
  * (int): the frame delta in milliseconds.
  * Returns: bool: true when the emitter was serviced.
@@ -231961,7 +232031,7 @@ LAB_0052a152:
  * tightest in the tail block; particle vector on both sides and NO material table on either, which
  * separates it from the wheel and body emitters.
  * Evidence: VA 0x0052a1b0. Called x1 by `vehicle_update_visuals`; rank 2 of the forced 7-for-7 tail
- * block. The RPM gate reads `+0x234`, the same field `vehicle_init_damage` resets. Renamed from
+ * block. The damage gate reads `+0x234`, the pool `vehicle_init_damage` resets. Renamed from
  * `FUN_0052a1b0`.
  * Class layout: `exe-re/structs/vehicle.md`
  */
@@ -236744,24 +236814,34 @@ LAB_005334bd:
 }
 
 /*
- * vehicle_wheel_contact_solve — per-wheel ground-contact / suspension solver. Called
- * from the motion integrator car_net_apply_remote_state (with dt in
- * seconds) and from other vehicle physics contexts (car_recompute_velocity + a wheel-loop caller).
- * Sibling of the vehicle_wheel_contact_* family (proximity_band / filter_special_surface).
+ * vehicle_wheel_contact_solve — the per-wheel ground-contact and suspension solver
  *
- *   Heavy vec/matrix routine (large S_matrix scratch frame). Resolves a wheel's ground
- *   contact and writes the contact's surface-material id (`contact->+0xb4 = surface`) at
- *   the LAB_005341b4 site — the basis of the sidewalk offence (material id 3 = Chodnik).
- *
- *   NOTE: Ghidra's recovered signature `(int, undefined4*, float, float*, char)` is
- *   inconsistent with the call sites (the dt float lands in different operand positions),
- *   so param order is APPROXIMATE; one float arg is the dt (seconds) and one vector arg is
- *   the (negated) velocity. returns: per caller (void in the integrator's use).
- *
- *   Inner logic not exhaustively read; role established from the dt-driven caller + the
- *   identification of the +0xb4 surface-id writer.
- *
- *   Renamed from `FUN_005334e0`. Behaviour-derived (head + role).
+ * What it does, per wheel of +0xcb4 (wheel fields: def-files-docs/vehicles-bin.md 4b):
+ *   1. Contact query. A settled car (+0x618 < 1.5626, every wheel slow) reuses each wheel's
+ *      last contact plane. Otherwise, unless +0xce4 bit 0x800, two vertical line tests from
+ *      two points on the body give a front and a rear plane, picked per wheel by wheel+0x18
+ *      against +0x488; a wheel without a usable plane runs collision_test_line_vertical.
+ *      The probe is radius +0x10c (+0x110 while wheel flag bit 31) + travel +0x8c + +0x1c0.
+ *   2. Surface. Stores contact point +0x28, normal +0x40, record +0x124 and flag bit 0x8;
+ *      on a new material (+0xb4 = byte 3 of the record) looks up the tyre's surface entry
+ *      +0xb0. A record flag 0x10000 raises the contact latch this+0x28. Material 3 is the
+ *      sidewalk car_ai_tick checks for.
+ *   3. Spring and damper. With x = extension and v = (+0x94 - x) / dt:
+ *      +0x90 = (+0x8c - x) * +0x88, plus v * +0x9c while extending (v < 0) or v * +0x98
+ *      while compressing and not bottomed. A negative force clears bit 0x8 (lift-off).
+ *   4. Bump stop (param_5 set, x <= 0). Latches bit 0x40 and applies a rigid impulse along
+ *      the normal from the inverse inertia (+0xda4 scaled by +0x4b4..+0x4bc) and
+ *      1 / +0x670, averaged over the bottomed wheels; may call vehicle_deform (+0xce4 bit
+ *      0x8000) and vehicle_apply_damage (bit 0x4000); plays the wheel sound above 1.4.
+ *   5. Wheel axes. Rebuilds lateral +0x4c and longitudinal +0x58 from the normal and the
+ *      body basis (or the wheel frame for a steered wheel, bit 0x1), turned by +0x114.
+ * Parameters: param_1 (this): the C_Vehicle. param_2: out vec3. param_3: the time step in
+ *   seconds. param_4: the down vector the probes run along. param_5: enables the bump stop.
+ * Returns: void.
+ * Callers: vehicle_move (twice), car_recompute_velocity, car_net_apply_remote_state.
+ * PS2 twin: DoWheelsCollision__9C_VehicleFfRC8S_vectorb  [CONFIRMED]
+ * Evidence: VA 0x005334e0; the model is written up in basic/artifacts/vehicle-movement.md
+ *   section 3. Renamed from `FUN_005334e0`.
  */
 void __thiscall
 vehicle_wheel_contact_solve(int param_1,undefined4 *param_2,float param_3,float *param_4,char param_5)
@@ -238479,7 +238559,7 @@ LAB_00535e98:
           if (cStack_2e5 != '\0') {
             local_2fc = (uint *)(fStack_284 * fStack_284 +
                                 fStack_280 * fStack_280 + fStack_288 * fStack_288);
-            fVar18 = (float10)vec3_dist_sq();
+            fVar18 = (float10)vec3_length_sq();
             if (fVar18 < (float10)(float)local_2fc) {
               *param_4 = fStack_288;
               param_4[1] = fStack_284;
@@ -244833,7 +244913,7 @@ LAB_0053f9af:
         } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar12) != piVar9);
       }
       if (iVar14 != -1) {
-        std_vector8_erase_at(g_i3d_model_cache_items_begin + iVar14 * 8);
+        i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + iVar14 * 8);
       }
       for (uVar16 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar16 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
           uVar16 = uVar16 + 1) {
@@ -244856,7 +244936,7 @@ LAB_0053f9af:
       iVar14 = vec_count_stride_0x4();
       if (iVar14 != 0) {
         do {
-          string_append_cstr(&iStack_134,fStack_12c);
+          string_concat_cstr(&iStack_134,fStack_12c);
           iVar14 = *piVar9;
           pvStack_c = (void *)0x1;
           uVar7 = string_get_data(0x10,i3d_open_notify_forward_cb,&uStack_118);
@@ -244959,7 +245039,7 @@ LAB_0054001c:
     } while (*(int **)(g_i3d_sound_cache_items_begin + -8 + iVar12) != piVar9);
   }
   if (iVar14 != -1) {
-    std_vector8_erase_at(g_i3d_sound_cache_items_begin + iVar14 * 8);
+    i3d_cache_items_erase_at(g_i3d_sound_cache_items_begin + iVar14 * 8);
   }
   uVar16 = 0;
   iVar14 = vec_count_stride_0x8();
@@ -244986,7 +245066,7 @@ LAB_0054001c:
   iVar14 = vec_count_stride_0x4();
   if (iVar14 != 0) {
     do {
-      string_append_cstr(&stack0xfffffeb0,s_nadzemka_wav_0064c9a8);
+      string_concat_cstr(&stack0xfffffeb0,s_nadzemka_wav_0064c9a8);
       iVar14 = *piVar9;
       pvStack_c = (void *)0x5;
       uVar7 = string_get_data(0x10,i3d_open_notify_forward_cb,&uStack_118);
@@ -245020,14 +245100,14 @@ LAB_0053fb38:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar16 * 8) + 4) == 1) {
       puVar15 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar16 * 8);
       (**(code **)*puVar15)(puVar15);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar16 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar16 * 8);
       break;
     }
   }
 LAB_0053fb72:
   uVar7 = clear1_dword_at_0x04();
   pvStack_c = (void *)0x2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar7);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar7);
   pvStack_c = (void *)0xffffffff;
   if (iStack_10c != 0) {
     string_base_release();
@@ -245097,14 +245177,14 @@ LAB_00540309:
     if (*(int *)(*(int *)(g_i3d_sound_cache_items_begin + uVar16 * 8) + 4) == 1) {
       puVar15 = *(undefined4 **)(g_i3d_sound_cache_items_begin + uVar16 * 8);
       (**(code **)*puVar15)(puVar15);
-      std_vector8_erase_at(g_i3d_sound_cache_items_begin + uVar16 * 8);
+      i3d_cache_items_erase_at(g_i3d_sound_cache_items_begin + uVar16 * 8);
       break;
     }
   }
 LAB_00540343:
   uVar7 = clear1_dword_at_0x04();
   pvStack_c = (void *)0x6;
-  std_vector8_insert_one(g_i3d_sound_cache_items_end,uVar7);
+  i3d_cache_items_insert_one(g_i3d_sound_cache_items_end,uVar7);
   pvStack_c = (void *)0xffffffff;
   if (iStack_10c != 0) {
     string_base_release();
@@ -245883,20 +245963,28 @@ undefined4 __fastcall recorder_get_mode(int param_1)
 // FUN_00540fc0 @ VA 0x00540fc0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * recorder_sync_clock_from_system — reseeds the clocks from the system timer and prunes finished
- * tracks.
+ * recorder_set_clock - set the recorder clock to an absolute time and prune finished tracks
  *
- * What it does: Sets `+0x11c` from the system ms timer, remaps it through the `+0x68` timeline
- * table into `+0x120`/`+0x124`, then walks both track vectors stopping every track whose slot `0xc`
- * reports no key at that time.
- * Parameters: param_1 (this, ECX): the `C_recorder` singleton at `0x00656368`.
- * Returns: void: nothing.
- * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
- * Evidence: VA 0x00540fc0. `C_recorder` vtable `0x0063d0e8` slot 2. The absolute-time counterpart
- * of `recorder_advance_clock`, which takes a delta instead. Renamed from `FUN_00540fc0`.
+ * What it does: stores the incoming time in the source clock `+0x11c`, remaps it through the
+ *  `+0x68` keyframe table into the playback clock `+0x120` and rate `+0x124` (a straight copy
+ *  and rate 1.0 when the timeline `+0x129` is off or empty), advances the `+0xb8` cursor, and
+ *  in mode 0 or 3 stops and rewinds every track in both client vectors whose slot-3 test
+ *  fails at the new playback time. `recorder_advance_clock` is the same body taking a delta.
+ * Parameters:
+ *  this (ECX): the `C_recorder` singleton at `0x00656368`.
+ *  time_ms (stack): the new absolute clock value. Ghidra drops it from the signature; the
+ *   body reads it as `mov ecx,[esp+0x14]` and passes it through `folded_return_this`.
+ * Returns: void.
+ * PS2 twin: - (`C_recorder` does not exist on the PS2, `structs/recorder.md` 6)
+ * Evidence: VA 0x00540fc0, `C_recorder` vtable `0x0063d0e8` slot 2; 0 direct callsites and
+ *  1 dataref. Nothing in the body reads a timer. The singleton's address occurs only as 59
+ *  `mov ecx, 0x656368` immediates, each followed by a direct call, so no caller dispatches
+ *  this slot through the singleton.
+ * Renamed from `FUN_00540fc0`.
  * Class layout: `exe-re/structs/recorder.md`
  */
-void __fastcall recorder_sync_clock_from_system(int param_1)
+
+void __fastcall recorder_set_clock(int param_1)
 
 {
   char cVar1;
@@ -246538,9 +246626,9 @@ void recorder_track_snapshot_static_dtor(void)
  *
  * What it does: Returns immediately in mode 4; decrements `g_recorder_startup_hold_frames` while it
  * is non-zero; then walks both track vectors advancing each track's key cursors against the
- * playback clock `+0x120`, dispatching per-key events through `speech_preload_for_record` and
- * refreshing the speech accessory frames. The `0x44268000` sentinel appears as the per-key 'no
- * value' marker.
+ * playback clock `+0x120`, dispatching per-key events through `speech_apply_recorder_key` and
+ * refreshing the speakers' eye and neck targets. The `0x44268000` sentinel appears as the
+ * per-key 'no value' marker.
  * Parameters: param_1 (this, ECX): the `C_recorder` singleton. param_2 (int): the frame delta.
  * Returns: void: nothing.
  * PS2 twin: — (PC-only; `C_recorder` has no PS2 counterpart).
@@ -246960,7 +247048,7 @@ LAB_005421d4:
   param_1[0x3a] = param_1[0x39];
   if (((uint)param_1[0x1e] < (uint)param_1[0x1d]) &&
      (*(uint *)(param_1[0x1f] + param_1[0x1e] * 0x24) <= (uint)param_1[0x48])) {
-    speech_preload_for_record();
+    speech_apply_recorder_key();
     param_1[0x1e] = param_1[0x1e] + 1;
   }
   if (((uint)param_1[0x2e] < (uint)param_1[0x2d]) &&
@@ -246974,7 +247062,7 @@ LAB_005421d4:
     param_1[0x37] = param_1[0x37] + 1;
   }
   (**(code **)(*param_1 + 0xd0))(param_1[0x47]);
-  speech_update_accessory_frames();
+  speech_update_look_at_targets();
   return;
 }
 
@@ -246983,7 +247071,8 @@ LAB_005421d4:
  *
  * What it does: Resets all four key cursors of the track at `obj+0x08` to the first chunk
  *   (`track+0x18` + 8), or to null when the track holds no chunks, and clears
- *   `track+0x54`. Leaves the key data itself intact.
+ *   `track+0x54`, the end-reached flag `recorder_track_step_keys_to_clock` sets. Leaves the
+ *   key data itself intact.
  * Parameters: param_1: the object owning the track.
  * Returns: void.
  * PS2 twin: none — the C_recorder subsystem is PC-only; see Evidence
@@ -247070,7 +247159,7 @@ void __thiscall recorder_track_step_keys_to_clock(int param_1,int *param_2,undef
  * Parameters: param_1 (this, ECX): the `C_recorder` singleton at `0x00656368`. param_2: the track.
  * Returns: void: nothing.
  * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
- * Evidence: VA 0x00542790. Called from `recorder_sync_clock_from_system` for tracks that report no
+ * Evidence: VA 0x00542790. Called from `recorder_set_clock` for tracks that report no
  * key at the current time. Renamed from `FUN_00542790`.
  * Class layout: `exe-re/structs/recorder.md`
  */
@@ -249161,7 +249250,7 @@ LAB_00544513:
   local_4 = 1;
   chunk_close();
   local_4 = 0xffffffff;
-  vector_clear();
+  chunk_open_stack_free();
   ExceptionList = local_c;
   return 1;
 }
@@ -251485,15 +251574,15 @@ LAB_005465b8:
 /*
  * recorder_get_constant_5 — returns the literal 5.
  *
- * What it does: `return 5;` — nothing else. What the 5 denotes is NOT established: it is not a
- * channel count (there are 16) and there is no consumer to read it from. Recorded as an open
- * question rather than guessed.
+ * What it does: `return 5;` — nothing else. The value is unobservable: nothing ever calls
+ * this slot (Evidence).
  * Parameters: void.
  * Returns: int: always 5.
  * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
  * Evidence: VA 0x005465f0. `C_recorder` vtable `0x0063d0e8` slot 46. 🔴 ONE dataref — its own vtable
- * slot — and NO reachable caller: a capstone scan for indirect calls on the singleton finds nothing
- * at displacement 0xb8. Dead code in retail. Renamed from `FUN_005465f0`.
+ * slot — and NO reachable caller: the singleton address occurs only as `mov ecx, 0x656368`
+ * (59 sites, every one a direct call) and no recorder method dispatches displacement 0xb8.
+ * Dead code in retail. Renamed from `FUN_005465f0`.
  * Class layout: `exe-re/structs/recorder.md`
  */
 undefined4 recorder_get_constant_5(void)
@@ -251756,12 +251845,18 @@ void __thiscall stl_vector_ctor_with_allocator(undefined4 *param_1,int param_2)
 }
 
 /*
- * vector_clear — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_00546810` (original Ghidra id). VA 0x00546810.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_00546810`.
+ * chunk_open_stack_free - free a `C_chunk`'s open-chunk stack vector.
+ * What it does: hands `[+0x04, +0x0c)` back through slot 1 of the allocator vtable at `+0x00`,
+ *  then zeroes begin, end and capacity. Handle and open byte are not touched.
+ * Parameters: param_1 (int *, ECX): the `C_chunk`.
+ * Returns: void.
+ * PS2 twin: - (the PS2 stack is a fixed array inside the object; `exe-re/structs/chunk.md` §7).
+ * Evidence: VA 0x00546810; 15 referrers, all on a stack `C_chunk`: 6 calls right after
+ *  `chunk_close` on the same object and 9 unwind funclets. `chunk_dtor` ends with the same
+ *  four statements inline. Renamed from `FUN_00546810`.
  */
-void __fastcall vector_clear(int *param_1)
+
+void __fastcall chunk_open_stack_free(int *param_1)
 
 {
   (**(code **)(*param_1 + 4))(param_1[1],param_1[3] - param_1[1] >> 2);
@@ -252198,16 +252293,17 @@ int speech_get_free_channel(void)
 /*
  * speech_channel_set_human — binds a channel to a `C_human` and neutralises its morph weights.
  *
- * What it does: Stores `human+0x68` as the owner frame and `human+0x588`/`+0x58c` as the two
- * accessory frames, validates `human+0x57c` as a morph frame (`+0x110 == 1`, `+0x1d4 == 'SMMR'`),
- * zeroes the 3x5 morph weights and seeds the three blend fields.
+ * What it does: Stores `human+0x68` as the owner frame and `human+0x588` / `+0x58c` (the model
+ * frames `targetE` / `targetN`) as the eye and neck targets, validates `human+0x57c` as a morph
+ * frame (`+0x110 == 1`, `+0x1d4 == 'SMMR'`), zeroes the 3x5 morph weights and seeds the six
+ * viseme parameters with a neutral set.
  * Parameters: param_1 (int): the channel index. param_2: the `C_human`. no receiver — free function
  * over the 16-channel bank.
  * Returns: void: nothing.
  * PS2 twin: `DabingSetHuman__FiP7C_human` *(CONFIRMED)*
  * Evidence: VA 0x00546b10. Signature match `(int, C_human*)`, same `SMMR` validation, same 3x5
  * weight reset, ratio 912/1204 = 0.76. Callers `entity_process_command` x2,
- * `program_process_command`, `speech_preload_for_record`. Renamed from `FUN_00546b10`.
+ * `program_process_command`, `speech_apply_recorder_key`. Renamed from `FUN_00546b10`.
  * Class layout: `exe-re/structs/speech.md`
  */
 void __fastcall speech_channel_set_human(int param_1,int param_2)
@@ -252217,8 +252313,8 @@ void __fastcall speech_channel_set_human(int param_1,int param_2)
   
   if (((-1 < param_1) && (param_1 < 0x10)) && (param_2 != 0)) {
     (&g_speech_channel_owner_frame)[param_1 * 0x11] = *(undefined4 *)(param_2 + 0x68);
-    (&g_speech_channel_extra_frame_a)[param_1 * 0x11] = *(undefined4 *)(param_2 + 0x588);
-    (&g_speech_channel_extra_frame_b)[param_1 * 0x11] = *(undefined4 *)(param_2 + 0x58c);
+    (&g_speech_channel_eye_target_frame)[param_1 * 0x11] = *(undefined4 *)(param_2 + 0x588);
+    (&g_speech_channel_neck_target_frame)[param_1 * 0x11] = *(undefined4 *)(param_2 + 0x58c);
     iVar1 = *(int *)(param_2 + 0x57c);
     if (((iVar1 != 0) && (*(int *)(iVar1 + 0x110) == 1)) && (*(int *)(iVar1 + 0x1d4) == 0x524d4d53))
     {
@@ -252252,53 +252348,53 @@ void __fastcall speech_channel_set_human(int param_1,int param_2)
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),2,3,0);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),2,4,0);
-      (&g_speech_channel_field_0x2c)[param_1 * 0x11] = 0;
-      (&g_speech_channel_field_0x28)[param_1 * 0x11] = 0x3eeb851f;
-      (&g_speech_channel_field_0x30)[param_1 * 0x11] = 0x3f07ae14;
-      (&g_speech_channel_field_0x38)[param_1 * 0x11] = 0x3de147ae;
-      (&g_speech_channel_field_0x34)[param_1 * 0x11] = 0x3f800000;
-      (&g_speech_channel_field_0x3c)[param_1 * 0x11] = 0x3f19999a;
+      (&g_speech_channel_viseme_param_0x2c)[param_1 * 0x11] = 0;
+      (&g_speech_channel_viseme_param_0x28)[param_1 * 0x11] = 0x3eeb851f;
+      (&g_speech_channel_viseme_param_0x30)[param_1 * 0x11] = 0x3f07ae14;
+      (&g_speech_channel_viseme_param_0x38)[param_1 * 0x11] = 0x3de147ae;
+      (&g_speech_channel_viseme_param_0x34)[param_1 * 0x11] = 0x3f800000;
+      (&g_speech_channel_viseme_param_0x3c)[param_1 * 0x11] = 0x3f19999a;
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),0,0,0);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),0,1,
-                 (float)(&g_speech_channel_field_0x28)[param_1 * 0x11] * (float)(&g_speech_channel_field_0x2c)[param_1 * 0x11]);
+                 (float)(&g_speech_channel_viseme_param_0x28)[param_1 * 0x11] * (float)(&g_speech_channel_viseme_param_0x2c)[param_1 * 0x11]);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140,0,2,
-                 (1.0 - (float)(&g_speech_channel_field_0x28)[param_1 * 0x11]) *
-                 (float)(&g_speech_channel_field_0x2c)[param_1 * 0x11]);
+                 (1.0 - (float)(&g_speech_channel_viseme_param_0x28)[param_1 * 0x11]) *
+                 (float)(&g_speech_channel_viseme_param_0x2c)[param_1 * 0x11]);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140,0,3,
-                 (1.0 - (float)(&g_speech_channel_field_0x2c)[param_1 * 0x11]) *
-                 (1.0 - (float)(&g_speech_channel_field_0x30)[param_1 * 0x11]));
+                 (1.0 - (float)(&g_speech_channel_viseme_param_0x2c)[param_1 * 0x11]) *
+                 (1.0 - (float)(&g_speech_channel_viseme_param_0x30)[param_1 * 0x11]));
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140,0,4,
-                 (1.0 - (float)(&g_speech_channel_field_0x2c)[param_1 * 0x11]) *
-                 (float)(&g_speech_channel_field_0x30)[param_1 * 0x11]);
+                 (1.0 - (float)(&g_speech_channel_viseme_param_0x2c)[param_1 * 0x11]) *
+                 (float)(&g_speech_channel_viseme_param_0x30)[param_1 * 0x11]);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),1,0,0);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140,1,1,
-                 (float)(&g_speech_channel_field_0x38)[param_1 * 0x11] * (float)(&g_speech_channel_field_0x34)[param_1 * 0x11]);
+                 (float)(&g_speech_channel_viseme_param_0x38)[param_1 * 0x11] * (float)(&g_speech_channel_viseme_param_0x34)[param_1 * 0x11]);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),1,2,
-                 (1.0 - (float)(&g_speech_channel_field_0x38)[param_1 * 0x11]) *
-                 (float)(&g_speech_channel_field_0x34)[param_1 * 0x11]);
+                 (1.0 - (float)(&g_speech_channel_viseme_param_0x38)[param_1 * 0x11]) *
+                 (float)(&g_speech_channel_viseme_param_0x34)[param_1 * 0x11]);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140,1,3,
-                 1.0 - (float)(&g_speech_channel_field_0x34)[param_1 * 0x11]);
+                 1.0 - (float)(&g_speech_channel_viseme_param_0x34)[param_1 * 0x11]);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),2,0,0);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140,2,1,
-                 (float)(&g_speech_channel_field_0x3c)[param_1 * 0x11] * (float)(&g_speech_channel_field_0x34)[param_1 * 0x11]);
+                 (float)(&g_speech_channel_viseme_param_0x3c)[param_1 * 0x11] * (float)(&g_speech_channel_viseme_param_0x34)[param_1 * 0x11]);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),2,2,
-                 (1.0 - (float)(&g_speech_channel_field_0x3c)[param_1 * 0x11]) *
-                 (float)(&g_speech_channel_field_0x34)[param_1 * 0x11]);
+                 (1.0 - (float)(&g_speech_channel_viseme_param_0x3c)[param_1 * 0x11]) *
+                 (float)(&g_speech_channel_viseme_param_0x34)[param_1 * 0x11]);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140,2,3,
-                 1.0 - (float)(&g_speech_channel_field_0x34)[param_1 * 0x11]);
+                 1.0 - (float)(&g_speech_channel_viseme_param_0x34)[param_1 * 0x11]);
       (&g_speech_channel_state)[param_1 * 0x11] = 1;
       return;
     }
@@ -252396,8 +252492,8 @@ void __fastcall speech_channel_set_model(int param_1,int *param_2)
     if (((iVar1 != 0) && (*(int *)(iVar1 + 0x110) == 1)) && (*(int *)(iVar1 + 0x1d4) == 0x524d4d53))
     {
       (&g_speech_channel_morph_frame)[param_1 * 0x11] = iVar1;
-      (&g_speech_channel_extra_frame_a)[param_1 * 0x11] = 0;
-      (&g_speech_channel_extra_frame_b)[param_1 * 0x11] = 0;
+      (&g_speech_channel_eye_target_frame)[param_1 * 0x11] = 0;
+      (&g_speech_channel_neck_target_frame)[param_1 * 0x11] = 0;
       (**(code **)(*(int *)(iVar1 + 0x140) + 8))((int *)(iVar1 + 0x140),0,0,0x3f800000);
       (**(code **)(*(int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140) + 8))
                 ((int *)((&g_speech_channel_morph_frame)[param_1 * 0x11] + 0x140),0,1,0);
@@ -252707,7 +252803,7 @@ LAB_00547743:
             ((int *)(&g_speech_channel_sound)[param_1 * 0x11],1,1);
 LAB_005477d9:
   (&g_speech_channel_time_ms)[param_1 * 0x11] = 0;
-  (&g_speech_channel_stop_flag)[param_1 * 0x11] = 200;
+  (&g_speech_channel_countdown_ms)[param_1 * 0x11] = 200;
   if (((param_3 != '\0') && ((&g_speech_channel_sound)[param_1 * 0x11] == 0)) && (*piVar1 == 0)) {
     pcVar7 = (char *)textdb_get_string_by_id(param_2);
     uVar4 = 0xffffffff;
@@ -252718,7 +252814,7 @@ LAB_005477d9:
       pcVar7 = pcVar7 + 1;
     } while (cVar2 != '\0');
     (&g_speech_channel_state)[param_1 * 0x11] = 4;
-    (&g_speech_channel_stop_flag)[param_1 * 0x11] = (~uVar4 - 1) * 0x1e + 1000;
+    (&g_speech_channel_countdown_ms)[param_1 * 0x11] = (~uVar4 - 1) * 0x1e + 1000;
   }
   (&g_speech_channel_field_0x40)[param_1 * 0x11] = 0;
   if (param_3 != '\0') {
@@ -252759,38 +252855,41 @@ LAB_005477d9:
 }
 
 /*
- * speech_channel_attach_accessory_frame — attaches or detaches one of a channel's two accessory
- * frames.
+ * speech_channel_set_look_at_frame - points a channel's eye / neck targets at a frame
  *
- * What it does: Mask bit 0 selects the `+0x24` frame and bit 1 the `+0x20` frame; a null frame
- * detaches, otherwise the frame is re-parented, zeroed and marked with the `& 0xfffffedf |
- * 0x40000000` transform-dirty rewrite.
- * Parameters: param_1 (int): the channel index. param_2: the frame. param_3 (byte): the mask. no
- * receiver — free function over the 16-channel bank.
- * Returns: void: nothing.
- * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
- * Evidence: VA 0x00547960. ⚠️ No PS2 rank; same UNVERIFIED inlining hypothesis as
- * `speech_update_accessory_frames`. Both callsites are inside `speech_preload_for_record`. Renamed
- * from `FUN_00547960`.
- * Class layout: `exe-re/structs/speech.md`
+ * What it does: for a bound channel, mask bit 0 selects the eye target (+0x24, the
+ *  speaker's model frame targetE, from C_human+0x588) and bit 1 the neck target (+0x20,
+ *  targetN, from C_human+0x58c). A null frame hides the target (frame vtable +0x24 with
+ *  0). Otherwise the target is shown, linked under the frame (+0x2c), its local
+ *  position zeroed with the `& 0xfffffedf | 0x40000000` dirty rewrite, and updated
+ *  (+0x18). The model's eye joints Reye / Leye aim at targetE.
+ * Parameters: param_1 (int): the channel index 0..15. param_2: the frame to look at, or
+ *  0. param_3 (byte): the target mask.
+ * Returns: void.
+ * PS2 twin: none. Both callers are speech_apply_recorder_key, which C_recorder alone
+ *  reaches, and C_recorder does not exist on the PS2 build.
+ * Evidence: VA 0x00547960. Two E8 callsites, both in speech_apply_recorder_key.
+ *  Renamed from `FUN_00547960`.
+ * Class layout: exe-re/structs/speech.md
  */
-void __fastcall speech_channel_attach_accessory_frame(int param_1,int param_2,byte param_3)
+
+void __fastcall speech_channel_set_look_at_frame(int param_1,int param_2,byte param_3)
 
 {
   int *piVar1;
   int iVar2;
   
   if (((-1 < param_1) && (param_1 < 0x10)) && ((&g_speech_channel_owner_frame)[param_1 * 0x11] != 0)) {
-    piVar1 = (int *)(&g_speech_channel_extra_frame_a)[param_1 * 0x11];
+    piVar1 = (int *)(&g_speech_channel_eye_target_frame)[param_1 * 0x11];
     if ((piVar1 != (int *)0x0) && ((param_3 & 1) != 0)) {
       if (param_2 == 0) {
         (**(code **)(*piVar1 + 0x24))(piVar1,0);
       }
       else {
         (**(code **)(*piVar1 + 0x24))(piVar1,1);
-        (**(code **)(*(int *)(&g_speech_channel_extra_frame_a)[param_1 * 0x11] + 0x2c))
-                  ((int *)(&g_speech_channel_extra_frame_a)[param_1 * 0x11],param_2,0);
-        iVar2 = (&g_speech_channel_extra_frame_a)[param_1 * 0x11];
+        (**(code **)(*(int *)(&g_speech_channel_eye_target_frame)[param_1 * 0x11] + 0x2c))
+                  ((int *)(&g_speech_channel_eye_target_frame)[param_1 * 0x11],param_2,0);
+        iVar2 = (&g_speech_channel_eye_target_frame)[param_1 * 0x11];
         if (-1 < (char)*(uint *)(iVar2 + 0xac)) {
           *(undefined4 *)(iVar2 + 0x80) = 0;
           *(undefined4 *)(iVar2 + 0x84) = 0;
@@ -252798,31 +252897,31 @@ void __fastcall speech_channel_attach_accessory_frame(int param_1,int param_2,by
           *(uint *)(iVar2 + 0xac) = *(uint *)(iVar2 + 0xac) & 0xfffffedf | 0x40000000;
         }
       }
-      (**(code **)(*(int *)(&g_speech_channel_extra_frame_a)[param_1 * 0x11] + 0x18))
-                ((int *)(&g_speech_channel_extra_frame_a)[param_1 * 0x11]);
+      (**(code **)(*(int *)(&g_speech_channel_eye_target_frame)[param_1 * 0x11] + 0x18))
+                ((int *)(&g_speech_channel_eye_target_frame)[param_1 * 0x11]);
     }
-    piVar1 = (int *)(&g_speech_channel_extra_frame_b)[param_1 * 0x11];
+    piVar1 = (int *)(&g_speech_channel_neck_target_frame)[param_1 * 0x11];
     if ((piVar1 != (int *)0x0) && ((param_3 & 2) != 0)) {
       if (param_2 == 0) {
         (**(code **)(*piVar1 + 0x24))(piVar1,0);
       }
       else {
         (**(code **)(*piVar1 + 0x24))(piVar1,1);
-        (**(code **)(*(int *)(&g_speech_channel_extra_frame_b)[param_1 * 0x11] + 0x2c))
-                  ((int *)(&g_speech_channel_extra_frame_b)[param_1 * 0x11],param_2,0);
-        iVar2 = (&g_speech_channel_extra_frame_b)[param_1 * 0x11];
+        (**(code **)(*(int *)(&g_speech_channel_neck_target_frame)[param_1 * 0x11] + 0x2c))
+                  ((int *)(&g_speech_channel_neck_target_frame)[param_1 * 0x11],param_2,0);
+        iVar2 = (&g_speech_channel_neck_target_frame)[param_1 * 0x11];
         if (-1 < (char)*(uint *)(iVar2 + 0xac)) {
           *(undefined4 *)(iVar2 + 0x80) = 0;
           *(undefined4 *)(iVar2 + 0x84) = 0;
           *(undefined4 *)(iVar2 + 0x88) = 0;
           *(uint *)(iVar2 + 0xac) = *(uint *)(iVar2 + 0xac) & 0xfffffedf | 0x40000000;
-          (**(code **)(*(int *)(&g_speech_channel_extra_frame_b)[param_1 * 0x11] + 0x18))
-                    ((int *)(&g_speech_channel_extra_frame_b)[param_1 * 0x11]);
+          (**(code **)(*(int *)(&g_speech_channel_neck_target_frame)[param_1 * 0x11] + 0x18))
+                    ((int *)(&g_speech_channel_neck_target_frame)[param_1 * 0x11]);
           return;
         }
       }
-      (**(code **)(*(int *)(&g_speech_channel_extra_frame_b)[param_1 * 0x11] + 0x18))
-                ((int *)(&g_speech_channel_extra_frame_b)[param_1 * 0x11]);
+      (**(code **)(*(int *)(&g_speech_channel_neck_target_frame)[param_1 * 0x11] + 0x18))
+                ((int *)(&g_speech_channel_neck_target_frame)[param_1 * 0x11]);
     }
   }
   return;
@@ -252877,7 +252976,7 @@ bool __fastcall speech_channel_is_speaking(int param_1)
  * speech_channel_stop — stops a channel from speaking.
  *
  * What it does: Bounds-checks the index, refuses channels in state 5, fades the sound out through
- * its slot `0x88` with `(0, 1)`, sets the stop flag and moves the channel to state 3.
+ * its slot `0x88` with `(0, 1)`, sets the countdown to 1 ms and moves the channel to state 3.
  * Parameters: param_1 (int): the channel index. no receiver — free function over the 16-channel
  * bank.
  * Returns: void: nothing.
@@ -252897,33 +252996,35 @@ void __fastcall speech_channel_stop(int param_1)
     if (piVar1 != (int *)0x0) {
       (**(code **)(*piVar1 + 0x88))(piVar1,0,1);
     }
-    (&g_speech_channel_stop_flag)[param_1 * 0x11] = 1;
+    (&g_speech_channel_countdown_ms)[param_1 * 0x11] = 1;
     (&g_speech_channel_state)[param_1 * 0x11] = 3;
   }
   return;
 }
 
 /*
- * speech_update_accessory_frames — re-stamps every channel's two accessory frames each frame.
+ * speech_update_look_at_targets - refreshes every channel's eye and neck targets
  *
- * What it does: For each channel whose accessory frames are flagged live, rewrites the frame
- * position and applies the `& 0xfffffedf | 0x40000000` transform-dirty rewrite, then dispatches the
- * frame's slot `0x18`.
- * Parameters: no receiver — free function over the 16-channel bank.
- * Returns: void: nothing.
- * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
- * Evidence: VA 0x00547b50. ⚠️ No PS2 rank. `DabingSetHuman` is 292 bytes LARGER than its PC twin,
- * so the leading hypothesis is that the PS2 inlined this and its sibling — UNVERIFIED, no terminal
- * tag. Sole caller `recorder_tick_tracks`. Renamed from `FUN_00547b50`.
- * Class layout: `exe-re/structs/speech.md`
+ * What it does: for each of the 16 channels, takes the neck target (+0x20) and the eye
+ *  target (+0x24); for each one that is non-null and on (frame flag bit 0), re-applies
+ *  its position with the `& 0xfffffedf | 0x40000000` dirty rewrite unless flag 0x80 is
+ *  set, then calls the frame's update (+0x18).
+ * Parameters: none - a free function over the 16-channel bank.
+ * Returns: void.
+ * PS2 twin: none. The only caller is recorder_tick_tracks, and C_recorder does not
+ *  exist on the PS2 build.
+ * Evidence: VA 0x00547b50. One E8 callsite (recorder_tick_tracks), no data reference.
+ *  Renamed from `FUN_00547b50`.
+ * Class layout: exe-re/structs/speech.md
  */
-void speech_update_accessory_frames(void)
+
+void speech_update_look_at_targets(void)
 
 {
   int iVar1;
   int *piVar2;
   
-  piVar2 = &g_speech_channel_extra_frame_a;
+  piVar2 = &g_speech_channel_eye_target_frame;
   do {
     iVar1 = piVar2[-1];
     if ((iVar1 != 0) && ((*(byte *)(iVar1 + 0xac) & 1) != 0)) {
@@ -253242,20 +253343,29 @@ void __fastcall speech_pause_all_channels(char param_1)
 }
 
 /*
- * speech_preload_for_record — prepares a speech channel from a track record naming its speaker.
+ * speech_apply_recorder_key - applies one speech key of a recorder track
  *
- * What it does: Dispatches on the record type at `+0x08`: type 1 resolves the named object through
- * the mission's lookup and binds kinds {2,3,7,0x1b} with `speech_channel_set_human`; the
- * `0xfffffffc` branch resolves a frame by name and attaches it as a channel accessory frame.
- * Parameters: param_1: the track record. no receiver — free function over the 16-channel bank.
- * Returns: void: nothing.
- * PS2 twin: `DabingPreLoad__FPCc` *(CONFIRMED)*
- * Evidence: VA 0x005484b0. Rank matches — immediately after `PauseSounds` on both builds — and both
- * take a NAME. Ratio 240/308 = 0.78. Sole caller `recorder_tick_tracks`. Renamed from
- * `FUN_005484b0`.
- * Class layout: `exe-re/structs/speech.md`
+ * What it does: dispatches on the key type at +0x08:
+ *  - 1: resolves the object named at +0x0c in the mission scene and binds it as the
+ *    speaker - speech_channel_set_human for kinds 2, 3, 7, 0x1b, speech_channel_set_model
+ *    for kind 1 when its visual type is 9;
+ *  - 0xfffffffd..0xffffffff: the look-at key - resolves the frame named at +0x0c and
+ *    hands it to speech_channel_set_look_at_frame, or passes a null frame when the
+ *    name is empty, which hides the targets;
+ *  - any other non-zero value: speaks the line through speech_channel_speak_line;
+ *  - 0: nothing.
+ * Parameters: param_1 (ECX): the track key record. No receiver - a free function over
+ *  the 16-channel bank.
+ * Returns: void.
+ * PS2 twin: none. C_recorder does not exist on the PS2 build, and the only caller is
+ *  recorder_tick_tracks. DabingPreLoad__FPCc is a different function: it frees and
+ *  loads the per-mission viseme archive dabingPreData.
+ * Evidence: VA 0x005484b0. One E8 callsite (recorder_tick_tracks), no data reference.
+ *  Renamed from `FUN_005484b0`.
+ * Class layout: exe-re/structs/speech.md
  */
-void __fastcall speech_preload_for_record(int param_1)
+
+void __fastcall speech_apply_recorder_key(int param_1)
 
 {
   uint uVar1;
@@ -253295,10 +253405,10 @@ void __fastcall speech_preload_for_record(int param_1)
     if (*(char *)(param_1 + 0xc) != '\0') {
       piVar3 = *(int **)(g_act_mission + 0x10);
       (**(code **)(*piVar3 + 0x58))(piVar3,param_1 + 0xc,0xffff);
-      speech_channel_attach_accessory_frame(piVar3);
+      speech_channel_set_look_at_frame(piVar3);
       return;
     }
-    speech_channel_attach_accessory_frame(uVar1);
+    speech_channel_set_look_at_frame(uVar1);
     return;
   }
   speech_channel_speak_line(1,3);
@@ -254299,7 +254409,7 @@ void __fastcall hud_create(int param_1)
   (**(code **)(*g_engine + 4))(g_engine,s_0textura_tga_0064d370,0,2,param_1 + 0x908c);
   (**(code **)(*g_engine + 4))(g_engine,s_radarclp_bmp_0064d360,0,8,&g_radar_clip_texture);
   g_transmission_indicator_texture = 0;
-  (**(code **)(*g_engine + 4))(g_engine,s_2intbenal_tga_0064d350,0,8,&g_hud_2intbenal_texture);
+  (**(code **)(*g_engine + 4))(g_engine,s_2intbenal_tga_0064d350,0,8,&g_hud_low_fuel_lamp_texture);
   hud_load_font(0,0);
   hud_load_font(0,1);
   hud_load_font(0,2);
@@ -254375,10 +254485,10 @@ void __fastcall hud_destroy(int param_1)
     (**(code **)*g_transmission_indicator_texture)(g_transmission_indicator_texture);
   }
   g_transmission_indicator_texture = (undefined4 *)0x0;
-  if (g_hud_2intbenal_texture != (undefined4 *)0x0) {
-    (**(code **)*g_hud_2intbenal_texture)(g_hud_2intbenal_texture);
+  if (g_hud_low_fuel_lamp_texture != (undefined4 *)0x0) {
+    (**(code **)*g_hud_low_fuel_lamp_texture)(g_hud_low_fuel_lamp_texture);
   }
-  g_hud_2intbenal_texture = (undefined4 *)0x0;
+  g_hud_low_fuel_lamp_texture = (undefined4 *)0x0;
   // ===== FOLDED ON PC: UvolniMapu__17G_IndicatorsClassFb =====
   // PS2 releases the map sheet through a 92-byte method taking a bool that also
   // selects whether to drop the instrument dial at +0x4084; the PC has no such
@@ -255552,16 +255662,21 @@ void __thiscall hud_speedometer_set_gear(int param_1,int param_2,undefined1 para
 }
 
 /*
- * hud_speedometer_set_values(hud, speed, value_b, value_c) -> void
+ * hud_speedometer_set_values(hud, speed, rpm, fuel, odometer) -> void
  * What it does: drives the in-car instrument cluster for one frame. Converts `speed` from m/s to
  *   km/h (`* 3.6`) and stores it at +0x916c; stores two further gauge values at +0x9190 and
  *   +0x91b4. Each of the three is CHANGE-GATED — the needle geometry is rebuilt via
  *   `hud_build_needle_quad` only when the value actually differs from the cached one.
- *   Then rebuilds the six-digit odometer strip from the integer distance, walking digits
- *   least-significant-first and computing each glyph's atlas V as `130.0 - (d0*1.3 + d1*13.0)`.
+ *   Then rebuilds the five-digit odometer strip from `__ftol(odometer * 0.1)` (plus
+ *   999999.0 when the argument is negative), walking digits least-significant-first and
+ *   computing each glyph's atlas V as `130.0 - (d0*1.3 + d1*13.0)`.
  *   Finally sets the two low-value flags at +0x91fd/+0x9200 when both remaining gauges read ~0.
  * Parameters: param_1 (hud_state*, this, ECX); param_2 (float): speed in m/s; param_3, param_4
  *   (float): the other two gauge values (the +0x9190 and +0x91b4 needles).
+ *   A fourth float, the odometer reading, is passed on the stack after them and read only
+ *   through the `__ftol` operand; Ghidra's signature drops it. The two per-frame callers,
+ *   `player_ai` and `player_ai_drive`, pass `car+0x1f90`, a value `car_game_init` sets once
+ *   to `251000 + 150 * crt_rand()` and nothing advances (`exe-re/structs/car.md` §1).
  * Returns: void.
  * Evidence: VA 0x0054a7a0. Body-diff vs PS2 TachometrSetValues — same `* 3.6`, same change-gated
  *   needle calls into the confirmed `hud_build_needle_quad` twin, same odometer digit
@@ -255808,8 +255923,8 @@ void __thiscall hud_set_player_accuracy(int param_1,undefined4 param_2)
  * Drivers:
  *   - script-VM case 0x79 WINGMAN_SETINDICATOR (`program_process_command`):
  *     `(script_argv[2] (slot), script_argv[1] (portrait))`.
- *   - per-frame player-tick reapply: replays the player's
- *     pinned `(slot, portrait)` pair from `player+0x6d8`/`+0x6dc`.
+ *   - human_save_game_load: re-applies the pair stored on the human
+ *     (`human+0x6d8` / `+0x6dc`, see human_set_wingman_indicator).
  *   - explicit 4-slot init loop in `hud_reset_values`:
  *     `(0,0); (1,0); (2,0); (3,0);` — independently proves the 4-slot
  *     model and zeros all portraits at startup/reset.
@@ -255855,18 +255970,16 @@ void __thiscall hud_wingman_set_portrait_for_slot(int param_1,uint param_2,uint 
  *                                      init loop).
  * Returns: void.
  *
- * Drivers (all five known):
- *   - script-VM case 0x79 WINGMAN_SETINDICATOR:
- *     `(script_argv[2] (slot), local_7a8)` where local_7a8 is either
- *     the FPU-derived script-supplied value OR `*stl_max_int_ptr(...)`
- *     of the engine-live source, picked by the player+0x5e predicate.
- *   - three per-frame player-tick reapply sites: same
- *     `(player+0x6d8, computed_value)` pattern across
- *     three gameplay contexts (likely on-foot / in-vehicle / cutscene).
- *   - explicit 4-slot init loop in `hud_reset_values`:
- *     `(0,100); (1,100); (2,100); (3,100);` — confirms default value 100.
- *   - two non-script callers, `(iVar14, puVar11)` and `(param_1[0x1b6], 0)` —
- *     engine-side updates not yet body-read.
+ * Drivers. Each passes a human's slot (+0x6d8, skipped when negative) and its health
+ * percentage (+0x644 / +0x604 * 100), raised to at least 1 while the human is alive
+ * (+0x5d); the two script cases and game_character_stack_pop test instead that it is
+ * not death-processed (+0x5e):
+ *   - script-VM case 0x79 WINGMAN_SETINDICATOR, when the pin is set;
+ *   - script-VM case 0x65 HUMAN_SETPROPERTY, when a script changes the health;
+ *   - human_hit and human_hit_in_car, after the health drops;
+ *   - human_die_in_exploding_car, with the value 0;
+ *   - human_save_game_load and game_character_stack_pop, which restore a human;
+ *   - hud_reset_values: `(0,100); (1,100); (2,100); (3,100);`, the default 100.
  *
  * Evidence: BYTE-VERIFIED — function body is the entire guard+store.
  *   Immediate sibling of `hud_wingman_set_portrait_for_slot` at VA
@@ -264017,7 +264130,7 @@ void __fastcall loadsave_profile_enum_release(int param_1)
  *   2. The trivial `C_blood` constructor - 1 callsite, in `blood_manager_add_blood`:
  *      `push 0x24; call operator_new; mov ecx,eax; call <here>` on a fresh object.
  *   3. A third owner reached with a stack parameter - 1 callsite, in
- *      `recorder_sync_clock_from_system`, receiver `mov ecx,[esp+0x14]`.
+ *      `recorder_set_clock`, receiver `mov ecx,[esp+0x14]`.
  * Parameters: param_1 (ECX): whatever object the caller is operating on.
  * Returns: undefined4: param_1, unchanged.
  * Evidence: VA 0x005575f0. Branch-aware receiver census over all 11 image-wide `E8`
@@ -264969,8 +265082,8 @@ LAB_005585aa:
             } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar2) != piVar9);
           }
           if (iVar5 != -1) {
-            array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar5 * 8);
-            destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+            i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar5 * 8);
+            i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
             g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
           }
           for (uVar14 = 0;
@@ -264994,7 +265107,7 @@ LAB_005585aa:
           iVar5 = vec_count_stride_0x4();
           if (iVar5 != 0) {
             do {
-              string_append_cstr(&puStack_378,auStack_2e8);
+              string_concat_cstr(&puStack_378,auStack_2e8);
               iVar5 = *piVar9;
               pvStack_c._0_1_ = 4;
               uVar7 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_338);
@@ -265218,14 +265331,14 @@ LAB_00558743:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar14 * 8) + 4) == 1) {
       puVar8 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar14 * 8);
       (**(code **)*puVar8)(puVar8);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar14 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar14 * 8);
       break;
     }
   }
 LAB_0055877c:
   uVar7 = clear1_dword_at_0x04();
   pvStack_c._0_1_ = 5;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar7);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar7);
   pvStack_c = (void *)((uint)pvStack_c._1_3_ << 8);
   if (iStack_32c != 0) {
     string_base_release();
@@ -266281,20 +266394,23 @@ int __fastcall inventory_get_in_hand_item_def(int param_1)
 }
 
 /*
- * game_item_table_get — Returns the global predmety.def item table.
+ * inventory_get_left_hand_item_def - item definition of the left-hand weapon
  *
- * What it does: `return g_game_item_table;` — the 0xbc-stride definition table every weapon and
- * item record indexes.
- * Parameters: none.
- * Returns: undefined4: the table base.
+ * What it does: returns the base of the item-definition table `g_game_item_table` without
+ *  reading the inventory: no left-hand slot exists, so the answer is always the table's
+ *  first record. Its sibling `inventory_get_in_hand_item_def` reads the right-hand id.
+ * Parameters:
+ *  this (ECX, hidden by Ghidra): a `G_Inventory`; the one caller passes the human's
+ *   inventory, `lea ecx,[esi+0x480]` in `human_change_weapon_model`.
+ * Returns: the item-definition record (stride `0xbc`).
  * PS2 twin: `GetWeaponInLeftHand__11G_InventoryFv`  [CONFIRMED]
- * Evidence: VA 0x00559bd0. 🔴 §3b: the PS2 symbol is a lie — its body is `return gameItemTable;`,
- * the same one-line global accessor. Named for what it does; the twin records the mapping. It
- * belongs to no class, so it takes no `inventory_` prefix. Renamed from `FUN_00559bd0`.
- * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` —
- *   see `exe-re/structs/loadsave.md`.
+ * Evidence: VA 0x00559bd0. Both bodies return the table base and ignore `this`; the PS2
+ *  caller passes the human's inventory too (`param_1 + 0x5cc`).
+ * Renamed from `FUN_00559bd0`.
+ * Class layout: `exe-re/structs/inventory.md`
  */
-undefined4 game_item_table_get(void)
+
+undefined4 inventory_get_left_hand_item_def(void)
 
 {
   return g_game_item_table;
@@ -267174,7 +267290,7 @@ LAB_0055aa83:
  * consider the stash slot too.
  * Returns: uint: 1 when there is room.
  * PS2 twin: `HaveSpaceFor__11G_InventoryFUib`  [STRUCTURAL] ⚠️ the PS2 body
- * is an EMPTY 8-byte stub, so no code diff is possible.
+ * is an 8-byte stub that always returns 1 (`jr ra; li v0, 1`), so no code diff is possible.
  * Evidence: VA 0x0055aac0. Graded on arity 3<->3, the emission rank between `IsIn` and
  * `DobijNaboje`, and the fact that it is the only predicate in that slot. Renamed from
  * `FUN_0055aac0`.
@@ -270911,9 +271027,13 @@ void __thiscall garage_add_car_by_actor(int param_1,int param_2)
   undefined4 uVar6;
   
   if (param_2 != 0) {
+    // Script-only: the callers are the two GARAGE_ADDCAR arms (the car in an actor register,
+    // or the car the player sits in). No police, usability or model test - the four banking
+    // paths of garage_game_done do not call this function and carry their own tests.
     uVar6 = *(undefined4 *)(param_2 + 0x205c);
     uVar1 = car_get_model_level(uVar6);
     uVar2 = car_database_pack_id_by_model(param_2 + 0x20cc,uVar1,uVar6);
+    // A car that holds a slot in the table returns at once.
     piVar4 = (int *)(param_1 + 0xa4);
     iVar5 = 0;
     piVar3 = piVar4;
@@ -270926,6 +271046,7 @@ void __thiscall garage_add_car_by_actor(int param_1,int param_2)
     } while (iVar5 < 0x19);
     iVar5 = 0;
     do {
+      // The first empty slot takes {packed id, live car}; byte +2 of the id is cleared.
       if ((piVar4[-1] == 0) && (*piVar4 == 0)) {
         *(uint *)(param_1 + 0xa0 + iVar5 * 8) = uVar2;
         *(undefined1 *)(param_1 + 0xa2 + iVar5 * 8) = 0;
@@ -270935,6 +271056,7 @@ void __thiscall garage_add_car_by_actor(int param_1,int param_2)
       iVar5 = iVar5 + 1;
       piVar4 = piVar4 + 2;
     } while (iVar5 < 0x19);
+    // A full table drops the car silently; either way its race unlock is enabled.
     iVar5 = car_database_get_car(uVar2 & 0xffff);
     loadsave_race_cars_enable(*(undefined4 *)(iVar5 + 0x84));
   }
@@ -271527,6 +271649,12 @@ void garage_game_done(int param_1)
     for (uVar4 = *(uint *)(param_1 + 4); uVar4 < *(uint *)(param_1 + 8); uVar4 = uVar4 + 4) {
     }
   }
+  // ===== THE GARAGE AREA =====
+  // The marker frames oblast_garaze_a / _b (a Salieri scene.4ds) or, failing that,
+  // watercity.oblast_garaze_a / _b (the city model, models/watercity.4ds). The area is the
+  // X/Z rectangle between their world origins (frame +0x40 / +0x48); height is ignored, and
+  // without both frames the rectangle has zero size at the origin.
+  // See basic/artifacts/garage/storing-cars-in-the-garage.md.
   uStack_84 = 0xffff;
   pcStack_88 = s_oblast_garaze_a_0064d8c4;
   ExceptionList = &pvStack_c;
@@ -271592,6 +271720,11 @@ void garage_game_done(int param_1)
     uStack_5c = *(undefined4 *)(this + 0x44);
     fStack_60 = *(float *)pIVar18;
   }
+  // local_78 / fStack_70 = the minimum X / Z, fStack_60 / fStack_58 = the maximum X / Z.
+  // ===== PATH 1: the 25 slots of the garage table (+0xa0 {packed id, live car}) =====
+  // A slot holding only a packed id is kept. A slot holding a live car is kept when the car
+  // is carried into the next mission (param_1, the list game_done builds) or still passes
+  // car_is_usable(1); every kept car re-enables its race unlock.
   iVar19 = 0;
   piVar15 = unaff_EBP + 0x29;
   piVar20 = unaff_EBP;
@@ -271629,6 +271762,12 @@ LAB_0055e951:
     iVar19 = iVar19 + 1;
     piVar15 = piVar15 + 2;
   } while (iVar19 < 0x19);
+  // ===== PATH 2: the area scan over C_game's ACTIVE actor list (+0xf0, act state 0) =====
+  // A car (kind 4) is banked when its position +0x24 (X) / +0x2c (Z) lies in the area, its
+  // frame is on (+0xac bit 0), it is not a police model (+0x1ff2), its frame name lacks
+  // the case-sensitive "nesahat", car_is_usable(1) holds, it is not listed yet and its
+  // packed id is not 0x39 / 0x3a / 0x3d (the three Bolt trucks). Nothing asks whether the
+  // player ever drove it; scene-placed and spawned cars are both in the list.
   iVar19 = *(int *)(g_act_mission + 0x24);
   piVar15 = *(int **)(iVar19 + 0xf0);
   if (piVar15 < *(int **)(iVar19 + 0xf4)) {
@@ -271673,6 +271812,8 @@ LAB_0055eb66:
       piVar15 = piVar15 + 1;
     } while (piVar15 < *(int **)(iVar19 + 0xf4));
   }
+  // ===== PATH 3: the same area scan over the INACTIVE actor list (+0x100, act state 1) =====
+  // An actor switched off (act state 2) is in neither list and is never banked.
   iVar19 = *(int *)(g_act_mission + 0x24);
   piVar15 = *(int **)(iVar19 + 0x100);
   if (piVar15 < *(int **)(iVar19 + 0x104)) {
@@ -271717,6 +271858,10 @@ LAB_0055ecf2:
       piVar15 = piVar15 + 1;
     } while (piVar15 < *(int **)(iVar19 + 0x104));
   }
+  // ===== PATH 4: the last car the player entered (+0x1e8, garage_set_last_entered_car) ====
+  // Only when the mission ran garage_show (+0x1cc) or garage_addlaststolen (+0x1cd), and
+  // wherever the car stands. Refused: a police model, an unusable car, and the packed ids
+  // 0x39 / 0x3a / 0x3d (the Bolt trucks) and 0x2b (bugatti), which the area scan accepts.
   if ((((char)unaff_EBP[0x73] != '\0') || (*(char *)((int)unaff_EBP + 0x1cd) != '\0')) &&
      ((unaff_EBP[0x7a] != 0 &&
       ((*(char *)(unaff_EBP[0x7a] + 0x1ff2) == '\0' && (cVar3 = car_is_usable(1), cVar3 != '\0'))))))  // +0x1ff2 clear = not a police car (police cars excluded here too)
@@ -271747,6 +271892,9 @@ LAB_0055ede9:
   stub_noop_args8_00575c00(puVar9,puStack_2c);
   iVar19 = iStack_14;
   puStack_2c = puVar9;
+  // The banking above runs on every mission teardown; the discard screen below runs only
+  // when the mission is ending under script control (C_game+0x3665, set by change_mission
+  // and endofmission).
   if (*(char *)(*(int *)(g_act_mission + 0x24) + 0x3665) != '\0') {
     iVar7 = unaff_EBP[0x73];
     while( true ) {
@@ -271772,7 +271920,7 @@ LAB_0055ede9:
       // This caller lockstep is what identifies the screen below as GM_GarageFull rather
       // than its near-identical sibling GM_GarageSelect - the two build almost the same
       // row list, so only the caller discriminates.
-      // See exe-re/structs/garage.md SS3.
+      // See exe-re/structs/garage.md §3.
       if (uVar4 <= (iVar10 - (uint)((char)iVar7 != '\0')) + 0x10) break;
       pcStack_88 = (char *)operator_new(0x50);
       uStack_1c = 2;
@@ -271844,6 +271992,9 @@ LAB_0055ef75:
       piVar15 = piVar15 + 3;
     } while (piVar8 < piVar16);
   }
+  // A parked car that is not carried into the next mission leaves the world here: its
+  // occupants are taken out, it leaves both actor lists, the radar and the scene, and its
+  // slot keeps only the packed id.
   pcStack_88 = (char *)0x19;
   piVar15 = piVar20 + 0x29;
   iVar19 = iStack_14;
@@ -271990,6 +272141,8 @@ LAB_0055f261:
         piVar16 = piStack_50 + 1;
         piVar12 = piVar20;
         do {
+          // A newly banked car (slot -1) takes the first free slot: the packed id always,
+          // the live pointer only when the car is carried into the next mission.
           if (piVar16[1] == -1) {
             iVar19 = *piStack_40;
             piVar11 = piVar15;
@@ -272027,6 +272180,8 @@ LAB_0055f261:
           piVar16 = piVar16 + 3;
         } while (piVar14 < piStack_4c);
       }
+      // The results screen ("New cars have been added to the garage") needs both the
+      // script-controlled end (C_game+0x3665) and garage_show (+0x1cc).
       if ((*(char *)(*(int *)(g_act_mission + 0x24) + 0x3665) != '\0') &&
          ((char)piVar20[0x73] != '\0')) {
         garage_show_results();
@@ -272416,18 +272571,26 @@ LAB_0055fae9:
 }
 
 /*
- * garage_generate_cars — Script hook for populating the garage — does nothing.
+ * garage_request_add_last_stolen - request that the tracked car be banked at mission end
  *
- * What it does: Empty on both builds.
- * Parameters: none.
+ * What it does: sets the one-shot request byte `+0x1cd` of the garage block to 1.
+ *  `garage_game_done` banks the tracked car when `+0x1cc` or `+0x1cd` is set and then clears
+ *  both (`exe-re/structs/garage.md` 2a).
+ * Parameters:
+ *  param_1 (this, ECX): the garage block of the `G_LoadSaveClass` singleton `0x00671fb0`.
  * Returns: void.
- * PS2 twin: `GenerateCars__13G_GarageClassFv`  [CONFIRMED]
- * Evidence: VA 0x0055fc90. 🎯 EIGHT BYTES ON BOTH BUILDS, both empty, both reached from the script
- * VM. The adjacent empty pair is the anchor that fixed this whole rank. Renamed from `FUN_0055fc90`.
- * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` —
- *   see `exe-re/structs/loadsave.md`.
+ * PS2 twin: `AddLastStolen__13G_GarageClassFv`  [CONFIRMED]
+ * Evidence: VA 0x0055fc90. Body `mov byte [ecx+0x1cd], 1; ret`; the PS2 body stores 1 to
+ *  `+0x7d`. Both builds call it from the `GARAGE_ADDLASTSTOLEN` arm (PC case `0xc8`), and both
+ *  `GameDone` bodies test the two request bytes in one condition. The `GARAGE_GENERATECARS`
+ *  arm calls the shared empty `stub_noop_cdecl_00574a40` on the PC and the empty
+ *  `GenerateCars` on the PS2.
+ * Renamed from `FUN_0055fc90`.
+ * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)`,
+ *  see `exe-re/structs/loadsave.md`.
  */
-void __fastcall garage_generate_cars(int param_1)
+
+void __fastcall garage_request_add_last_stolen(int param_1)
 
 {
   *(undefined1 *)(param_1 + 0x1cd) = 1;
@@ -272435,18 +272598,26 @@ void __fastcall garage_generate_cars(int param_1)
 }
 
 /*
- * garage_release_cars — Script hook for releasing the garage cars — does nothing.
+ * garage_request_show_results - request the end-of-mission garage report
  *
- * What it does: Empty on both builds.
- * Parameters: none.
+ * What it does: sets the one-shot request byte `+0x1cc` of the garage block to 1.
+ *  `garage_game_done` banks the tracked car when `+0x1cc` or `+0x1cd` is set, and when
+ *  `+0x1cc` is set it also runs `garage_show_results`, the design-`0x27` report screen.
+ * Parameters:
+ *  param_1 (this, ECX): the garage block of the `G_LoadSaveClass` singleton `0x00671fb0`.
  * Returns: void.
- * PS2 twin: `ReleaseCars__13G_GarageClassFv`  [CONFIRMED]
- * Evidence: VA 0x0055fca0. The second half of the empty pair; same size, same emptiness, same
- * script caller. Renamed from `FUN_0055fca0`.
- * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` —
- *   see `exe-re/structs/loadsave.md`.
+ * PS2 twin: `ShowResults__13G_GarageClassFv`  [CONFIRMED]
+ * Evidence: VA 0x0055fca0. Body `mov byte [ecx+0x1cc], 1; ret`; the PS2 body stores 1 to
+ *  `+0x7c`, and the PS2 `GameDone` opens its results screen on `+0x7c` alone. Both builds
+ *  call it from the `GARAGE_SHOW` arm (PC case `0xc9`). The `GARAGE_RELEASECARS` arm calls
+ *  the shared empty `stub_noop_cdecl_00574a40` on the PC and the empty `ReleaseCars` on the
+ *  PS2.
+ * Renamed from `FUN_0055fca0`.
+ * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)`,
+ *  see `exe-re/structs/loadsave.md`.
  */
-void __fastcall garage_release_cars(int param_1)
+
+void __fastcall garage_request_show_results(int param_1)
 
 {
   *(undefined1 *)(param_1 + 0x1cc) = 1;
@@ -272602,19 +272773,25 @@ code_r0x0055fd7c:
 }
 
 /*
- * garage_set_stolen_car — Records the car the player is currently stealing.
+ * garage_set_last_entered_car - remember the last car the player got into
  *
- * What it does: `*(this+0x1e8) = car`.
- * Parameters: param_1 (int): the singleton (ECX). param_2 (undefined4): the car record.
+ * What it does: `*(this+0x1e8) = car`. human_use_actor calls it on every car the
+ *  player enters (no ownership or theft test), engine_new_mission with the car carried
+ *  into the new mission, and human_save_game_load when a save is restored.
+ *  garage_game_done banks this car wherever it stands when the mission ran
+ *  garage_show or garage_addlaststolen (exe-re/basic/artifacts/garage).
+ * Parameters: param_1 (int): the G_GarageClass singleton (ECX). param_2: the C_car.
  * Returns: void.
  * PS2 twin: `CarIsStolen__13G_GarageClassFP5C_car`  [CONFIRMED]
- * Evidence: VA 0x0055fea0. Same single store in the same rank; the PS2 additionally adds a radar
- * blip, the PC does not. Bracketed by `garage_set_blocked_car`, which is byte-for-byte. Renamed
- * from `FUN_0055fea0`.
- * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` —
+ * Evidence: VA 0x0055fea0. Same single store in the same rank; the PS2 additionally
+ *  adds a radar blip, the PC does not. The PS2 callers are C_human::Intern_UseCar,
+ *  Do_ClimbInCarLR and SaveGameLoad, the same roles. Bracketed by
+ *  garage_set_blocked_car, which is byte-for-byte. Renamed from `FUN_0055fea0`.
+ * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` -
  *   see `exe-re/structs/loadsave.md`.
  */
-void __thiscall garage_set_stolen_car(int param_1,undefined4 param_2)
+
+void __thiscall garage_set_last_entered_car(int param_1,undefined4 param_2)
 
 {
   *(undefined4 *)(param_1 + 0x1e8) = param_2;
@@ -284073,7 +284250,7 @@ LAB_0056e117:
  * Evidence: VA 0x0056e3f0. The push/pop pair around the construction is what proves the role
  *  of the two `g_hud_flags` stack globals. Renamed from `FUN_0056e3f0`.
  *  ⚠️ This def lives in the CLOSED `g_menu.cpp` TU `[0x0056adf0, 0x00575c20)`.
- * Doc: `exe-re/structs/gui_screen.md` SS10, `exe-re/structs/game_menus.md` SS3.
+ * Doc: `exe-re/structs/gui_screen.md` §10, `exe-re/structs/game_menus.md` §3.
  */
 void __fastcall gui_notice_panel_present_once(undefined4 param_1,undefined4 param_2)
 
@@ -287050,7 +287227,7 @@ void __fastcall gui_widget_window_scroll_page_down(int param_1)
  * of `gui_load_game_tick`, which hit-tests component 4 and passes the WHEEL delta. ⚠️ PC/PS2 field
  * roles are SWAPPED for this class: PC `+0x44` is the target and `+0x40` the current value; on the
  * PS2 `+0x40` is the target and `+0x44` the current.
- * Doc: `exe-re/structs/gui_widget.md` SS7.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  * Renamed from `FUN_00570c30`.
  */
 void __thiscall gui_widget_window_scroll_by(int param_1,float param_2)
@@ -292617,7 +292794,7 @@ gui_combo_dropdown_screen_ctor(undefined4 *param_1,undefined4 param_2,undefined4
  * here.
  * Evidence: VA 0x00575ea0, vtable `0x0063ddfc` slot 5. The click-outside dismissal is PC-only -
  * there is no mouse on the console.
- * Doc: `exe-re/structs/game_menus.md` SS3a.
+ * Doc: `exe-re/structs/game_menus.md` §3a.
  * Renamed from `FUN_00575ea0`.
  */
 undefined4 __thiscall
@@ -292678,7 +292855,7 @@ gui_combo_dropdown_tick(int *param_1,undefined4 param_2,uint param_3,int param_4
  *  1320/1321), `gui_notice_panel_present_once`, `net_host_session_start`,
  *  `net_open_session_browser` and three in `net_multiplayer_run`.
  *  Renamed from `FUN_00575f50`.
- * Doc: `exe-re/structs/game_menus.md` SS3.
+ * Doc: `exe-re/structs/game_menus.md` §3.
  */
 undefined4 * __thiscall
 gui_notice_panel_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
@@ -292704,7 +292881,7 @@ gui_notice_panel_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
   // of `GM_QuestionBox` is `gui_question_box_ctor` / `gui_question_box_tick` on shipped
   // design 1. This class is a two-line NOTICE PANEL and its own PS2 counterpart is OPEN -
   // not searched, not tagged terminal.
-  // See `exe-re/structs/game_menus.md` SS3.
+  // See `exe-re/structs/game_menus.md` §3.
   gui_menu_build_components_from_design(&g_gui_screen_design_table,0,0);
   param_1[0x10] = param_1[0x10] | 0x80000;
   gui_menu_set_component_text_id(0x82,param_4);
@@ -292788,7 +292965,7 @@ gui_notice_panel_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
  * PS2 twin: - (PC-only; see `gui_notice_panel_ctor`).
  * Evidence: VA 0x005761d0, 639 bytes - the same size as the id-taking overload. Callers:
  * `entity_process_command` (entity-script command `0x1010`) and `gui_gun_shop_tick`.
- * Doc: `exe-re/structs/game_menus.md` SS3.
+ * Doc: `exe-re/structs/game_menus.md` §3.
  * Renamed from `FUN_005761d0`.
  */
 undefined4 * __thiscall
@@ -292894,7 +293071,7 @@ gui_notice_panel_ctor_from_strings(undefined4 *param_1,undefined4 param_2,undefi
  * PS2 twin: - (PC-only; see `gui_notice_panel_ctor`). Design 0 has NO buttons, which is the
  * clearest single reason this class is not `GM_QuestionBox`.
  * Evidence: VA 0x00576450, vtable `0x0063de14` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS3.
+ * Doc: `exe-re/structs/game_menus.md` §3.
  * Renamed from `FUN_00576450`.
  */
 undefined4 __thiscall
@@ -292937,7 +293114,7 @@ gui_notice_panel_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefin
  * Evidence: VA 0x005764c0. `gui_profile_delete_tick` opens it with textdb `0x82` "Delete" - exactly
  * the id PS2 `OnClick__16GM_ProfileDeleteFUi` passes to `GM_QuestionBox` at the same site. Another
  * caller passes textdb 716 "Abort game?".
- * Doc: `exe-re/structs/game_menus.md` SS3.
+ * Doc: `exe-re/structs/game_menus.md` §3.
  * Renamed from `FUN_005764c0`.
  */
 undefined4 * __thiscall
@@ -292962,7 +293139,7 @@ gui_question_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
   // `+0x2c`/`+0x30` plus a bool; the framework then calls `OnCreate` to build and
   // re-lay-out the box. The `0x8a`/`0x8b` ids belong to this class, not to the
   // design-0 notice panel.
-  // See `exe-re/structs/game_menus.md` SS3.
+  // See `exe-re/structs/game_menus.md` §3.
   gui_menu_build_components_from_design(&g_gui_screen_design_table,1,0);
   param_1[0x10] = param_1[0x10] | 0x80000;
   gui_menu_set_component_text_id(0x82,param_4);
@@ -292988,7 +293165,7 @@ gui_question_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
  * Same two ids, the SAME two result constants 0xb and 0xc, ESC mapped to
  * the No path on both builds, and the same root-vs-child fork (PS2 tests `+0x20`, PC `+0x18`).
  * Evidence: VA 0x00576560, vtable `0x0063de2c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS3.
+ * Doc: `exe-re/structs/game_menus.md` §3.
  * Renamed from `FUN_00576560`.
  */
 undefined4 __thiscall
@@ -293046,7 +293223,7 @@ gui_question_box_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 pa
  * vocabulary three ways - notice panel, question box, message box.
  * Evidence: VA 0x00576620. Callers include the profile flow ("This Profile Already Exists", textdb
  * `0x83`) and five sites in `net_multiplayer_run` that pass `g_net_session+0x1fc`.
- * Doc: `exe-re/structs/game_menus.md` SS3.
+ * Doc: `exe-re/structs/game_menus.md` §3.
  * Renamed from `FUN_00576620`.
  */
 undefined4 * __thiscall
@@ -293117,7 +293294,7 @@ gui_message_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,u
  * PS2 twin: none - see `gui_message_box_ctor`. In PS2 terms this is a 2 -> 1 fold of what would be
  * OnClick and OnKey.
  * Evidence: VA 0x005767a0, vtable `0x0063de44` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS3.
+ * Doc: `exe-re/structs/game_menus.md` §3.
  * Renamed from `FUN_005767a0`.
  */
 undefined4 __thiscall
@@ -293153,7 +293330,7 @@ gui_message_box_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 par
  * body that sets the SAME component `0x82` to the SAME textdb id `0x77`.
  * Evidence: VA 0x00576810, opened from `gui_main_menu_tick` case `0xf1ba1` with
  * `operator_new(0x48)`.
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  * Renamed from `FUN_00576810`.
  */
 undefined4 * __thiscall gui_main_menu_exit_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -293189,7 +293366,7 @@ undefined4 * __thiscall gui_main_menu_exit_box_ctor(undefined4 *param_1,undefine
  * PS2 twin: `OnClick__15GM_MainMenuExitFUi` [CONFIRMED]. Same two ids and
  * the SAME result constant 0x18. A 2 -> 1 fold - it also carries the PS2 `OnKey` ESC arm.
  * Evidence: VA 0x00576890, vtable `0x0063de5c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  * Renamed from `FUN_00576890`.
  */
 undefined4 __thiscall
@@ -293221,7 +293398,7 @@ gui_main_menu_exit_box_tick(int *param_1,undefined4 param_2,uint param_3,undefin
  *  group that carries the extra "Free Ride Extreme" row. Then it points the menu camera at
  *  item `0xf1b31`, disables `0xf1b9a` (Free Ride Extreme) when `g_freeride_unlock_level < 3`, and
  *  disables AND DELETES `0xf1b9b` and `0xf1b9c` - the two rows the retail `menu.def` does not
- *  ship (`0xf1b9c` is the cut Multiplayer entry, `structs/multiplayer.md` SS1). Finally it
+ *  ship (`0xf1b9c` is the cut Multiplayer entry, `structs/multiplayer.md` §1). Finally it
  *  seeds the free-ride parameter block through `loadsave_freeride_store_params`.
  * Parameters: param_1 (undefined4 *, ECX): the new screen; param_2: the parent screen;
  *  param_3 (undefined4): the screen id handed back on close.
@@ -293231,7 +293408,7 @@ gui_main_menu_exit_box_tick(int *param_1,undefined4 param_2,uint param_3,undefin
  *  gates on `ProfileNumEnabledSaves` where the PC gates on the shipped design.
  * Evidence: VA 0x00576920. Design 6's frame caption is textdb 101 "Main Menu:".
  *  Renamed from `FUN_00576920`.
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  */
 undefined4 * __thiscall gui_main_menu_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -293287,7 +293464,7 @@ undefined4 * __thiscall gui_main_menu_ctor(undefined4 *param_1,undefined4 param_
  * this screen has no ESC arm.
  * Evidence: VA 0x00576a20, vtable `0x0063de74` slot 5. `0xf1b9b`/`0xf1b9c` are the two rows the
  * retail `menu.def` does not ship, which is why the constructor deletes them.
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  * Renamed from `FUN_00576a20`.
  */
 undefined4 __thiscall
@@ -293400,7 +293577,7 @@ switchD_00576a74_default:
  * PS2 twin: `OnCreate__15GM_GameMenuExitFv` [CONFIRMED] - sets the SAME
  * component `0x82` to the SAME textdb id `0x95` (it additionally pre-focuses `0x8b`).
  * Evidence: VA 0x00576cc0, opened from `gui_game_menu_tick` case `0x66`.
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  * Renamed from `FUN_00576cc0`.
  */
 undefined4 * __thiscall gui_game_menu_exit_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -293437,7 +293614,7 @@ undefined4 * __thiscall gui_game_menu_exit_box_ctor(undefined4 *param_1,undefine
  * split and the same shape; the close result is per-build (PC 0x21, PS2 0x26). A 2 -> 1 fold
  * (+OnKey).
  * Evidence: VA 0x00576d40, vtable `0x0063de8c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  * Renamed from `FUN_00576d40`.
  */
 undefined4 __thiscall
@@ -293478,7 +293655,7 @@ gui_game_menu_exit_box_tick(int *param_1,undefined4 param_2,uint param_3,undefin
  * Evidence: VA 0x00576dd0. Design 7's frame caption is textdb 140 "Game menu:".
  *  The TU also holds the racing variant `gui_racing_game_menu_ctor` (design 0x2e).
  *  Renamed from `FUN_00576dd0`.
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  */
 undefined4 * __thiscall gui_game_menu_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -293511,7 +293688,7 @@ undefined4 * __thiscall gui_game_menu_ctor(undefined4 *param_1,undefined4 param_
  * OnBeforeCreate - there is no `OnExchange` override, because the console build cannot change
  * language or resolution at runtime.
  * Evidence: VA 0x00576e30, vtable `0x0063dea4` slot 1 (read from the vtable, not source order).
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  * Renamed from `FUN_00576e30`.
  */
 void __fastcall gui_game_menu_on_exchange(int param_1)
@@ -293539,7 +293716,7 @@ void __fastcall gui_game_menu_on_exchange(int param_1)
  * ids, and `0x6c` opens `GM_Options` on both builds. A 2 -> 1 fold (+`OnKey__11GM_GameMenuFUcUi`).
  * Evidence: VA 0x00576e60, vtable `0x0063dea4` slot 5. Design 7 ships rows 102/103/108/111 =
  * `0x66`/`0x67`/`0x6c`/`0x6f`.
- * Doc: `exe-re/structs/game_menus.md` SS2.
+ * Doc: `exe-re/structs/game_menus.md` §2.
  * Renamed from `FUN_00576e60`.
  */
 undefined4 __thiscall
@@ -293624,7 +293801,7 @@ switchD_00576ee9_caseD_68:
  * Evidence: VA 0x00576fe0, vtable `0x0063dec4` slot-less ctor; design literal 8 in
  * `gui_menu_build_components_from_design`. Slot 1 is the only screen in the TU that stubs
  * `OnExchange` to a no-op instead of forwarding to the parent.
- * Doc: `exe-re/structs/game_menus.md` SS4a.
+ * Doc: `exe-re/structs/game_menus.md` §4a.
  * Renamed from `FUN_00576fe0`.
  */
 undefined4 * __thiscall gui_options_audio_video_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -293695,7 +293872,7 @@ void thunk_gui_menu_on_close_child(void)
  * Evidence: VA 0x005771b0, vtable `0x0063dec4` slot 5. The `0.625` and `1.4285715` seeds in the
  * constructor are the exact inverses of the two display setters' clamps, which is what pins each
  * slider to its field.
- * Doc: `exe-re/structs/game_menus.md` SS4a.
+ * Doc: `exe-re/structs/game_menus.md` §4a.
  * Renamed from `FUN_005771b0`.
  */
 int __thiscall
@@ -293909,7 +294086,7 @@ switchD_0057721d_caseD_21:
  * with the IDENTICAL mask `0xfffeffff`. The PS2 additionally seeds its volume sliders here; on the
  * PC those live on the separate audio/video page.
  * Evidence: VA 0x00577990. Design 9 ships 100 "Controls", 101 "Audio & Video", 400 "Back".
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_00577990`.
  */
 undefined4 * __thiscall gui_options_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -293947,7 +294124,7 @@ undefined4 * __thiscall gui_options_ctor(undefined4 *param_1,undefined4 param_2,
  * `GM_OptionsControls` on both builds. A 2 -> 1 fold (+OnKey). The PS2's save-and-close arm has no
  * PC counterpart because the PC persists settings from the pages themselves.
  * Evidence: VA 0x00577a20, vtable `0x0063dedc` slot 5; the three ids are design 9's rows.
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_00577a20`.
  */
 undefined4 __thiscall
@@ -294014,7 +294191,7 @@ gui_options_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4
  * bit with the identical mask `0xfffeffff` and then delegates the text seeding, exactly as the PC
  * does (here the seeding lives in slot 1, `gui_options_controls_on_exchange`).
  * Evidence: VA 0x00577b10. Design 10's frame caption is textdb 205 "Player Controls:".
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_00577b10`.
  */
 undefined4 * __thiscall gui_options_controls_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -294056,7 +294233,7 @@ undefined4 * __thiscall gui_options_controls_ctor(undefined4 *param_1,undefined4
  * is shared.
  * Evidence: VA 0x00577b90, vtable `0x0063def4` slot 1. The identical seeding block is INLINED a
  * second time in the tick's "restore defaults" arm (id `0x35`).
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_00577b90`.
  */
 void __fastcall gui_options_controls_on_exchange(int param_1)
@@ -294082,7 +294259,7 @@ void __fastcall gui_options_controls_on_exchange(int param_1)
   // the seeding is inlined here, and again in the tick's `case 0x35` (restore
   // defaults). The PS2 version seeds 0x12 key-name rows per device; the PC seeds
   // sliders and toggle labels, which is why the pairing is STRUCTURAL.
-  // See `exe-re/structs/game_menus.md` SS4.
+  // See `exe-re/structs/game_menus.md` §4.
   gui_menu_set_component_float(0x44,g_steering_linearity);
   gui_menu_set_component_float(0x41,g_aiming_sensitivity_x);
   gui_menu_set_component_float(0x42,g_aiming_sensitivity_y);
@@ -294140,7 +294317,7 @@ void __fastcall gui_options_controls_on_exchange(int param_1)
  * OnKey, SetUpTexts, {dtor}, OnBeforeCreate) - it has no `OnClose`/`MenuClose` override, and the
  * PS2 has no speedometer unit switch.
  * Evidence: VA 0x00577d20, vtable `0x0063def4` slot 4.
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_00577d20`.
  */
 void gui_options_controls_close(undefined4 param_1,undefined4 param_2)
@@ -294170,7 +294347,7 @@ void gui_options_controls_close(undefined4 param_1,undefined4 param_2)
  * method is an EMPTY STUB (`return 0`), so no body agreement is assertable; the pairing rests on
  * the class and the slot. A 3 -> 1 fold: it also carries the PS2 `OnKey` and `Tick`.
  * Evidence: VA 0x00577d50, vtable `0x0063def4` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_00577d50`.
  */
 int __thiscall
@@ -294235,7 +294412,7 @@ LAB_00577ddb:
         // PS2-INLINED HERE (second copy): the block below is
         // `SetUpTexts__18GM_OptionsControlsFv` again - the same PS2 method the PC inlines
         // in `gui_options_controls_on_exchange`. On the PS2 this arm would be one CALL.
-        // See `exe-re/structs/game_menus.md` SS4.
+        // See `exe-re/structs/game_menus.md` §4.
         gui_menu_set_component_float(0x44,g_steering_linearity);
         gui_menu_set_component_float(0x41,g_aiming_sensitivity_x);
         gui_menu_set_component_float(0x42,g_aiming_sensitivity_y);
@@ -294435,7 +294612,7 @@ switchD_0057802a_caseD_47:
  * control PRESET, and the closed `GM_*` roster contains no capture screen.
  * Evidence: VA 0x005782e0, vtable `0x0063df0c`; design literal 0xb. Opened from
  * `gui_options_controls_tick` and from both key-binding widgets.
- * Doc: `exe-re/structs/game_menus.md` SS4b.
+ * Doc: `exe-re/structs/game_menus.md` §4b.
  * Renamed from `FUN_005782e0`.
  */
 undefined4 * __thiscall
@@ -294478,7 +294655,7 @@ gui_key_capture_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,u
  * Returns: void.
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x00578370, vtable `0x0063df0c` slot 3.
- * Doc: `exe-re/structs/game_menus.md` SS4b.
+ * Doc: `exe-re/structs/game_menus.md` §4b.
  * Renamed from `FUN_00578370`.
  */
 void __thiscall gui_key_capture_on_close_child(int *param_1,undefined4 param_2,undefined4 param_3)
@@ -294508,7 +294685,7 @@ void __thiscall gui_key_capture_on_close_child(int *param_1,undefined4 param_2,u
  * Evidence: VA 0x005783a0 (657 B), vtable `0x0063df0c` slot 5. The `*0xc` stride and the
  * `g_key_binding_table` records (`S_key_binding`: `.device_kind`/`.code` at +4, `.device_index`
  * at +8) are the binding table; its writer in the input subsystem is still unread.
- * Doc: `exe-re/structs/game_menus.md` SS4b.
+ * Doc: `exe-re/structs/game_menus.md` §4b.
  * Renamed from `FUN_005783a0`.
  */
 undefined4 __thiscall
@@ -294703,7 +294880,7 @@ LAB_00578601:
  * PS2 twin: none - the console has no key rebinding, so it has no conflict box either.
  * Evidence: VA 0x005786e0, vtable `0x0063df24`; design literal 0x35 (textdb 185 'Control already
  * used', 186 'Use new setting?', 189 'Already used by:').
- * Doc: `exe-re/structs/game_menus.md` SS4b.
+ * Doc: `exe-re/structs/game_menus.md` §4b.
  * Renamed from `FUN_005786e0`.
  */
 undefined4 * __thiscall
@@ -294752,7 +294929,7 @@ gui_key_conflict_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
  * vtables spanning the racing menus, the multiplayer front end and this TU. It is the
  * screen-side counterpart of `gui_widget_scalar_deleting_dtor_common`, which covers 46 of the
  * 53 widgets.
- * Doc: `exe-re/structs/gui_screen.md` SS3.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  * Renamed from `FUN_00578790`.
  */
 undefined4 __thiscall gui_menu_scalar_deleting_dtor_common(undefined4 param_1,byte param_2)
@@ -294801,7 +294978,7 @@ void __fastcall thunk_gui_menu_dtor(undefined4 *param_1)
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x005787c0, vtable `0x0063df24` slot 5. It writes the same `*0xc` binding record as
  * `gui_key_capture_tick`, which is what pairs the two screens.
- * Doc: `exe-re/structs/game_menus.md` SS4b.
+ * Doc: `exe-re/structs/game_menus.md` §4b.
  * Renamed from `FUN_005787c0`.
  */
 undefined4 __thiscall
@@ -294877,7 +295054,7 @@ switchD_0057883e_caseD_6:
  * PS2 twin: none - the PS2 has no inventory screen, and its HUD build formats the equivalent
  * strings inline with `sprintf`.
  * Evidence: VA 0x00578940. Called eight times by `gui_inventory_ctor`, once per fixed slot.
- * Doc: `exe-re/structs/game_menus.md` SS4c.
+ * Doc: `exe-re/structs/game_menus.md` §4c.
  * Renamed from `FUN_00578940`.
  */
 void gui_inventory_format_slot_row(undefined4 param_1,undefined4 param_2,undefined4 param_3,ushort *param_4)
@@ -294933,7 +295110,7 @@ void gui_inventory_format_slot_row(undefined4 param_1,undefined4 param_2,undefin
  * alternative location, not a failed grep.
  * Evidence: VA 0x00578a30, vtable `0x0063df3c`; design literal 0xf. `+0x848` is the same field the
  * gun-shop screen uses, so the two classes share a layout.
- * Doc: `exe-re/structs/game_menus.md` SS4c.
+ * Doc: `exe-re/structs/game_menus.md` §4c.
  * Renamed from `FUN_00578a30`.
  */
 undefined4 * __thiscall
@@ -295051,7 +295228,7 @@ gui_inventory_ctor(undefined4 *param_1,uint param_2,float param_3,int param_4,un
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x00578d10, vtable `0x0063df3c` slot 3. The `0xbc` stride into `g_game_item_table`
  * is the shared `predmety.def` record size.
- * Doc: `exe-re/structs/game_menus.md` SS4c.
+ * Doc: `exe-re/structs/game_menus.md` §4c.
  * Renamed from `FUN_00578d10`.
  */
 void gui_inventory_on_close_child(int param_1,uint param_2)
@@ -295090,7 +295267,7 @@ void gui_inventory_on_close_child(int param_1,uint param_2)
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x00578d90, vtable `0x0063df3c` slot 5. The five `kind` constants are the same enum
  * `inventory_select_slot` takes elsewhere.
- * Doc: `exe-re/structs/game_menus.md` SS4c.
+ * Doc: `exe-re/structs/game_menus.md` §4c.
  * Renamed from `FUN_00578d90`.
  */
 uint __thiscall
@@ -295231,7 +295408,7 @@ LAB_00578f08:
  *    this constructor and closes with `0xb3`. The PC runs the same test — same `& 2`
  *    flag on the same mission field — in `gui_action_menu_tick` instead. Do not read
  *    that as a fold; both builds have both functions.
- * Doc: `exe-re/structs/game_menus.md` SS4d.
+ * Doc: `exe-re/structs/game_menus.md` §4d.
  */
 undefined4 * __thiscall
 gui_action_menu_ctor(undefined4 *param_1,float param_2,int *param_3,undefined4 param_4,undefined4 param_5,
@@ -295403,7 +295580,7 @@ gui_action_menu_ctor(undefined4 *param_1,float param_2,int *param_3,undefined4 p
  * Evidence: VA 0x00579480, vtable `0x0063df54` slot 0. This is the only screen in the TU with a
  * class-specific slot 0; every sibling shares `gui_menu_scalar_deleting_dtor_common`, because only
  * this class owns heap storage of its own.
- * Doc: `exe-re/structs/game_menus.md` SS4d.
+ * Doc: `exe-re/structs/game_menus.md` §4d.
  * Renamed from `FUN_00579480`.
  */
 undefined4 __thiscall gui_action_menu_scalar_deleting_dtor(undefined4 param_1,byte param_2)
@@ -295427,7 +295604,7 @@ undefined4 __thiscall gui_action_menu_scalar_deleting_dtor(undefined4 param_1,by
  * destroys the `gif::vector` at `+0x40` and chains to `~GM_Menu`. `+0x1060` and PS2 `+0x40` are
  * the same member under the class's constant `+0x101c` field-offset delta.
  * Evidence: VA 0x005794a0. Reached only through slot 0.
- * Doc: `exe-re/structs/game_menus.md` SS4d.
+ * Doc: `exe-re/structs/game_menus.md` §4d.
  * Renamed from `FUN_005794a0`.
  */
 void __fastcall gui_action_menu_dtor(int param_1)
@@ -295457,11 +295634,11 @@ void __fastcall gui_action_menu_dtor(int param_1)
  * statement: the same stride-0x10 linear scan of the world vector for the record POINTER, the same
  * two conditional 0x10-stride push-backs gated by the same bool, and the same fall-through loop
  * calling `G_Inventory::RemoveByPtr` over the actor vector. The verb is carried from the PS2
- * because the signature and the behaviour agree with it (naming rule SS3c).
+ * because the signature and the behaviour agree with it.
  * Evidence: VA 0x005794d0. Field map is 1:1 at a constant `+0x101c` delta: PC `+0x104c`/`+0x1050`
  * /`+0x1054`/`+0x1058`/`+0x1060` are PS2 `+0x30`/`+0x34`/`+0x38`/`+0x3c`/`+0x40`. This closes a
- * method `game_menus.md` SS10d listed as having no PC counterpart located.
- * Doc: `exe-re/structs/game_menus.md` SS4d.
+ * method `game_menus.md` §10d listed as having no PC counterpart located.
+ * Doc: `exe-re/structs/game_menus.md` §4d.
  * Renamed from `FUN_005794d0`.
  */
 void __thiscall gui_action_menu_pick_up(int param_1,int param_2,char param_3)
@@ -295510,7 +295687,7 @@ void __thiscall gui_action_menu_pick_up(int param_1,int param_2,char param_3)
  * PS2 twin: none. `GM_ItemPickUp` has no `OnCloseChild` override at all - on that build the
  * equivalent decision is taken inside `OnCreate`, which auto-takes a lone option and closes.
  * Evidence: VA 0x00579590, vtable `0x0063df54` slot 3.
- * Doc: `exe-re/structs/game_menus.md` SS4d.
+ * Doc: `exe-re/structs/game_menus.md` §4d.
  * Renamed from `FUN_00579590`.
  */
 void __thiscall gui_action_menu_on_close_child(int param_1,int param_2,int param_3)
@@ -295547,7 +295724,7 @@ void __thiscall gui_action_menu_on_close_child(int param_1,int param_2,int param
  * Evidence: VA 0x00579610, vtable `0x0063df54` slot 5. The lone-option auto-take is the same test
  * the PS2 runs in `OnCreate` (same `& 2` flag on the same mission field) - relocated across
  * virtuals, not inlined.
- * Doc: `exe-re/structs/game_menus.md` SS4d.
+ * Doc: `exe-re/structs/game_menus.md` §4d.
  * Renamed from `FUN_00579610`.
  */
 int __thiscall
@@ -295681,7 +295858,7 @@ LAB_0057980b:
  * agreement is assertable.
  * Evidence: VA 0x00579900. Design 4's frame caption is textdb 120 "Player Profile:" and its rows
  * are 100 "< none >", 201 Create, 202 Delete, 203 Quit Game.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_00579900`.
  */
 undefined4 * __thiscall gui_profile_select_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -295726,7 +295903,7 @@ undefined4 * __thiscall gui_profile_select_ctor(undefined4 *param_1,undefined4 p
  * PS2 twin: none. Measured against the complete `GM_ProfileSelect` method set (OnKey, OnCreate,
  * OnCloseChild, OnTick, OnClick, {dtor}, OnBeforeCreate) - it has no `OnExchange` override.
  * Evidence: VA 0x005799d0, vtable `0x0063df6c` slot 1.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_005799d0`.
  */
 void __fastcall gui_profile_select_on_exchange(int param_1)
@@ -295760,7 +295937,7 @@ void __fastcall gui_profile_select_on_exchange(int param_1)
  * Evidence: VA 0x00579a00. The 0x54 stride and the `+0x10` name offset are PC facts read off the
  * three consumers of the profile vector in this TU. `folded_return_this` (0x005575f0) is the
  * folded `return this` accessor that yields it.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_00579a00`.
  */
 void __fastcall gui_profile_select_build_rows(int param_1)
@@ -295856,7 +296033,7 @@ void __fastcall gui_profile_select_build_rows(int param_1)
  * same slot and same role, but the PS2 body is a memory-card state machine, so nothing beyond the
  * role is shared.
  * Evidence: VA 0x00579bf0, vtable `0x0063df6c` slot 3.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_00579bf0`.
  */
 void __thiscall gui_profile_select_on_close_child(int *param_1,int param_2,int param_3)
@@ -295914,7 +296091,7 @@ LAB_00579c66:
  * the same `100..199` row band with the same `id - 100` index, the same "at least one profile"
  * guard on Delete, and the SAME two result constants 0xf and 0x10.
  * Evidence: VA 0x00579cc0, vtable `0x0063df6c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_00579cc0`.
  */
 undefined4 __thiscall
@@ -296063,7 +296240,7 @@ gui_profile_select_tick(int *param_1,undefined4 param_2,undefined4 param_3,undef
  * which the PC replaces with the engine text-input mode switch.
  * Evidence: VA 0x00579fb0. Design 3 ships ids 1 (caption, textdb 127), 11 = `0xb` (the edit field),
  * 101 = `0x65` OK and 102 = `0x66` Cancel.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_00579fb0`.
  */
 undefined4 * __thiscall
@@ -296109,7 +296286,7 @@ gui_profile_create_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_
  * Evidence: VA 0x0057a070, vtable `0x0063df84` slot 0. Notable because this is one of the few
  * screens that does NOT use the shared `gui_menu_scalar_deleting_dtor_common` - it has real
  * teardown work to do.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057a070`.
  */
 undefined4 __thiscall gui_profile_create_scalar_deleting_dtor(undefined4 param_1,byte param_2)
@@ -296134,7 +296311,7 @@ undefined4 __thiscall gui_profile_create_scalar_deleting_dtor(undefined4 param_1
  * PS2 has no input-mode switch to undo, so only the destructor role corresponds.
  * Evidence: VA 0x0057a090. The 2 -> 1 pairing of this call with the constructor's is what proves
  * `g_engine` vtable `+0x88` is a keyboard/text-input mode selector.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057a090`.
  */
 void __fastcall gui_profile_create_dtor(undefined4 *param_1)
@@ -296173,7 +296350,7 @@ void __fastcall gui_profile_create_dtor(undefined4 *param_1)
  * result constants 0xd and 0xe, and the same root-vs-child fork; the PS2 `OnKey` literally
  * forwards ESC to `OnClick(0x66)`.
  * Evidence: VA 0x0057a0f0, vtable `0x0063df84` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057a0f0`.
  */
 undefined4 __thiscall
@@ -296191,7 +296368,7 @@ gui_profile_create_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
       // PS2 is a real method that CALLS `OnClick(0x66)` back through the vtable
       // (`(**(this->vt + 0x34))(this, 0x66)`). The PC folds the two into this one slot-5
       // body, and additionally gates ESC on Cancel being enabled - a PC-only guard.
-      // See `exe-re/structs/game_menus.md` SS8.
+      // See `exe-re/structs/game_menus.md` §8.
       cVar1 = gui_menu_get_component_enabled(0x66);
       if (cVar1 != '\0') {
         (**(code **)(*param_1 + 0x10))(param_1[0x11],0);
@@ -296238,7 +296415,7 @@ gui_profile_create_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
  * clear with the identical mask and the same one-row-per-profile loop from component 100 upward.
  * Evidence: VA 0x0057a1f0. Design 5's caption is textdb 125 "Delete Profile:" and its Cancel row is
  * 201 with textdb 126.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057a1f0`.
  */
 undefined4 * __thiscall gui_profile_delete_ctor(undefined4 *param_1,undefined4 param_2,float param_3)
@@ -296313,7 +296490,7 @@ undefined4 * __thiscall gui_profile_delete_ctor(undefined4 *param_1,undefined4 p
  * PS2 twin: `OnCloseChild__16GM_ProfileDeleteFP7GM_MenuUiUi` [STRUCTURAL] -
  * same slot, same role and the same `100..199` row band, but the PS2 body is memory-card driven.
  * Evidence: VA 0x0057a370, vtable `0x0063df9c` slot 3.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057a370`.
  */
 void __thiscall gui_profile_delete_on_close_child(int *param_1,uint param_2,int param_3)
@@ -296343,7 +296520,7 @@ void __thiscall gui_profile_delete_on_close_child(int *param_1,uint param_2,int 
  * `0x82` handed to the question box - the PS2 line is `__ct__14GM_QuestionBoxFUiUib(new, 0x82,
  * 0x86, 0)`. A 2 -> 1 fold (+OnKey).
  * Evidence: VA 0x0057a3c0, vtable `0x0063df9c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS8.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057a3c0`.
  */
 undefined4 __thiscall
@@ -296411,7 +296588,7 @@ gui_profile_delete_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
  * `SetRangeFloat` through vtable `+0x70`). The record stride differs: PC 0x18, PS2 0x38.
  * Evidence: VA 0x0057a4a0. 🔑 The scroll-range write is what independently proves that the PC
  * `'swnd'` range lives at `+0x28` - the field `gui_widget_window_scroll_tick` clamps against.
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_0057a4a0`.
  */
 undefined4 * __thiscall gui_load_game_ctor(undefined4 *param_1,undefined4 param_2,int param_3)
@@ -296507,7 +296684,7 @@ LAB_0057a625:
  * loading the header, and the SAME textdb id `0xaf` into the SAME component `0x3f2`. A 5 -> 1 fold
  * - it also carries OnChange, OnTick, OnKey and OnMouse.
  * Evidence: VA 0x0057a670, vtable `0x0063dfb4` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_0057a670`.
  */
 undefined4 __thiscall
@@ -296644,7 +296821,7 @@ gui_load_game_tick(int *param_1,undefined4 param_2,uint param_3,int param_4,int 
  * same car-name fallback to textdb `0x2bf` under the identical range test `(id & 0xffff) != 0 &&
  * id < count`, and the same free-ride parameter store.
  * Evidence: VA 0x0057aaf0. Design 0xe's frame caption is textdb 1055 "Free Ride:".
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_0057aaf0`.
  */
 undefined4 * __thiscall gui_free_ride_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -296709,7 +296886,7 @@ LAB_0057aba5:
  * `0x65` arm is statement-for-statement the PS2 body, including the `0x2bf` fallback. The id-100
  * arm is a PC extension - the console build has no free-ride mode gallery.
  * Evidence: VA 0x0057ac40, vtable `0x0063dfcc` slot 3.
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_0057ac40`.
  */
 void __thiscall gui_free_ride_on_close_child(int param_1,int param_2,int param_3)
@@ -296786,7 +296963,7 @@ switchD_0057ac69_default:
  * 100 / `0x65` / 200 / `0xc9`, and `0x65` opens the car-manufacturer chooser on both builds. A 2
  * -> 1 fold (+OnKey).
  * Evidence: VA 0x0057ad80, vtable `0x0063dfcc` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS4.
+ * Doc: `exe-re/structs/game_menus.md` §4.
  * Renamed from `FUN_0057ad80`.
  */
 undefined4 __thiscall
@@ -296894,7 +297071,7 @@ switchD_0057adf4_caseD_66:
  * `GM_*` roster has no equivalent class.
  * Evidence: VA 0x0057aff0, vtable `0x0063dfe4`; design literal 0x34. Opened from
  * `gui_free_ride_tick`'s Start arm (id 0xc9) whenever the mode is not `0x1c`.
- * Doc: `exe-re/structs/game_menus.md` SS4f.
+ * Doc: `exe-re/structs/game_menus.md` §4f.
  * Renamed from `FUN_0057aff0`.
  */
 undefined4 * __thiscall
@@ -296937,7 +297114,7 @@ gui_free_ride_location_ctor(undefined4 *param_1,undefined4 param_2,undefined4 pa
  * Returns: int - the free-ride mode on a pick, else 0.
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x0057b0b0, vtable `0x0063dfe4` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS4f.
+ * Doc: `exe-re/structs/game_menus.md` §4f.
  * Renamed from `FUN_0057b0b0`.
  */
 int __thiscall
@@ -296989,7 +297166,7 @@ gui_free_ride_location_tick(int *param_1,undefined4 param_2,uint param_3,undefin
  * both callers of this constructor are in `net_multiplayer_run`.
  * Evidence: VA 0x0057b150. Design 0x2f's two shipped records are exactly the frame + row template
  * this body assumes.
- * Doc: `exe-re/structs/game_menus.md` SS7.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_0057b150`.
  */
 undefined4 * __thiscall
@@ -297076,7 +297253,7 @@ gui_session_list_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undef
  * PS2 twin: none - see `gui_session_list_ctor`. A 3 -> 1 fold in PS2 terms: it carries what would
  * be OnClick, OnKey and OnTick.
  * Evidence: VA 0x0057b2e0, vtable `0x0063dffc` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS7.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_0057b2e0`.
  */
 int __thiscall
@@ -297132,7 +297309,7 @@ gui_session_list_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 pa
  * `gunshop_menu` (parser raw 0x060, dispatcher case 0x61) as a modal, passing `player+0x480`; the
  * shipped scripts use it in `MISE19-MESTO/1ProdZ.script` and `MISE20-MESTO/1ProdZ.script`, the
  * weapons dealer. It is a weapon PICKUP screen despite the window caption 'Inventory (Drop)'.
- * Doc: `exe-re/structs/game_menus.md` SS4e.
+ * Doc: `exe-re/structs/game_menus.md` §4e.
  * Renamed from `FUN_0057b3a0`.
  */
 undefined4 * __thiscall
@@ -297218,7 +297395,7 @@ gui_gun_shop_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefined
  * Returns: void. Side effect: enables/disables the component and sets its text pointer.
  * PS2 twin: none - the PS2 formats the equivalent strings inline with `sprintf`.
  * Evidence: VA 0x0057b530. Called eight times by `gui_gun_shop_refresh_slots`.
- * Doc: `exe-re/structs/game_menus.md` SS4e.
+ * Doc: `exe-re/structs/game_menus.md` §4e.
  * Renamed from `FUN_0057b530`.
  */
 void gui_gun_shop_format_slot_row(undefined4 param_1,undefined4 param_2,undefined4 param_3,ushort *param_4)
@@ -297266,7 +297443,7 @@ void gui_gun_shop_format_slot_row(undefined4 param_1,undefined4 param_2,undefine
  * is pinned instead by TWO independent identical call positions: the tail of `OnCreate` and the
  * default arm of `OnClick`. The verb is carried because the PS2 declares exactly this method.
  * Evidence: VA 0x0057b600.
- * Doc: `exe-re/structs/game_menus.md` SS4e.
+ * Doc: `exe-re/structs/game_menus.md` §4e.
  * Renamed from `FUN_0057b600`.
  */
 void __fastcall gui_gun_shop_refresh_slots(int param_1)
@@ -297331,7 +297508,7 @@ void __fastcall gui_gun_shop_refresh_slots(int param_1)
  * PS2 twin: `OnClick__10GM_GunShopFUi` [CONFIRMED]. A 1 -> 1 fold: the same
  * `0x44c` close id and the same tail call to `RefreshInventory` on every other id.
  * Evidence: VA 0x0057b700, vtable `0x0063e014` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS4e.
+ * Doc: `exe-re/structs/game_menus.md` §4e.
  * Renamed from `FUN_0057b700`.
  */
 undefined4 __thiscall
@@ -297457,7 +297634,7 @@ LAB_0057b8f0:
  * a CONFIRMED twin of `CarManager__13G_GarageClassFv`. The PS2 texture-preview release in
  * `OnClose` has no PC counterpart - the PC list has no previews.
  * Evidence: VA 0x0057b930 (992 B), vtable `0x0063e02c`; design literal 0x25.
- * Doc: `exe-re/structs/garage.md` SS3.
+ * Doc: `exe-re/structs/garage.md` §3.
  * Renamed from `FUN_0057b930`.
  */
 undefined4 * __thiscall
@@ -297741,7 +297918,7 @@ LAB_0057bb12:
  * activate-writes-the-selection pair through the class's out-pointer. The PS2 does the toggle in
  * `CarManager` after the menu returns.
  * Evidence: VA 0x0057bd10, vtable `0x0063e02c` slot 5. True size 608 B.
- * Doc: `exe-re/structs/garage.md` SS3.
+ * Doc: `exe-re/structs/garage.md` §3.
  * Renamed from `FUN_0057bd10`.
  */
 undefined4 __thiscall
@@ -297866,7 +298043,7 @@ LAB_0057bf46:
  * `garage_game_done`, with the PC cap literal `0x10`.
  * Evidence: VA 0x0057bfa0 (925 B), vtable `0x0063e044`; design literal 0x26 (textdb 1111 'The
  * garage is full', 1112 'Which car do you want to discard from the Garage?').
- * Doc: `exe-re/structs/garage.md` SS3.
+ * Doc: `exe-re/structs/garage.md` §3.
  * Renamed from `FUN_0057bfa0`.
  */
 undefined4 * __thiscall
@@ -298111,7 +298288,7 @@ LAB_0057c20b:
  * `HlidejPocetVect` after `ExecuteMenu` returns, so there is no PC-side body to diff against
  * (graded STRUCTURAL on slot, class and the caller lockstep rather than on a body match).
  * Evidence: VA 0x0057c340, vtable `0x0063e044` slot 5.
- * Doc: `exe-re/structs/garage.md` SS3.
+ * Doc: `exe-re/structs/garage.md` §3.
  * Renamed from `FUN_0057c340`.
  */
 undefined4 __thiscall
@@ -298205,7 +298382,7 @@ gui_garage_full_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefine
  * composition. No sibling screen builds two bands. Its caller `garage_show_results` is already a
  * CONFIRMED twin of `GarageShowResultsProc__13G_GarageClassFv`.
  * Evidence: VA 0x0057c540 (817 B), vtable `0x0063e05c`; design literal 0x27, gate variable.
- * Doc: `exe-re/structs/garage.md` SS3.
+ * Doc: `exe-re/structs/garage.md` §3.
  * Renamed from `FUN_0057c540`.
  */
 undefined4 * __thiscall
@@ -298322,7 +298499,7 @@ gui_garage_summary_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_
  * `OnClick__16GM_GarageSummaryFUi`, which is an 8-byte stub on that build. The PS2 closes only on
  * key `0x1c`; the PC closes on any key, because it also has a mouse.
  * Evidence: VA 0x0057c880, vtable `0x0063e05c` slot 5.
- * Doc: `exe-re/structs/garage.md` SS3.
+ * Doc: `exe-re/structs/garage.md` §3.
  * Renamed from `FUN_0057c880`.
  */
 undefined4 __thiscall
@@ -298364,9 +298541,8 @@ gui_garage_summary_tick(int *param_1,undefined4 param_2,undefined4 param_3,undef
  *   the identical
  *  `FreerideGetState` -> disable 1000 + activate `0x3ea` tail.
  * Evidence: VA 0x0057c8e0. Design 0x30's frame caption is textdb 1403 "Game Over".
- *  Renamed from `FUN_0057c8e0`; the previous
- *  docblock was a PROVENANCE-ONLY stub - a name that had never been checked against the body.
- * Doc: `exe-re/structs/game_menus.md` SS5.
+ *  Renamed from `FUN_0057c8e0`.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  */
 undefined4 * __thiscall
 gui_game_over_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefined4 param_4)
@@ -298438,7 +298614,7 @@ gui_game_over_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefine
  * / 0x506).
  * Evidence: VA 0x0057ca40, vtable `0x0063e074` slot 5. Design 0x30 ships exactly those two rows,
  * 1000 textdb 1402 "Retry" and 1002 textdb 1400 "Exit to Main Menu".
- * Doc: `exe-re/structs/game_menus.md` SS5.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_0057ca40`.
  */
 undefined4 __thiscall
@@ -298472,7 +298648,7 @@ gui_game_over_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefined4
  * PS2 twin: `OnCreate__17GM_GameMenuRacingFv` [CONFIRMED] - the same class,
  * and the PS2 body pre-focuses `0x3ec` (Resume) where the PC leaves the design's own focus.
  * Evidence: VA 0x0057cab0. Design 0x2e's shipped ids 1001..1004 are exactly `0x3e9`..`0x3ec`.
- * Doc: `exe-re/structs/game_menus.md` SS5.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_0057cab0`.
  */
 undefined4 * __thiscall gui_racing_game_menu_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -298513,7 +298689,7 @@ undefined4 * __thiscall gui_racing_game_menu_ctor(undefined4 *param_1,undefined4
  * PS2 twin: `OnClick__17GM_GameMenuRacingFUi` [CONFIRMED] - the SAME four
  * ids and `0x3ea` opens `GM_Options` on both builds. A 2 -> 1 fold (+OnKey).
  * Evidence: VA 0x0057cb40, vtable `0x0063e08c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` SS5.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_0057cb40`.
  */
 undefined4 __thiscall
@@ -298590,7 +298766,7 @@ gui_racing_game_menu_tick(int *param_1,undefined4 param_2,uint param_3,undefined
  *  15-row multiplayer roster is a PC-only extension.
  * Evidence: VA 0x0057cc90. Design 0x32's caption is textdb 650 "Loading progress".
  *  Renamed from `FUN_0057cc90`.
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  */
 undefined4 * __thiscall
 gui_load_progress_ctor(undefined4 *param_1,float param_2,int param_3,float param_4,undefined4 param_5,
@@ -298702,7 +298878,7 @@ gui_load_progress_ctor(undefined4 *param_1,float param_2,int param_3,float param
  * SetRawProgress, Present) - there is no OnExchange, and the console build has no network roster
  * at all.
  * Evidence: VA 0x0057cf80, vtable `0x0063e0a4` slot 1.
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_0057cf80`.
  */
 void __fastcall gui_load_progress_on_exchange(int param_1)
@@ -298776,7 +298952,7 @@ void __fastcall gui_load_progress_on_exchange(int param_1)
  * slot, and everything this function does is the PC multiplayer extension.
  * Evidence: VA 0x0057d0c0, vtable `0x0063e0a4` slot 5. Note it does NOT call `gui_menu_tick` - the
  * loading screen takes no input.
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_0057d0c0`.
  */
 undefined4 gui_load_progress_tick(undefined4 param_1,char param_2)
@@ -298852,7 +299028,7 @@ LAB_0057d197:
  * Evidence: VA 0x0057d240. 🔴 This function and its sibling were briefly filed as "network message
  * classes" because they touch the message vtable `0x0063e0bc` - that vtable belongs to the message
  * they CONSTRUCT, not to them. The PS2 formulas are what assigned the two names correctly.
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_0057d240`.
  */
 void __thiscall gui_load_progress_set_progress_game_init(int param_1,float param_2)
@@ -298872,7 +299048,7 @@ void __thiscall gui_load_progress_set_progress_game_init(int param_1,float param
   // component 300 with `FindComponentByID` and dispatches the widget's vtable +0x50;
   // the PC writes the same component 300 directly. The arithmetic above
   // (`base + (1 - base) * t`) is byte-for-byte the PS2's.
-  // See `exe-re/structs/game_menus.md` SS6.
+  // See `exe-re/structs/game_menus.md` §6.
   gui_menu_set_component_float(300,fVar2);
   if (g_net_session != 0) {
     cVar3 = net_session_is_active();
@@ -298913,7 +299089,7 @@ void __thiscall gui_load_progress_set_progress_game_init(int param_1,float param
  * formula is byte-for-byte `t * *(base)`, feeding `SetRawProgress` and the same component 300.
  * Evidence: VA 0x0057d320. Together with its sibling this pins `+0x48` as the split point between
  * the two loading phases: mission-open fills `[0, base]` and game-init fills `[base, 1]`.
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_0057d320`.
  */
 void __thiscall gui_load_progress_set_progress_mission_open(int param_1,float param_2)
@@ -298929,7 +299105,7 @@ void __thiscall gui_load_progress_set_progress_mission_open(int param_1,float pa
   // PS2-INLINED HERE: this write is `SetRawProgress__15GM_LoadProgressFf`, which the
   // PS2 `SetProgressMissionOpen__15GM_LoadProgressFf` CALLS. The multiplication
   // `t * base` is byte-for-byte the PS2's; only the call is gone.
-  // See `exe-re/structs/game_menus.md` SS6.
+  // See `exe-re/structs/game_menus.md` §6.
   gui_menu_set_component_float(300,param_2 * *(float *)(param_1 + 0x48));
   if (g_net_session != 0) {
     cVar2 = net_session_is_active();
@@ -298969,7 +299145,7 @@ void __thiscall gui_load_progress_set_progress_mission_open(int param_1,float pa
  * `OnCreate__15GM_LoadProgressFv` [STRUCTURAL]; the PC out-lined it so the
  * loading sequence can change the caption between phases.
  * Evidence: VA 0x0057d400, 18 bytes. Component 400 is design 0x32's `rtxt` at (400, 15).
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_0057d400`.
  */
 void gui_load_progress_set_caption(undefined4 param_1)
@@ -298994,7 +299170,7 @@ void gui_load_progress_set_caption(undefined4 param_1)
  * SAME `Draw(0xffffffff)` argument.
  * Evidence: VA 0x0057d420. The 1:1 correspondence of the six graphics calls is what maps `g_engine`
  * vtable `+0x30`..`+0x44` onto the PS2 `igraph` `+0x68`..`+0x78` band.
- * Doc: `exe-re/structs/game_menus.md` SS6.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_0057d420`.
  */
 void __fastcall gui_load_progress_present(int *param_1)
@@ -299032,7 +299208,7 @@ void __fastcall gui_load_progress_present(int *param_1)
  * Evidence: VA 0x0057d4b0, vtable `0x0063e0cc`; design literal 0x33. Rows 401..405 are textdb
  * 1050..1054: City - Small, City - Night, Countryside - Night, City - Daytime, Countryside -
  * Daytime. `g_freeride_unlock_level` is deliberately left `DAT_` - its writer is not traced.
- * Doc: `exe-re/structs/game_menus.md` SS4f.
+ * Doc: `exe-re/structs/game_menus.md` §4f.
  * Renamed from `FUN_0057d4b0`.
  */
 undefined4 * __thiscall gui_free_ride_mode_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -299080,7 +299256,7 @@ LAB_0057d558:
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x0057d580, vtable `0x0063e0cc` slot 5. The row-to-mode map is what pairs the five
  * `freerideN.bmp` previews with the modes `0x1c`..`0x20` the free-ride screen stores.
- * Doc: `exe-re/structs/game_menus.md` SS4f.
+ * Doc: `exe-re/structs/game_menus.md` §4f.
  * Renamed from `FUN_0057d580`.
  */
 undefined4 __thiscall
@@ -299226,7 +299402,7 @@ void crt_atexit_register_0057d700(void)
  * PS2 twin: none - MSVC toolchain scaffolding.
  * Evidence: VA 0x0057d710. It sits immediately after the `game_menus` TU's CLOSING static-init
  * pair, which is what marks it as the head of the next translation unit.
- * Doc: `exe-re/structs/textdb.md` SS4.
+ * Doc: `exe-re/structs/textdb.md` §4.
  * Renamed from `FUN_0057d710`.
  */
 void crt_static_init_textdb(void)
@@ -299249,7 +299425,7 @@ void crt_static_init_textdb(void)
  * Evidence: VA 0x0057d720. `textdb_ctor` has ONE inbound edge in the whole image — this
  * function's own `E9` tail jump at 0x0057d725 — so it is class-owned: it is
  * `G_TextDatabase`'s constructor.
- * Doc: `exe-re/structs/textdb.md` SS4.
+ * Doc: `exe-re/structs/textdb.md` §4.
  * Renamed from `FUN_0057d720`.
  */
 void crt_zero_init_textdb(void)
@@ -299267,7 +299443,7 @@ void crt_zero_init_textdb(void)
  * Returns: void.
  * PS2 twin: none - MSVC toolchain scaffolding.
  * Evidence: VA 0x0057d730. Matches the 235-member `crt_atexit_register_*` family.
- * Doc: `exe-re/structs/textdb.md` SS4.
+ * Doc: `exe-re/structs/textdb.md` §4.
  * Renamed from `FUN_0057d730`.
  */
 void crt_atexit_register_textdb(void)
@@ -299289,7 +299465,7 @@ void crt_atexit_register_textdb(void)
  * PS2 twin: none - MSVC toolchain scaffolding.
  * Evidence: VA 0x0057d740. Reached ONLY as an address (`crt_atexit(&crt_atexit_free_textdb)`),
  * never called.
- * Doc: `exe-re/structs/textdb.md` SS4.
+ * Doc: `exe-re/structs/textdb.md` §4.
  * Renamed from `FUN_0057d740`.
  */
 void crt_atexit_free_textdb(void)
@@ -299324,7 +299500,7 @@ void crt_atexit_free_textdb(void)
  *     0x0057d710 is reached from the MSVC `.CRT$XCU` dynamic-initializer table at
  *     `.data:0x00646190`. A scan for DATA references alone never follows that `E8`/`E9`
  *     code chain.
- * Doc: `exe-re/structs/textdb.md` SS4.
+ * Doc: `exe-re/structs/textdb.md` §4.
  */
 void __fastcall textdb_ctor(undefined4 *param_1)
 
@@ -299349,7 +299525,7 @@ void __fastcall textdb_ctor(undefined4 *param_1)
  * Evidence: VA 0x0057d760. ONE real caller (the crt_atexit adaptor above), which is what makes it
  * class-owned rather than a shared helper. `textdb_ctor` likewise has ONE inbound edge and is
  * equally class-owned.
- * Doc: `exe-re/structs/textdb.md` SS4.
+ * Doc: `exe-re/structs/textdb.md` §4.
  * Renamed from `FUN_0057d760`.
  */
 void __fastcall textdb_dtor(int *param_1)
@@ -299379,7 +299555,7 @@ void __fastcall textdb_dtor(int *param_1)
  * record's text pointer. The PS2 signature carries a trailing `bool` that neither body reads.
  * Evidence: VA 0x0057d770. The layout it builds is exactly what `textdb_get_string_by_id` binary-
  * searches: 8-byte records at `+0x08`, key at +0, text pointer at +4, count at `+0x04`. 2 callers.
- * Doc: `exe-re/structs/textdb.md` SS2.
+ * Doc: `exe-re/structs/textdb.md` §2.
  * Renamed from `FUN_0057d770`.
  */
 uint __thiscall textdb_load(int *param_1,int param_2)
@@ -299891,7 +300067,7 @@ void __fastcall collision_classify_static_primitives(int param_1)
                 // intervening call. Everything either side is statement-identical, including the
                 // `& 0xa0` skip gate (PS2 splits it into `& 0x80` and `& 0x20`), the 8/9/10
                 // intermediate codes and the 1..7 refinement. Only the epsilon differs:
-                // 0.0001 here, 0.0002 on PS2. See `exe-re/structs/collision.md` SS2b.
+                // 0.0001 here, 0.0002 on PS2. See `exe-re/structs/collision.md` §2b.
                 if (ABS((float)puVar2[4]) <= ABS((float)puVar2[5])) {
                   uVar5 = 10;
                   if (ABS((float)puVar2[6]) <= ABS((float)puVar2[5])) {
@@ -299958,8 +300134,29 @@ void __fastcall collision_classify_static_primitives(int param_1)
 }
 
 /*
- * collision_load_level — provenance stub (behaviour not yet documented; function body not read).
- * Renamed from `FUN_0057dca0` (original Ghidra id, VA 0x0057dca0).
+ * collision_load_level - load a mission's static collision level (`tree.klz`).
+ * What it does: clears `+0x2c4`, frees the previous level (`collision_free_level_data`) and
+ *  opens the file; stops if it fails or the first dword is not `GifC`. Reads the 0x18-byte
+ *  header, the frame-name table and the level block, and resolves each name to a scene frame
+ *  through the I3D driver (a name flagged bit 0 must be a visual frame and gets virtual +0x50).
+ *  Sets `g_collision_level_loaded`, stores the block at `+0x284` and turns counts into
+ *  pointers: triangles (0x20 bytes) at `+0x34`, then kinds 0x81 (0x20), 0x80 (0xb8),
+ *  0x84 (0x14), 0x83 (0xa0), 0x82 (0x18) and the shared vertex pool (0xc). Record frame indices
+ *  become frame pointers. Triangle vertex indices become pointers into the frame's vertex buffer
+ *  or, for frame 0x7fff, the shared pool; non-visual frames, `MIRR` frames and frames with no
+ *  mesh resolve to nothing. A triangle whose frame is missing, or that is degenerate (score >= 2:
+ *  each coincident vertex pair 2, each flat box axis 1, epsilon 1e-8), gets its flag dword set
+ *  to exactly 0x20, which the queries skip. Builds the cell table at `+0x2c` (`+0x18` x `+0x1c`),
+ *  rebasing each entry by its tag byte (0 triangle, 0x80..0x84 the record arrays). With
+ *  `param_3` it also builds the dynamic grid at `+0x28c` over the level's extent. Last,
+ *  `collision_classify_static_primitives`.
+ * Parameters: param_1 (int, ECX): `g_collision`. param_2 (char *): the path.
+ *  param_3 (char): non-zero = also build the dynamic grid.
+ * Returns: void.
+ * PS2 twin: `LoadCollision__11g_collisionFPCcb`  [CONFIRMED]
+ *  Same `GifC` test, 0x7fff branch, `MIRR` exclusion and 0x20 for an unresolved triangle.
+ * Evidence: VA 0x0057dca0; 14 callsites. The layout parses all 81 shipped `tree.klz` files.
+ *  `exe-re/structs/collision.md` §2, §4. Renamed from `FUN_0057dca0`.
  */
 void __thiscall collision_load_level(int param_1,undefined4 param_2,char param_3)
 
@@ -301869,7 +302066,7 @@ undefined1 __thiscall collision_line_in_dynamics(int param_1,float *param_2)
               puVar17 = local_24;
               vec3_add_to(local_c,local_8c);
               vec3_sub(puVar17,pfVar12);
-              fVar16 = (float10)vec3_dist();
+              fVar16 = (float10)vec3_length();
             }
             else {
               fVar16 = (float10)-1e+16;
@@ -302065,7 +302262,7 @@ undefined1 __thiscall collision_line_in_dynamics_inner(int param_1,float *param_
               uVar12 = vec3_scale_to_by_ptr(local_30,&local_c4);
               vec3_add_to(local_18,uVar12);
               vec3_sub(puVar18,pfVar16);
-              fVar17 = (float10)vec3_dist();
+              fVar17 = (float10)vec3_length();
             }
             else {
               fVar17 = (float10)-1e+16;
@@ -304649,9 +304846,9 @@ void collision_collect_primitive_volume_in_sphere(uint *param_1,float *param_2,u
     vec3_set_xyz((float)param_1[2] + (float)param_1[5],(float)param_1[3] + (float)param_1[6],
                  (float)param_1[4] + (float)param_1[7]);
     vec3_div_scalar(&local_94,0x40000000);
-    fVar4 = (float10)vec3_dist();
+    fVar4 = (float10)vec3_length();
     vec3_sub(local_c,&local_94);
-    fVar5 = (float10)vec3_dist_sq();
+    fVar5 = (float10)vec3_length_sq();
     if (fVar5 <= (float10)(float)(fVar4 + (float10)param_5) *
                  (float10)(float)(fVar4 + (float10)param_5)) {
       puVar3 = *(undefined4 **)(param_6 + 4);
@@ -305102,7 +305299,7 @@ LAB_00585af0:
               uVar10 = vec3_scale_to_by_ptr(local_24,&local_124);
               vec3_add_to(local_c,uVar10);
               vec3_sub(puVar17,pfVar6);
-              fVar16 = (float10)vec3_dist();
+              fVar16 = (float10)vec3_length();
             }
             else {
               fVar16 = (float10)-1e+16;
@@ -305406,7 +305603,7 @@ undefined1 __thiscall collision_sphere_in_dynamics(int param_1,float *param_2)
               uVar13 = vec3_scale_to_by_ptr(local_24,&local_198);
               vec3_add_to(local_c,uVar13);
               vec3_sub(puVar20,pfVar14);
-              fVar18 = (float10)vec3_dist();
+              fVar18 = (float10)vec3_length();
             }
             else {
               fVar18 = (float10)-1e+16;
@@ -310969,6 +311166,7 @@ void crt_atexit_register_line_batch(void)
  * the cap, the stride and the array base all corroborate each other in one arithmetic identity.
  * ⚠️ The function is `__fastcall`, so a callsite census over its visible arguments is a census
  * of the two COLOURS, not of the endpoints. Renamed from `FUN_00591f50`.
+ * PS2 twin: none - the line batch is PC-only (`structs/line_batch.md` section 4).
  */
 void __fastcall line_batch_add(undefined4 *param_1,undefined4 *param_2,undefined4 param_3,int param_4)
 
@@ -311013,6 +311211,7 @@ void __fastcall line_batch_add(undefined4 *param_1,undefined4 *param_2,undefined
  * identity (`1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1`), with exactly one code reference in the whole
  * image - this one. Its sole caller is `engine_draw_overlay_callback`, which flushes and then
  * immediately resets the batch. Renamed from `FUN_00591fe0`.
+ * PS2 twin: none - the line batch is PC-only (`structs/line_batch.md` section 4).
  */
 void line_batch_draw(void)
 
@@ -311035,6 +311234,7 @@ void line_batch_draw(void)
  * Evidence: VA 0x00592030. Called once, from `engine_draw_overlay_callback`, immediately after
  * `line_batch_draw` - so the batch's lifetime is exactly one frame and a caller that adds a line
  * is adding it for the current frame only. Renamed from `FUN_00592030`.
+ * PS2 twin: none - the line batch is PC-only (`structs/line_batch.md` section 4).
  */
 void line_batch_reset(void)
 
@@ -316429,6 +316629,7 @@ int __fastcall net_session_settings_addr(int param_1)
  *  the session mode (1 Deathmatch, 2 Team Deathmatch, 3 Single Race, 4 Championship). Do
  *  not confuse it with `net_session_settings_addr`, which returns the `+0x110` CONNECTION
  *  settings.
+ * PS2 twin: — (PC-only: the PS2 build loads no network module)
  * Evidence: VA 0x00597720. Renamed from `FUN_00597720` (original Ghidra id).
  */
 int __fastcall net_session_game_settings_addr(int param_1)
@@ -319842,7 +320043,7 @@ void crt_atexit_register_0059abb0(void)
  *  again into the live band +0x21c0, and the orientation quaternion into +0x217c; zeroes the
  *  correction accumulator +0x218c and the correction velocity +0x21e4; derives the snap-back
  *  threshold +0x219c from half the smaller body extent scaled by 0.9; stamps `timeGetTime()`
- *  into +0x21cc; and clears the half-rate alternation byte +0x21f0 and the light-state flags.
+ *  into +0x21cc; and clears the broadcast counter +0x21f0 and the light-state flags.
  * Parameters: param_1 (this) the C_car.
  * Returns: void.
  * Evidence: VA 0x0059abc0. `C_car` vtable `0x0063bc08` **slot 39** (and `C_car_ex` `0x0063bd64`
@@ -320481,9 +320682,9 @@ LAB_0059b92a:
       fStack_1e4 = 1.0;
     }
     fStack_198 = fStack_1c8;
-    fVar14 = (float10)vec3_dist();
+    fVar14 = (float10)vec3_length();
     if ((fVar14 < (float10)fStack_1e4) ||
-       (fVar14 = (float10)vec3_dist(), fVar14 < (float10)0.001 != (fVar14 == (float10)0.001))) {
+       (fVar14 = (float10)vec3_length(), fVar14 < (float10)0.001 != (fVar14 == (float10)0.001))) {
       *pfVar15 = *pfVar11;
       *(undefined4 *)(param_1 + 0x21c4) = *(undefined4 *)(param_1 + 0x2174);
       *(undefined4 *)(param_1 + 0x21c8) = *(undefined4 *)(param_1 + 0x2178);
@@ -320510,12 +320711,16 @@ LAB_0059b92a:
 }
 
 /*
- * car_broadcast_state_net_event_msg - post one car snapshot per peer, at half rate.
+ * car_broadcast_state_net_event_msg - post the car's snapshots to the near and far peers.
  *
- * What it does: flips bit `0x100` of `car+0x2198` every second tick using the counter at
- * `car+0x21f0`, so the snapshot goes out on alternate frames, then walks the peer list
- * `g_net_session+0xb4..0xb8` calling `car_post_state_net_event_msg` once per peer.
- * Parameters: this (ECX): the C_car; param_2: the frame delta.
+ * What it does: raises bit `0x100` of `car+0x2198` on one call in three, counting in
+ * `car+0x21f0`. On the host it calls `car_post_state_net_event_msg` for every near peer
+ * (`g_net_session+0xb4..0xb8`) and, on the calls with the bit set,
+ * `car_post_reduced_state_net_event_msg` for every far peer (`+0xc4..0xc8`); a client sends
+ * to the host only.
+ * Parameters: this (ECX): the C_car; param_2: the snapshot's flag byte, passed through to the
+ * posters: `car_update` pushes 3 when bit 1 of `car+0x2198` is set and 0 when the session's
+ * update interval runs out.
  * Returns: void.
  * Evidence: VA 0x0059c0a0. 2 callsites, both in `car_update`. Same shape as the documented
  * `physical_object_broadcast_state_net_event_msg`, which also walks `g_net_session+0xb4`.
@@ -320601,11 +320806,13 @@ LAB_0059c0dc:
  * What it does: builds a generic actor-state message instead of the full car snapshot. When the
  *  car is moving it sends type 0x20/0x21 with the quantised position and the velocity scaled by
  *  car+0x20b4; when it is at rest it sends type 0x22/0x23 with the resting vector at car+0xd28.
- *  The low bit is the half-rate alternation carried in car+0x2198 bit 0x100.
+ *  The low bit is bit 0x100 of car+0x2198, which is set on every call that reaches this
+ *  function, so only types 0x21 and 0x23 are sent.
  * Parameters: param_1 (this) the C_car; param_2 the addressee's network id.
  * Returns: void.
  * Evidence: VA 0x0059c200. Receiver `mov ecx, edi` from car_broadcast_state_net_event_msg, i.e.
- *  the car. All 3 callsites are that function's far-bucket (`g_net_session+0xc4`) walk.
+ *  the car. Both callsites are in that function: the host's far-bucket (`g_net_session+0xc4`)
+ *  walk and the client's send to the host.
  * Renamed from `FUN_0059c200`.
  */
 void __thiscall car_post_reduced_state_net_event_msg(int param_1,int param_2)
@@ -326155,11 +326362,11 @@ void __fastcall particle_effect_destroy(undefined4 *param_1)
 }
 
 /*
- * particle_effect_init — bind an effect to a frame and give it a guid
+ * particle_effect_init — bind an effect to a frame and give it an engine id
  *
  * What it does: stores the parent `I3D_frame`, the local position and direction vectors, the two
  *  extra vectors the creators pass, and the two flag bytes `+0x4a` (rotate offset by the
- *  parent) and `+0x4b` (rotate direction by the parent); then takes the next guid from the
+ *  parent) and `+0x4b` (rotate direction by the parent); then takes the next engine id from the
  *  engine driver's counter at `I3DGetDriver()+0x58`, post-increments it, and stores it as a
  *  short at `+0x14`.
  * Parameters: param_1 (undefined4 *, ECX): the effect; param_2: the parent frame;
@@ -326167,8 +326374,9 @@ void __fastcall particle_effect_destroy(undefined4 *param_1)
  *  two rotate flags; param_7/param_8 (undefined4 *): the record's own offset and direction.
  * Returns: void.
  * Evidence: VA 0x005a3290. Called by both creators immediately after the effect object is taken
- *  from the pool. The guid it mints here is the key the manager's `{effect*, guid}` vector is
- *  sorted and searched on.
+ *  from the pool. The `+0x14` short is not the manager's guid: that is the manager's counter
+ *  `+0x30`, issued by `particle_manager_create_particle_from_type`. `particle_create` stamps the
+ *  `+0x14` id into each particle frame's `+0x21c`.
  * PS2 twin: `Init__17C_ParticleEmitterFP9I3D_sceneP9I3D_frameRC8S_matrixP15C_PData_Emitterb`
  *  [STRUCTURAL]
  * Renamed from `FUN_005a3290`.
@@ -326904,9 +327112,11 @@ void particle_effect_pool_static_dtor(void)
  *  loads `tables\effects.tbl` and parks the guid counter at `+0x30 = -1`.
  * Parameters: param_1 (undefined1 *, ECX): the manager.
  * Returns: undefined1 * - the manager.
- * Evidence: VA 0x005a3aa0. One callsite. ⚠️ Ghidra renders a call to
- *  `particle_manager_load_data` inside the constructor, which the PS2 constructor does not have
- *  (there, `Mission_Start` loads); reported as measured, not explained.
+ * Evidence: VA 0x005a3aa0. One callsite, `mission_init`, which creates the manager at
+ *  `C_mission+0x6c`. The load is a real call (`0x005a3afb`), so the effect table is in place
+ *  before `particle_manager_mission_start`, which loads only while the type list is empty. The
+ *  PS2 constructor has no load: there the manager is built inside the `C_mission` constructor
+ *  and `Mission_Start` loads it.
  * PS2 twin: `__ct__17C_ParticleManagerFv` [CONFIRMED]
  * Renamed from `FUN_005a3aa0`.
  */
@@ -327273,7 +327483,7 @@ LAB_005a401c:
     chunk_close();
   }
   local_4 = 0xffffffff;
-  vector_clear();
+  chunk_open_stack_free();
   ExceptionList = local_c;
   return;
 }
@@ -327435,7 +327645,7 @@ int particle_manager_create_particle_from_type(int param_1,int param_2,undefined
     iVar4 = iVar6 + -1;
   } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar6 * 8) != piVar3);
   if (iVar6 + -1 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + (iVar6 + -1) * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + (iVar6 + -1) * 8);
   }
   uVar14 = 0;
   iVar4 = vec_count_stride_0x8();
@@ -327462,7 +327672,7 @@ int particle_manager_create_particle_from_type(int param_1,int param_2,undefined
   iVar4 = vec_count_stride_0x4();
   if (iVar4 == 0) goto LAB_005a4468;
   do {
-    string_append_cstr(&pvStack_88,iVar13);
+    string_concat_cstr(&pvStack_88,iVar13);
     iVar4 = *piVar3;
     local_c = (void *)0x2;
     uVar12 = string_get_data(0x10,&i3d_open_notify_forward_cb,&puStack_7c);
@@ -327494,14 +327704,14 @@ LAB_005a43ae:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar14 * 8) + 4) == 1) {
       puVar7 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar14 * 8);
       (**(code **)*puVar7)(puVar7);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar14 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar14 * 8);
       break;
     }
   }
 LAB_005a43e8:
   uVar12 = clear1_dword_at_0x04();
   local_c = (void *)0x3;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar12);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar12);
   local_c = (void *)0xffffffff;
   if (iStack_64 != 0) {
     string_base_release();
@@ -328162,7 +328372,7 @@ void __thiscall particle_manager_create_static_particle(int param_1,uint param_2
     iVar4 = iVar6 + -1;
   } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar6 * 8) != piVar3);
   if (iVar6 + -1 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + (iVar6 + -1) * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + (iVar6 + -1) * 8);
   }
   uVar15 = 0;
   iVar4 = vec_count_stride_0x8();
@@ -328189,7 +328399,7 @@ void __thiscall particle_manager_create_static_particle(int param_1,uint param_2
   iVar4 = vec_count_stride_0x4();
   if (iVar4 == 0) goto LAB_005a514a;
   do {
-    string_append_cstr(&uStack_80,iVar14);
+    string_concat_cstr(&uStack_80,iVar14);
     iVar4 = *piVar3;
     local_c = (void *)0x2;
     uVar13 = string_get_data(0x10,&i3d_open_notify_forward_cb,&puStack_7c);
@@ -328221,14 +328431,14 @@ LAB_005a5090:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar15 * 8) + 4) == 1) {
       puVar7 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar15 * 8);
       (**(code **)*puVar7)(puVar7);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar15 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar15 * 8);
       break;
     }
   }
 LAB_005a50ca:
   uVar13 = clear1_dword_at_0x04();
   local_c = (void *)0x3;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar13);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar13);
   local_c = (void *)0xffffffff;
   if (local_64 != 0) {
     string_base_release();
@@ -328664,7 +328874,7 @@ LAB_005a5b2f:
   }
   chunk_close();
   uStack_4 = CONCAT31(uStack_4._1_3_,1);
-  vector_clear();
+  chunk_open_stack_free();
 LAB_005a5b55:
   uStack_4 = 0xffffffff;
   if (apiStack_118[0] != (int *)0x0) {
@@ -330683,7 +330893,7 @@ void cache_base_block_prepare_scene(void)
  *  remembering it in the scratch dword; every later match is re-parented onto that first frame
  *  instead. The frames are invisible collision geometry: the mission's scene2.bin already
  *  switches them off, and their names are in its tree.klz
- *  (exe-re/structs/cache_base_block.md SS4a).
+ *  (exe-re/structs/cache_base_block.md §4a).
  * Parameters: param_1 (int *): the `I3D_frame`. param_2 (int *): the scratch dword holding the
  *  first match.
  * Returns: undefined4: always 0 (continue the walk).
@@ -331270,7 +331480,7 @@ uint __thiscall cache_base_block_open_model(int param_1,char *param_2)
     iVar7 = iVar3 + -1;
   } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar3 * 8) != piVar4);
   if (iVar3 + -1 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + (iVar3 + -1) * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + (iVar3 + -1) * 8);
   }
   uVar8 = 0;
   iVar7 = vec_count_stride_0x8();
@@ -331299,7 +331509,7 @@ uint __thiscall cache_base_block_open_model(int param_1,char *param_2)
   iVar7 = vec_count_stride_0x4();
   if (iVar7 != 0) {
     do {
-      string_append_cstr(local_a0,param_2);
+      string_concat_cstr(local_a0,param_2);
       iVar7 = *piVar4;
       local_c._0_1_ = 2;
       uVar6 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_bc);
@@ -331333,14 +331543,14 @@ LAB_005a842e:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar8 * 8) + 4) == 1) {
       puVar1 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar8 * 8);
       (**(code **)*puVar1)(puVar1);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar8 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar8 * 8);
       break;
     }
   }
 LAB_005a8468:
   uVar6 = clear1_dword_at_0x04();
   local_c._0_1_ = 3;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar6);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar6);
   local_c = (void *)((uint)local_c._1_3_ << 8);
   if (local_a0[2] != 0) {
     string_base_release();
@@ -337033,16 +337243,29 @@ void __fastcall force_feedback_manager_ctor(undefined1 *param_1)
 }
 
 /*
- * force_feedback_manager_dtor — destructor of the force-feedback manager singleton
+ * folded_vector_pair_free_at_0x04_0x14 - frees the two std::vectors at +0x04 and +0x14
  *
- * What it does: Frees and nulls both effect vectors (`+0x14/+0x18/+0x1c` then `+0x04/+0x08/+0x0c`).
- * Parameters: param_1 (this): the force-feedback manager singleton at 0x006f91e0.
- * Returns: void: nothing.
- * PS2 twin: none — see Evidence
- * Evidence: VA 0x005ae6f0. **No PS2 twin.** PS2's `C_ff_manager` fills the same ROLE with a different implementation (a software envelope mixer over `scePadSetActDirect`, with a `C_ff_manager::S_effect` POD vector), and the PC's device-side interfaces live in `ijoy.dll` rather than in Game.exe. A twin line here would assert a body agreement nobody can check. Reached only through `force_feedback_manager_static_dtor`. Renamed from `FUN_005ae6f0`.
- * Class layout: exe-re/structs/force_feedback.md
+ * What it does: frees and nulls the vector at +0x14/+0x18/+0x1c, then the vector at
+ *  +0x04/+0x08/+0x0c. One address serves two classes whose members are exactly two
+ *  vectors at those offsets, so no class-qualified name fits it:
+ *  - the force-feedback manager at 0x006f91e0 (both effect vectors):
+ *    force_feedback_manager_static_dtor is `mov ecx,0x6f91e0; jmp` here;
+ *  - the pursuit-event manager (C_sledovacka) embedded at C_game+0x2b18 (the
+ *    S_ELEMENT vector at +0x14, then the S_BRIDGE vector at +0x04): game_dtor
+ *    calls it with `lea ecx,[esi+0x2b18]`, and two unwind funclets of game_ctor
+ *    jump here with `ecx = this + 0x2b18`.
+ * Parameters: param_1 (ECX): the object.
+ * Returns: void.
+ * Evidence: VA 0x005ae6f0. Receiver census: one E8 callsite (game_dtor, C_game+0x2b18),
+ *  three E9 referrers (the static dtor with 0x6f91e0, two unwind funclets with
+ *  this+0x2b18). The C_sledovacka role matches PS2 __dt__12C_sledovackaFv, which frees
+ *  the S_ELEMENT vector and then the S_BRIDGE vector; the PS2 force-feedback manager is
+ *  a different implementation. No PS2 twin is stamped on a folded symbol.
+ *  Renamed from `FUN_005ae6f0`.
+ * Class layout: exe-re/structs/force_feedback.md, exe-re/structs/pursuit-event-manager.md
  */
-void __fastcall force_feedback_manager_dtor(int param_1)
+
+void __fastcall folded_vector_pair_free_at_0x04_0x14(int param_1)
 
 {
   operator_delete_wrapper(*(undefined4 *)(param_1 + 0x14));
@@ -338347,9 +338570,9 @@ LAB_005af692:
 // replacement source over the program that was just loaded - a per-mission script
 // override. The table has ZERO writers anywhere in the PS2 image, so it is compiled-in
 // constant data.
-// NOT tagged terminal: tell (d) does not fire, because the caller is a
-// shared method rather than a known PS2-only subsystem. Graded a strong PS2-port-only
-// CANDIDATE. See structs/program.md section 6.
+// PS2-ONLY, terminal: the PS2 image holds exactly one call to it (one jal, no pointer),
+// here, and this PC body makes the same calls in the same order and ends at this point.
+// See structs/program.md section 5e.
 LAB_005af709:
   *(undefined1 *)(local_c + *(int *)(local_8 + 8)) = 0;
   return 1;
@@ -338482,8 +338705,9 @@ void __fastcall program_init(int param_1)
     // block (0x001d2bd0), between GetInterCityName and DebilitizeScripts - and BOTH of
     // those are terminal PS2-port-only (DebilitizeScripts' only caller is
     // InterCity_ChangeMission__9C_mission).
-    // NOT tagged terminal: guilt by neighbourhood is a lead, not a measurement.
-    // Graded a strong PS2-port-only CANDIDATE. See structs/program.md section 6.
+    // PS2-ONLY, terminal: the PS2 image holds exactly one call to it (one jal, no
+    // pointer), here, and this PC body makes the same calls in the same order and ends at
+    // this point. See structs/program.md section 5e.
   }
   if ((*(int *)(param_1 + 0x10) == 0) ||
      (*(int *)(param_1 + 0x14) - *(int *)(param_1 + 0x10) >> 3 == 0)) {
@@ -351074,7 +351298,7 @@ LAB_005bf5cd:
      *       letterbox ratio - then hud_widescreen_fade_bars(1, 250) to fade them in over
      *       250 ms;
      *    5. human_set_idle_anims_enabled(0) on the player, if there is one;
-     *    6. mission_get/set_sound_restore_stage raised to 1 (monotonic - it never lowers);
+     *    6. the frame-skip count (mission_get/set_frame_skip_count) raised to 1 if lower;
      *    7. cutscene_set_active().
      *
      *  `recunload` (case 0x2e) is the exact inverse and undoes them in the same order.
@@ -351117,9 +351341,9 @@ LAB_005bf5cd:
       game_get_player_actor();
       human_set_idle_anims_enabled(script_scratch_u0);
     }
-    script_scratch_i0 = mission_get_sound_restore_stage();
+    script_scratch_i0 = mission_get_frame_skip_count();
     if (script_scratch_i0 < 1) {
-      mission_set_sound_restore_stage(1);
+      mission_set_frame_skip_count(1);
     }
     cutscene_set_active();
     break;
@@ -351152,7 +351376,7 @@ LAB_005bf5cd:
      *    4. hud_pop_element_flags() - the saved HUD mask comes back;
      *    5. hud_widescreen_fade_bars(0, 250) - the letterbox fades out over the same 250 ms;
      *    6. human_set_idle_anims_enabled(1) on the player;
-     *    7. sound_restore_stage raised to 2 (again monotonic);
+     *    7. the frame-skip count raised to 2 if lower;
      *    8. sound_arena_init() on the game's soundArena - the hearing ring is emptied so
      *       nothing the recording played is still audible (structs/soundArena.md);
      *    9. cutscene_set_active() and game_clear_film_music().
@@ -351174,9 +351398,9 @@ LAB_005bf5cd:
       game_get_player_actor();
       human_set_idle_anims_enabled(script_scratch_u0);
     }
-    script_scratch_i0 = mission_get_sound_restore_stage();
+    script_scratch_i0 = mission_get_frame_skip_count();
     if (script_scratch_i0 < 2) {
-      mission_set_sound_restore_stage(2);
+      mission_set_frame_skip_count(2);
     }
     act_mission_get_game();
     game_get_sound_arena();
@@ -351257,7 +351481,7 @@ LAB_005bf5cd:
      *    - hud_timer_set_time(ww, xx, yy)  // writes +0x9150/+0x9154/+0x9158
      *    - hud_timer_set_interval(zz)               // writes +0x9168 (ms) + recomputes hand angles
      *    - hud_show_element(8)              // show timer HUD (bit 8)
-     *    - pedestrian_manager_end_all_taxi_waves()                        // unrelated NPC-zone refresh (see note)
+     *    - pedestrian_manager_end_all_taxi_waves()  // every pedestrian hailing a taxi stops
      *
      *  Confidence: Tier-2 strong. 4-arg/0-arg pairing with case 0x32
      *  matches the timeron/timeroff arg-count split exactly; the 3+1
@@ -351266,12 +351490,11 @@ LAB_005bf5cd:
      *  arithmetic is the diagnostic fingerprint of an analog-clock
      *  driver. No string-literal anchor in case body.
      *
-     *  Note on pedestrian_manager_end_all_taxi_waves: this is NOT a timer-start function — its
-     *  body iterates `g_npc_zone_array` and calls `pedestrian_end_taxi_wave` on
-     *  flagged zones. Whether this NPC-zone refresh is causally related
-     *  to enabling the timer HUD, or is an unrelated tail call that
-     *  happens to follow at this dispatcher case, is not yet
-     *  understood. The name is left unchanged pending clarification.
+     *  pedestrian_manager_end_all_taxi_waves walks g_pedestrian_list and calls
+     *  pedestrian_end_taxi_wave on every pedestrian whose waving flag +0x1fe is set, so
+     *  starting a stopwatch cancels all taxi hails. The PS2 arm (case 0x33) makes the same
+     *  call, ZrusVsechnyMavajici__19C_traffic_generatorFv, right after showing the timer.
+     *  The countdown runs in hud_tick only while HUD bit 8 is set (TIMEROFF freezes it).
      */
     script_scratch_i0 = vec_index_addr_stride_0x8(param_1[7]);
     puVar8 = *(undefined4 **)(script_scratch_i0 + 4);
@@ -351536,7 +351759,7 @@ LAB_005bf5cd:
      *  Writes the distance between actors xx and yy into flt[zz]. 446 shipped call sites.
      *
      *  flt[zz] is zeroed FIRST, so a failed guard leaves 0 rather than the previous value.
-     *  Both actors take the standard guard; the distance is vec3_dist between the two
+     *  Both actors take the standard guard; the distance is vec3_length between the two
      *  I3D_frame world positions.
      *
      *  The load-time arm accepts a FOURTH argument the Mafia Script Data Reference does not
@@ -351561,7 +351784,7 @@ LAB_005bf5cd:
         folded_get_dword_0x68(puVar12,script_scratch_u0);
         i3d_frame_get_world_position_ptr();
         vec3_set_xyz(puVar12,script_scratch_u0);
-        fVar34 = (float10)vec3_dist();
+        fVar34 = (float10)vec3_length();
         *(float *)(param_1[0x12] + script_argv[2] * 4) = (float)fVar34;
         if ((script_argv[3] != 0) && (script_pred_c = actor_is_death_processed(), script_pred_c != '\0')) {
           if (*(float *)(param_1[0x12] + script_argv[2] * 4) < 0.1) {
@@ -353623,7 +353846,7 @@ LAB_005bf781:
               folded_get_dword_0x68(puVar12,puVar8);
               i3d_frame_get_world_position_ptr();
               vec3_set_xyz(puVar12,puVar8);
-              fVar34 = (float10)vec3_dist_sq();
+              fVar34 = (float10)vec3_length_sq();
               if (fVar34 < (float10)local_7ec) {
                 puVar8 = (undefined4 *)vec_index_addr_stride_0x4(script_scratch_i0);
                 *(undefined4 *)(param_1[0x16] + script_argv[1] * 4) = *puVar8;
@@ -353755,105 +353978,25 @@ LAB_005bf92f:
     loadsave_set_mission_name_id(**(undefined4 **)(script_scratch_i0 + 4));
     break;
   case 0x79:                                     // WINGMAN_SETINDICATOR
-    /*  wingman_setindicator <npc_id>, <portrait_id>, <slot>
+    /*  wingman_setindicator <xx actor register>, <portrait_id>, <slot>
      *  -----------------------------------------------------------------
-     *  Pins one of the player's 4 wingman-indicator slots to a (portrait,
-     *  live-value) display on the HUD. The player struct stores the
-     *  (slot, portrait) pair as the persistent "currently-pinned wingman
-     *  indicator"; the per-frame player-tick reapply replays it through
-     *  the HUD singleton's slot tables on every frame. Paired with case
-     *  0x7a (`wingman_delindicator`) which clears the pin and hides the
-     *  per-slot HUD bit.
+     *  Shows the health of the human in act[xx] in one of the 4 HUD wingman-indicator slots,
+     *  with a portrait. The human must be kind 2 or 0x1b and the slot 0..3.
      *
-     *      *script_argv         = arg0  npc_id     actor index (validated
-     *                                              against `param_1[0x17]`
-     *                                              NPC table; range
-     *                                              [0, param_1[0x17])).
-     *                                              **npc_id 0 = the
-     *                                              player** (user-asserted;
-     *                                              the Mafia Script Data
-     *                                              Reference's "id 0 =
-     *                                              Paulie" mapping is wrong
-     *                                              for this opcode).
-     *      script_argv[1]       = arg1  portrait   portrait_id (0..7;
-     *                                              masked `& 7` by
-     *                                              `hud_wingman_set_portrait_for_slot`).
-     *                                              Selects the wingman
-     *                                              face shown next to the
-     *                                              indicator. Scripts
-     *                                              observed using 1..5
-     *                                              (Sara.script L48:
-     *                                              `wingman_setindicator
-     *                                              1, 5, 0`).
-     *      script_argv[2]       = arg2  slot       wingman slot 0..3
-     *                                              (bounds-checked
-     *                                              `-1 < slot < 4`).
-     *                                              Each slot owns one of
-     *                                              the 4 HUD flag-word
-     *                                              bits 0x10000000 ..
-     *                                              0x80000000 on
-     *                                              `g_hud_flags`.
+     *  1. human_set_wingman_indicator(slot, portrait), with ECX = act[xx]: the pin is stored
+     *     on that human (+0x6d8 slot, +0x6dc portrait) and saved and loaded with it.
+     *  2. hud_wingman_set_portrait_for_slot(slot, portrait): HUD +0x9244 + slot*4.
+     *  3. local_7a8 = __ftol(cur_health +0x644 / max_health +0x604 * 100), the FPU sequence
+     *     Ghidra drops; unless the human is death-processed (+0x5e) it is raised to at least
+     *     1 through stl_max_int_ptr(&local_7a8, &1).
+     *  4. hud_wingman_set_indicator_value_for_slot(slot, value): HUD +0x9254 + slot*4.
+     *  5. hud_show_element of the slot's bit, 0x10000000 << slot.
+     *  From then on the human's own hit, death and save-load paths refresh the slot
+     *  (basic/artifacts/hud_elements.md section 7). In game, register 0 named the player;
+     *  the Mafia Script Data Reference maps id 0 to Paulie for this command.
      *
-     *  Arg-type validation (after npc_id bounds check):
-     *      folded_get_dword_0x10() ∈ {2, 0x1b}      — both are actor-ref
-     *                                              codes; same gate used
-     *                                              by the rest of the
-     *                                              wingman / police-target
-     *                                              opcode cluster.
-     *
-     *  Engine pipeline (when all validations pass):
-     *      1. player_set_wingman_indicator(npc_id, portrait)
-     *           --- WAIT, scratch confusion: the call passes
-     *           `script_scratch_i0` (= validated `script_argv[2]` = SLOT)
-     *           as arg0 and `script_argv[1]` (portrait) as arg1. So the
-     *           recorded pair on the player struct is `(slot, portrait)`,
-     *           NOT `(npc_id, portrait)`. The npc_id is consumed only by
-     *           the upfront bounds check (proves the wingman actor exists)
-     *           and is NOT carried forward into the indicator state —
-     *           tracking which actor the indicator follows happens
-     *           elsewhere (likely the actor's own slot field; not yet
-     *           traced).
-     *      2. hud_wingman_set_portrait_for_slot(slot, portrait)
-     *           pushes portrait into HUD singleton's slot table
-     *           at `+0x9244 + slot*4` (mask `& 7`).
-     *      3. local_7a8 = __ftol()
-     *           Ghidra-dropped FPU op: truncates the FPU TOS to int32.
-     *           The value pushed to st(0) earlier in the dispatcher
-     *           prelude (or by an inlined call lost in the decomp) is
-     *           the script-supplied indicator value. Tentatively the
-     *           "indicator scalar" the script wants displayed (health %
-     *           or similar).
-     *      4. if (actor_is_death_processed() == 0)
-     *             local_7a8 = *stl_max_int_ptr(?, ?)    // both args
-     *                                                   // dropped by
-     *                                                   // Ghidra
-     *           When the predicate is false, override `local_7a8` with
-     *           the max of two engine-live ints (the std::max-of-int*
-     *           helper at `stl_max_int_ptr`). Predicate is a byte getter
-     *           on `player+0x5e` — likely the "use scripted indicator
-     *           value vs engine-live source" flag; setter not yet traced.
-     *      5. hud_wingman_set_indicator_value_for_slot(slot, local_7a8)
-     *           pushes the chosen value into HUD singleton's slot table
-     *           at `+0x9254 + slot*4`.
-     *      6. switch (slot) { 0: 0x10000000; 1: 0x20000000;
-     *                         2: 0x40000000; 3: 0x80000000; }
-     *         hud_show_element(bit)
-     *           ORs the per-slot indicator-active bit into the HUD flag
-     *           word at `g_hud_flags`.
-     *
-     *  Naming note for actor_is_death_processed:
-     *      NAMING-DEFERRED — `player+0x5e` byte getter, role is
-     *      "use script-supplied indicator value vs engine-live value"
-     *      predicate. Setter for `+0x5e` not yet traced; the rename is
-     *      held until the setter is identified. Likely future name:
-     *      is identified. Likely future name:
-     *      `player_uses_scripted_wingman_value` or similar.
-     *
-     *  **[USER-EMPIRICAL]** Tier-2 anchored by a patched-binary test:
-     *  case-0x146 sub-case 2 was patched to `hud_show_element(0x10000000)` and user
-     *  observed a player health indicator appear in-game; repeated calls
-     *  stacked → 4 independent slots. Cross-confirmed by case body
-     *  structure (4 slots, 4 bits, switch on slot index).
+     *  **[USER-EMPIRICAL]** case 0x146 sub-case 2 patched to hud_show_element(0x10000000)
+     *  made a player health indicator appear in game; repeated calls stacked to 4 slots.
      */
     script_scratch_i0 = vec_index_addr_stride_0x8(param_1[7]);
     script_argv = *(int **)(script_scratch_i0 + 4);
@@ -353861,7 +354004,7 @@ LAB_005bf92f:
     if ((((-1 < script_scratch_i0) && (script_scratch_i0 < param_1[0x17])) && (*(int *)(param_1[0x16] + script_scratch_i0 * 4) != 0))
        && (((script_scratch_i0 = folded_get_dword_0x10(), script_scratch_i0 == 2 || (script_scratch_i0 = folded_get_dword_0x10(), script_scratch_i0 == 0x1b)) &&
            ((script_scratch_i0 = script_argv[2], -1 < script_scratch_i0 && (script_scratch_i0 < 4)))))) {
-      player_set_wingman_indicator(script_scratch_i0,script_argv[1]);
+      human_set_wingman_indicator(script_scratch_i0,script_argv[1]);
       hud_wingman_set_portrait_for_slot(script_argv[2],script_argv[1]);
       local_7a8 = __ftol();
       script_pred_c = actor_is_death_processed();
@@ -353887,60 +354030,19 @@ LAB_005bf92f:
     }
     break;
   case 0x7a:                                     // WINGMAN_DELINDICATOR
-    /*  wingman_delindicator <npc_id>, <slot>
+    /*  wingman_delindicator <xx actor register>, <slot>
      *  -----------------------------------------------------------------
-     *  Clears the player's pinned wingman-indicator state and hides the
-     *  per-slot HUD bit for the specified slot. Paired with case 0x79
-     *  (`wingman_setindicator`).
+     *  Removes the indicator of the human in act[xx] (kind 2 or 0x1b, same bounds check as
+     *  case 0x79) and hides one slot.
      *
-     *      *script_argv         = arg0  npc_id     actor index (validated
-     *                                              against `param_1[0x17]`
-     *                                              NPC table; same
-     *                                              `-1 < npc_id <
-     *                                              param_1[0x17]` bounds
-     *                                              check as case 0x79).
-     *                                              **npc_id 0 = the
-     *                                              player** (same
-     *                                              user-asserted mapping
-     *                                              as case 0x79).
-     *      script_argv[1]       = arg1  slot       wingman slot 0..3
-     *                                              (used only as the
-     *                                              switch input below;
-     *                                              no explicit bounds
-     *                                              check, but slots
-     *                                              outside 0..3 fall
-     *                                              through the switch
-     *                                              and clear nothing).
+     *  1. human_set_wingman_indicator(0xffffffff, 0), with ECX = act[xx]: that human's
+     *     +0x6d8 = -1 and +0x6dc = 0, so its later hits stop updating any slot.
+     *  2. hud_hide_element of slot yy's bit (0x10000000 << slot); a slot outside 0..3 hides
+     *     nothing. Every other human's pin and every other slot stays as it is.
      *
-     *  Arg-type validation: same `folded_get_dword_0x10() ∈ {2, 0x1b}`
-     *  gate as case 0x79.
-     *
-     *  Engine pipeline (when validations pass):
-     *      1. player_set_wingman_indicator(0xffffffff, 0)
-     *           writes `player+0x6d8 = -1` (sentinel = "no wingman
-     *           pinned") and `player+0x6dc = 0` (portrait cleared). The
-     *           sentinel disables the per-frame player-tick reapply
-     *           (which gates on `if (-1 < +0x6d8)`), so the indicator
-     *           stops being re-pushed to the HUD on subsequent frames.
-     *           **NB:** this clears the GLOBAL pin regardless of which
-     *           slot the script specified — `wingman_delindicator` does
-     *           NOT preserve other slots' pins when called for one slot.
-     *           Whether that's intentional or a bug is undetermined.
-     *      2. switch (slot) { 0: 0x10000000; 1: 0x20000000;
-     *                         2: 0x40000000; 3: 0x80000000; }
-     *         hud_hide_element(bit)
-     *           Clears the per-slot indicator-active bit from the HUD
-     *           flag word at `g_hud_flags` for the specified slot only.
-     *           Other slots' bits are preserved (the visual icons remain
-     *           on screen until their bit is also cleared, but since the
-     *           player struct's pin was wiped in step 1, none of them
-     *           will be re-applied next frame — they'll go stale).
-     *
-     *  **[USER-EMPIRICAL]** Same Tier-2 anchoring as case 0x79
-     *  (patched-binary test).
+     *  **[USER-EMPIRICAL]** Same anchoring as case 0x79 (patched-binary test).
      *  User-asserted: cases 0x79 / 0x7a are WINGMAN_SETINDICATOR /
-     *  WINGMAN_DELINDICATOR — no further verification required
-     *  ([USER-ASSERTED]).
+     *  WINGMAN_DELINDICATOR ([USER-ASSERTED]).
      */
     script_scratch_i0 = vec_index_addr_stride_0x8(param_1[7]);
     script_argv = *(int **)(script_scratch_i0 + 4);
@@ -353948,7 +354050,7 @@ LAB_005bf92f:
     if (((script_scratch_i0 < param_1[0x17]) && (-1 < script_scratch_i0)) &&
        ((*(int *)(param_1[0x16] + script_scratch_i0 * 4) != 0 &&
         ((script_scratch_i0 = folded_get_dword_0x10(), script_scratch_i0 == 2 || (script_scratch_i0 = folded_get_dword_0x10(), script_scratch_i0 == 0x1b)))))) {
-      player_set_wingman_indicator(0xffffffff,0);
+      human_set_wingman_indicator(0xffffffff,0);
       switch(script_argv[1]) {
       case 0:
         hud_hide_element(0x10000000);
@@ -356164,15 +356266,15 @@ LAB_005c3232:
       script_scratch_i0 = script_argv[1];
       uVar7 = uVar7 & 0xffdfffff;
       if (script_scratch_i0 == 1) {
-        vehicle_set_light_bit_0x80(1);
+        vehicle_set_emergency_lights(1);
         vehicle_set_light_script_override(uVar7);
       }
       else if (script_scratch_i0 == 2) {
-        vehicle_set_light_bit_0x80(1);
+        vehicle_set_emergency_lights(1);
         vehicle_set_light_script_override(uVar7 | 0x200000);
       }
       else {
-        vehicle_set_light_bit_0x80(0);
+        vehicle_set_emergency_lights(0);
         vehicle_set_light_script_override(uVar7);
       }
     }
@@ -356395,7 +356497,7 @@ LAB_005c1cb9:
      *  ⚠️ Not to be confused with garage_generatecars (case 0x5b) and garage_releasecars
      *  (case 0x5c), which are the DEAD pair - both are one call to a shared do-nothing stub.
      */
-    garage_generate_cars();
+    garage_request_add_last_stolen();
     break;
   case 0xc9:                                     // GARAGE_SHOW
     /*  garage_show
@@ -356414,7 +356516,7 @@ LAB_005c1cb9:
      *  raised later by garage_game_done, not here. The screen command that IS wired up is
      *  garage_carmanager (case 0x5d).
      */
-    garage_release_cars();
+    garage_request_show_results();
     break;
   case 0xca:                                     // CAR_INWATER
     /*  car_inwater xx, yy
@@ -358243,7 +358345,7 @@ LAB_005c4848:
      *  Writes the length of the vector at flt[xx..xx+2] into flt[yy]. 2 shipped call sites.
      *
      *  Note the asymmetric guard: xx is checked at +2 as a vector, yy at +0 as a single
-     *  float. The length itself comes from vec3_dist applied to the copied triple.
+     *  float. The length itself comes from vec3_length applied to the copied triple.
      */
     script_scratch_i0 = vec_index_addr_stride_0x8(param_1[7]);
     script_argv = *(int **)(script_scratch_i0 + 4);
@@ -358253,7 +358355,7 @@ LAB_005c4848:
         script_scratch_i1 = param_1[0x12];
         vec3_set_xyz(*(undefined4 *)(script_scratch_i1 + script_scratch_i0 * 4),*(undefined4 *)(script_scratch_i1 + 4 + script_scratch_i0 * 4),
                      *(undefined4 *)(script_scratch_i1 + (script_scratch_i0 + 2) * 4));
-        fVar34 = (float10)vec3_dist();
+        fVar34 = (float10)vec3_length();
         *(float *)(param_1[0x12] + script_argv[1] * 4) = (float)fVar34;
       }
     }
@@ -360492,11 +360594,11 @@ LAB_005c5e7d:
      *  (case 0x15c) - the two labels fall through to the same code - and that body validates the
      *  flt[] slot and stores a hard 0. There is no version test anywhere in it.
      *
-     *  That is a fact about THIS binary, not about the command: the censored German release and
-     *  the editor are separate executables, each presumably compiled with a different constant
-     *  here. The Mafia Script Data Reference documents the intended 0 not-German / 1 German
-     *  contract, which is what a script
-     *  should still be written against.
+     *  That is a fact about THIS binary, not about the command: the German release is a
+     *  separate executable, cut for Germany's stricter rules on violence in video games, that
+     *  runs the same scripts, and the editor is another separate build. The Mafia Script Data
+     *  Reference documents the intended 0 not-German / 1 German contract, which is what a
+     *  script should still be written against.
      *
      *  Five shipped scripts call it, so retail content does branch on it - and always takes the
      *  not-German arm.
@@ -361775,19 +361877,14 @@ script_flt_write_zero:
      *    6. Set facing via `vec3_set_xyz(1.0, 0, 0)` then vmethod 0xc
      *       (set_orientation) and vmethod 0x18 (commit transform).
      *    7. `i3d_scene_set_frame_sector_pos` likely registers the vehicle with the world.
-     *    8. Controller vmethod 0x48 returns success → on success runs a
-     *       finalisation sequence (semantics unverified):
+     *    8. Controller vmethod 0x48 returns success → on success the
+     *       car becomes a temporary actor:
      *         vmethod 0x64,
-     *         vehicle_controller_set_field_0x214c(1),
-     *         act_mission_get_game(controller),
+     *         car_set_remove_at_game_done(1) - game_done removes it,
+     *         act_mission_get_game(controller) - the C_game receiver,
      *         game_add_temporary_actor_intern(controller),
      *         vehicle_settle(100),
-     *         vehicle_controller_set_field_0x65(1).
-     *       The presence of `act_mission_get_game` in this
-     *       branch suggests the player actor is involved (possibly
-     *       teleported into / parented to the spawned car), but this
-     *       has NOT been confirmed in-game and is not provable from
-     *       the case body alone.
+     *         actor_set_save_excluded(1) - the savegame skips it.
      *
      *  The spawn position (-841, -6.5, -637) appears to be a fixed
      *  developer-test location in the Lost Heaven map. The factory
@@ -361830,11 +361927,11 @@ script_flt_write_zero:
           script_pred_c = (**(code **)(*piVar22 + 0x48))(script_argv);
           if (script_pred_c != '\0') {
             (**(code **)(*piVar22 + 100))();
-            vehicle_controller_set_field_0x214c(1);
+            car_set_remove_at_game_done(1);
             act_mission_get_game(piVar22);
             game_add_temporary_actor_intern(piVar22);
             vehicle_settle(100);
-            vehicle_controller_set_field_0x65(1);
+            actor_set_save_excluded(1);
           }
         }
       }
@@ -362008,6 +362105,8 @@ void __thiscall hud_set_element_flags(int param_1,undefined4 param_2)
  * `hud_show_element` for the full context on the singleton, the
  * ECX-hidden-receiver convention, and the per-bit element map.
  * The flag word is multi-element, not police-only.
+ * PS2 twin: — (inlined on the PS2: no Show/Hide method among its 84 HUD symbols;
+ *   structs/hud.md section 4)
  * Evidence: renamed from `FUN_005c7db0` (original Ghidra id).
  */
 void __thiscall hud_hide_element(int param_1,uint param_2)
@@ -362152,6 +362251,8 @@ undefined4 __fastcall hud_pop_element_flags(int param_1)
  * tick. The field is the engine's wanted bar, NOT a free script-controlled
  * progress bar.
  *
+ * PS2 twin: — (PC-only: the PS2 field the setter would write has no reference;
+ *   structs/hud.md section 4)
  * Evidence: renamed from `FUN_005c8010` (original Ghidra id).
  */
 void __thiscall hud_set_police_wanted_bar(int param_1,undefined4 param_2)
@@ -363277,28 +363378,26 @@ void __fastcall mission_commit_next_mission_number(int param_1)
 }
 
 /*
- * mission_set_sound_restore_stage — set the cutscene sound-restore stage `mission_tick` consumes
+ * mission_set_frame_skip_count - set the frame-skip countdown `C_mission+0x78`
  *
- * What it does:
- *   Writes `C_mission+0x78`. The `recloadfull` arm raises it to 1 when it is below 1
- *   (a cutscene is starting); the `recunload` arm raises it to 2 when it is below 2
- *   (the cutscene has ended and the ambient sound bed must come back). The
- *   comparison lives in the caller, not here — this is a plain store.
+ * What it does: a plain store into `+0x78`. While the count is above 0, `engine_game_loop`
+ *  decrements it once per frame and skips that frame's present call; `mission_tick` restores
+ *  the sound volume `mission_open` muted on the first frame the count is below 1. Callers:
+ *  `game_init` stores 10; the `recloadfull` and `recunload` arms raise it to 1 and 2 only
+ *  when it is lower (`exe-re/structs/mission.md` 3d).
  * Parameters:
- *   this (ECX, hidden by Ghidra): the `C_mission` — always `g_act_mission`.
- *   stage (undefined4): 1 = cutscene entered, 2 = cutscene left.
+ *  this (ECX, hidden by Ghidra): the `C_mission`, always `g_act_mission`.
+ *  count (undefined4): the number of frames to skip.
  * Returns: void.
- * PS2 twin: — (PC-only: `recloadfull` / `recunload` belong to `C_recorder`, which does not exist
- *    on PS2.)
- * Evidence:
- *   VA 0x005c8690. Receiver BYTE-PROVEN `mov ecx,[0x65115c]` (2 callsites in
- *   `program_process_command`, 1 in `game_init`). ⚠️ Graded STRUCTURAL, not
- *   CONFIRMED: both consuming commands are PC-only, so there is no PS2 arm to diff
- *   against — an artifact-level cap, not a pending item.
- *   `structs/mission.md` independently records `+0x78` as the sound-restore
- *   countdown consumed by `mission_tick`. Renamed from `FUN_005c8690`.
+ * PS2 twin: - (PC-only: `recloadfull` / `recunload` belong to `C_recorder`, which the PS2
+ *  lacks)
+ * Evidence: VA 0x005c8690. Receiver byte-proven `mov ecx,[0x65115c]` at all 3 callsites. The
+ *  other writers store `+0x78` directly: `mission_open` 0, `recorder_stop` 4,
+ *  `recorder_end_sequence_and_restore_scene` 2.
+ * Renamed from `FUN_005c8690`.
  */
-void __thiscall mission_set_sound_restore_stage(int param_1,undefined4 param_2)
+
+void __thiscall mission_set_frame_skip_count(int param_1,undefined4 param_2)
 
 {
   *(undefined4 *)(param_1 + 0x78) = param_2;
@@ -363306,22 +363405,19 @@ void __thiscall mission_set_sound_restore_stage(int param_1,undefined4 param_2)
 }
 
 /*
- * mission_get_sound_restore_stage — read the cutscene sound-restore stage
+ * mission_get_frame_skip_count - read the frame-skip countdown `C_mission+0x78`
  *
- * What it does:
- *   Reads `C_mission+0x78`. Both callers compare the result before calling
- *   `mission_set_sound_restore_stage`, so the stage only ever moves forward.
+ * What it does: returns `+0x78`. Both callers, the `recloadfull` and `recunload` arms, read it
+ *  to raise the count only when it is lower (`mission_set_frame_skip_count`).
  * Parameters:
- *   this (ECX, hidden by Ghidra): the `C_mission` — always `g_act_mission`.
- * Returns: undefined4: the stage — 0 none, 1 cutscene entered, 2 cutscene left.
- * PS2 twin: — (PC-only: `recloadfull` / `recunload` belong to `C_recorder`, which does not exist
- *    on PS2.)
- * Evidence:
- *   VA 0x005c86a0. Receiver BYTE-PROVEN `mov ecx,[0x65115c]` (2 callsites).
- *   ⚠️ STRUCTURAL for the same reason as its setter: no PS2 arm exists.
- *   Renamed from `FUN_005c86a0`.
+ *  this (ECX, hidden by Ghidra): the `C_mission`, always `g_act_mission`.
+ * Returns: undefined4: the frames still to skip; 0 when none.
+ * PS2 twin: - (PC-only, for the same reason as its setter)
+ * Evidence: VA 0x005c86a0. Receiver byte-proven `mov ecx,[0x65115c]` at both callsites.
+ * Renamed from `FUN_005c86a0`.
  */
-undefined4 __fastcall mission_get_sound_restore_stage(int param_1)
+
+undefined4 __fastcall mission_get_frame_skip_count(int param_1)
 
 {
   return *(undefined4 *)(param_1 + 0x78);
@@ -363484,12 +363580,21 @@ void __thiscall actor_mark_created_at_runtime(int param_1,undefined1 param_2)
 }
 
 /*
- * vehicle_controller_set_field_0x65 — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_005c8740` (original Ghidra id). VA 0x005c8740.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_005c8740`.
+ * actor_set_save_excluded - set the actor's save_excluded byte (C_actor+0x65)
+ *
+ * What it does: stores the argument into C_actor+0x65. While it is 1 the savegame
+ *  skips the actor (structs/actor.md).
+ * Parameters: param_1 (ECX): the actor. param_2 (byte): 1 = exclude from saves.
+ * Returns: void.
+ * Evidence: VA 0x005c8740. One callsite, the DAN_INTERNAL_1 arm (case 0x185) of
+ *  program_process_command, with ECX = the freshly built C_car (its C_Vehicle is
+ *  `lea ecx,[edi+0x70]` two instructions earlier) and the argument 1. The field's
+ *  readers are the savegame writers listed in structs/actor.md. No PS2 counterpart is
+ *  located. Renamed from `FUN_005c8740`.
+ * Class layout: exe-re/structs/actor.md
  */
-void __thiscall vehicle_controller_set_field_0x65(int param_1,undefined1 param_2)
+
+void __thiscall actor_set_save_excluded(int param_1,undefined1 param_2)
 
 {
   *(undefined1 *)(param_1 + 0x65) = param_2;
@@ -363501,8 +363606,8 @@ void __thiscall vehicle_controller_set_field_0x65(int param_1,undefined1 param_2
  *
  * What it does:
  *   Returns the address of the global `std::vector<C_actor *>` that every live
- *   actor is registered in. Three arms walk it: `findnearactor`,
- *   `destroy_physicalobject` and `dan_internal_2`. It takes no receiver — the
+ *   actor is registered in. Three arms walk it: `findactor`,
+ *   `findnearactor` and `destroy_physicalobject`. It takes no receiver — the
  *   list is a static, not a member of any instance.
  * Parameters: none — a free function with no receiver.
  * Returns: undefined *: the address of the global actor vector.
@@ -363727,30 +363832,30 @@ void __thiscall vehicle_set_auto_indicators_from_steering(int param_1,char param
 }
 
 /*
- * vehicle_set_light_bit_0x80 — set or clear bit 0x80 of the vehicle light-state word
+ * vehicle_set_emergency_lights - switch the emergency light bar on or off
  *
- * What it does:
- *   Sets or clears bit `0x80` of `C_Vehicle+0x19c` and invokes the `+0x388` wake-up
- *   slot. ⚠️ The name is MECHANICAL on purpose: `structs/vehicle.md` 1b marks this
- *   lamp UNIDENTIFIED — the Mafia Script Data Reference's `carlight_light` entry is
- *   blank, and the user tested the command in-game and saw no visible effect. The bit
- *   exists on both builds and pairs with script override bit `0x200000`; what it lights
- *   does not appear on any shipped model.
+ * What it does: sets or clears bit `0x80` of the light-state word `C_Vehicle+0x19c` and
+ *  invokes the `+0x388` wake-up slot. While the bit is set, `vehicle_apply_light_state`
+ *  runs a two-phase flasher: a timer at `+0x1b8` counts against the period `+0x1b4`,
+ *  toggles bit `0x20000000`, and lights bit `0x20` or `0x10` alternately. Those two bits
+ *  drive lamp types 5 and 6, the `LIGHTLI*` frames, which ship only on the fire engines
+ *  and the police cars (`structs/vehicle.md` 1b).
  * Parameters:
- *   this (ECX, hidden by Ghidra): the `C_Vehicle` at `C_car+0x70`.
- *   on (char): non-zero to set the bit, zero to clear it.
+ *  this (ECX, hidden by Ghidra): the `C_Vehicle` at `C_car+0x70`.
+ *  on (char): non-zero to set the bit, zero to clear it.
  * Returns: void.
- * PS2 twin: — (header inline; the PS2 build inlines it into its own `Process` arm, so no symbol
- *    exists on either side)
- * Evidence:
- *   VA 0x005c88b0. Receiver BYTE-PROVEN `add ecx, 0x70` at all 3 callsites.
- *   Body-diffed against the PS2 `CARLIGHT_LIGHT` arm (opcode 0xc4), which sets and
- *   clears bit `0x80` of `car + 0x5f8` and fires the same `car + 0x6d8` callback,
- *   and whose override mask is `& 0xfd00000` — the PS2 spelling of the PC's
- *   `& 0xffdfffff`, i.e. override bit `0x200000` belongs to this lamp.
- *   Renamed from `FUN_005c88b0`.
+ * PS2 twin: - (header inline; the PS2 build inlines it into its own `Process` arm, so no
+ *  symbol exists on either side)
+ * Evidence: VA 0x005c88b0. Receiver byte-proven `add ecx, 0x70` at all 3 callsites, all in
+ *  the `carlight_light` arm of `program_process_command`. The pursuit dispatch paths
+ *  (`police_manager_deploy_vehicle_from_pool`, `police_manager_acquire_from_pool_by_name`,
+ *  `police_manager_spawn_patrol_car_reinforcements_at_radius`,
+ *  `police_manager_try_dispatch_pursuit_for_target`) set the same bit inline. Script
+ *  override bit `0x200000` belongs to this lamp.
+ * Renamed from `FUN_005c88b0`.
  */
-void __thiscall vehicle_set_light_bit_0x80(int param_1,char param_2)
+
+void __thiscall vehicle_set_emergency_lights(int param_1,char param_2)
 
 {
   uint uVar1;
@@ -364175,12 +364280,23 @@ void __thiscall car_adjust_brake_hold_count(int param_1,char param_2)
 }
 
 /*
- * vehicle_controller_set_field_0x214c — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_005c8a90` (original Ghidra id). VA 0x005c8a90.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_005c8a90`.
+ * car_set_remove_at_game_done - set the car's remove-at-game-end byte (C_car+0x214c)
+ *
+ * What it does: stores the argument into C_car+0x214c. game_done removes every
+ *  kind-4 actor whose byte is set (mission_active_actor_drop, mission_del_actor).
+ * Parameters: param_1 (ECX): the C_car. param_2 (byte): 1 = remove at game end.
+ * Returns: void.
+ * Evidence: VA 0x005c8a90. One callsite, the DAN_INTERNAL_1 arm (case 0x185) of
+ *  program_process_command, on the freshly built C_car, argument 1. The other writers
+ *  set the byte inline: car_explosion, traffic_car_activate_or_spawn_pursuit_vehicles,
+ *  traffic_car_spawn_mafia_pursuit_car, traffic_car_take_over_cruising_car,
+ *  garage_game_done and police_manager_apply_state; car_ctor clears it. Readers:
+ *  game_done, car_game_done, car_extended_update and the savegame pair. No PS2
+ *  counterpart is located. Renamed from `FUN_005c8a90`.
+ * Class layout: exe-re/structs/car.md
  */
-void __thiscall vehicle_controller_set_field_0x214c(int param_1,undefined1 param_2)
+
+void __thiscall car_set_remove_at_game_done(int param_1,undefined1 param_2)
 
 {
   *(undefined1 *)(param_1 + 0x214c) = param_2;
@@ -364336,6 +364452,7 @@ undefined4 __fastcall camera_get_car(int param_1)
  *
  * Params:  param_1 (this) = police_manager* (byte 0 = enabled flag).
  * Returns: undefined1 — the enabled byte (non-zero = police enabled).
+ * PS2 twin: — (inlined on the PS2: its three PM_SHOW* arms test the enabled byte in place)
  * Renamed from `FUN_005c8af0`.
  */
 undefined1 __fastcall police_manager_is_enabled(undefined1 *param_1)
@@ -364345,10 +364462,19 @@ undefined1 __fastcall police_manager_is_enabled(undefined1 *param_1)
 }
 
 /*
- * police_manager_set_speed_thresholds — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_005c8b00` (original Ghidra id). VA 0x005c8b00.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_005c8b00`.
+ * police_manager_set_speed_thresholds — set the two speeding thresholds of the police manager
+ *
+ * What it does: writes param_2 to +0x0c (speed_threshold_fine) and param_3 to +0x10
+ *   (speed_threshold_arrest), both in m/s. police_manager_tick compares the suspect's
+ *   vehicle speed against them (above +0x0c = speeding fine, above +0x10 = handcuffs tier);
+ *   police_manager_game_init resets them to 17.0 / 28.0.
+ * Parameters: param_1 (this, ECX): the police_manager (C_game+0x2da0).
+ *   param_2: the fine threshold, m/s. param_3: the arrest threshold, m/s.
+ * Returns: void.
+ * PS2 twin: — (inlined on the PS2: its POLICEMANAGER_SETSPEED arm stores both thresholds in
+ *   place, km/h / 3.6)
+ * Evidence: VA 0x005c8b00. Sole caller: program_process_command case 0x89
+ *   POLICEMANAGER_SETSPEED (structs/police_manager.md). Renamed from `FUN_005c8b00`.
  */
 void __thiscall police_manager_set_speed_thresholds(int param_1,undefined4 param_2,undefined4 param_3)
 
@@ -364548,8 +364674,10 @@ void __thiscall game_set_timer_timeout_event(int param_1,undefined4 param_2,unde
  *   VA 0x005c8b90. Body-diffed against the PS2 `SETPLAYERFIREEVENT` arm (opcode
  *   0x74): `*(int *)(game + 0x119c) = program; *(int *)(game + 0x11a0) = event;`.
  *   The Mafia Script Data Reference: 'if the player fires, event yy is called in actor xx'.
- *   🔴 `script-opcode-dispatch.md` section 9 attributed this helper to case `0x74`
- *   by nearest-arm arithmetic; the decompiler's own label is case `0x72`.
+ *   Its one callsite is shared: the `0x72` arm reaches it with its arguments, and the
+ *   invalid-actor fallback of the `0x74` SETPLAYERHORNEVENT arm jumps into it with (0, 0),
+ *   so a horn registration with a bad actor clears THIS slot, on the PS2 too
+ *   (script-opcode-dispatch.md section 8).
  *   Renamed from `FUN_005c8b90`.
  */
 void __thiscall game_set_player_fire_event(int param_1,undefined4 param_2,undefined4 param_3)
@@ -364578,6 +364706,8 @@ void __thiscall game_set_player_fire_event(int param_1,undefined4 param_2,undefi
  *   0x76): `*(int *)(game + 0x11a4) = program; *(int *)(game + 0x11a8) = event;`.
  *   The Mafia Script Data Reference: 'if the player honks in a car, event yy is called in actor
  *   xx'.
+ *   An invalid actor does not clear this slot: the arm's fallback calls
+ *   game_set_player_fire_event(0, 0) (script-opcode-dispatch.md section 8).
  *   Renamed from `FUN_005c8bb0`.
  */
 void __thiscall game_set_player_horn_event(int param_1,undefined4 param_2,undefined4 param_3)
@@ -365044,58 +365174,29 @@ void __thiscall human_pose_set_look_target_frame(int param_1,undefined4 param_2)
 }
 
 /*
- * player_set_wingman_indicator — record the player's pinned wingman-
- *   indicator assignment (slot, portrait) on the player struct.
+ * human_set_wingman_indicator - pin a wingman indicator on a human
  *
- * What it does:
- *   Two-field setter:
- *     *(player + 0x6d8) = slot;       // wingman slot index 0..3, or
- *                                     // 0xffffffff (-1) = disabled
- *     *(player + 0x6dc) = portrait;   // portrait_id 0..7 (HUD setter
- *                                     // masks & 7)
- *
- * Why "player": receiver is the PLAYER STRUCT (the same `this` that
- *   `loadsave_savegame_save` serializes — NOT the HUD singleton). Proof:
- *     - the save serializer copies +0x6d8/+0x6dc into the .sav record at
- *       record-offsets +0x169/+0x16d (alongside +0x600 region pose data
- *       and the rest of the player block).
- *     - the matching loader restores them from the same offsets.
- *     - two player-init paths set +0x6d8 = 0xffffffff as the "no wingman"
- *       sentinel.
- *
- * Why "set_wingman_indicator": the (slot, portrait) pair is consumed
- *   exclusively by the wingman-indicator reapply pipeline. Three
- *   per-frame player-tick sites read +0x6d8 and, when non-sentinel:
- *     1. call `hud_wingman_set_portrait_for_slot(+0x6d8, +0x6dc)` to
- *        push the portrait into the HUD singleton's slot table;
- *     2. `switch(+0x6d8)` cases 0..3 OR one of bits 0x10000000,
- *        0x20000000, 0x40000000, 0x80000000 into the HUD flag word at
- *        g_hud_flags;
- *     3. compute the indicator value (either a script-supplied scalar
- *        or `*stl_max_int_ptr(...)` of an engine-live source, picked by
- *        the `player+0x5d`/`+0x5e` predicate) and push it via
- *        `hud_wingman_set_indicator_value_for_slot(+0x6d8, value)`.
- *   The HUD singleton's slot tables are therefore frame-volatile caches;
- *   the player struct is the source of truth.
- *
- * Parameters:
- *   this (ECX, hidden by __thiscall) : player struct pointer.
- *   slot (int, param_2)              : wingman slot index 0..3, or
- *                                     0xffffffff (-1) = disable reapply.
- *   portrait (uint, param_3)         : portrait_id 0..7.
+ * What it does: two stores on the C_human: +0x6d8 = the wingman slot (0..3, or -1 =
+ *  no indicator) and +0x6dc = the portrait id (0..7). The C_human methods read the
+ *  pair back: human_hit, human_hit_in_car and human_die_in_exploding_car push the
+ *  human's health to that HUD slot, human_save_game_save / _load serialise it, and
+ *  human_game_init / human_activate reset the slot.
+ * Parameters: this (ECX): the C_human, kind 2 (player) or 0x1b (C_entity) - both
+ *  script arms test exactly those two kinds before the call. param_2 (int): the slot.
+ *  param_3 (uint): the portrait id.
  * Returns: void.
- *
- * Script-VM callsites:
- *   - case 0x79 WINGMAN_SETINDICATOR:
- *     `(script_argv[2] (slot), script_argv[1] (portrait))`
- *   - case 0x7a WINGMAN_DELINDICATOR:
- *     `(0xffffffff, 0)` — sets slot to -1 sentinel, disabling the
- *     per-frame reapply on subsequent ticks.
- *
- * Evidence: BYTE-VERIFIED body. Receiver identification grounded in the
- *   save/load serializer evidence cited above. Renamed from `FUN_005c8d50`.
+ * Callers: program_process_command case 0x79 WINGMAN_SETINDICATOR (slot, portrait)
+ *  and case 0x7a WINGMAN_DELINDICATOR (-1, 0).
+ * PS2 parallel: no PS2 method; Process__9C_programFUi inlines the same two stores at
+ *  C_human +0x734 / +0x738 in its WINGMAN_SETINDICATOR arm (PS2 opcode 0x7b), behind
+ *  the same kind 2 / 0x1b guard.
+ * Evidence: VA 0x005c8d50, `mov [ecx+0x6d8],eax; mov [ecx+0x6dc],edx; ret 8`. Every
+ *  reader of +0x6d8 / +0x6dc in .text is a C_human method or the script VM.
+ *  Renamed from `FUN_005c8d50`.
+ * Class layout: exe-re/structs/human.md
  */
-void __thiscall player_set_wingman_indicator(int param_1,undefined4 param_2,undefined4 param_3)
+
+void __thiscall human_set_wingman_indicator(int param_1,undefined4 param_2,undefined4 param_3)
 
 {
   *(undefined4 *)(param_1 + 0x6d8) = param_2;
@@ -367567,10 +367668,9 @@ void __thiscall std_string_tidy(int param_1,char param_2)
  *  builds at [ebp-8]; it is typed rather than left as Ghidra's `code *`. The SEH record's
  *  other field is `pvStack_10`, the previous-record link.
  * Note: the `__thiscall` signature and both parameters only exist because the whole body is
- *  present - the head's `mov ebx, ecx` has no consumer without the tail. The four callsites
- *  elsewhere in this file still render ONE argument, because their own functions were
- *  exported against a one-argument prototype. That is expected; do not hand-edit call
- *  expressions to match this body.
+ *  present - the head's `mov ebx, ecx` has no consumer without the tail. Each of the four
+ *  callsites loads ECX with the string and pushes one value, so its call expression shows that
+ *  one stack argument and not `this`, as every `__thiscall` call in this file does.
  * Renamed from `FUN_005cac30`.
  */
 void __thiscall std_string_grow_buffer(int param_1,uint param_2)
@@ -369402,7 +369502,7 @@ reset_pending_for_next_pass:                                  // (was LAB_005cc8
  *   numerically indistinguishable from zero" (~10e-8 per component
  *   if equally distributed).
  *
- *   Companion to `vec3_dist_sq` (VA 0x004250f0) and the rest of the
+ *   Companion to `vec3_length_sq` (VA 0x004250f0) and the rest of the
  *   vec2/vec3 math library at VAs 0x00424e80..0x004251a0.
  *
  * Parameters:
@@ -369675,8 +369775,8 @@ LAB_005ccd82:
           } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar8) != piVar7);
         }
         if (iVar12 != -1) {
-          array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar12 * 8);
-          destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+          i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar12 * 8);
+          i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
           g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
         }
         for (uVar5 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar5 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
@@ -369699,7 +369799,7 @@ LAB_005ccd82:
         iVar12 = vec_count_stride_0x4();
         if (iVar12 != 0) {
           do {
-            string_append_cstr(&local_80,pcVar13);
+            string_concat_cstr(&local_80,pcVar13);
             iVar12 = *piVar7;
             uStack_18 = 1;
             uVar3 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_68);
@@ -369754,8 +369854,8 @@ LAB_005cd149:
           } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar12) != piVar7);
         }
         if (iVar15 != -1) {
-          array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar15 * 8);
-          destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+          i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar15 * 8);
+          i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
           g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
         }
         for (; (g_i3d_model_cache_items_begin != 0 && (uVar5 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
@@ -369778,7 +369878,7 @@ LAB_005cd149:
         iVar15 = vec_count_stride_0x4();
         if (iVar15 != 0) {
           do {
-            string_append_cstr(&pvStack_84,s_barrier_i3d_006500c0);
+            string_concat_cstr(&pvStack_84,s_barrier_i3d_006500c0);
             iVar15 = *piVar7;
             uStack_18 = 6;
             uVar3 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_68);
@@ -369843,8 +369943,8 @@ LAB_005cd503:
           } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar12) != piVar9);
         }
         if (iVar15 != -1) {
-          array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar15 * 8);
-          destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+          i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar15 * 8);
+          i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
           g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
         }
         for (uVar5 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar5 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
@@ -369867,7 +369967,7 @@ LAB_005cd503:
         iVar15 = vec_count_stride_0x4();
         if (iVar15 != 0) {
           do {
-            string_append_cstr(&stack0xffffff74,pcVar13);
+            string_concat_cstr(&stack0xffffff74,pcVar13);
             iVar15 = *piVar9;
             uStack_18 = 0xb;
             uVar3 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_5c);
@@ -369910,14 +370010,14 @@ LAB_005ccf15:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar5 * 8) + 4) == 1) {
       puVar4 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar5 * 8);
       (**(code **)*puVar4)(puVar4);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar5 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar5 * 8);
       break;
     }
   }
 LAB_005ccf4f:
   uVar3 = clear1_dword_at_0x04();
   uStack_18 = 2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar3);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar3);
   uStack_18 = 0xffffffff;
   if (iStack_50 != 0) {
     string_base_release();
@@ -369974,14 +370074,14 @@ LAB_005cd2e0:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar5 * 8) + 4) == 1) {
       puVar4 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar5 * 8);
       (**(code **)*puVar4)(puVar4);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar5 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar5 * 8);
       break;
     }
   }
 LAB_005cd319:
   uVar3 = clear1_dword_at_0x04();
   uStack_18 = 7;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar3);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar3);
   uStack_18 = 0xffffffff;
   if (iStack_50 != 0) {
     string_base_release();
@@ -370035,14 +370135,14 @@ LAB_005cd696:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar5 * 8) + 4) == 1) {
       puVar4 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar5 * 8);
       (**(code **)*puVar4)(puVar4);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar5 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar5 * 8);
       break;
     }
   }
 LAB_005cd6d0:
   uVar3 = clear1_dword_at_0x04();
   uStack_18 = 0xc;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar3);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar3);
   uStack_18 = 0xffffffff;
   if (iStack_44 != 0) {
     string_base_release();
@@ -371899,8 +371999,9 @@ int police_manager_deploy_vehicle_from_pool(void)
  *   `int` (entity pointer): the deployed spike_strip entity, OR 0 if
  *   the pool was empty.
  *
- * Evidence: VA 0x005ce8d0. Renamed from `FUN_005ce8d0`. PS2 twin not located
- *   (deploy-side; candidate area = the C_shvestky roadblock-spawn methods).
+ * Evidence: VA 0x005ce8d0. Renamed from `FUN_005ce8d0`.
+ * PS2 twin: - (the PS2 never fills its iris pool, see
+ *  `police_manager_spike_strip_pool_pop`; its roadblock builder places no strip).
  */
 int police_manager_deploy_temp_spike_strip(undefined4 *param_1,undefined4 param_2)
 
@@ -372793,7 +372894,8 @@ int __fastcall police_manager_get_free_officers_count(int param_1)
  *
  * Evidence: VA 0x005cf6e0. Sole callsite is the wrapping
  *   `police_manager_deploy_temp_spike_strip`. Renamed from `FUN_005cf6e0`.
- *   No PS2 twin located.
+ * PS2 twin: - (the PS2 never fills its iris pool: `vector<C_shvestky::S_road_block_iris>`
+ *  has no `insert` instantiated, only its allocator constructor, `clear` and destructor).
  */
 undefined4 __fastcall police_manager_spike_strip_pool_pop(int param_1)
 
@@ -375239,9 +375341,9 @@ void __thiscall police_manager_rename_police_car(int param_1,int param_2)
  *  separately gates on `(id & 0x8000) == 0` before indexing
  *  `roads+0x08 + (id & 0xffff)*0xec + 0xc`. Used in the running-a-red-light test to turn
  *  a stop-line's two endpoint ids into two world positions.
- * Note: no PS2 twin located. Searched the 19-method `C_roads` class column, a
- *  0x7fff + 0xec co-occurrence grep of the PS2 decomp, and `Tick__10C_shvestkyFUi`;
- *  a header inline on PS2 is the likeliest explanation but nothing is tagged terminal.
+ * PS2 twin: none - the PS2 inlines this dispatch twice inside `TestOverRed__10C_shvestkyFv`
+ *  (crossing stride 0xe0, node stride 0x20, `& 0x7fff`), at the two positions where
+ *  `police_manager_tick` calls this function.
  * See `exe-re/structs/roads.md`.
  * Renamed from `FUN_005d1420`.
  */
@@ -375734,6 +375836,7 @@ void __fastcall input_clear_bindings(int param_1)
  *  vector at `+0xb0` (`g_input_bindings_begin` / `_end`). `engine_game_loop` zeroes both
  *  tables using `(g_input_bindings_end - g_input_bindings_begin) / 0xc` as the bound.
  * See `exe-re/structs/input.md`.
+ * PS2 twin: — (PC-only: no PS2 input class has methods; structs/input.md section 6)
  * Renamed from `FUN_005d1b20`.
  */
 int __thiscall input_get_action_values(int param_1,undefined4 *param_2,byte param_3)
@@ -375992,6 +376095,7 @@ undefined4 __thiscall input_get_binding(int param_1,undefined4 *param_2,uint par
  *  half (1) or negative half (2).
  * `param_1` is the input-manager singleton and every field it writes is a binding or an
  * action value. See `exe-re/structs/input.md`.
+ * PS2 twin: — (PC-only: no PS2 input class has methods; structs/input.md section 6)
  * Renamed from `FUN_005d1f30`.
  */
 void __thiscall input_update(undefined4 *param_1,char param_2)
@@ -376472,8 +376576,13 @@ void __fastcall input_poll_joysticks(int param_1)
  *  pressed. Keyboard modifiers are recognised specially and reported by their own scancodes
  *  (0x2a/0x36 Shift, 0x1d/0x9d Ctrl, 0x38/0xb8 Alt); joystick axes must clear a dead-zone of
  *  0.3, 0.5 or 0.7 depending on the axis capability bits.
- * Parameters: param_1 (undefined4 *, ECX): the input manager. param_2 (undefined4): unused by
- *  the body. param_3 (char): non-zero to poll the devices first.
+ * Parameters: param_1 (undefined4 *, ECX): the input manager. param_2 (undefined4): the device
+ *  FILTER; each set bit skips one source - 0x01 mouse axes, 0x02 joystick axes, 0x04 mouse
+ *  buttons, 0x08 joystick buttons, 0x10 POV hats, 0x20 keyboard. The body below renders it as
+ *  the return value of engine slot 0xe8 (uVar4) because the decompiler loses the stack depth
+ *  across the engine's callee-cleans virtual calls; all five reads sit at stack depth 0x1c, the
+ *  first argument. The sole caller passes 0 or 1 (Aiming slot or not) or 0x3c / 0x3d (axes
+ *  only). param_3 (char): non-zero to poll the devices first.
  * Returns: int *: the scratch binding at `this+0x14`, or NULL.
  * Evidence: VA 0x005d2b40. It writes exactly the record layout `input_binding_get_label`
  *  decodes, and its sole caller `gui_key_capture_tick` stores the returned record. The encoding
@@ -378768,7 +378877,7 @@ int __fastcall camera_ctor(int param_1)
   // `reserve__Q23std38__vector_pod<>FUi(this+0x8c, 15)`. MSVC inlined the two ctors to
   // the eight zero stores above and emitted NO reserve at all, so the PC starts both
   // vectors empty and grows them on first use. Same two members, different policy.
-  // See `exe-re/structs/camera.md` SS6.
+  // See `exe-re/structs/camera.md` §6.
   local_4 = 1;
   camera_reset();
   ExceptionList = local_c;
@@ -378794,7 +378903,7 @@ void __fastcall camera_dtor(int param_1)
   // frees - `__dt__Q23std38__vector_pod<>Fv` on this+0x8c and
   // `__dt__Q23std72__vector_deleter<15G_CameraPushPop,...>Fv` (0x00299840) on this+0x80.
   // MSVC inlined both. Same two members in the same order; PC +0x7c/+0x6c map onto PS2
-  // +0x8c/+0x80. See `exe-re/structs/camera.md` SS6.
+  // +0x8c/+0x80. See `exe-re/structs/camera.md` §6.
   operator_delete_wrapper(*(undefined4 *)(param_1 + 0x7c));
   *(undefined4 *)(param_1 + 0x7c) = 0;
   *(undefined4 *)(param_1 + 0x80) = 0;
@@ -382163,7 +382272,7 @@ void __thiscall camera_lock_at_human_pair(int param_1,undefined4 param_2)
     // own FOV slot 0x50 with the identical pi/4 constant. The same substitution appears
     // in `camera_set_sniper_fov`, and the third PS2 caller's twin, `carcyclopedia_ctor`,
     // calls the same slot directly, so ParheliaSetFov has no PC counterpart.
-    // See `exe-re/structs/camera.md` SS6d.
+    // See `exe-re/structs/camera.md` §6d.
     (**(code **)(**(int **)(param_1 + 4) + 0x50))(*(int **)(param_1 + 4),0x3f490fdb);
     (**(code **)(**(int **)(param_1 + 4) + 0x18))(*(int **)(param_1 + 4));
   }
@@ -382259,7 +382368,7 @@ void __fastcall camera_push_mode(int param_1)
       // grow-copy-fill-free path instead, which is the 549 B against 104 B size difference.
       // The element type G_CameraPushPop is the PS2 template argument (the container lever);
       // the record is {mode, frame+0x140, frame+0x144, frame+0x148}, stride 0x10.
-      // See `exe-re/structs/camera.md` SS6.
+      // See `exe-re/structs/camera.md` §6.
       pvVar3 = operator_new(iVar2 << 4);
       pvVar6 = pvVar3;
       for (puVar4 = *(undefined4 **)(param_1 + 0x6c); puVar4 != puVar7; puVar4 = puVar4 + 4) {
@@ -382469,7 +382578,7 @@ void __thiscall camera_dialog_start(int param_1,int param_2,uint param_3)
           // and the fill_n below are all one PS2 call. Those three helpers are NOT inlinings:
           // they are genuinely shared STL primitives (copy_range_stride_0x14 has 22 callers in
           // at least six unrelated families), which is why they keep mechanical names.
-          // See `exe-re/structs/camera.md` SS6.
+          // See `exe-re/structs/camera.md` §6.
           piVar3 = (int *)operator_new(iVar2 * 0x14);
           iVar2 = copy_range_stride_0x14(g_camera_dialog_actors_begin,piVar5,piVar3);
           fill_n_stride_0x14(iVar2,1,local_14);
@@ -382598,7 +382707,7 @@ void __thiscall camera_add_race_camera(int param_1,int param_2)
       // `insert__Q23std38__vector_pod<>FPUiUiRCUi` - to append to the race-camera vector.
       // MSVC inlined both, which is the 462 B against 136 B size difference; the duplicate
       // scan above it is present on both builds and is not part of the inlining.
-      // See `exe-re/structs/camera.md` SS6.
+      // See `exe-re/structs/camera.md` §6.
       pvVar3 = operator_new(iVar2 * 4);
       pvVar5 = pvVar3;
       for (piVar6 = *(int **)(param_1 + 0x7c); piVar6 != piVar7; piVar6 = piVar6 + 1) {
@@ -382817,7 +382926,7 @@ void __thiscall camera_set_sniper_fov(int param_1,undefined4 param_2)
     // has no such wrapper - it calls the I3D_camera's own FOV slot 0x50 directly, here and
     // in `camera_lock_at_human_pair`, and the third PS2 caller's twin, `carcyclopedia_ctor`,
     // calls the same slot directly, so ParheliaSetFov has no PC counterpart.
-    // See `exe-re/structs/camera.md` SS6d.
+    // See `exe-re/structs/camera.md` §6d.
     (**(code **)(**(int **)(param_1 + 4) + 0x50))(*(int **)(param_1 + 4),param_2);
     (**(code **)(**(int **)(param_1 + 4) + 0x18))(*(int **)(param_1 + 4));
     return;
@@ -383470,7 +383579,7 @@ undefined4 __fastcall game_init(int param_1)
     for (ppuStack_e4 = (undefined **)0x0;
         (g_i3d_anim_cache_dirs_begin != 0 && (ppuStack_e4 < (undefined **)(g_i3d_anim_cache_dirs_end - g_i3d_anim_cache_dirs_begin >> 2)));
         ppuStack_e4 = (undefined **)((int)ppuStack_e4 + 1)) {
-      string_append_cstr(&stack0xffffff14,s_AutoRidicVolant_I3D_00650f50);
+      string_concat_cstr(&stack0xffffff14,s_AutoRidicVolant_I3D_00650f50);
       iVar4 = *piVar12;
       uStack_28 = 1;
       uVar5 = string_get_data(0,&i3d_open_notify_forward_cb,&pvStack_cc);
@@ -383502,14 +383611,14 @@ LAB_005dd10a:
     if (*(int *)(*(int *)(g_i3d_anim_cache_items_begin + uVar17 * 8) + 4) == 1) {
       puVar20 = *(undefined4 **)(g_i3d_anim_cache_items_begin + uVar17 * 8);
       (**(code **)*puVar20)(puVar20);
-      std_vector8_erase_at(g_i3d_anim_cache_items_begin + uVar17 * 8);
+      i3d_cache_items_erase_at(g_i3d_anim_cache_items_begin + uVar17 * 8);
       break;
     }
   }
 LAB_005dd144:
   uVar5 = clear1_dword_at_0x04();
   uStack_28 = 6;
-  std_vector8_insert_one(g_i3d_anim_cache_items_end,uVar5);
+  i3d_cache_items_insert_one(g_i3d_anim_cache_items_end,uVar5);
   uStack_28 = 0xffffffff;
   if (unaff_ESI != 0) {
     string_base_release();
@@ -383533,14 +383642,14 @@ LAB_005de3ad:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar17 * 8) + 4) == 1) {
       puVar20 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar17 * 8);
       (**(code **)*puVar20)(puVar20);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar17 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar17 * 8);
       break;
     }
   }
 LAB_005de3e7:
   uVar5 = clear1_dword_at_0x04();
   uStack_28 = 0xc;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar5);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar5);
   uStack_28 = 0xffffffff;
   if (piStack_c8 != (int *)0x0) {
     string_base_release();
@@ -383558,14 +383667,14 @@ LAB_005de7c2:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar17 * 8) + 4) == 1) {
       puVar20 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar17 * 8);
       (**(code **)*puVar20)(puVar20);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar17 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar17 * 8);
       break;
     }
   }
 LAB_005de7fc:
   uVar5 = clear1_dword_at_0x04();
   uStack_28 = 0x12;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar5);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar5);
   uStack_28 = 0xffffffff;
   if (iStack_e0 != 0) {
     string_base_release();
@@ -383583,14 +383692,14 @@ LAB_005deb5d:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar17 * 8) + 4) == 1) {
       puVar20 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar17 * 8);
       (**(code **)*puVar20)(puVar20);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar17 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar17 * 8);
       break;
     }
   }
 LAB_005deb97:
   uVar5 = clear1_dword_at_0x04();
   uStack_28 = 0x17;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar5);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar5);
   uStack_28 = 0xffffffff;
   if (iStack_e0 != 0) {
     string_base_release();
@@ -383608,14 +383717,14 @@ LAB_005dcc85:
     if (*(int *)(*(int *)(g_i3d_anim_cache_items_begin + uVar17 * 8) + 4) == 1) {
       puVar20 = *(undefined4 **)(g_i3d_anim_cache_items_begin + uVar17 * 8);
       (**(code **)*puVar20)(puVar20);
-      std_vector8_erase_at(g_i3d_anim_cache_items_begin + uVar17 * 8);
+      i3d_cache_items_erase_at(g_i3d_anim_cache_items_begin + uVar17 * 8);
       break;
     }
   }
 LAB_005dccbf:
   uVar5 = clear1_dword_at_0x04();
   uStack_28 = 2;
-  std_vector8_insert_one(g_i3d_anim_cache_items_end,uVar5);
+  i3d_cache_items_insert_one(g_i3d_anim_cache_items_end,uVar5);
   uStack_28 = 0xffffffff;
   if (unaff_ESI != 0) {
     string_base_release();
@@ -383655,7 +383764,7 @@ LAB_005dcb24:
     for (ppuStack_e4 = (undefined **)0x0;
         (g_i3d_anim_cache_dirs_begin != 0 && (ppuStack_e4 < (undefined **)(g_i3d_anim_cache_dirs_end - g_i3d_anim_cache_dirs_begin >> 2)));
         ppuStack_e4 = (undefined **)((int)ppuStack_e4 + 1)) {
-      string_append_cstr(&stack0xffffff14,s_FormuleVolant_I3D_00650f3c);
+      string_concat_cstr(&stack0xffffff14,s_FormuleVolant_I3D_00650f3c);
       iVar4 = *piVar12;
       uStack_28 = 5;
       uVar5 = string_get_data(0,&i3d_open_notify_forward_cb,&pvStack_cc);
@@ -383948,7 +384057,7 @@ LAB_005dd5ee:
   }
   // ===== INLINED SetActiveTrafficP__6C_gameFUi with the period plus one =====
   // Seeds the traffic-generator pick period +0x190 = 6000 ms and runs the pick at once, as the
-  // PS2 Init does with SetActiveTrafficP(period + 1) (structs/game.md SS6a).
+  // PS2 Init does with SetActiveTrafficP(period + 1) (structs/game.md §6a).
   *(undefined4 *)(param_1 + 0x18c) = 0;
   *(undefined4 *)(param_1 + 400) = 6000;
   uVar17 = *(int *)(param_1 + 400) + 1;
@@ -383979,7 +384088,7 @@ LAB_005dd5ee:
           }
           vec3_set_xyz(*(float *)(pIVar7 + 0x40) - fStack_c0,*(float *)(pIVar7 + 0x44) - fStack_bc,
                        *(float *)(pIVar7 + 0x48) - fStack_b8);
-          fVar21 = (float10)vec3_dist();
+          fVar21 = (float10)vec3_length();
           if (*(char *)(ppuVar8 + 0x1c) == '\0') {
             if (fVar21 < (float10)(float)ppuVar8[0x1d]) {
               piVar23 = (int *)CONCAT13(1,(int3)piVar23);
@@ -384171,7 +384280,7 @@ LAB_005dd5ee:
               }
               iVar18 = *(int *)(iVar14 + 4);
               vec3_sub(&fStack_c0,&pvStack_cc);
-              fVar21 = (float10)vec3_dist_sq();
+              fVar21 = (float10)vec3_length_sq();
               *(float *)(iVar18 + 0x18 + iVar4) = (float)fVar21;
             }
             ppuStack_e4 = (undefined **)((int)ppuStack_e4 + -1);
@@ -384356,8 +384465,8 @@ LAB_005de1c4:
         } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar14) != piVar12);
       }
       if (iVar4 != -1) {
-        array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar4 * 8);
-        destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+        i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar4 * 8);
+        i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
         g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
       }
       for (uVar17 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar17 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
@@ -384397,7 +384506,7 @@ LAB_005de1c4:
       iVar4 = vec_count_stride_0x4();
       if (iVar4 != 0) {
         do {
-          string_append_cstr(&ppuStack_e4,s_2stone_i3d_00650a78);
+          string_concat_cstr(&ppuStack_e4,s_2stone_i3d_00650a78);
           iVar4 = *piVar12;
           uStack_28 = 0xb;
           uVar5 = string_get_data(0x10,&i3d_open_notify_forward_cb,&pvStack_d8);
@@ -384485,8 +384594,8 @@ LAB_005de5d9:
         } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar14) != piVar23);
       }
       if (iVar4 != -1) {
-        array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar4 * 8);
-        destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+        i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar4 * 8);
+        i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
         g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
       }
       for (uVar17 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar17 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
@@ -384526,7 +384635,7 @@ LAB_005de5d9:
       iVar4 = vec_count_stride_0x4();
       if (iVar4 != 0) {
         do {
-          string_append_cstr(&pvStack_cc,s_2nabojnice_i3d_00650a68);
+          string_concat_cstr(&pvStack_cc,s_2nabojnice_i3d_00650a68);
           iVar4 = *piVar23;
           uStack_28 = 0x11;
           uVar5 = string_get_data(0x10,&i3d_open_notify_forward_cb,&pvStack_d8);
@@ -384609,8 +384718,8 @@ LAB_005de9b7:
         } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar14) != piVar23);
       }
       if (iVar4 != -1) {
-        array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar4 * 8);
-        destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+        i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar4 * 8);
+        i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
         g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
       }
       for (uVar17 = 0; (g_i3d_model_cache_items_begin != 0 && (uVar17 < (uint)(g_i3d_model_cache_items_end - g_i3d_model_cache_items_begin >> 3)));
@@ -384632,7 +384741,7 @@ LAB_005de9b7:
       pvStack_d8 = (void *)0x0;
       for (uVar17 = 0; (g_i3d_model_cache_dirs_begin != 0 && (uVar17 < (uint)(g_i3d_model_cache_dirs_end - g_i3d_model_cache_dirs_begin >> 2)));
           uVar17 = uVar17 + 1) {
-        string_append_cstr(&pvStack_cc,s_2nabojniceb_i3d_00650a50);
+        string_concat_cstr(&pvStack_cc,s_2nabojniceb_i3d_00650a50);
         iVar4 = *piVar23;
         uStack_28 = 0x16;
         uVar5 = string_get_data(0x10,&i3d_open_notify_forward_cb,&pvStack_d8);
@@ -384821,6 +384930,13 @@ LAB_005dec1f:
   if ((g_racing != 0) && (*(char *)(param_1 + 0x2f9c) != '\0')) {
     racing_game_init();
   }
+  // ===== PS2-ONLY CALLS: CreateActorsFQL / InternMission_Spolkni =====
+  // Around garage_game_init the PS2 twin C_game::Init calls CreateActorsFQL just before
+  // G_GarageClass::GameInit, creating the save-game actors AddActorForFQL queued, and
+  // InternMission_Spolkni__Fv just after it, rebuilding the car carried across a city part.
+  // The PC has neither: loadsave_savegame_load creates a missing save-game actor at once,
+  // and the PC never tears the carried car down (see the banner in engine_new_mission).
+  // See exe-re/structs/game.md 6b and exe-re/structs/mission.md 5f.
   garage_game_init();
   gui_show_load_progress(0x3f666666);
   engine_set_wbuffer();
@@ -384828,7 +384944,7 @@ LAB_005dec1f:
   if (*(char *)(param_1 + 0x10c) != '\0') {
     game_change_act_state();
   }
-  mission_set_sound_restore_stage(10);
+  mission_set_frame_skip_count(10);
   *(undefined4 *)(param_1 + 0x2f6c) = 0;
   *(undefined4 *)(param_1 + 0x2f70) = 0;
   *(undefined4 *)(param_1 + 0x2f50) = 0;
@@ -385057,7 +385173,7 @@ void game_create_easter_egg_detectors(void)
  * Evidence: VA 0x005df610. Same predicate (type == 5), same callee
  *  (`C_Vehicle::AddSectorForProjectorLights`) and same recursion as the PS2 callback. 50 B
  *  against 356 B because GCC unrolled three tree levels and MSVC did not.
- * PS2 twin: `cbEnumSectors__Q26C_game18S_hlp_3427game_cppFP9I3D_frame` [CONFIRMED]
+ * PS2 twin: `cbEnumSectors__Q26C_game18S_hlp$3427game_cppFP9I3D_frame` [CONFIRMED]
  * Renamed from `FUN_005df610`. Class layout: `exe-re/structs/game.md`
  */
 void __fastcall game_enum_sectors_for_projector_lights(int *param_1)
@@ -386387,7 +386503,7 @@ LAB_005e0e80:
   // Every +0x190 ms (6000, set by game_init) pick one kind-0x12 traffic generator: the first
   // whose in-range byte +0x70 is clear and whose radius +0x74 holds the player frame, else the
   // nearest one; clear +0x78 on all of them, then set +0x78 and act-state 0 on the pick.
-  // Statement for statement the PS2 method (structs/game.md SS6a).
+  // Statement for statement the PS2 method (structs/game.md §6a).
   idx = *(int *)(game_obj + 0x18c) + (int)delta_ms;
   *(uint *)(game_obj + 0x18c) = idx;
   if (*(uint *)(game_obj + 400) < idx) {
@@ -386414,7 +386530,7 @@ LAB_005e0e80:
             I3D_frame::UpdateWMatrixProc(*(I3D_frame **)(tmp3 + 0x68));
           }
           vec3_sub(&delta_f,&pos_z);
-          dist_f80 = (float10)vec3_dist();
+          dist_f80 = (float10)vec3_length();
           if (*(char *)(tmp3 + 0x70) == '\0') {
             if (dist_f80 < (float10)*(float *)(tmp3 + 0x74)) {
               found_exact = '\x01';
@@ -386440,7 +386556,7 @@ LAB_005e0e80:
   // MSVC spliced C_game::TickEffects in here; there is no separate PC function. The walk runs
   // every frame while +0x310 (the number of records still fading) is non-zero, otherwise every
   // +0x308 ms (accumulator +0x304). Over the stride-0x18 S_sound_play vector at +0x2f8
-  // (structs/game.md SS2): a sound that stopped playing, or whose playback position went
+  // (structs/game.md §2): a sound that stopped playing, or whose playback position went
   // backwards, is stopped (vtable +0x88), unlinked (+0x2c), destroyed (+0x00) and swap-popped;
   // a fading record moves its volume by dt * rate (`speed_scale` is the frame time as a float)
   // toward the target +0x08, or toward 0 where the sound is stopped, and decrements +0x310 when
@@ -386589,7 +386705,7 @@ LAB_005e1622:
                 I3D_frame::UpdateWMatrixProc(player_frame);
               }
               vec3_sub(&delta_f,&pos_z);
-              dist_f80 = (float10)vec3_dist_sq();
+              dist_f80 = (float10)vec3_length_sq();
               *(float *)(*(int *)(tmp3 + 4) + 0x18 + tmp) = (float)dist_f80;
             }
             best_dist = (float)((int)best_dist + -1);
@@ -386650,7 +386766,7 @@ LAB_005e1622:
   // MSVC spliced C_game::ShootLightTick directly here (no separate PC function). It ticks the 10
   // slots of the shoot-light pool +0x2a48..+0x2ac0, walking down from the pool's END at +0x2ac0
   // (stride 0xc: +0x00 I3D_light *, +0x04 lifetime_ms, +0x08 u16 flags; structs/lightness.md
-  // SS4). Statement for statement the PS2 loop, which walks a pool of 2.
+  // §4). Statement for statement the PS2 loop, which walks a pool of 2.
   scratch_f = 1.4013e-44;                               // loop counter = 10, an int read as float
   obj = (int *)(game_obj + 0x2ac0);
   do {
@@ -386706,7 +386822,7 @@ LAB_005e1622:
         obj = *(int **)(*(int *)(game_obj + 0x16c) + tmp * 4);
         scratch_f = (float)obj[0x5b] + (float)tmp_ptr + 15.0;
         scratch_f = scratch_f * scratch_f;
-        dist_f80 = (float10)vec3_dist_sq();
+        dist_f80 = (float10)vec3_length_sq();
         if ((float10)scratch_f <= dist_f80) {
           (**(code **)(*obj + 0x24))(obj,0);
         }
@@ -386755,7 +386871,7 @@ LAB_005e1c61:
     else {
       tmp2 = *(int *)(game_obj + 0x2c8);
       vec3_sub(&dist_x,&cam_x);
-      dist_f80 = (float10)vec3_dist_sq();
+      dist_f80 = (float10)vec3_length_sq();
       if ((float10)22500.0 < dist_f80) {
         obj = *(int **)(tmp + 0x14 + tmp2);
         if (obj != (int *)0x0) {
@@ -388023,16 +388139,17 @@ void __fastcall game_update_controls(int param_1)
  *
  * Called once per frame from the main loop (input_update tail) when the
  * post-entity state-recheck (g_engine vtable +0x98) reports a change, with the
- * newly typed character. See game-loop.md (state_recheck / screen_obj).
+ * newly typed character. See game-loop.md (state_recheck / typed_char).
  *
  * Parameters (__thiscall):
- *   param_1 (this) — the active screen / UI object (the value returned by the
- *                    g_engine vtable +0xbc accessor). Relevant fields used here:
+ *   param_1 (this) — the C_game singleton: both callers load ECX from
+ *                    `*(g_act_mission + 0x24)`. Relevant fields used here:
  *                      +0x2ef4  char[]  cheat-input text buffer (NUL-terminated)
  *                      +0x2f14  uint    gameplay/cheat flag word (toggle bits below)
  *                      +0xe4    void*   player entity pointer (0 when none)
  *                      +0x3664  char    one-shot gate consumed by cheat id 0xd
- *   param_2 (byte) — the newly typed character. Lower-case a..z is folded to
+ *   param_2 (byte) — the newly typed character, the value g_engine vtable +0xbc
+ *                    returns. Lower-case a..z is folded to
  *                    upper-case, then stored as its bitwise complement (~c) so the
  *                    buffer matches the cheat-code table, whose strings are stored
  *                    NOT-obfuscated to defeat plain-text extraction from the binary.
@@ -390724,7 +390841,7 @@ int * game_new_grenade(undefined4 param_1,undefined4 *param_2,undefined4 *param_
     iVar5 = iVar9 + -1;
   } while (*(I3D_frame **)(g_i3d_model_cache_items_begin + -8 + iVar9 * 8) != this);
   if (iVar9 + -1 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + (iVar9 + -1) * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + (iVar9 + -1) * 8);
   }
   uVar11 = 0;
   iVar5 = vec_count_stride_0x8();
@@ -390750,7 +390867,7 @@ int * game_new_grenade(undefined4 param_1,undefined4 *param_2,undefined4 *param_
   iVar5 = vec_count_stride_0x4();
   if (iVar5 != 0) {
     do {
-      string_append_cstr(&iStack_48,param_5);
+      string_concat_cstr(&iStack_48,param_5);
       iVar5 = *(int *)this;
       uStack_4 = 0;
       uVar7 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_40);
@@ -390788,14 +390905,14 @@ LAB_005e831b:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar11 * 8) + 4) == 1) {
       puVar1 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar11 * 8);
       (**(code **)*puVar1)(puVar1);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar11 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar11 * 8);
       break;
     }
   }
 LAB_005e8355:
   uVar7 = clear1_dword_at_0x04();
   uStack_4 = 1;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar7);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar7);
   uStack_4 = 0xffffffff;
   if (iStack_34 != 0) {
     string_base_release();
@@ -392098,7 +392215,7 @@ void __fastcall game_load_city_music_areas(int param_1)
  *  Same frame type, same length gate, same 11-character case-insensitive prefix compare against
  *  the same literal. 180 B on the PS2 because MSVC inlines the whole vector-grow path.
  * Note: referenced only as `&game_enum_city_music_areas` by `game_load_city_music_areas`.
- * PS2 twin: `cbCityMusic__Q26C_game19S_hlp_12237game_cppFP9I3D_frameUi` [CONFIRMED]
+ * PS2 twin: `cbCityMusic__Q26C_game19S_hlp$12237game_cppFP9I3D_frameUi` [CONFIRMED]
  * Renamed from `FUN_005e9b70`. Class layout: `exe-re/structs/game.md`
  */
 undefined4 game_enum_city_music_areas(int param_1,void *param_2)
@@ -392635,7 +392752,7 @@ void game_load_differences(void)
     local_4 = 1;
     chunk_close();
     local_4 = 0xffffffff;
-    vector_clear();
+    chunk_open_stack_free();
     ExceptionList = local_c;
     return;
   }
@@ -392980,7 +393097,7 @@ LAB_005ea8a0:
             } while (*(int *****)(g_i3d_model_cache_items_begin + -8 + iVar5 * 8) != ppppiVar9);
             if (iVar5 + -1 != -1) {
               ppppiStack_22c = (int ****)(g_i3d_model_cache_items_begin + (iVar5 + -1) * 8);
-              std_vector8_erase_at();
+              i3d_cache_items_erase_at();
             }
             uVar15 = 0;
             ppppiStack_22c = (int ****)0x5ea8f1;
@@ -393013,7 +393130,7 @@ LAB_005ea8a0:
             if (iVar4 != 0) {
               do {
                 ppppiStack_22c = &local_12c;
-                string_append_cstr(&uStack_19c);
+                string_concat_cstr(&uStack_19c);
                 pppiVar1 = *ppppiVar9;
                 ppppiStack_22c = &pppiStack_168;
                 uStack_24 = 2;
@@ -393093,7 +393210,7 @@ LAB_005eabd2:
         } while (*(int *****)(g_i3d_sound_cache_items_begin + -8 + iVar5 * 8) != ppppiVar9);
         if (iVar5 + -1 != -1) {
           ppppiStack_22c = (int ****)(g_i3d_sound_cache_items_begin + (iVar5 + -1) * 8);
-          std_vector8_erase_at();
+          i3d_cache_items_erase_at();
         }
         uVar15 = 0;
         ppppiStack_22c = (int ****)0x5eac23;
@@ -393126,7 +393243,7 @@ LAB_005eabd2:
         if (iVar4 != 0) {
           do {
             ppppiStack_22c = &local_12c;
-            string_append_cstr(&local_184);
+            string_concat_cstr(&local_184);
             pppiVar1 = *ppppiVar9;
             ppppiStack_22c = &pppiStack_160;
             uStack_24 = 5;
@@ -393294,7 +393411,7 @@ LAB_005eaa5f:
       ppppiStack_22c = *(int *****)(g_i3d_model_cache_items_begin + uVar15 * 8);
       (*(code *)**ppppiStack_22c)();
       ppppiStack_22c = (int ****)(g_i3d_model_cache_items_begin + uVar15 * 8);
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
@@ -393302,7 +393419,7 @@ LAB_005eaa98:
   ppppiStack_22c = (int ****)0x5eaaa4;
   ppppiStack_22c = (int ****)clear1_dword_at_0x04();
   uStack_24 = 3;
-  std_vector8_insert_one(g_i3d_model_cache_items_end);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end);
   uStack_24 = 0;
   if (local_138 != 0) {
     ppppiStack_22c = (int ****)0x5eaad6;
@@ -393326,7 +393443,7 @@ LAB_005ead70:
       ppppiStack_22c = *(int *****)(g_i3d_sound_cache_items_begin + uVar15 * 8);
       (*(code *)**ppppiStack_22c)();
       ppppiStack_22c = (int ****)(g_i3d_sound_cache_items_begin + uVar15 * 8);
-      std_vector8_erase_at();
+      i3d_cache_items_erase_at();
       break;
     }
   }
@@ -393334,7 +393451,7 @@ LAB_005eadaa:
   ppppiStack_22c = (int ****)0x5eadb6;
   ppppiStack_22c = (int ****)clear1_dword_at_0x04();
   uStack_24 = 6;
-  std_vector8_insert_one(g_i3d_sound_cache_items_end);
+  i3d_cache_items_insert_one(g_i3d_sound_cache_items_end);
   uStack_24 = 0;
   if (iStack_130 != 0) {
     ppppiStack_22c = (int ****)0x5eade8;
@@ -393659,7 +393776,7 @@ void __fastcall game_clear_differences(int param_1)
  *  sibling `game_invalidate_frame_recursive` walks a raw sibling chain. Records are 0x34 bytes
  *  on PC and 0x40 on PS2, the delta already recorded for `game_del_frame_placement`. Its
  *  receiver is a vector element, i.e. an `I3D_frame *` — not the `C_game`.
- * PS2 twin: `cbFreeFramePlacement__Q26C_game19S_hlp_13685game_cppFP9I3D_frameRQ23gif38vector<>`
+ * PS2 twin: `cbFreeFramePlacement__Q26C_game19S_hlp$13685game_cppFP9I3D_frameRQ23gif38vector<>`
  *  [CONFIRMED]
  * Renamed from `FUN_005eb920`. Class layout: `exe-re/structs/game.md`
  */
@@ -394031,7 +394148,7 @@ void game_invalidate_frame(int param_1)
  * Evidence: VA 0x005ebeb0. The discriminator against its sibling is the recursion shape, and it
  *  matches byte for byte: the PS2 callback walks `frame+0x10c` / `frame+0x110` as a raw chain
  *  while `cbFreeFramePlacement` uses the child virtuals.
- * PS2 twin: `cbDelFrame__Q26C_game19S_hlp_14436game_cppFP9I3D_frameRQ23gif38vector<>`
+ * PS2 twin: `cbDelFrame__Q26C_game19S_hlp$14436game_cppFP9I3D_frameRQ23gif38vector<>`
  *  [CONFIRMED]
  * Renamed from `FUN_005ebeb0`. Class layout: `exe-re/structs/game.md`
  */
@@ -398763,7 +398880,7 @@ void * __thiscall game_media_create(int param_1,undefined4 param_2)
   undefined4 local_c;
   float local_8;
   
-  if (g_ls3d_setup_flag_bytes_0x1c._1_1_ == '\0') {
+  if (g_ls3d_setup_sound_disabled == '\0') {
     local_10 = *(int *)(param_1 + 0x2f38);
     local_8 = 0.0;
     *(int *)(param_1 + 0x2f38) = local_10 + 1;
@@ -400271,7 +400388,7 @@ void __thiscall game_human_talk_del(int param_1,undefined4 param_2,int param_3)
  * separates this function from its sibling `game_human_talk_del`, which keys on the
  * speech id instead and stops nothing.
  * Evidence: VA 0x005f3440. Callers `human_hit`, `human_movement`,
- * `human_car_launched_into_air`, `human_throw_from_car_truck`, `entity_force_ai` and
+ * `human_die_in_exploding_car`, `human_throw_from_car_truck`, `entity_force_ai` and
  * a `program_process_command` arm - all events after which a human must stop talking.
  * Renamed from `FUN_005f3440`.
  * Class layout: `exe-re/structs/game.md`
@@ -404638,28 +404755,28 @@ void thunk_ls3d_setup_static_init(void)
 
 {
   g_ls3d_setup._1_1_ = 0;
-  g_ls3d_setup_field_0x0e = 0;
-  g_ls3d_setup_field_0x12 = 0;
-  g_ls3d_setup_field_0x13 = 0;
-  g_ls3d_setup_field_0x14 = 0;
-  g_ls3d_setup_field_0x15 = 0;
-  g_ls3d_setup_field_0x17 = 0;
-  g_ls3d_setup_flag_bytes_0x18._0_1_ = 0;
-  g_ls3d_setup_flag_bytes_0x18._1_1_ = 0;
-  g_ls3d_setup_flag_bytes_0x1c._0_1_ = 0;
-  g_ls3d_setup_flag_bytes_0x1c._1_1_ = 0;
-  g_ls3d_setup_field_0x20 = 0;
-  g_ls3d_setup_field_0x22 = 0;
+  g_ls3d_setup_refresh_rate = 0;
+  g_ls3d_setup_antialiasing = 0;
+  g_ls3d_setup_multipass_rendering = 0;
+  g_ls3d_setup_clip_always = 0;
+  g_ls3d_setup_fullscreen = 0;
+  g_ls3d_setup_vsync = 0;
+  g_ls3d_setup_low_detail_textures = 0;
+  g_ls3d_setup_triple_buffering = 0;
+  g_ls3d_setup_truecolor_textures = 0;
+  g_ls3d_setup_sound_disabled = 0;
+  g_ls3d_setup_software_mixing_only = 0;
+  g_ls3d_setup_language = 0;
   g_ls3d_setup._0_1_ = 0x14;
   g_ls3d_setup_width = 800;
   g_ls3d_setup_height = 600;
   g_ls3d_setup_bpp = 0x20;
-  g_ls3d_setup_field_0x16 = 1;
-  g_ls3d_setup_flag_bytes_0x18._2_1_ = 1;
-  g_ls3d_setup_flag_bytes_0x18._3_1_ = 1;
-  g_ls3d_setup_flag_bytes_0x1c._2_1_ = 1;
-  g_ls3d_setup_flag_bytes_0x1c._3_1_ = 1;
-  g_ls3d_setup_field_0x21 = 1;
+  g_ls3d_setup_hw_transform_lighting = 1;
+  g_ls3d_setup_truecolor_lightmaps = 1;
+  g_ls3d_setup_compressed_textures = 1;
+  g_ls3d_setup_eax_disabled = 1;
+  g_ls3d_setup_suspend_when_inactive = 1;
+  g_ls3d_setup_speaker_config = 1;
   g_ls3d_setup_wbuffer_enabled = 1;
   g_ls3d_setup_details_scale = 0x3f800000;
   g_ls3d_setup_draw_distance_scale = 0x3f800000;
@@ -404695,28 +404812,28 @@ void ls3d_setup_static_init(void)
 
 {
   g_ls3d_setup._1_1_ = 0;
-  g_ls3d_setup_field_0x0e = 0;
-  g_ls3d_setup_field_0x12 = 0;
-  g_ls3d_setup_field_0x13 = 0;
-  g_ls3d_setup_field_0x14 = 0;
-  g_ls3d_setup_field_0x15 = 0;
-  g_ls3d_setup_field_0x17 = 0;
-  g_ls3d_setup_flag_bytes_0x18._0_1_ = 0;
-  g_ls3d_setup_flag_bytes_0x18._1_1_ = 0;
-  g_ls3d_setup_flag_bytes_0x1c._0_1_ = 0;
-  g_ls3d_setup_flag_bytes_0x1c._1_1_ = 0;
-  g_ls3d_setup_field_0x20 = 0;
-  g_ls3d_setup_field_0x22 = 0;
+  g_ls3d_setup_refresh_rate = 0;
+  g_ls3d_setup_antialiasing = 0;
+  g_ls3d_setup_multipass_rendering = 0;
+  g_ls3d_setup_clip_always = 0;
+  g_ls3d_setup_fullscreen = 0;
+  g_ls3d_setup_vsync = 0;
+  g_ls3d_setup_low_detail_textures = 0;
+  g_ls3d_setup_triple_buffering = 0;
+  g_ls3d_setup_truecolor_textures = 0;
+  g_ls3d_setup_sound_disabled = 0;
+  g_ls3d_setup_software_mixing_only = 0;
+  g_ls3d_setup_language = 0;
   g_ls3d_setup._0_1_ = 0x14;
   g_ls3d_setup_width = 800;
   g_ls3d_setup_height = 600;
   g_ls3d_setup_bpp = 0x20;
-  g_ls3d_setup_field_0x16 = 1;
-  g_ls3d_setup_flag_bytes_0x18._2_1_ = 1;
-  g_ls3d_setup_flag_bytes_0x18._3_1_ = 1;
-  g_ls3d_setup_flag_bytes_0x1c._2_1_ = 1;
-  g_ls3d_setup_flag_bytes_0x1c._3_1_ = 1;
-  g_ls3d_setup_field_0x21 = 1;
+  g_ls3d_setup_hw_transform_lighting = 1;
+  g_ls3d_setup_truecolor_lightmaps = 1;
+  g_ls3d_setup_compressed_textures = 1;
+  g_ls3d_setup_eax_disabled = 1;
+  g_ls3d_setup_suspend_when_inactive = 1;
+  g_ls3d_setup_speaker_config = 1;
   g_ls3d_setup_wbuffer_enabled = 1;
   g_ls3d_setup_details_scale = 0x3f800000;
   g_ls3d_setup_draw_distance_scale = 0x3f800000;
@@ -404904,7 +405021,7 @@ void i3d_model_cache_static_dtor(void)
  * PS2 twin: `__dt__17C_I3D_model_cacheFv` [CONFIRMED] - the DERIVED destructor: reached
  *  from derived slot 5 and the global's exit destructor. The PS2 body stores the derived
  *  vtable (a dead store) and then runs the template destructor inline; this body is that
- *  sequence without the dead store (structs/i3d_cache.md SS6).
+ *  sequence without the dead store (structs/i3d_cache.md §6).
  * Renamed from `FUN_005f7d50`. TU: `Main.cpp`. See
  *  `exe-re/structs/app_bootstrap.md`.
  */
@@ -404930,7 +405047,7 @@ void __fastcall i3d_model_cache_dtor(undefined4 *param_1)
   // dispatches Clear through its own vtable here - one statement,
   // `(**(code **)(*this + 0x18))()`, i.e. slot 6. MSVC inlined it: the backwards walk
   // over the item vector calling each cached object's virtual destructor, and the
-  // `destroy_range_stride8` that collapses the vector, ARE that call. Everything down
+  // `i3d_cache_items_destroy_range` that collapses the vector, ARE that call. Everything down
   // to the `param_1[3] = uVar2;` store is the inlined body.
   // Proven by the statement-for-statement destructor diff.
   // See exe-re/structs/i3d_cache.md.
@@ -404944,7 +405061,7 @@ void __fastcall i3d_model_cache_dtor(undefined4 *param_1)
     }
   }
   uVar2 = param_1[2];
-  destroy_range_stride8(uVar2,param_1[3]);
+  i3d_cache_items_destroy_range(uVar2,param_1[3]);
   param_1[3] = uVar2;
   piVar3 = (int *)param_1[7];
   piVar5 = (int *)param_1[6];
@@ -405131,7 +405248,7 @@ void i3d_sound_cache_static_dtor(void)
  * PS2 twin: `__dt__17C_I3D_sound_cacheFv` [CONFIRMED] - the DERIVED destructor: reached
  *  from derived slot 5 and the global's exit destructor. The PS2 body stores the derived
  *  vtable (a dead store) and then runs the template destructor inline; this body is that
- *  sequence without the dead store (structs/i3d_cache.md SS6).
+ *  sequence without the dead store (structs/i3d_cache.md §6).
  * Renamed from `FUN_005f7f10`. TU: `Main.cpp`. See
  *  `exe-re/structs/app_bootstrap.md`.
  */
@@ -405157,7 +405274,7 @@ void __fastcall i3d_sound_cache_dtor(undefined4 *param_1)
   // dispatches Clear through its own vtable here - one statement,
   // `(**(code **)(*this + 0x18))()`, i.e. slot 6. MSVC inlined it: the backwards walk
   // over the item vector calling each cached object's virtual destructor, and the
-  // `destroy_range_stride8` that collapses the vector, ARE that call. Everything down
+  // `i3d_cache_items_destroy_range` that collapses the vector, ARE that call. Everything down
   // to the `param_1[3] = uVar2;` store is the inlined body.
   // Proven by the statement-for-statement destructor diff.
   // See exe-re/structs/i3d_cache.md.
@@ -405171,7 +405288,7 @@ void __fastcall i3d_sound_cache_dtor(undefined4 *param_1)
     }
   }
   uVar2 = param_1[2];
-  destroy_range_stride8(uVar2,param_1[3]);
+  i3d_cache_items_destroy_range(uVar2,param_1[3]);
   param_1[3] = uVar2;
   piVar3 = (int *)param_1[7];
   for (piVar5 = (int *)param_1[6]; piVar5 != piVar3; piVar5 = piVar5 + 1) {
@@ -405354,7 +405471,7 @@ void i3d_anim_cache_static_dtor(void)
  * PS2 twin: `__dt__16C_I3D_anim_cacheFv` [CONFIRMED] - the DERIVED destructor: reached
  *  from derived slot 5 and the global's exit destructor. The PS2 body stores the derived
  *  vtable (a dead store) and then runs the template destructor inline; this body is that
- *  sequence without the dead store (structs/i3d_cache.md SS6).
+ *  sequence without the dead store (structs/i3d_cache.md §6).
  * Renamed from `FUN_005f80c0`. TU: `Main.cpp`. See
  *  `exe-re/structs/app_bootstrap.md`.
  */
@@ -405380,7 +405497,7 @@ void __fastcall i3d_anim_cache_dtor(undefined4 *param_1)
   // dispatches Clear through its own vtable here - one statement,
   // `(**(code **)(*this + 0x18))()`, i.e. slot 6. MSVC inlined it: the backwards walk
   // over the item vector calling each cached object's virtual destructor, and the
-  // `destroy_range_stride8` that collapses the vector, ARE that call. Everything down
+  // `i3d_cache_items_destroy_range` that collapses the vector, ARE that call. Everything down
   // to the `param_1[3] = uVar2;` store is the inlined body.
   // Proven by the statement-for-statement destructor diff.
   // See exe-re/structs/i3d_cache.md.
@@ -405394,7 +405511,7 @@ void __fastcall i3d_anim_cache_dtor(undefined4 *param_1)
     }
   }
   uVar2 = param_1[2];
-  destroy_range_stride8(uVar2,param_1[3]);
+  i3d_cache_items_destroy_range(uVar2,param_1[3]);
   param_1[3] = uVar2;
   piVar3 = (int *)param_1[7];
   for (piVar5 = (int *)param_1[6]; piVar5 != piVar3; piVar5 = piVar5 + 1) {
@@ -405897,11 +406014,11 @@ void force_feedback_manager_register_atexit_dtor(void)
  * force_feedback_manager_static_dtor(void) -> void
  *
  * What it does: loads `0x006f91e0` into ECX and tail-jumps to
- * `force_feedback_manager_dtor`. Taken only by address, from the `crt_atexit`
+ * `folded_vector_pair_free_at_0x04_0x14`. Taken only by address, from the `crt_atexit`
  * registrar above.
  * Parameters: none.
  * Returns: void.
- * Evidence: VA 0x005f83a0. `mov ecx, 0x6f91e0; jmp force_feedback_manager_dtor`.
+ * Evidence: VA 0x005f83a0. `mov ecx, 0x6f91e0; jmp folded_vector_pair_free_at_0x04_0x14`.
  * Renamed from `FUN_005f83a0`.
  * Spelling alignment onto the ten-family house form.
  * TU: `Main.cpp`. See `exe-re/structs/force_feedback.md`.
@@ -405910,7 +406027,8 @@ void force_feedback_manager_register_atexit_dtor(void)
 void force_feedback_manager_static_dtor(void)
 
 {
-  force_feedback_manager_dtor();
+  // destroys the force-feedback manager: ECX = 0x006f91e0.
+  folded_vector_pair_free_at_0x04_0x14();
   return;
 }
 
@@ -406101,6 +406219,9 @@ void joy_devices_done(void)
  * it is the only `push imm8; push <code address>` pair in the whole of `engine_init`, so there
  * is no sibling callback to confuse it with. Named from the BODY, not from the callback id: what
  * it does is composite the overlay. Renamed from `FUN_005f86c0`.
+ * PS2 twin: `cbScene__F20SCN_CALLBACK_MESSAGEUiUi` [CONFIRMED]. Statement-aligned on message 2:
+ * the HUD, then the active menu, then the console. The PS2 adds `DrawInventory` and an
+ * `LSI_Setup` bracket around the menu; the PC adds the line-batch flush, which the PS2 lacks.
  */
 undefined4 engine_draw_overlay_callback(int param_1)
 
@@ -406643,7 +406764,7 @@ LAB_005f8e70:
         hud_radar_add_car_with_color(g_new_mission_actors[0],0xffffffff); //white color
         vehicle_add_projector_lights_to_sectors();
         vehicle_add_sounds_to_sectors();
-        garage_set_stolen_car(g_new_mission_actors[0]);
+        garage_set_last_entered_car(g_new_mission_actors[0]);
         if (*(float *)(iVar5 + 0x590) < 800.0) {
           g_hud_flags = g_hud_flags | 0x100;
         }
@@ -406792,8 +406913,8 @@ void engine_game_loop(void)
   undefined *display_ptr;
   char mission_state;
   char state_recheck;
-  uint screen_flags;
-  undefined4 screen_obj;
+  uint key_flags;
+  undefined4 typed_char;
   undefined4 delta_ms;
   undefined4 unaff_EBP;
   int tmp;
@@ -406829,9 +406950,9 @@ void engine_game_loop(void)
     state_recheck = (**(code **)(*g_engine + 0x98))(g_engine);
     if (state_recheck != '\0') {
       tmp = *g_engine;
-      screen_flags = (**(code **)(tmp + 0xb8))(g_engine,0);
-      screen_obj = (**(code **)(tmp + 0xbc))(g_engine,unaff_EBP,screen_flags & 0xf);
-      state_recheck = game_cheat_check(screen_obj);
+      key_flags = (**(code **)(tmp + 0xb8))(g_engine,0);
+      typed_char = (**(code **)(tmp + 0xbc))(g_engine,unaff_EBP,key_flags & 0xf);
+      state_recheck = game_cheat_check(typed_char);   // ECX = the C_game singleton
       if (state_recheck != '\0') {
         mission_state = '\0';
         input_get_action_values(&layer0_ptr,0);
@@ -406956,7 +407077,7 @@ void engine_igraph_error_callback(HKEY param_1)
   DWORD local_4;
   
   if (param_1 == (HKEY)&DAT_80000002) {
-    g_ls3d_setup_flag_bytes_0x1c._0_1_ = 0;
+    g_ls3d_setup_truecolor_textures = 0;
     LVar1 = RegCreateKeyExA((HKEY)&DAT_80000002,s_Software_Illusion_Softworks_Mafi_00651198,0,
                             (LPSTR)0x0,0,0xf003f,(LPSECURITY_ATTRIBUTES)0x0,&param_1,&local_4);
     if (LVar1 == 0) {
@@ -406985,7 +407106,7 @@ void engine_igraph_error_callback(HKEY param_1)
  * `Mafia Launcher Super Mutex Shit`, runs the `Main program` TEV check and the
  * CD check, installs the exception handlers, reads `LS3D_setup` back out of the
  * registry over the defaults (rejecting a blob whose version tag is not 0x14,
- * which sends the user to `setup.exe`), calls `engine_init`, pushes the six
+ * which starts `setup.exe` without waiting and returns), calls `engine_init`, pushes the six
  * persisted quality settings into `C_mission + 0x90`, then runs the main-menu
  * loop: build `GM_MainMenu`, execute it modally, and switch on its result -
  * 0x11 tutorial, 0x12 intro then mise01, 0x13 load game, 0x14 multiplayer,
@@ -407373,10 +407494,22 @@ void __fastcall ls3d_setup_set_defaults(undefined1 *param_1)
 }
 
 /*
- * engine_init — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_005fa320` (original Ghidra id). VA 0x005fa320.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_005fa320`.
+ * engine_init - bring up the engine and the global game data at start-up.
+ * What it does: creates the 12 data archives (slot 3 retried after the CD lookup; "error #3075"
+ *  if one is missing); fills the IGraph init block from the LS3D setup bytes and creates
+ *  `g_engine` ("error #4103"); the sound driver unless sound is disabled (22050 Hz, 16-bit,
+ *  stereo); the I3D driver and its states; `mission_init`; hides the cursor; joysticks and
+ *  input; the `Maps\`, `Sounds\`, `Anims\` cache directories; console font, tyres, materials,
+ *  particle effects, animation index, sound tables; the language from `tables\version.txt`;
+ *  the network session; the two logo videos when the disc is found; last, `loadsave_init`.
+ * Parameters: param_1 (HINSTANCE, ECX): the module instance (IGraph block, string resource,
+ *  icon). param_2 (bool *, EDX): set to 1 when `loadsave_init` fails; `engine_main` then goes
+ *  straight to `engine_shutdown`.
+ * Returns: undefined4: 1, or 0 when an archive, IGraph or the I3D driver fails.
+ * PS2 twin: `InitSystem__FPvRb`  [CONFIRMED]
+ *  Same callees in the same order, except the sound driver (created later on the PS2). `main`
+ *  calls it where `engine_main` calls this.
+ * Evidence: VA 0x005fa320; one caller, `engine_main`. Renamed from `FUN_005fa320`.
  */
 undefined4 engine_init(void)
 
@@ -407556,12 +407689,12 @@ undefined4 engine_init(void)
   SetRect(&tStack_13c,0x32,0x32,g_ls3d_setup_width,g_ls3d_setup_height);
   uStack_184 = 0x5fa5cc;
   SetRect(&tStack_12c,0,0,g_ls3d_setup_width,g_ls3d_setup_height);
-  uStack_11b = g_ls3d_setup_field_0x0e;
-  uStack_118 = -(uint)(g_ls3d_setup_field_0x13 != '\0') & 0x4000 | (g_ls3d_setup_field_0x12 != '\x04') - 1 & 0x2000 |
-               (g_ls3d_setup_field_0x12 != '\x02') - 1 & 0x1000 | -(uint)(g_ls3d_setup_field_0x17 != '\0') & 0x100 |
-               -(uint)(g_ls3d_setup_field_0x14 != '\0') & 0x8000 | -(uint)(g_ls3d_setup_field_0x16 != '\0') & 0x10 |
-               -(uint)(g_ls3d_setup_field_0x15 != '\0') & 2 | -(uint)(g_ls3d_setup_flag_bytes_0x18._1_1_ != '\0') & 4 |
-               -(uint)(g_ls3d_setup_flag_bytes_0x1c._3_1_ != '\0') & 0x20 | 0x10090;
+  uStack_11b = g_ls3d_setup_refresh_rate;
+  uStack_118 = -(uint)(g_ls3d_setup_multipass_rendering != '\0') & 0x4000 | (g_ls3d_setup_antialiasing != '\x04') - 1 & 0x2000 |
+               (g_ls3d_setup_antialiasing != '\x02') - 1 & 0x1000 | -(uint)(g_ls3d_setup_vsync != '\0') & 0x100 |
+               -(uint)(g_ls3d_setup_clip_always != '\0') & 0x8000 | -(uint)(g_ls3d_setup_hw_transform_lighting != '\0') & 0x10 |
+               -(uint)(g_ls3d_setup_fullscreen != '\0') & 2 | -(uint)(g_ls3d_setup_triple_buffering != '\0') & 4 |
+               -(uint)(g_ls3d_setup_suspend_when_inactive != '\0') & 0x20 | 0x10090;
   uStack_11c = g_ls3d_setup_bpp;
   g_engine = (int *)GetIGraph();
   if (g_engine == (int *)0x0) {
@@ -407612,11 +407745,11 @@ undefined4 engine_init(void)
   (**(code **)(*g_engine + 0x10))();
   uStack_1c4 = 0x5fa7b4;
   win_set_app_icon();
-  if (g_ls3d_setup_flag_bytes_0x1c._1_1_ == '\0') {
+  if (g_ls3d_setup_sound_disabled == '\0') {
     uStack_1c4 = 0x5fa7c2;
     g_sound_mgr = (int *)ISndGetDriver();
     iVar8 = *g_sound_mgr;
-    uStack_1c4 = (-(g_ls3d_setup_field_0x20 != '\0') & 0x20U | -(g_ls3d_setup_flag_bytes_0x1c._2_1_ != '\0') & 0x10U) | 2;
+    uStack_1c4 = (-(g_ls3d_setup_software_mixing_only != '\0') & 0x20U | -(g_ls3d_setup_eax_disabled != '\0') & 0x10U) | 2;
     piStack_1c8 = (int *)0x10;
     uStack_1cc = 2;
     uStack_1d0 = 0x5622;
@@ -407699,22 +407832,22 @@ undefined4 engine_init(void)
   piStack_24c = g_i3d_driver;
   uStack_250 = 0x5fa8fe;
   (**(code **)(*g_i3d_driver + 0x14))();
-  uStack_250 = g_ls3d_setup_flag_bytes_0x1c & 0xff;
+  uStack_250 = (uint)g_ls3d_setup_truecolor_textures;
   uStack_254 = 0x11;
   piStack_258 = g_i3d_driver;
   uStack_25c = 0x5fa918;
   (**(code **)(*g_i3d_driver + 0x14))();
-  uStack_25c = g_ls3d_setup_flag_bytes_0x18 & 0xff;
+  uStack_25c = (uint)g_ls3d_setup_low_detail_textures;
   uStack_260 = 0x15;
   piStack_264 = g_i3d_driver;
   uStack_268 = 0x5fa932;
   (**(code **)(*g_i3d_driver + 0x14))();
-  uStack_268 = g_ls3d_setup_flag_bytes_0x18 >> 0x18;
+  uStack_268 = (uint)g_ls3d_setup_compressed_textures;
   uStack_26c = 0x19;
   piStack_270 = g_i3d_driver;
   uStack_274 = 0x5fa948;
   (**(code **)(*g_i3d_driver + 0x14))();
-  uStack_274 = g_ls3d_setup_flag_bytes_0x18 >> 0x10 & 0xff;
+  uStack_274 = (uint)g_ls3d_setup_truecolor_lightmaps;
   uStack_278 = 0x22;
   piStack_27c = g_i3d_driver;
   uStack_280 = 0x5fa95e;
@@ -408293,10 +408426,18 @@ void __fastcall engine_show_init_error(uint param_1,int param_2)
 }
 
 /*
- * engine_shutdown — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_005fb4f0` (original Ghidra id). VA 0x005fb4f0.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_005fb4f0`.
+ * engine_shutdown - tear down what `engine_init` brought up.
+ * What it does: `loadsave_close`, `anim_index_free`, tyres, materials, particle effects,
+ *  `console_font_release`, `mission_uninit`; releases every cached model, sound and animation
+ *  set and empties the caches and the animation track table; destroys the network session;
+ *  releases the I3D driver, joysticks, sound driver and `g_engine` (pointers cleared) and the
+ *  12 data archives; last, `sound_table_free_tables`.
+ * Parameters: none.
+ * Returns: void.
+ * PS2 twin: `CloseSystem__Fv`  [CONFIRMED]
+ *  Same callees in the same order, `G_LoadSaveClass::Close` first, `FreeTables` last.
+ * Evidence: VA 0x005fb4f0; one caller, `engine_main` (the PS2 `main` calls its twin 12 times).
+ *  Renamed from `FUN_005fb4f0`.
  */
 void engine_shutdown(void)
 
@@ -408319,8 +408460,8 @@ void engine_shutdown(void)
       (**(code **)*puVar1)(puVar1);
     }
   }
-  uVar2 = array_copy_refcounted8(g_i3d_model_cache_items_begin);
-  destroy_range_stride8(uVar2,g_i3d_model_cache_items_end);
+  uVar2 = i3d_cache_items_copy_range(g_i3d_model_cache_items_begin);
+  i3d_cache_items_destroy_range(uVar2,g_i3d_model_cache_items_end);
   g_i3d_model_cache_items_end = uVar2;
   if (g_i3d_sound_cache_items_begin != 0) {
     for (iVar3 = g_i3d_sound_cache_items_end - g_i3d_sound_cache_items_begin >> 3; iVar3 != 0; iVar3 = iVar3 + -1) {
@@ -408328,8 +408469,8 @@ void engine_shutdown(void)
       (**(code **)*puVar1)(puVar1);
     }
   }
-  uVar2 = array_copy_refcounted8(g_i3d_sound_cache_items_begin);
-  destroy_range_stride8(uVar2,g_i3d_sound_cache_items_end);
+  uVar2 = i3d_cache_items_copy_range(g_i3d_sound_cache_items_begin);
+  i3d_cache_items_destroy_range(uVar2,g_i3d_sound_cache_items_end);
   g_i3d_sound_cache_items_end = uVar2;
   if (g_i3d_anim_cache_items_begin != 0) {
     for (iVar3 = g_i3d_anim_cache_items_end - g_i3d_anim_cache_items_begin >> 3; iVar3 != 0; iVar3 = iVar3 + -1) {
@@ -408337,8 +408478,8 @@ void engine_shutdown(void)
       (**(code **)*puVar1)(puVar1);
     }
   }
-  uVar2 = array_copy_refcounted8(g_i3d_anim_cache_items_begin);
-  destroy_range_stride8(uVar2,g_i3d_anim_cache_items_end);
+  uVar2 = i3d_cache_items_copy_range(g_i3d_anim_cache_items_begin);
+  i3d_cache_items_destroy_range(uVar2,g_i3d_anim_cache_items_end);
   g_i3d_anim_cache_items_end = uVar2;
   uVar2 = anim_track_table_copy_assign_range_005fe200(g_anim_track_table_begin);
   anim_track_table_destroy_range(uVar2,g_anim_track_table_end);
@@ -408517,7 +408658,7 @@ LAB_005fb818:
     uStack_10 = param_5;
     for (; (pcVar5 = param_4, param_1[6] != 0 && (uVar13 < (uint)(param_1[7] - param_1[6] >> 2)));
         uVar13 = uVar13 + 1) {
-      piVar11 = (int *)string_append_cstr(&local_1c,param_2);
+      piVar11 = (int *)string_concat_cstr(&local_1c,param_2);
       uStack_4 = 0;
       if (*piVar11 != 0) {
         piVar11 = (int *)(*piVar11 + 8);
@@ -408570,14 +408711,14 @@ LAB_005fb954:
   iVar12 = param_1[3];
   iVar9 = param_1[2] + uVar13 * 8;
   while (iVar9 = iVar9 + 8, iVar9 != iVar12) {
-    assign_elem_stride_8_with_string(iVar9);
+    i3d_cache_items_copy_assign_one(iVar9);
   }
-  destroy_range_stride8(param_1[3] + -8,param_1[3]);
+  i3d_cache_items_destroy_range(param_1[3] + -8,param_1[3]);
   param_1[3] = param_1[3] + -8;
 LAB_005fb9bc:
   piStack_18 = (int *)0x0;
   uStack_4 = 1;
-  std_vector8_insert_one(param_1[3],&local_1c);
+  i3d_cache_items_insert_one(param_1[3],&local_1c);
   uStack_4 = 0xffffffff;
   if ((piStack_18 != (int *)0x0) && (*piStack_18 = *piStack_18 + -1, *piStack_18 == 0)) {
     operator_delete_wrapper(piStack_18);
@@ -409145,7 +409286,7 @@ LAB_005fc12a:
       (iVar12 = local_114, *(int *)(local_114 + 0x18) != 0 &&
       (uVar9 < (uint)(*(int *)(local_114 + 0x1c) - *(int *)(local_114 + 0x18) >> 2)));
       uVar9 = uVar9 + 1) {
-    string_append_cstr(&local_11c,s_asterisk_0064b838);
+    string_concat_cstr(&local_11c,s_asterisk_0064b838);
     local_4._0_1_ = 2;
     cVar3 = string_wildcard_match(&local_11c);
     if (cVar3 != '\0') {
@@ -409349,7 +409490,7 @@ LAB_005fc3a8:
     uStack_10 = param_5;
     for (; (pcVar5 = param_4, param_1[6] != 0 && (uVar13 < (uint)(param_1[7] - param_1[6] >> 2)));
         uVar13 = uVar13 + 1) {
-      piVar11 = (int *)string_append_cstr(&local_1c,param_2);
+      piVar11 = (int *)string_concat_cstr(&local_1c,param_2);
       uStack_4 = 0;
       if (*piVar11 != 0) {
         piVar11 = (int *)(*piVar11 + 8);
@@ -409402,14 +409543,14 @@ LAB_005fc4e4:
   iVar12 = param_1[3];
   iVar9 = param_1[2] + uVar13 * 8;
   while (iVar9 = iVar9 + 8, iVar9 != iVar12) {
-    assign_elem_stride_8_with_string(iVar9);
+    i3d_cache_items_copy_assign_one(iVar9);
   }
-  destroy_range_stride8(param_1[3] + -8,param_1[3]);
+  i3d_cache_items_destroy_range(param_1[3] + -8,param_1[3]);
   param_1[3] = param_1[3] + -8;
 LAB_005fc54c:
   piStack_18 = (int *)0x0;
   uStack_4 = 1;
-  std_vector8_insert_one(param_1[3],&local_1c);
+  i3d_cache_items_insert_one(param_1[3],&local_1c);
   uStack_4 = 0xffffffff;
   if ((piStack_18 != (int *)0x0) && (*piStack_18 = *piStack_18 + -1, *piStack_18 == 0)) {
     operator_delete_wrapper(piStack_18);
@@ -409884,7 +410025,7 @@ LAB_005fcc07:
       (*(int *)(local_114 + 0x18) != 0 &&
       (uVar8 < (uint)(*(int *)(local_114 + 0x1c) - *(int *)(local_114 + 0x18) >> 2)));
       uVar8 = uVar8 + 1) {
-    string_append_cstr(&local_118,s_asterisk_0064b838);
+    string_concat_cstr(&local_118,s_asterisk_0064b838);
     local_4._0_1_ = 2;
     cVar2 = string_wildcard_match(&local_118);
     if (cVar2 != '\0') {
@@ -410037,8 +410178,8 @@ LAB_005fcd9c:
   ExceptionList = &pvStack_c;
   if (iVar4 != -1) {
     ExceptionList = &pvStack_c;
-    array_copy_refcounted8(param_1[2] + iVar4 * 8);
-    destroy_range_stride8(param_1[3] + -8,param_1[3]);
+    i3d_cache_items_copy_range(param_1[2] + iVar4 * 8);
+    i3d_cache_items_destroy_range(param_1[3] + -8,param_1[3]);
     param_1[3] = param_1[3] + -8;
   }
   for (local_28 = 0; (param_1[2] != 0 && (local_28 < (uint)(param_1[3] - param_1[2] >> 3)));
@@ -410141,7 +410282,7 @@ LAB_005fcebe:
       ExceptionList = pvStack_c;
       return iVar4;
     }
-    piVar8 = (int *)string_append_cstr(&param_4,param_3);
+    piVar8 = (int *)string_concat_cstr(&param_4,param_3);
     local_4 = 0;
     if (*piVar8 != 0) {
       piVar8 = (int *)(*piVar8 + 8);
@@ -410182,16 +410323,16 @@ LAB_005fcfe4:
   }
   puVar3 = *(undefined4 **)(param_1[2] + uVar10 * 8);
   (**(code **)*puVar3)(puVar3);
-  array_copy_refcounted8(param_1[2] + uVar10 * 8);
+  i3d_cache_items_copy_range(param_1[2] + uVar10 * 8);
   iVar12 = param_1[3];
   for (iVar7 = iVar12 + -8; iVar7 != iVar12; iVar7 = iVar7 + 8) {
-    refcounted8_scalar_deleting_dtor(0);
+    i3d_cache_items_scalar_deleting_dtor(0);
   }
   param_1[3] = param_1[3] + -8;
 LAB_005fd046:
   piStack_18 = (int *)0x0;
   local_4 = 1;
-  std_vector8_insert_one(param_1[3],&local_1c);
+  i3d_cache_items_insert_one(param_1[3],&local_1c);
   local_4 = 0xffffffff;
   if ((piStack_18 != (int *)0x0) && (*piStack_18 = *piStack_18 + -1, *piStack_18 == 0)) {
     operator_delete_wrapper(piStack_18);
@@ -410265,7 +410406,7 @@ void __fastcall i3d_cache_clear(int param_1)
   iVar2 = *(int *)(param_1 + 0xc);
   iVar3 = *(int *)(param_1 + 8);
   for (iVar4 = iVar3; iVar4 != iVar2; iVar4 = iVar4 + 8) {
-    refcount_release_at_0x4();
+    i3d_cache_items_destroy_one();
   }
   *(int *)(param_1 + 0xc) = iVar3;
   return;
@@ -410794,7 +410935,7 @@ LAB_005fd847:
       (*(int *)(local_114 + 0x18) != 0 &&
       (uVar8 < (uint)(*(int *)(local_114 + 0x1c) - *(int *)(local_114 + 0x18) >> 2)));
       uVar8 = uVar8 + 1) {
-    string_append_cstr(&local_118,s_asterisk_0064b838);
+    string_concat_cstr(&local_118,s_asterisk_0064b838);
     local_4._0_1_ = 2;
     cVar2 = string_wildcard_match(&local_118);
     if (cVar2 != '\0') {
@@ -411056,7 +411197,7 @@ void __fastcall i3d_cache_model_dtor(undefined4 *param_1)
   // The PS2 twin dispatches Clear through its own vtable slot 6 here, as the single
   // statement `(**(code **)(*this + 0x18))()`. MSVC inlined it: the backwards walk over
   // the item vector calling each cached object's virtual destructor, and the
-  // destroy_range_stride8 that collapses the vector, ARE that call.
+  // i3d_cache_items_destroy_range that collapses the vector, ARE that call.
   // The out-of-line PC realisation of the same method is `i3d_cache_clear`
   // (0x005fd180), which fills vtable slot 4 - it is simply not called from here.
   // Proven by the statement-for-statement destructor diff.
@@ -411071,7 +411212,7 @@ void __fastcall i3d_cache_model_dtor(undefined4 *param_1)
     }
   }
   uVar2 = param_1[2];
-  destroy_range_stride8(uVar2,param_1[3]);
+  i3d_cache_items_destroy_range(uVar2,param_1[3]);
   param_1[3] = uVar2;
   piVar3 = (int *)param_1[7];
   for (piVar5 = (int *)param_1[6]; piVar5 != piVar3; piVar5 = piVar5 + 1) {
@@ -411175,7 +411316,7 @@ void __fastcall i3d_cache_sound_dtor(undefined4 *param_1)
   // The PS2 twin dispatches Clear through its own vtable slot 6 here, as the single
   // statement `(**(code **)(*this + 0x18))()`. MSVC inlined it: the backwards walk over
   // the item vector calling each cached object's virtual destructor, and the
-  // destroy_range_stride8 that collapses the vector, ARE that call.
+  // i3d_cache_items_destroy_range that collapses the vector, ARE that call.
   // The out-of-line PC realisation of the same method is `i3d_cache_clear`
   // (0x005fd180), which fills vtable slot 4 - it is simply not called from here.
   // Proven by the statement-for-statement destructor diff.
@@ -411190,7 +411331,7 @@ void __fastcall i3d_cache_sound_dtor(undefined4 *param_1)
     }
   }
   uVar2 = param_1[2];
-  destroy_range_stride8(uVar2,param_1[3]);
+  i3d_cache_items_destroy_range(uVar2,param_1[3]);
   param_1[3] = uVar2;
   piVar3 = (int *)param_1[7];
   for (piVar5 = (int *)param_1[6]; piVar5 != piVar3; piVar5 = piVar5 + 1) {
@@ -411292,7 +411433,7 @@ void __fastcall i3d_cache_anim_dtor(undefined4 *param_1)
   // The PS2 twin dispatches Clear through its own vtable slot 6 here, as the single
   // statement `(**(code **)(*this + 0x18))()`. MSVC inlined it: the backwards walk over
   // the item vector calling each cached object's virtual destructor, and the
-  // destroy_range_stride8 that collapses the vector, ARE that call.
+  // i3d_cache_items_destroy_range that collapses the vector, ARE that call.
   // The out-of-line PC realisation of the same method is `i3d_cache_clear`
   // (0x005fd180), which fills vtable slot 4 - it is simply not called from here.
   // Proven by the statement-for-statement destructor diff.
@@ -411307,7 +411448,7 @@ void __fastcall i3d_cache_anim_dtor(undefined4 *param_1)
     }
   }
   uVar2 = param_1[2];
-  destroy_range_stride8(uVar2,param_1[3]);
+  i3d_cache_items_destroy_range(uVar2,param_1[3]);
   param_1[3] = uVar2;
   piVar3 = (int *)param_1[7];
   for (piVar5 = (int *)param_1[6]; piVar5 != piVar3; piVar5 = piVar5 + 1) {
@@ -411416,7 +411557,7 @@ void __fastcall i3d_cache_items_vector_destroy(int param_1)
   
   iVar1 = *(int *)(param_1 + 8);
   for (iVar2 = *(int *)(param_1 + 4); iVar2 != iVar1; iVar2 = iVar2 + 8) {
-    refcount_release_at_0x4();
+    i3d_cache_items_destroy_one();
   }
   operator_delete_wrapper(*(undefined4 *)(param_1 + 4));
   *(undefined4 *)(param_1 + 4) = 0;
@@ -413929,7 +414070,7 @@ mission_open(int scene_mgr,char *scene_name,char reload_flag,undefined4 param_4,
     return 0;
   }
   chunk_close();
-  vector_clear();
+  chunk_open_stack_free();
   ExceptionList = (void *)(unaff_EBP & 0xffffff00);
   return 1;
 }
@@ -414324,7 +414465,7 @@ undefined4 __thiscall mission_open_bin(int param_1,undefined4 param_2)
     iStack_4._0_1_ = 5;
     chunk_close();
     iStack_4 = (uint)iStack_4._1_3_ << 8;
-    vector_clear();
+    chunk_open_stack_free();
     if ((piStack_1fec != (int *)0x0) && (*piStack_1fec = *piStack_1fec + -1, *piStack_1fec == 0)) {
       operator_delete_wrapper(piStack_1fec);
     }
@@ -414662,7 +414803,7 @@ LAB_00604351:
                             if ((piVar15 != (int *)0x0) &&
                                (piVar3 = (int *)i3d_frame_get_type_ptr(),
                                uVar1 = (undefined1)iStack_4, *piVar3 == 6)) {
-                              i3d_frame_set_field_0x140_block(auStack_1cb0);
+                              i3d_dummy_set_bound_box(auStack_1cb0);
                               uVar1 = (undefined1)iStack_4;
                             }
                             break;
@@ -414739,7 +414880,7 @@ LAB_006028a9:
                                       } while (*(int **)(g_i3d_sound_cache_items_begin + -8 +
                                                         iVar5 * 8) != piVar3);
                                       if (iVar5 + -1 != -1) {
-                                        std_vector8_erase_at
+                                        i3d_cache_items_erase_at
                                                   (g_i3d_sound_cache_items_begin + (iVar5 + -1) * 8)
                                         ;
                                       }
@@ -414773,7 +414914,7 @@ LAB_006028a9:
                                       piVar3 = piStack_1fd8;
                                       if (iVar12 != 0) {
                                         do {
-                                          string_append_cstr(&iStack_1dec,ppiVar13);
+                                          string_concat_cstr(&iStack_1dec,ppiVar13);
                                           iVar12 = *piVar15;
                                           iStack_4._0_1_ = 0x18;
                                           uVar4 = string_get_data(0x10,i3d_open_notify_forward_cb,
@@ -416501,14 +416642,14 @@ LAB_00602535:
     if (*(int *)(*(int *)(g_i3d_sound_cache_items_begin + uVar11 * 8) + 4) == 1) {
       puVar10 = *(undefined4 **)(g_i3d_sound_cache_items_begin + uVar11 * 8);
       (**(code **)*puVar10)(puVar10);
-      std_vector8_erase_at(g_i3d_sound_cache_items_begin + uVar11 * 8);
+      i3d_cache_items_erase_at(g_i3d_sound_cache_items_begin + uVar11 * 8);
       break;
     }
   }
 LAB_0060256e:
   uVar4 = clear1_dword_at_0x04();
   iStack_4._0_1_ = 0x19;
-  std_vector8_insert_one(g_i3d_sound_cache_items_end,uVar4);
+  i3d_cache_items_insert_one(g_i3d_sound_cache_items_end,uVar4);
   iStack_4._0_1_ = 0x10;
   if (iStack_1cf0 != 0) {
     string_base_release();
@@ -416662,7 +416803,7 @@ void __thiscall uv_scroll_add_channel(int param_1,undefined4 *param_2)
  *
  * What it does: allocates `oldlen + newlen + 9`, copies the existing buffer then the new
  *  characters, NUL-terminates, releases the old buffer through its refcount and installs the
- *  new one. Distinct from `string_append_cstr` (`0x00448e40`), which writes its result to an
+ *  new one. Distinct from `string_concat_cstr` (`0x00448e40`), which writes its result to an
  *  out-parameter instead of mutating the receiver.
  * Parameters: param_1 (handle *): the string handle, mutated in place. param_2 (char *): the
  *  text to append.
@@ -418256,19 +418397,21 @@ void __fastcall mission_carry_caches_clear(int param_1)
 }
 
 /*
- * i3d_frame_set_field_0x140_block - store a 0x18-byte scene-file block on a frame.
+ * i3d_dummy_set_bound_box - store a DUMMY frame's bounding box (I3D_frame+0x140)
  *
- * What it does: copies six dwords from a caller buffer into `I3D_frame + 0x140`.
- * Parameters: param_1 (I3D_frame *): the frame. param_2 (void *): the 0x18 bytes.
+ * What it does: copies six dwords from a caller buffer into I3D_frame+0x140: the
+ *  minimum corner, then the maximum corner.
+ * Parameters: param_1 (I3D_frame *): the DUMMY frame (visual type 6).
+ *  param_2 (float *): the 0x18-byte min/max pair.
  * Returns: void.
- * Evidence: VA 0x00606370. One callsite, in `mission_open_bin`, guarded on
- *  `i3d_frame_get_type_ptr` returning visual type 6, immediately after a `chunk_read(buf,
- *  0x18)`. `structs/i3d_frame.md` marks `+0x140` [U]; this proves it is at least `0x18` bytes
- *  and is loaded from the scene file, but not what it means - hence the mechanical field name.
- * Renamed from `FUN_00606370`. TU: `Mission.cpp`. See
- *  `exe-re/structs/mission.md`.
+ * Evidence: VA 0x00606370. One callsite, in mission_open_bin, on scene chunk 0x4050:
+ *  chunk_read(buf, 0x18), then the copy only when i3d_frame_get_type_ptr returns 6.
+ *  The readers use the field as a min/max corner pair (structs/i3d_frame.md).
+ *  Renamed from `FUN_00606370`.
+ * Class layout: exe-re/structs/i3d_frame.md
  */
-void __thiscall i3d_frame_set_field_0x140_block(int param_1,undefined4 *param_2)
+
+void __thiscall i3d_dummy_set_bound_box(int param_1,undefined4 *param_2)
 
 {
   int iVar1;
@@ -418578,12 +418721,11 @@ void __fastcall actor_mark_scene_placed(int param_1)
  *       pairs, traced through `i3d_frame_get_type_ptr` and a type-dependent virtual),
  *       `entity_action_tick` 6 (`C_entity+0xaa8` = the same `C_program+0x0c`),
  *       `entity_process_command` 5.
- *   Different element types mangle differently, so COMDAT dedup-by-name cannot have merged
- *   them — identical-COMDAT folding did. ⚠️ Caveat: the element types were read off their USE,
- *   not off a declaration; if both were one generic 8-byte pair type this would be
- *   dedup-by-name instead. That does not change the conclusion — one address serves the script
- *   VM and the mission loader, so neither a subsystem nor a `C_program` receiver may be
- *   asserted.
+ *   One address serves the script VM and the mission loader. Whether that is identical-COMDAT
+ *   folding of two element types or dedup-by-name of one declared pair type cannot be
+ *   decided: the element types are known only from their use, and neither binary records
+ *   the declarations (structs/program.md section 5i). Either way neither a subsystem nor a
+ *   `C_program` receiver may be asserted.
  *   The name is the intersection of `vec_index_addr_stride_0x4` (0x005a17b0, the same
  *   operation at stride 4) and `vec_count_stride_0x8`. NOT `folded_*`, which is reserved for
  *   folds whose owners are CLASSES sharing a field offset; here there is no class owner at
@@ -418665,7 +418807,7 @@ void __fastcall i3d_cache_items_clear(int param_1)
   iVar2 = *(int *)(param_1 + 8);
   iVar1 = *(int *)(param_1 + 4);
   for (iVar3 = iVar1; iVar3 != iVar2; iVar3 = iVar3 + 8) {
-    refcount_release_at_0x4();
+    i3d_cache_items_destroy_one();
   }
   *(int *)(param_1 + 8) = iVar1;
   return;
@@ -419151,7 +419293,9 @@ void __fastcall game_dtor(int param_1)
   *(undefined4 *)(param_1 + 0x2d70) = 0;
   *(undefined4 *)(param_1 + 0x2d74) = 0;
   local_4._0_1_ = 0x23;
-  force_feedback_manager_dtor();
+  // destroys the pursuit-event manager (C_sledovacka) at this+0x2b18: ECX = this + 0x2b18.
+  // The body is shared with the force-feedback manager's destructor.
+  folded_vector_pair_free_at_0x04_0x14();
   operator_delete_wrapper(*(undefined4 *)(param_1 + 0x2b00));
   *(undefined4 *)(param_1 + 0x2b00) = 0;
   *(undefined4 *)(param_1 + 0x2b04) = 0;
@@ -419176,9 +419320,11 @@ void __fastcall game_dtor(int param_1)
   vector_dispose_at_0x04();
   vector_dispose_at_0x04();
   local_4._0_1_ = 0x14;
-  game_subobject_0x240_dtor();
+  // destroys the C_Debris at this+0x240: ECX = this + 0x240. The body is shared with the
+  // C_using_object at this+0x29ec (structs/debris.md, structs/using_object.md).
+  folded_vector_pair_free_at_0x04_0x14_00607500();
   local_4._0_1_ = 0x13;
-  game_subobject_0x208_dtor();
+  glass_shatter_dtor();
   vector_dispose_at_0x04();
   vector_dispose_at_0x04();
   vector_dispose_at_0x04();
@@ -419248,20 +419394,23 @@ undefined4 * __thiscall uv_scroll_clear_channels(int param_1,undefined4 *param_2
 }
 
 /*
- * game_subobject_0x208_dtor - destroy the `C_game + 0x208` sub-object.
+ * glass_shatter_dtor - destructor of the C_Break_plain_glass embedded at C_game+0x208
  *
- * What it does: walks the stride-`0x18` record vector at `this+0x14`, freeing each record's
- *  inner dword vector, then frees the outer vector and the plain vector at `this+0x04`.
- * Parameters: param_1 (C_game + 0x208): the sub-object.
+ * What it does: walks the live-pane vector at this+0x14 (S_DICE records, stride 0x18),
+ *  freeing each pane's inner frame list at +0x04, then frees the pane vector and the
+ *  restore list at this+0x04, nulling each begin/end/capacity triple. The pane pool at
+ *  +0x20 is not touched here.
+ * Parameters: param_1 (ECX): the C_Break_plain_glass (C_game+0x208).
  * Returns: void.
- * Evidence: VA 0x00607450. One callsite, in `game_dtor`, receiver byte-proven `lea
- *  ecx,[esi+0x208]`. The name is OWNER-qualified rather than invented on purpose: WHICH class
- *  the sub-object is remains open - its `GameDone` is `glass_shatter_done`, unnamed and outside this
- *  range.
- * Renamed from `FUN_00607450`. TU: `Mission.cpp`. See
- *  `exe-re/structs/mission.md`.
+ * Evidence: VA 0x00607450. Every referrer passes C_game+0x208: the E8 call in game_dtor
+ *  (`lea ecx,[esi+0x208]`) and two unwind funclets that jump here with
+ *  `ecx = this + 0x208`. No other receiver exists, so the body has one owner. The PS2
+ *  build has no destructor symbol for C_Break_plain_glass, so no twin is stamped.
+ *  Renamed from `FUN_00607450`.
+ * Class layout: exe-re/structs/glass_shatter.md
  */
-void __fastcall game_subobject_0x208_dtor(int param_1)
+
+void __fastcall glass_shatter_dtor(int param_1)
 
 {
   int iVar1;
@@ -419301,18 +419450,26 @@ void __fastcall game_subobject_0x208_dtor(int param_1)
 }
 
 /*
- * game_subobject_0x240_dtor - destroy the `C_game + 0x240` sub-object.
+ * folded_vector_pair_free_at_0x04_0x14_00607500 - frees the std::vectors at +0x14, +0x04
  *
- * What it does: frees the two vectors at `this+0x14` and `this+0x04`.
- * Parameters: param_1 (C_game + 0x240): the sub-object.
+ * What it does: frees and nulls the vector at +0x14/+0x18/+0x1c, then the vector at
+ *  +0x04/+0x08/+0x0c. A second copy of the body of
+ *  folded_vector_pair_free_at_0x04_0x14, and like it, it serves two classes whose
+ *  members are two vectors at those offsets, so no class-qualified name fits:
+ *  - the C_Debris embedded at C_game+0x240 (debris vector +0x04, flash vector +0x14):
+ *    game_dtor calls it with `lea ecx,[esi+0x240]`, and two unwind funclets jump
+ *    here with `ecx = this + 0x240`;
+ *  - the C_using_object embedded at C_game+0x29ec: two unwind funclets jump here
+ *    with `ecx = this + 0x29ec`.
+ * Parameters: param_1 (ECX): the object.
  * Returns: void.
- * Evidence: VA 0x00607500. One callsite, in `game_dtor`, receiver byte-proven `lea
- *  ecx,[esi+0x240]`. Owner-qualified for the same reason as its `+0x208` sibling; that
- *  sub-object's `GameDone` is `debris_done`, also unnamed.
- * Renamed from `FUN_00607500`. TU: `Mission.cpp`. See
- *  `exe-re/structs/mission.md`.
+ * Evidence: VA 0x00607500. Receiver census: one E8 callsite (game_dtor, +0x240) and four
+ *  E9 referrers (two with +0x240, two with +0x29ec). No PS2 twin is stamped on a
+ *  folded symbol. Renamed from `FUN_00607500`.
+ * Class layout: exe-re/structs/debris.md, exe-re/structs/using_object.md
  */
-void __fastcall game_subobject_0x240_dtor(int param_1)
+
+void __fastcall folded_vector_pair_free_at_0x04_0x14_00607500(int param_1)
 
 {
   operator_delete_wrapper(*(undefined4 *)(param_1 + 0x14));
@@ -419503,7 +419660,7 @@ undefined4 * __thiscall i3d_cache_items_erase_range(int param_1,undefined4 *para
   puVar5 = puVar4;
   if (puVar4 != puVar1) {
     do {
-      refcount_release_at_0x4();
+      i3d_cache_items_destroy_one();
       puVar5 = puVar5 + 2;
     } while (puVar5 != puVar1);
     *(undefined4 **)(param_1 + 8) = puVar4;
@@ -425772,7 +425929,7 @@ LAB_0060d0be:
     } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar12) != piVar10);
   }
   if (iVar6 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + iVar6 * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + iVar6 * 8);
   }
   uVar13 = 0;
   iVar6 = vec_count_stride_0x8();
@@ -425799,7 +425956,7 @@ LAB_0060d0be:
   iVar6 = vec_count_stride_0x4();
   if (iVar6 != 0) {
     do {
-      string_append_cstr(&piStack_d0,auStack_a0);
+      string_concat_cstr(&piStack_d0,auStack_a0);
       iVar6 = *piVar10;
       uStack_18 = 1;
       uVar5 = string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_c8);
@@ -425842,7 +425999,7 @@ LAB_0060d32b:
     } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar12) != piVar10);
   }
   if (iVar6 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + iVar6 * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + iVar6 * 8);
   }
   uVar13 = 0;
   iVar6 = vec_count_stride_0x8();
@@ -425870,7 +426027,7 @@ LAB_0060d32b:
   iVar6 = vec_count_stride_0x4();
   if (iVar6 != 0) {
     do {
-      string_append_cstr(&piStack_d0,auStack_a0);
+      string_concat_cstr(&piStack_d0,auStack_a0);
       iVar6 = *piVar10;
       uStack_18 = 5;
       piVar8 = (int *)string_get_data(0x10,&i3d_open_notify_forward_cb,&uStack_c8);
@@ -425904,14 +426061,14 @@ LAB_0060d233:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar13 * 8) + 4) == 1) {
       puVar15 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       (**(code **)*puVar15)(puVar15);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
       break;
     }
   }
 LAB_0060d26d:
   uVar5 = clear1_dword_at_0x04();
   uStack_18 = 2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar5);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar5);
   uStack_18 = 0xffffffff;
   if (iStack_bc != 0) {
     string_base_release();
@@ -426078,14 +426235,14 @@ LAB_0060dc43:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar13 * 8) + 4) == 1) {
       puVar2 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       (**(code **)*puVar2)(puVar2);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
       break;
     }
   }
 LAB_0060dc7d:
   uVar11 = clear1_dword_at_0x04();
   uStack_38 = 0xc;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar11);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar11);
   uStack_38 = 0xffffffff;
   if (puVar15 != (undefined4 *)0x0) {
     string_base_release();
@@ -426103,14 +426260,14 @@ LAB_0060d4aa:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar13 * 8) + 4) == 1) {
       puVar15 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       (**(code **)*puVar15)(puVar15);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
       break;
     }
   }
 LAB_0060d4e4:
   uVar5 = clear1_dword_at_0x04();
   uStack_18 = 6;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar5);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar5);
   uStack_18 = 0xffffffff;
   if (iStack_bc != 0) {
     string_base_release();
@@ -426156,7 +426313,7 @@ LAB_0060dad4:
     } while (*(int **)(g_i3d_model_cache_items_begin + -8 + iVar12) != piVar10);
   }
   if (iVar6 != -1) {
-    std_vector8_erase_at(g_i3d_model_cache_items_begin + iVar6 * 8);
+    i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + iVar6 * 8);
   }
   iVar6 = vec_count_stride_0x8();
   if (iVar6 != 0) {
@@ -426181,7 +426338,7 @@ LAB_0060dad4:
   iVar6 = vec_count_stride_0x4();
   if (iVar6 != 0) {
     do {
-      string_append_cstr(&uStack_e8,uVar5);
+      string_concat_cstr(&uStack_e8,uVar5);
       iVar6 = *piVar10;
       uStack_38 = 0xb;
       uVar11 = string_get_data(0x10,&i3d_open_notify_forward_cb,&stack0xffffff20);
@@ -432420,8 +432577,8 @@ joined_r0x006158f4:
   }
 LAB_00615904:
   if (iVar11 != -1) {
-    array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar11 * 8);
-    destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+    i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar11 * 8);
+    i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
     g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
   }
   iVar11 = g_i3d_model_cache_items_begin;
@@ -432445,7 +432602,7 @@ LAB_00615904:
   iVar11 = vec_count_stride_0x4();
   if (iVar11 != 0) {
     do {
-      string_append_cstr(&iStack_228,pcVar6);
+      string_concat_cstr(&iStack_228,pcVar6);
       iVar11 = *piVar9;
       pvStack_c = (void *)0x0;
       uVar7 = string_get_data(0x10,&i3d_open_notify_forward_cb,local_224);
@@ -432527,14 +432684,14 @@ LAB_00615a81:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar13 * 8) + 4) == 1) {
       puVar1 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       (**(code **)*puVar1)(puVar1);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
       break;
     }
   }
 LAB_00615ac1:
   uVar7 = clear1_dword_at_0x04();
   pvStack_c = (void *)0x1;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar7);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar7);
   pvStack_c = (void *)0xffffffff;
   if (iStack_218 != 0) {
     string_base_release();
@@ -432583,8 +432740,8 @@ joined_r0x00615cf6:
   }
 LAB_00615d06:
   if (iVar11 != -1) {
-    array_copy_refcounted8(g_i3d_model_cache_items_begin + iVar11 * 8);
-    destroy_range_stride8(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
+    i3d_cache_items_copy_range(g_i3d_model_cache_items_begin + iVar11 * 8);
+    i3d_cache_items_destroy_range(g_i3d_model_cache_items_end + -8,g_i3d_model_cache_items_end);
     g_i3d_model_cache_items_end = g_i3d_model_cache_items_end + -8;
   }
   uVar13 = 0;
@@ -432610,7 +432767,7 @@ LAB_00615d06:
   iVar11 = vec_count_stride_0x4();
   if (iVar11 != 0) {
     do {
-      string_append_cstr(&iStack_228,pcVar6);
+      string_concat_cstr(&iStack_228,pcVar6);
       iVar11 = *piVar9;
       pvStack_c = (void *)0x4;
       uVar7 = string_get_data(0x10,&i3d_open_notify_forward_cb,local_224);
@@ -432695,14 +432852,14 @@ LAB_00615e80:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar13 * 8) + 4) == 1) {
       puVar1 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar13 * 8);
       (**(code **)*puVar1)(puVar1);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar13 * 8);
       break;
     }
   }
 LAB_00615ebd:
   uVar7 = clear1_dword_at_0x04();
   pvStack_c = (void *)0x5;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar7);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar7);
   pvStack_c = (void *)0xffffffff;
   if (iStack_218 != 0) {
     string_base_release();
@@ -432804,9 +432961,15 @@ void __fastcall racing_fake_final_positions(int param_1)
 /*
  * racing_test_gate — tests a racer against its current gate and the two adjacent ones
  *
- * What it does: takes the car's AI probe point, then tries the racer's current gate (`opponent+0x5c`), the gate's successor (`gate+0x14`) and its predecessor (`gate+0x18`) in that order, returning 0 / +1 / -1 for which one was crossed. Returns the sentinel **-100** when the racer has no car at all, which the caller uses to mean 'not on the track'.
+ * What it does: takes the car's AI probe point (`car_get_ai_probe_point(1)`) and tests it with
+ *   `racing_test_gate_crossing` against three gate zones in a FIXED order: the racer's current
+ *   gate (`opponent+0x5c`), its successor (`gate+0x14`), its predecessor (`gate+0x18`).
+ *   Zones overlap, so a point inside both the successor's and the predecessor's zone is
+ *   always reported as forward progress. `racing_do_gates` calls it once per gate check
+ *   (every 1000 ms).
  * Parameters: param_1: the `C_opponent` to test (the receiver is unused, so Ghidra renders it as a free function).
- * Returns: int: 0 = current gate, 1 = next, -1 = previous, -100 = no car.
+ * Returns: int: 0 = still in the current gate's zone, 1 = in the next gate's zone, -1 = in
+ *   the previous gate's zone, -100 = in none of the three zones, or the racer has no car.
  * PS2 twin: `TestGate__8C_racingFP10C_opponent` (0x003a3420)  [CONFIRMED]
  * Evidence: VA 0x00616150. One `C_opponent*` argument and the **-100 sentinel** predicted for
  *   this pair before either body was read. `gate+0x14`/`+0x18` are the forward/back links of the
@@ -432885,11 +433048,22 @@ uint __thiscall racing_test_all_gates(int param_1,int param_2)
 }
 
 /*
- * racing_test_gate_crossing — tests whether a car's probe point has crossed one gate's plane this frame
+ * racing_test_gate_crossing — tests whether a point lies inside one gate's zone
  *
- * What it does: the geometric core of the gate system: takes one `C_racing_gate`, the car's probe point and a float reference, and reports whether the point lies within the gate's span and on the far side of its plane, writing the crossing parameter back through the float reference for the standings comparator to use as a tie-break.
- * Parameters: param_1: the gate record. param_2: the probe point (`S_vector`). param_3: out — the crossing parameter along the gate.
- * Returns: bool: true when the gate was crossed.
+ * What it does: the geometric core of the lap gates, read from the disassembly (the body
+ *   below loses the `vec3_set_xyz` results). On the X/Z plane only, it takes the signed
+ *   distance `d_prev` of the point from the PREVIOUS gate's infinite line (measured from
+ *   that gate's outer marker, normal `(dz, -dx)` of its direction) and `d_cur` from THIS
+ *   gate's infinite line (measured from its track node, normal `(-dz, dx)`), and computes
+ *   `t = d_prev / (d_prev + d_cur)`. The point is in the zone when `0 <= t <= 1`.
+ *   The lines are unbounded: a gate's drawn length never limits the zone sideways, and past
+ *   the crossing point of two non-parallel lines the zone appears again mirrored (both
+ *   distances negative), so the zones of different gates overlap widely.
+ * Parameters: param_1: the `C_racing_gate` (`+0x00` track node, `+0x04` outer marker,
+ *   `+0x18` previous gate). param_2: the probe point (`S_vector`; Y is not used).
+ *   param_3: out — `t`, written only when the point is inside (`C_opponent+0x4c`, the
+ *   standings tie-break of `race_compare_position`).
+ * Returns: bool: true when `0 <= t <= 1`.
  * PS2 twin: `InternTestGate__8C_racingFP13C_racing_gateR8S_vectorRf` (0x003a3600)  [CONFIRMED]
  * Evidence: VA 0x00616280. Three arguments, matching the mangled signature exactly, and both of its callers (`racing_test_gate`, `racing_test_all_gates`) pass `(gate, &probe_point, opponent+0x4c)` — `+0x4c` being the float `race_compare_position` reads as the within-gate tie-break. Renamed from `FUN_00616280`.
  * Class layout: exe-re/structs/racing.md
@@ -432971,7 +433145,24 @@ uint racing_test_gate_crossing(int *param_1,float *param_2,float *param_3)
 /*
  * racing_do_gates — advances one racer through the track's gates and handles a completed lap
  *
- * What it does: tests the racer against its expected next gate (`racing_test_gate`); on the `-100` 'no gate matched' sentinel it re-tests every gate on the circuit (`racing_test_all_gates`) and re-seats the racer's current gate at `+0x5c`. On a normal crossing it advances the lap counter when the gate is the start/finish line (`circuit_get_first_gate`), pushes the lap number to the HUD for the player entrant, records the split time, posts the checkpoint event message (type `0x41`), and runs the best-lap / finish tests.
+ * What it does: one gate check for one racer; `racing_tick` runs it every 1000 ms
+ *   (accumulator `C_racing+0x29c` against the period `+0x2a0`). It asks `racing_test_gate`
+ *   where the car is:
+ *   - -100: `racing_test_all_gates` returns the LOWEST-numbered gate whose zone holds the
+ *     car, and that becomes the current gate (`opponent+0x5c`); no lap change, no print.
+ *   - +1: if the current gate is the finish gate (`circuit_get_first_gate`) and the
+ *     start-crossing flag `opponent+0x45` is clear, the lap counter `+0x6c` goes up, the
+ *     HUD lap text is pushed for the player, `racing_test_best_lap` runs when `+0x46` is
+ *     set (otherwise `+0x46` is set), `+0x3c` restarts the lap clock, and at the race's
+ *     lap count `opponent_finish` runs. Every gate's stored split `+0x24` is cleared; a
+ *     printing gate (`+0x20`) shows "> checkpoint <" with the lap time for the player.
+ *     The current gate advances; when gate 2 becomes current, `+0x45` is cleared and
+ *     `+0x46` set.
+ *   - -1: the current gate steps back; if it steps back onto the finish gate the lap
+ *     counter goes DOWN and `+0x45` / `+0x46` are cleared.
+ *   In a network session the local car's finish crossings are posted as event messages:
+ *   types `0x3f` / `0x3e` forward and `0x41` / `0x40` backward (human / AI racer); the
+ *   backward branch then does not lower the lap counter.
  * Parameters: param_1 (this): the `C_racing` singleton. param_2: the `C_opponent` to advance.
  * Returns: void: nothing.
  * PS2 twin: `DoGates__8C_racingFP10C_opponent` (0x003a3910)  [CONFIRMED]
@@ -433548,6 +433739,9 @@ int __thiscall racing_predict_car_collision(int param_1,int param_2,undefined4 p
             fVar2 = 1.0;
           }
           if (fVar2 < *(float *)(iVar5 + 0x688) * 3.6 + *(float *)(param_2 + 0x688) * 3.6) {
+            // ===== INLINED ON PC: GetOpponentFromCar__8C_racingFP5C_car =====
+            // backward walk of the live racers (+0x228, count +0x288) for the racer whose
+            // C_car (+0x28) is this car; the result here is that racer's C_driver (+0x48).
             iVar5 = *(int *)(param_1 + 0x288);
             uVar7 = 0;
             if (iVar5 != 0) {
@@ -433602,6 +433796,8 @@ LAB_00617127:
             fVar2 = 1.0;
           }
           if (fVar2 < *(float *)(iVar5 + 0x688) * 3.6 + *(float *)(param_2 + 0x688) * 3.6) {
+            // ===== INLINED ON PC: GetOpponentFromCar__8C_racingFP5C_car =====
+            // the same racer lookup as above, for the second car list (+0x100).
             iVar5 = *(int *)(param_1 + 0x288);
             uVar7 = 0;
             if (iVar5 != 0) {
@@ -437631,8 +437827,8 @@ void __fastcall compass_activate(undefined4 *param_1)
  * param_2 (uint): the frame delta in milliseconds.
  * Returns: void.
  * Evidence: VA 0x0061b5e0. Twin CONFIRMED by diffing BOTH
- * tick bodies - they compute the identical expression. Called from `engine_main`,
- * `race_run` and `net_multiplayer_run`, each behind the same `+0x00` test.
+ * tick bodies - they compute the identical expression. Called from `engine_game_loop`,
+ * `race_game_loop` and `race_game_loop_net`, each behind the same `+0x00` test.
  * PS2 twin: `Tick__15C_silver_screenFUi` [CONFIRMED]
  * Renamed from `FUN_0061b5e0`. The rest of the family is `screen_fade_*`
  * (`structs/screen_fade.md` section 4).
@@ -438799,7 +438995,7 @@ LAB_0061c78b:
         iVar6 = iVar4 + -1;
       } while (*(I3D_frame **)(g_i3d_model_cache_items_begin + -8 + iVar4 * 8) != this);
       if (iVar4 + -1 != -1) {
-        std_vector8_erase_at(g_i3d_model_cache_items_begin + (iVar4 + -1) * 8);
+        i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + (iVar4 + -1) * 8);
       }
       uVar11 = 0;
       iVar6 = vec_count_stride_0x8();
@@ -438826,7 +439022,7 @@ LAB_0061c78b:
       iVar6 = vec_count_stride_0x4();
       if (iVar6 != 0) {
         do {
-          string_append_cstr(aiStack_20,iVar9);
+          string_concat_cstr(aiStack_20,iVar9);
           iVar9 = *(int *)this;
           uStack_4 = 1;
           uVar8 = string_get_data(0x10,&i3d_open_notify_forward_cb,aiStack_20 + 1);
@@ -438867,14 +439063,14 @@ LAB_0061c95e:
     if (*(int *)(*(int *)(g_i3d_model_cache_items_begin + uVar11 * 8) + 4) == 1) {
       puVar3 = *(undefined4 **)(g_i3d_model_cache_items_begin + uVar11 * 8);
       (**(code **)*puVar3)(puVar3);
-      std_vector8_erase_at(g_i3d_model_cache_items_begin + uVar11 * 8);
+      i3d_cache_items_erase_at(g_i3d_model_cache_items_begin + uVar11 * 8);
       break;
     }
   }
 LAB_0061c997:
   uVar8 = clear1_dword_at_0x04();
   uStack_4 = 2;
-  std_vector8_insert_one(g_i3d_model_cache_items_end,uVar8);
+  i3d_cache_items_insert_one(g_i3d_model_cache_items_end,uVar8);
   uStack_4 = 0xffffffff;
   if (iStack_10 != 0) {
     string_base_release();
@@ -439913,19 +440109,23 @@ void __fastcall sound_table_clear_invisible_flag(int param_1)
 }
 
 /*
- * sound_arena_emit_sound(this, pos, loudness, range, type, source) -> void
+ * sound_arena_emit_sound(this, pos, range, intensity, type, source) -> void
  * What it does: EMITS a sound into the mission-owned soundArena — the producer side of the
  *   sound-propagation system whose listener side is
  *   sound_arena_update_entity_sound_contacts.
  *   Two phases:
  *     1. GARBAGE-COLLECT (throttled): if the arena's next-GC stamp at +0x204 has expired,
- *        stamp it forward by **2000** ms and sweep all **16** ring slots (base +0xc,
- *        stride 0x20), clearing any slot older than **2000** ms.
- *     2. FIND-OR-ADD the slot keyed by (type, source) and write the emission.
+ *        stamp it forward by **2000** ms and sweep all **16** ring slots (base +0x00,
+ *        stride 0x20), clearing the type and source of any slot older than **2000** ms.
+ *     2. FIND-OR-ADD the slot keyed by (type, source) and write the emission. A new slot
+ *        is taken at the write cursor +0x200 (advanced mod 16). Slot record: +0x00
+ *        position, +0x0c type (0 = free), +0x10 time, +0x14 intensity, +0x18 range,
+ *        +0x1c source.
  *   The clock is the mission object's field at +0x2b0c — the SAME mission object that owns
  *   the arena at +0x2b3c. See exe-re/structs/ai_sensors.md §3 for the full chain.
  * Parameters: param_1 (this, ECX): the soundArena (mission+0x2b3c);
- *             param_2 (pos): emission position; param_3/param_4 (loudness, range): floats;
+ *             param_2 (pos): emission position; param_3 (range) and param_4 (base
+ *             intensity): floats - gunfire passes 50.0 / 1.0, footsteps step x 10.0 / 0.5;
  *             param_5 (type): sound type (**2 = GUNFIRE**); param_6 (source): emitting actor.
  * Returns: void.
  * PS2 twin: `SoundEmit__10soundArenaFR8S_vectorffUiP7C_actor`  [CONFIRMED]
@@ -439998,21 +440198,22 @@ sound_arena_emit_sound(int param_1,undefined4 *param_2,undefined4 param_3,undefi
  *       entry+0x00..+0x08 = event world position (vec3)
  *       entry+0x14 (idx 5) = base intensity
  *       entry+0x18 (idx 6) = falloff range divisor
- *       entry+0x20 (idx 8, i.e. pfVar3[2]) = source actor (back-ref)
+ *       entry+0x0c = type (0 = free slot), entry+0x10 = emission time
+ *       entry+0x1c = source actor (back-ref)
  *
  *   Body summary (16 fixed slots, stride 0x20):
  *     for each entry:
- *       if (entry.base != 0 && entry.source != observer_actor) {
+ *       if (entry.type != 0 && entry.source != observer_actor) {
  *         frame = *(observer_actor + 0x68);              // I3D_frame
  *         if (!(frame[0xac] & 0x20)) UpdateWMatrixProc(frame);
  *         d2 = |frame.translation(+0x40..+0x48) - entry.pos|^2;
  *         dist = (d2 tiny) ? 0 : (near-unit) ? 1 : sqrt(d2);
  *         intensity = base - (dist*base)/range;          // linear falloff
  *         if (intensity <= 1.05 - entity_get_hearing_sensitivity())         // below threshold
- *            ai_sensors_cancel_sound_contact(entry.source, entry.base);      // expire / no-react
+ *            ai_sensors_cancel_sound_contact(entry.source, entry.type);      // expire / no-react
  *         else {
  *            clamp intensity to 1.0;
- *            ai_sensors_new_sound_contact(&{pos, base, range, source, intensity}); // deliver
+ *            ai_sensors_new_sound_contact(&{time, type, pos, source, intensity}); // deliver
  *         }
  *       }
  *
@@ -440117,8 +440318,8 @@ void __thiscall sound_arena_update_entity_sound_contacts(int param_1,float param
 /*
  * sound_arena_init(this) -> void
  * What it does: initialises the mission-owned soundArena. Zeroes **0x80 dwords = 0x200 bytes**
- *   — exactly the **16 slots x 0x20** of the sound ring (base +0xc) — then clears the two
- *   trailing scalars at +0x200 and +0x204. **+0x204 is the next-GC stamp that
+ *   — exactly the **16 slots x 0x20** of the sound ring (base +0x00) — then clears the
+ *   write cursor at +0x200 and the next-GC stamp at +0x204. **+0x204 is the next-GC stamp that
  *   sound_arena_emit_sound reads**, which is what pins this as the arena's init.
  *   See exe-re/structs/ai_sensors.md §3.
  * Parameters: param_1 (this, ECX): the soundArena (mission+0x2b3c).
@@ -440148,8 +440349,8 @@ void __fastcall sound_arena_init(undefined4 *param_1)
 /*
  * sound_arena_invalidate_actor(this, actor) -> void
  * What it does: drops every sound the given actor emitted from the mission-owned soundArena.
- *   Walks all **16** ring slots (base +0xc, stride 0x20) and, for each slot whose source
- *   field (+0x10) equals `actor`, zeroes that field and the slot's live/type field.
+ *   Walks all **16** ring slots (base +0x00, stride 0x20) and, for each slot whose source
+ *   field (+0x1c) equals `actor`, zeroes that field and the slot's type field (+0x0c).
  *   Called when an actor is destroyed, so its already-emitted sounds cannot outlive it and
  *   be attributed to freed memory. See exe-re/structs/ai_sensors.md §3.
  * Parameters: param_1 (this, ECX): the soundArena (mission+0x2b3c);
@@ -440157,7 +440358,7 @@ void __fastcall sound_arena_init(undefined4 *param_1)
  * Returns: void.
  * PS2 twin: `InvalidateActor__10soundArenaFP7C_actor`  [CONFIRMED]
  *   Same 16-slot walk keyed by the source actor, zeroing the same two fields. The array base
- *   +0xc matches the base sound_arena_emit_sound walks — an independent cross-check.
+ *   +0x00 matches the base sound_arena_emit_sound walks — an independent cross-check.
  *   Mirrors `entity_release_target` / `InvalidateActor__8C_entity` at the entity level.
  * Evidence: VA 0x0061dae0. Renamed from `FUN_0061dae0`.
  */
@@ -442228,14 +442429,12 @@ LAB_0061ff00:
       puVar4 = puStack_98;
       if (-1 < (int)pvVar5 + -1) {
         do {
-          // ===== PC INLINING: S_DICE_OBJ's default constructor =====
-          // The PS2 calls `__ct__10S_DICE_OBJFv` (8 B, PS2 0x003b9360) once per shard
-          // here, to default-construct the freshly allocated S_DICE_OBJ array.  MSVC
-          // spliced it in: the record is a POD, so the ctor collapses to nothing and
-          // what survives is this counted loop over a folded identity stub.
-          // Measured, NOT a terminal tag - the direction is a toolchain
-          // difference (Metrowerks out-lines a trivial ctor, MSVC does not), and no
-          // image-wide census of MSVC's POD-ctor out-lining was run.
+          // ===== S_DICE_OBJ's default constructor, once per shard =====
+          // The PS2 calls `__ct__10S_DICE_OBJFv` (8 B, PS2 0x003b9360, `return this`)
+          // once per shard to default-construct the new S_DICE_OBJ array. The PC calls
+          // its own out-of-line copy here: identity_thunk is the same empty body
+          // (`mov eax, ecx; ret`), shared with other empty constructors at that
+          // address, so no twin line sits on it. The loop steps 0x34, one shard.
           // Class layout: exe-re/structs/glass_shatter.md
           identity_thunk();
           pvVar5 = (void *)((int)pvVar5 + -1);
@@ -445092,11 +445291,15 @@ void crt_atexit_register_00623e30(void)
 }
 
 /*
- * winmain — provenance stub (behaviour not documented; function body not read).
- * Renamed from `FUN_00623e40` (VA 0x00623e40).
- * The original `FUN_00623e40` token is kept in this docblock on purpose so the function
- * stays grep-findable by its Ghidra name (avoids the "search by FUN_ id and not
- * find it" trap). No behavioural analysis here — placeholder docblock only.
+ * winmain — the Win32 entry point the CRT startup calls
+ *
+ * What it does: gets the executable's own path (GetModuleFileNameA, 1000-byte buffer), cuts
+ *   it at the last backslash, makes that directory current (crt_chdir) and runs engine_main.
+ * Parameters: h_instance (HMODULE): the module handle, passed on to engine_main.
+ * Returns: undefined4: always 0.
+ * PS2 twin: — (PC-only: the Win32 entry point; structs/app_bootstrap.md section 6)
+ * Evidence: VA 0x00623e40; called by crt_startup (structs/app_bootstrap.md).
+ *   Renamed from `FUN_00623e40`.
  */
 undefined4 winmain(HMODULE h_instance)
 
@@ -450825,10 +451028,14 @@ void crt_strtoul(undefined4 param_1,undefined4 param_2,undefined4 param_3)
 }
 
 /*
- * crt_call_init_fns — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_00626cfd` (original Ghidra id). VA 0x00626cfd.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_00626cfd`.
+ * crt_call_init_fns - the MSVC runtime's `_cinit`: run the static initialisers.
+ * What it does: calls `g_crt_fp_init_hook` when set, then `crt_initterm` over `.CRT$XI`
+ *  (`g_crt_xi_a`..`g_crt_xi_z`) and `.CRT$XC` (`g_crt_xc_a`..`g_crt_xc_z`), which runs every
+ *  static constructor and `atexit` registration in the program.
+ * Parameters: none.
+ * Returns: void.
+ * PS2 twin: - (MSVC start-up; the PS2 runs its own `__sinit_*` functions).
+ * Evidence: VA 0x00626cfd; one caller, `crt_startup`. Renamed from `FUN_00626cfd`.
  */
 void crt_call_init_fns(void)
 
@@ -450842,10 +451049,14 @@ void crt_call_init_fns(void)
 }
 
 /*
- * crt_exit — PROVENANCE-ONLY docblock (behaviour NOT documented).
- * Renamed from `FUN_00626d2a` (original Ghidra id). VA 0x00626d2a.
- * ⚠️ INCOMPLETE: what it does / its parameters / its return value are NOT recorded here.
- *    This docblock carries only the original Ghidra id `FUN_00626d2a`.
+ * crt_exit - the MSVC runtime's `exit`.
+ * What it does: `crt_doexit(code, 0, 0)`: the `atexit` table, the pre-terminators, the
+ *  terminators, then `ExitProcess(code)`. Does not return.
+ * Parameters: param_1 (UINT): the exit code.
+ * Returns: void; does not return.
+ * PS2 twin: - (MSVC runtime; no Win32 process model on the PS2).
+ * Evidence: VA 0x00626d2a; callers `crt_startup`, `engine_igraph_error_callback`.
+ *  Renamed from `FUN_00626d2a`.
  */
 void crt_exit(undefined4 param_1)
 
@@ -460127,8 +460338,8 @@ void crt_write_runtime_error_message(DWORD param_1)
  * Parameters: _Str1 (char *): the first string. _Str2 (char *): the second.
  * Returns: int: -1, 0 or +1.
  * PS2 twin: - (the PS2 links newlib's own `strcmp`; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md SS6).
- * Evidence: VA 0x0062d3f0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md SS7.
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ * Evidence: VA 0x0062d3f0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §7.
  */
 int __cdecl _strcmp(char *_Str1,char *_Str2)
 
@@ -461017,8 +461228,8 @@ void crt_double_to_ld10(uint *param_1,uint *param_2)
  *   whole dwords, and finishes the tail as bytes.
  * Parameters: _Dst (void *): destination. _Val (int): the fill byte. _Size (size_t): byte count.
  * Returns: void *: _Dst.
- * PS2 twin: - (the PS2 links newlib's own `memset`; crt_runtime_tail.md SS6).
- * Evidence: VA 0x0062dbc0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md SS7. 8 direct
+ * PS2 twin: - (the PS2 links newlib's own `memset`; crt_runtime_tail.md §6).
+ * Evidence: VA 0x0062dbc0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §7. 8 direct
  *   `E8` callers plus the compiler's own inline expansions elsewhere.
  */
 void * __cdecl _memset(void *_Dst,int _Val,size_t _Size)
@@ -462022,7 +462233,7 @@ LPSTR crt_wctomb(LPSTR param_1,WCHAR param_2)
  *   helper calling convention.
  * Returns: undefined8: the 64-bit remainder.
  * PS2 twin: - (x86-specific: MIPS has a 64-bit divide and needs no helper).
- * Evidence: VA 0x0062e5a0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md SS7. Emitted by
+ * Evidence: VA 0x0062e5a0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §7. Emitted by
  *   the compiler for `%` on a `unsigned __int64`, so it is reached from generated code rather than
  *   from a named caller.
  */
@@ -464480,10 +464691,10 @@ undefined4 crt_ld12_add_dword_carry(uint param_1,uint param_2,uint *param_3)
  *   addend.
  * Returns: void; in place.
  * PS2 twin: - (C-library internal; the PS2 links newlib, which has no `_LDBL12` arithmetic at all
- *   - crt_runtime_tail.md SS6).
+ *   - crt_runtime_tail.md §6).
  * Evidence: VA 0x00630478. 3 `E8` callers - `crt_ld12_from_decimal_digits` x2 and
  *   `crt_ld10_to_decimal_digits` x1 - which is the whole `_LDBL12` decimal-conversion chain.
- *   Ghidra Function-ID name, KEPT per crt_runtime_tail.md SS7; an FID name is a real,
+ *   Ghidra Function-ID name, KEPT per crt_runtime_tail.md §7; an FID name is a real,
  *   checkable claim, and reading the body confirms it.
  */
 void ___add_12(undefined4 *param_1,undefined4 *param_2)
@@ -465475,10 +465686,10 @@ int crt_setmode(uint param_1,int param_2)
  *   the byte count, not a character count.
  * Returns: int: -1, 0, +1, or 0x7fffffff on failure.
  * PS2 twin: - (C-library counterpart; two independent implementations of one standard API cannot
- *   be body-diffed - crt_runtime_tail.md SS6).
+ *   be body-diffed - crt_runtime_tail.md §6).
  * Evidence: VA 0x00630fdb. 2 `E8` callers - `crt_getenv` and `crt_environ_find_index`, which is
  *   why the environment lookup is case-insensitive and MBCS-safe. Ghidra Function-ID name, KEPT
- *   per crt_runtime_tail.md SS7; the body agrees with it in every argument.
+ *   per crt_runtime_tail.md §7; the body agrees with it in every argument.
  */
 int __cdecl __mbsnbicoll(uchar *_Str1,uchar *_Str2,size_t _MaxCount)
 
@@ -470506,9 +470717,10 @@ void crt_xtoa(uint param_1,char *param_2,uint param_3,int param_4)
  * Evidence: VA 0x006348a6. Its ONE caller is what settles what it is FOR:
  *   `engine_main` calls it as
  *   `(1, s_setup_exe_00651344, s_setup_exe_00651344, 0)` =
- *   `_spawnlp(_P_WAIT, "setup.exe", "setup.exe", NULL)` when the
+ *   `_spawnlp(_P_NOWAIT, "setup.exe", "setup.exe", NULL)` when the
  *   `Software\Illusion Softworks\Mafia` registry key has no `LS3D_setup` value -
- *   i.e. it LAUNCHES THE GAME'S SETUP PROGRAM AND WAITS FOR IT. Renamed from
+ *   i.e. it LAUNCHES THE GAME'S SETUP PROGRAM without waiting (`crt_dospawn` waits
+ *   only for mode 0), and `engine_main` returns right after. Renamed from
  *   `FUN_006348a6`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -472475,7 +472687,7 @@ void Unwind_006355f3(void)
 void Unwind_006355fb(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -472528,7 +472740,7 @@ void Unwind_00635620(void)
 // FUN_00635628 @ VA 0x00635628 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * EHHandler_00635628 - MSVC __ehhandler$ thunk for `string_append_cstr`
+ * EHHandler_00635628 - MSVC __ehhandler$ thunk for `string_concat_cstr`
  *
  * What it does: `mov eax, 0x00640044` (that function's FuncInfo table),
  *   then tail-jumps to __CxxFrameHandler at 0x00624aa8. Compiler-emitted C++
@@ -472794,7 +473006,7 @@ void Unwind_00635720(void)
 void Unwind_00635728(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -472959,7 +473171,7 @@ void Unwind_006357d7(void)
 void Unwind_006357e2(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -473151,7 +473363,7 @@ void Unwind_006358d6(void)
 void Unwind_006358de(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -473263,7 +473475,7 @@ void Unwind_0063593b(void)
 void Unwind_00635943(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -473572,7 +473784,7 @@ void Unwind_00635a78(void)
 void Unwind_00635a80(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -473787,7 +473999,7 @@ void Unwind_00635b48(void)
 void Unwind_00635b50(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -473849,7 +474061,7 @@ void Unwind_00635b83(void)
 void Unwind_00635b8b(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -474146,7 +474358,7 @@ void Unwind_00635ce8(void)
 void Unwind_00635cf0(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -474352,7 +474564,7 @@ void Unwind_00635dbc(void)
 void Unwind_00635dc7(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -474887,7 +475099,7 @@ void Unwind_00635fca(void)
 void Unwind_00635fd5(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475275,7 +475487,7 @@ void Unwind_0063614b(void)
 void Unwind_00636156(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475296,7 +475508,7 @@ void Unwind_0063616c(void)
 void Unwind_00636177(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475317,7 +475529,7 @@ void Unwind_0063618d(void)
 void Unwind_00636198(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475338,7 +475550,7 @@ void Unwind_006361ae(void)
 void Unwind_006361b9(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475359,7 +475571,7 @@ void Unwind_006361cf(void)
 void Unwind_006361da(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475380,7 +475592,7 @@ void Unwind_006361f0(void)
 void Unwind_006361fb(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475525,7 +475737,7 @@ void Unwind_006362bb(void)
 void Unwind_006362c6(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475573,7 +475785,7 @@ void Unwind_00636303(void)
 void Unwind_00636311(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -475594,7 +475806,7 @@ void Unwind_00636327(void)
 void Unwind_00636332(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476021,7 +476233,7 @@ void Unwind_006364e7(void)
 void Unwind_006364f2(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476035,7 +476247,7 @@ void Unwind_006364fd(void)
 void Unwind_00636508(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476065,7 +476277,7 @@ void Unwind_0063652c(void)
 void Unwind_00636537(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476104,7 +476316,7 @@ void Unwind_00636566(void)
 void Unwind_00636571(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476125,7 +476337,7 @@ void Unwind_00636584(void)
 void Unwind_0063658f(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476153,7 +476365,7 @@ void Unwind_006365ad(void)
 void Unwind_006365b8(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476174,7 +476386,7 @@ void Unwind_006365cb(void)
 void Unwind_006365d6(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476202,7 +476414,7 @@ void Unwind_006365f4(void)
 void Unwind_006365ff(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476250,7 +476462,7 @@ void Unwind_0063662e(void)
 void Unwind_00636639(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476298,7 +476510,7 @@ void Unwind_0063665e(void)
 void Unwind_00636669(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476364,7 +476576,7 @@ void Unwind_006366ae(void)
 void Unwind_006366b9(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476430,7 +476642,7 @@ void Unwind_006366f1(void)
 void Unwind_006366f9(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476444,7 +476656,7 @@ void Unwind_00636701(void)
 void Unwind_00636709(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476934,7 +477146,7 @@ void Unwind_0063695b(void)
 void Unwind_00636966(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476955,7 +477167,7 @@ void Unwind_0063697c(void)
 void Unwind_00636987(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -476994,7 +477206,7 @@ void Unwind_006369a0(void)
 void Unwind_006369a8(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
@@ -477544,7 +477756,7 @@ void Unwind_00636c12(void)
 void Unwind_00636c1d(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -483716,7 +483928,7 @@ void Unwind_00638630(void)
 void Unwind_00638638(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
@@ -483748,7 +483960,7 @@ void Unwind_00638653(void)
 void Unwind_0063865e(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
@@ -483801,7 +484013,7 @@ void Unwind_00638683(void)
 void Unwind_0063868b(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -483902,7 +484114,7 @@ void Unwind_006386f3(void)
 void Unwind_006386fb(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -483994,14 +484206,14 @@ void Unwind_00638767(void)
 void Unwind_00638778(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
 void Unwind_00638783(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
@@ -484318,7 +484530,7 @@ void Unwind_006388c6(void)
 void Unwind_006388d1(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -484765,7 +484977,7 @@ void Unwind_00638ab8(void)
 void Unwind_00638ac0(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -484795,7 +485007,7 @@ void Unwind_00638adb(void)
 void Unwind_00638ae3(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -484825,7 +485037,7 @@ void Unwind_00638afe(void)
 void Unwind_00638b06(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -485155,7 +485367,7 @@ void Unwind_00638c56(void)
 void Unwind_00638c61(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -485169,7 +485381,7 @@ void Unwind_00638c6c(void)
 void Unwind_00638c77(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -485206,7 +485418,7 @@ void Unwind_00638cac(void)
 void Unwind_00638cb7(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -485243,7 +485455,7 @@ void Unwind_00638cec(void)
 void Unwind_00638cf7(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -485273,7 +485485,7 @@ void Unwind_00638d1b(void)
 void Unwind_00638d26(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -485571,7 +485783,7 @@ void Unwind_00638e28(void)
 void Unwind_00638e33(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -485619,7 +485831,7 @@ void Unwind_00638e50(void)
 void Unwind_00638e5b(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
@@ -485633,7 +485845,7 @@ void Unwind_00638e66(void)
 void Unwind_00638e71(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -485647,7 +485859,7 @@ void Unwind_00638e7c(void)
 void Unwind_00638e87(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -486307,7 +486519,7 @@ void Unwind_00639110(void)
 void Unwind_00639118(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -486470,7 +486682,7 @@ void Unwind_006391b0(void)
 void Unwind_006391b8(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -486626,7 +486838,7 @@ void Unwind_00639250(void)
 void Unwind_00639258(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -487365,7 +487577,7 @@ void Unwind_00639593(void)
 void Unwind_0063959b(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
@@ -487379,7 +487591,7 @@ void Unwind_006395a3(void)
 void Unwind_006395ab(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
@@ -487446,7 +487658,7 @@ void Unwind_006395ec(void)
 void Unwind_006395f7(void)
 
 {
-  vector_clear();
+  chunk_open_stack_free();
   return;
 }
 
@@ -487621,7 +487833,7 @@ void Unwind_0063972f(void)
 void Unwind_0063973a(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -487954,7 +488166,7 @@ void Unwind_00639926(void)
 void Unwind_0063992e(void)
 
 {
-  game_subobject_0x208_dtor();
+  glass_shatter_dtor();
   return;
 }
 
@@ -487968,7 +488180,7 @@ void Unwind_0063993c(void)
 void Unwind_00639944(void)
 
 {
-  game_subobject_0x240_dtor();
+  folded_vector_pair_free_at_0x04_0x14_00607500();
   return;
 }
 
@@ -488059,7 +488271,7 @@ void Unwind_006399ec(void)
 void Unwind_006399f4(void)
 
 {
-  game_subobject_0x240_dtor();
+  folded_vector_pair_free_at_0x04_0x14_00607500();
   return;
 }
 
@@ -488087,7 +488299,8 @@ void Unwind_00639a1e(void)
 void Unwind_00639a2c(void)
 
 {
-  force_feedback_manager_dtor();
+  // destroys the C_game's pursuit-event manager: ECX = this + 0x2b18.
+  folded_vector_pair_free_at_0x04_0x14();
   return;
 }
 
@@ -488280,14 +488493,14 @@ void Unwind_00639b68(void)
 void Unwind_00639b76(void)
 
 {
-  game_subobject_0x208_dtor();
+  glass_shatter_dtor();
   return;
 }
 
 void Unwind_00639b84(void)
 
 {
-  game_subobject_0x240_dtor();
+  folded_vector_pair_free_at_0x04_0x14_00607500();
   return;
 }
 
@@ -488364,7 +488577,7 @@ void Unwind_00639c10(void)
 void Unwind_00639c1e(void)
 
 {
-  game_subobject_0x240_dtor();
+  folded_vector_pair_free_at_0x04_0x14_00607500();
   return;
 }
 
@@ -488392,7 +488605,8 @@ void Unwind_00639c48(void)
 void Unwind_00639c56(void)
 
 {
-  force_feedback_manager_dtor();
+  // destroys the C_game's pursuit-event manager: ECX = this + 0x2b18.
+  folded_vector_pair_free_at_0x04_0x14();
   return;
 }
 
@@ -488571,7 +488785,7 @@ void Unwind_00639d90(void)
 // FUN_00639d98 @ VA 0x00639d98 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * EHHandler_00639d98 - MSVC __ehhandler$ thunk for `game_subobject_0x208_dtor`
+ * EHHandler_00639d98 - MSVC __ehhandler$ thunk for `glass_shatter_dtor`
  *
  * What it does: `mov eax, 0x006445ec` (that function's FuncInfo table),
  *   then tail-jumps to __CxxFrameHandler at 0x00624aa8. Compiler-emitted C++
@@ -488967,7 +489181,7 @@ void Unwind_00639f1b(void)
 void Unwind_00639f26(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -488988,7 +489202,7 @@ void Unwind_00639f3c(void)
 void Unwind_00639f47(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -489027,7 +489241,7 @@ void Unwind_00639f79(void)
 void Unwind_00639f84(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -489346,7 +489560,7 @@ void Unwind_0063a0f0(void)
 void Unwind_0063a0fb(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -489369,7 +489583,7 @@ void Unwind_0063a114(void)
 void Unwind_0063a11f(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -489646,7 +489860,7 @@ void Unwind_0063a228(void)
 void Unwind_0063a230(void)
 
 {
-  refcount_release_at_0x4();
+  i3d_cache_items_destroy_one();
   return;
 }
 
@@ -490564,8 +490778,11 @@ void EHHandler_0063a57a(void)
  *   `crt_startup`. It then calls `safedisc_run` with `g_safedisc_saved_data_directories`; on
  *   failure it rewrites itself again as `ret 0xc` and either re-enters or calls
  *   `g_safedisc_abort_callback`; on success it jumps to `safedisc_jmp_oep`.
- * Parameters: in mode 0 none; in the other mode one stack argument at `[ebp+8]` forwarded to
- *   `safedisc_run`.
+ * Parameters: in mode 0 none. A non-zero mode wraps a DLL entry: `[ebp+8]` is DllMain's
+ *   hinstDLL, forwarded to `safedisc_run`; failure returns 0 through `ret 0xc` (DllMain's
+ *   three arguments); the rewritten entry jumps to the handler at 0x006ff0d3, which on
+ *   DLL_PROCESS_DETACH runs the two cleanup calls stored at 0x006ff02d after the real
+ *   DllMain returns.
  * Returns: void - control always leaves through a jump.
  * PS2 twin: — (SafeDisc 2.70.030 protection code; `safedisc` and `dilla` return
  *   0 hits in the PS2 symbol table - the PS2 has no disc protection).
@@ -492204,14 +492421,18 @@ LAB_00700356:
  * Returns: the extracted-entry count, or 0 on failure.
  * PS2 twin: — (SafeDisc 2.70.030 protection code; `safedisc` and `dilla` return
  *   0 hits in the PS2 symbol table - the PS2 has no disc protection).
- * Evidence: VA 0x00700490. 🔴 CAPPED AT STRUCTURAL AND IT CANNOT BE PROMOTED. The body carries
- *   dense opaque-predicate ANTI-DISASSEMBLY from 0x007005b8 onward - complementary `jcc` pairs
- *   (`74 15`/`75 0f`, `7a 0c`/`7b dc`, `7e 1d`/`7f 0f`) interleaved with `87 ed`/`8b ff`/`90 90`
- *   filler whose bytes double as the branch displacements - which desynchronises Ghidra (hence
- *   its `halt_baddata()`) and Capstone alike. The name rests on the disassembled prologue, the
- *   API set and the callee set; the middle is deliberately unreadable, so this is an
- *   artifact-level impossibility, not a pending diff. ⚠️ Ghidra's size (329) is also
- *   wrong - the body runs to 0x007008b9, about 1065 bytes. Renamed from
+ * Evidence: VA 0x00700490. The body carries opaque-predicate anti-disassembly from
+ *   0x007005b8 onward - complementary `jcc` pairs (`74 15`/`75 0f`, `7a 0c`/`7b dc`,
+ *   `7e 1d`/`7f 0f`) interleaved with `87 ed`/`8b ff`/`90 90` filler whose bytes double as
+ *   the branch displacements - which desynchronises Ghidra (`halt_baddata()`) and a linear
+ *   disassembler. A trace that keeps the flag values each taken branch implies resolves it:
+ *   the record is read at its file offset, which also seeds an in-place LCG decryption
+ *   (s = s*0x13C6A5 + 0xD8430DED, key byte = XOR of the four bytes of s); then
+ *   +0x00 == 1, +0x04 == 0 and +0x08 == the record id argument (hidden by Ghidra; the stub
+ *   passes 0) gate `safedisc_extract_one_file`, and the offset advances by +0x10 (header
+ *   size) plus +0x0c (data size). On Game-uncracked.exe's overlay nine records tile it up
+ *   to an 84-byte tail (structs/safedisc_stub.md). Ghidra's size (329) is wrong - the body
+ *   runs to 0x007008b9, about 1065 bytes. Renamed from
  *   `FUN_00700490`.
  * Class layout: — (free function of the SafeDisc stub; the stub has no classes)
  */

@@ -1,6 +1,6 @@
 # The input manager — `g_input` @ `0x006f92e0`
 
-**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-10-04 23:41 +0200
 
 PC prefix **`input_`**. Translation unit `[0x005d14a0, 0x005d3a60)`: 21 starts, all named.
 
@@ -95,8 +95,7 @@ typedef struct S_joy_block {       /* 0x44 bytes */
 /* +0x00 */ float axis[8];         // 8 analog axes
 /* +0x20 */ float pov[4];          // 4 POV hat angles, in radians
 /* +0x30 */ char  pov_centered[4]; // non-zero => that hat is centred
-/* +0x34 */ unsigned int buttons;  // 32-bit button mask
-/* +0x38 */ /* 0xc bytes not decoded */
+/* +0x34 */ unsigned int buttons[4]; // 128-bit button mask; Game.exe reads only word 0
 } S_joy_block;
 ```
 
@@ -105,6 +104,32 @@ with `record+0x04` and slot `0x54` with `record+0x48`, and `0x48 + 0x44 = 0x8c`.
 The POV angle thresholds `input_update` and `input_capture_binding` compare against —
 `0.1`, `1.5`, `1.6`, `3.12`, `3.16`, `4.69`, `4.72` — are radians around 0, π/2, π and
 3π/2, which is how a hat angle becomes a 4-bit direction mask.
+
+The block is the device state `ijoy.dll` keeps at `device+0x130`: device slot `0x50` copies those
+`0x44` bytes out, and the DLL's own button test picks word `index >> 5` of the four for buttons
+0..127. `input_update` and `input_capture_binding` read only word 0 (`1 << (code & 0x1f)`, and the
+capture loop stops at 32), so a joystick button above 31 cannot be bound.
+
+### 1c. The capture filter
+
+`input_capture_binding` takes two stack arguments (it returns with `ret 8`): a device FILTER and a
+poll flag. Each set filter bit skips one input source:
+
+| bit | source skipped |
+|---|---|
+| `0x01` | mouse axes |
+| `0x02` | joystick axes |
+| `0x04` | mouse buttons |
+| `0x08` | joystick buttons |
+| `0x10` | POV hats |
+| `0x20` | keyboard |
+
+Its one caller, `gui_key_capture_tick`, passes `0` for an Aiming slot (`0x12` / `0x13`) and `1` for
+any other slot, so only the Aiming actions accept a mouse axis. When the screen's byte at `+0x4c` is
+set it passes `0x3c` / `0x3d` instead, which leaves only the axes. The decompiler renders the filter
+as the return value of an engine call and the parameter as unused, because it loses the stack depth
+across the engine's callee-cleans virtual calls; in the disassembly all five reads of the filter sit
+at stack depth `0x1c`, where the first argument lives.
 
 ---
 
@@ -202,7 +227,7 @@ deltas, `0xe8` key repeat.
 | 0x005d1ec0 | `input_get_binding` | - | CONFIRMED | copy one `S_input_binding` out |
 | 0x005d1f30 | `input_update` | - | CONFIRMED | the per-frame resolve |
 | 0x005d2ad0 | `input_poll_joysticks` | - | CONFIRMED | prime before capture |
-| 0x005d2b40 | `input_capture_binding` | - | CONFIRMED | first control pressed → the scratch record |
+| 0x005d2b40 | `input_capture_binding` | - | CONFIRMED | first control pressed that the filter allows → the scratch record (§1c) |
 | 0x005d3180 | `input_binding_get_label` | - | CONFIRMED | the shipped label strings |
 | 0x005d3990 | `input_joy_states_copy_range` | - | STRUCTURAL | member helper ¹ |
 | 0x005d39d0 | `input_joy_states_fill_n` | - | STRUCTURAL | member helper ¹ |
@@ -270,8 +295,6 @@ value-table pointers directly — a factoring difference, not a missing function
 
 | item | state |
 |---|---|
-| last `0xc` bytes of `S_joy_block` (`+0x38`..`+0x43`) | undecoded; only `0x38` of `0x44` bytes accounted for |
 | whether part of the PC-side input code lives in a DLL | only half-excluded: `ijoy.dll` supplies the DEVICE objects while this game-side wrapper holds them (§6) |
-| `input_capture_binding`'s `param_2` | unused by the body; Ghidra shows three parameters and only `param_3` (the poll flag) is read |
 | in game: binding conflicts | `loadsave_binding_find_conflict` walks only the band a slot belongs to (`0..0x20` on foot, `0x21..0x3b` in car), so binding the same key to one on-foot and one in-car action should be allowed; untested |
 | in game: slot `0x20` | textdb id **0** — the last on-foot slot is unused; nothing should appear for it on the Controls screen; untested |

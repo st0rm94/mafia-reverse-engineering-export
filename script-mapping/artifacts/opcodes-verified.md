@@ -1,6 +1,6 @@
 # Mafia script-VM opcodes — verified
 
-**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-10-11 18:29 +0200
 
 Per-command evidence for the runtime dispatcher `program_process_command` (`0x005bb2d0`, jump
 table at `0x005c7700`, opcode range `1..0x186`).
@@ -56,6 +56,7 @@ Column conventions for every table below: **Opcode** = hex / decimal = dispatche
 | `0x0a` / 10 | `rnd xx, yy, zz` | `rand_range` | Stores a `rand_range` result into the destination `flt[]` slot. | `rand_range` + the shared `script_flt_write` tail; Mafia Script Data Reference: *"random integer from an interval"*. |
 | `0x0d` / 13 | `findframe` | `I3D_scene` vtable `+0x58` | Looks up a scene frame **by name** into the FRAME register file ¹. | Bounds against `param_1[0x15]`, writes `param_1[0x14] + slot*4`; keyword table places `FINDFRAME` at `0x0d`. |
 | `0x11` / 17 | `findactor xx, yy` | `i3d_frame_get_name` | Looks up an actor **by name** into the ACTOR register file ². | Bounds against `param_1[0x17]` (ACTOR table length); Mafia Script Data Reference: *"finds an object by name"*. |
+| `0x15b` / 347 | `version_is_germany xx` | - | Writes whether this is the German release into `flt[xx]`; this executable always writes 0 ³. | The case shares its body with `version_is_editor` (`0x15c`), which validates the slot and stores a hard 0. Mafia Script Data Reference: *"returns whether the running instance is the German version into variable xx"*, 0 = not German. |
 
 ¹ The name resolves through the `I3D_scene` vtable at `+0x58` (`folded_get_dword_0x10()` is the
 scene in this function, not an actor kind). An empty name substitutes the current frame.
@@ -63,6 +64,11 @@ scene in this function, not an actor kind). An empty name substitutes the curren
 argument. Developer easter egg: when the current frame is named `chcipnuti_chlapka` it calls
 `MessageBeep`. `0x0d` and `0x11` are graded together because both are lookup-by-name bodies; the
 register-file bound (`[0x15]` frame vs `[0x17]` actor) is what separates them.
+³ The German release is a separate executable, cut for Germany's stricter rules on violence in
+video games, that runs the same scripts. Five shipped scripts branch on the result — mission
+`MISE10-LETISTE` script `Czena5`, `MISE12-GARAGE` `detector_zbrane`, `MISE15-MESTO` `civil5`,
+`MISE15-PRISTAV` `PortGuard19` and `PortGuard20` — and this executable always takes the
+non-German arm.
 
 ### 3.2 HUD: compass, stopwatch, console, fade, damage bars
 
@@ -85,8 +91,10 @@ singleton `+0x9270`) + `hud_show_element(0x80)` + `player_set_navi_point()`. Bit
 word at singleton `+0x90a4` is compass visibility.
 ² `hud_timer_set_time(ww, xx, yy)` writes `+0x9150/+0x9154/+0x9158`; `hud_timer_set_interval(zz)`
 writes the ms count at `+0x9168` and recomputes the hand fractions at `+0x915c/+0x9160` with `/60`
-arithmetic; then `hud_show_element(8)` and `pedestrian_manager_end_all_taxi_waves()`.
-³ No explicit stop call (§6).
+arithmetic; then `hud_show_element(8)` and `pedestrian_manager_end_all_taxi_waves()`, which makes every
+pedestrian who is hailing the player's taxi stop waving (§4).
+³ No explicit stop call: `hud_tick` advances the countdown, the hands and the timeout script event only
+while bit 8 is set, so hiding the stopwatch freezes it where it stands.
 ⁴ The same HUD message ring the police system uses for offence texts (ids 2100–2110, 2200, …).
 ⁵ Sets fade-overlay bit `0x8000` of `+0x90a4` and the `+0x9468..+0x9474` state block. The same
 overlay drives the arrest / mission-fail end screen and the `game_cheat_check` acknowledgement flash.
@@ -112,23 +120,24 @@ after starting the game; first-call fill: `-1.0` empty, `-0.01` / `0.0` / `0.5` 
 
 | Opcode | Command | Handler | Behaviour | Evidence |
 |---|---|---|---|---|
-| `0x79` / 121 | `wingman_setindicator xx, yy, zz` | `player_set_wingman_indicator` | Pins one of 4 wingman-indicator HUD slots to a (portrait, live-value) display ¹. | 4-slot switch on bits `0x10000000..0x80000000`; confirmed in game ³. |
-| `0x7a` / 122 | `wingman_delindicator xx, yy` | `player_set_wingman_indicator(0xffffffff, 0)` | Clears the pinned indicator and hides slot `yy`'s HUD bit ². | Sibling of `0x79`, same actor-table gate; same in-game anchor ³. |
+| `0x79` / 121 | `wingman_setindicator xx, yy, zz` | `human_set_wingman_indicator` | Shows the health of human `act[xx]` in one of the 4 wingman-indicator HUD slots, with portrait `yy` ¹. | 4-slot switch on bits `0x10000000..0x80000000`; confirmed in game ³. |
+| `0x7a` / 122 | `wingman_delindicator xx, yy` | `human_set_wingman_indicator(0xffffffff, 0)` | Clears human `act[xx]`'s indicator and hides slot `yy`'s HUD bit ². | Sibling of `0x79`, same actor-table gate; same in-game anchor ³. |
 
-¹ Args: `xx` = npc id, validated against `param_1[0x17]` with `folded_get_dword_0x10() ∈ {2, 0x1b}`
-— **`0` = the player** (in-game; the Mafia Script Data Reference's "id 0 = Paulie" does not apply to this command);
+¹ Args: `xx` = an actor register, validated against `param_1[0x17]` with
+`folded_get_dword_0x10() ∈ {2, 0x1b}`; the human in `act[xx]` is the wingman (in game `0` named the
+player; the Mafia Script Data Reference's "id 0 = Paulie" does not apply to this command);
 `yy` = portrait `0..7` (masked `& 7`; scripts use 1..5, e.g. mission `MISE07-SARA`, script `Sara`:
-`wingman_setindicator 1, 5, 0`); `zz` = slot `0..3` (`-1 < slot < 4`). Pipeline:
-`player_set_wingman_indicator(slot, portrait)` records the pin on the player (`+0x6d8`/`+0x6dc`,
-saved and loaded) → `hud_wingman_set_portrait_for_slot(slot, portrait)` writes `+0x9244 + slot*4`
-→ value = the script scalar (`__ftol`), replaced by `*stl_max_int_ptr()` (an engine-live max) when
-`actor_is_death_processed()` (the `player+0x5e` byte getter) returns 0 →
+`wingman_setindicator 1, 5, 0`); `zz` = slot `0..3` (`-1 < slot < 4`). Pipeline, with `this` = the
+wingman: `human_set_wingman_indicator(slot, portrait)` stores the pin on that human (`+0x6d8` /
+`+0x6dc`, saved and loaded with it) → `hud_wingman_set_portrait_for_slot(slot, portrait)` writes
+`+0x9244 + slot*4` → value = `__ftol(cur_health +0x644 / max_health +0x604 × 100)`, raised to at least 1
+through `stl_max_int_ptr(&value, &1)` unless `actor_is_death_processed()` →
 `hud_wingman_set_indicator_value_for_slot(slot, value)` writes `+0x9254 + slot*4` →
-`hud_show_element(slot bit)` on `DAT_006613d4`. A per-frame player tick (3 sites) replays the pin.
-`xx` is consumed only by the bounds check and is **not** stored.
-² `player_set_wingman_indicator(0xffffffff, 0)` writes `player+0x6d8 = -1` ("no pin") and
-`+0x6dc = 0`, which stops the per-frame replay **for all slots**; only slot `yy`'s bit is cleared
-(slots outside `0..3` clear nothing), so other slots' icons go stale.
+`hud_show_element(slot bit)` on `DAT_006613d4`. From then on the human's own hit, death and save-load
+paths refresh the slot (`basic/artifacts/hud_elements.md` §7).
+² `human_set_wingman_indicator(0xffffffff, 0)` on `act[xx]` writes that human's `+0x6d8 = -1` and
+`+0x6dc = 0`, so its later hits stop updating the slot; slot `yy`'s bit is cleared (slots outside
+`0..3` clear nothing). Other humans' indicators are untouched.
 ³ A diagnostic patch of case `0x146` sub-case 2 to `hud_show_element(0x10000000)` made a player health
 indicator appear in game; repeated calls stacked to 4 independent indicators. The 4 hide bits in
 `0x7a` and an init loop zeroing all 4 slots agree.
@@ -223,10 +232,10 @@ where `policemanager_on` was called. Name string `s_M7_ZASTAVZKURVENEPOLISE_0064
 | Opcode | Command | Handler | Behaviour | Evidence |
 |---|---|---|---|---|
 | `0xae` / 174 | `get_pm_state xx, yy, zz` | `police_manager_get_offense_bits_for_target` | `flt[yy] = 1.0` iff actor `xx` recently committed offence type `zz`, else 0.0 ¹. | In game (mission `MISE02A-TAXI`, no gun): `get_pm_state 1,0,6` detects sidewalk = bit `1<<6 = 0x40`, impossible under a raw `6 & bits`. |
-| `0xaf` / 175 | `get_pm_crashtime xx, yy` | `police_manager_get_crashtime_for_target` | `flt[yy]` = time since actor `xx` last crashed in a car (`record+0x1c`); 0 without a record. | Standard 2-arg per-actor query skeleton. |
-| `0xb0` / 176 | `get_pm_firetime xx, yy` | `police_manager_get_firetime_for_target` | `flt[yy]` = time since actor `xx` last fired (`record+0x10`); 0 without a record. | Same skeleton as `0xaf`. |
+| `0xaf` / 175 | `get_pm_crashtime xx, yy` | `police_manager_get_crashtime_for_target` | `flt[yy]` = what is left of actor `xx`'s crash window, in ms (`record+0x1c`); 0 without a record ⁴. | Standard 2-arg per-actor query skeleton. |
+| `0xb0` / 176 | `get_pm_firetime xx, yy` | `police_manager_get_firetime_for_target` | `flt[yy]` = what is left of actor `xx`'s gunfire window, in ms (`record+0x10`); 0 without a record ⁴. | Same skeleton as `0xaf`. |
 | `0xb1` / 177 | `get_pm_numpredators xx, yy` | `police_manager_count_officers_for_target` | `flt[yy]` = number of cops chasing actor `xx`, with no line-of-sight or identification filter ². | Returns `(record+0x78 − record+0x74) >> 2`; the Mafia Script Data Reference: *"0 → no one is chasing, >0 → at least one predator is chasing"*. |
-| `0xb2` / 178 | `get_pm_humanstate xx, yy` | `police_manager_get_committed_police_state` | Reports whether actor `xx` is in any police state ³. | Helper returns the committed police-state level at `record+0x3c`; case sits in the `0xae–0xb2` `get_pm_*` cluster. |
+| `0xb2` / 178 | `get_pm_humanstate xx, yy` | `police_manager_get_committed_police_state` | `flt[yy]` = actor `xx`'s committed police-state level, 0.0 to 3.0 ³. | Helper returns the committed police-state level at `record+0x3c`; case sits in the `0xae–0xb2` `get_pm_*` cluster. |
 | `0x122` / 290 | `vlvp xx` | `police_board_has_recent_sighting` | 1 if any squad on this target has an officer who saw the player within the last 2000 ms, else 0. | Mafia Script Data Reference: *"Returns whether the police see the player during an offence"*. |
 
 ¹ `xx` = actor (0 = player), `yy` = output slot, `zz` = offence type 1..13. The helper returns
@@ -240,7 +249,12 @@ mask, built at script load by `program_decode_params` case `0xae` as `1 << min(z
 ² The count is 0 iff no squad exists for the target — both with no police state at all and
 once the wanted bar has entered its decaying phase (the group is dropped as soon as decay starts).
 `flt[yy]` is pre-cleared before the type check, so a failed check leaves 0.
-³ Levels: 0 no record, 1 fine, 2 handcuffs, 3 gun; the Mafia Script Data Reference documents a 0/1 result (§6).
+³ Levels: 0 no record, 1 fine, 2 handcuffs, 3 gun. The helper zero-extends the 16-bit level and the case
+stores it with an integer-to-float load, so a script sees the level itself; the Mafia Script Data
+Reference documents only a 0/1 result.
+⁴ Both fields are countdowns, not the time since the event: a crash sets `+0x1c` to at most 20000, each
+shot adds 5000 to `+0x10` up to 60000, and `police_manager_tick` lowers both by 330 on every 330 ms
+inner tick down to 0. A new record starts at 0. The case loads the dword as an unsigned integer.
 
 ### 3.7 Airplane
 
@@ -278,24 +292,28 @@ back on next frame, because it re-derives the bit every frame for any driven car
 angle) gates the side setter.
 ³ Allocates `C_public_physics` (kind `0x20`, `operator_new(0x3b0)`), calls `Init(frame)` (vtable slot
 18; `Release`, slot 17, on failure), builds the body with `physical_object_init_box`, registers via
-`game_add_temporary_actor`. `ww` = frame id (bounds-checked); `xx` = initial motion negated into Y
-(`vec3_set_xyz(0, -xx, 0)`), so in this Y-up world **>0 = impulse down, 0 = none, <0 = up**; `yy` =
-0 falls only once hit / 1 falls immediately (random-direction impulse scaled by weight); `zz` =
-weight in kg, clamped against a floor and used as mass. The Mafia Script Data Reference: *"Changes object ww into a
+`game_add_temporary_actor`. `ww` = frame id (bounds-checked); `xx` = the initial velocity negated
+into Y (`vec3_set_xyz(0, -xx, 0)`), so in this Y-up world **>0 = down, <0 = up**, and with `xx` = 0
+the prop starts asleep until something hits it; `yy` non-zero = an impulse `(0, 0.01 × mass, 0)` at
+a random world point in `[-1, 1)³`, which wakes it; `zz` = the mass in kg, at least 1.0. The Mafia Script Data Reference: *"Changes object ww into a
 physical one … At most 30 physical children can be created from one object"*;
 `public_physics_game_init` retires the oldest when `0x1e < size`. See `structs/public_physics.md`.
 ⁴ `xx` bounds against `param_1[0x15]`, resolved via `param_1[0x14] + xx*4`, canonicalised with
 `act_mission_get_game`; `yy` bounds against `param_1[0x13]`; failures jump to `LAB_005c7541`. The
 helper walks `world+0x1c8..+0x1cc` (stride `0xc`) comparing entry `+0x00` only. The list, filled by
 `game_load_telephones`, holds two device types distinguished by entry `+0x08` LSB — 0 alarm
-(`alarm01.i3d`), 1 PHbox (`PHbox01.i3d`) — so a registered alarm frame also returns 1 (§6). Shipped
-use: 11 calls in `EXTREME`, 1 in `MISE15-MESTO`.
+(`alarm01.i3d`), 1 PHbox (`PHbox01.i3d`). Its scene callback `game_collect_telephone` registers every
+frame whose model is either file, keyed on the frame; the cached instances it adds after that carry
+key 0, which no frame matches. So an alarm frame also returns 1. Shipped use: 11 calls in `EXTREME`, 1
+in `MISE15-MESTO`.
 
 ### 3.9 Menus, freeride score, film sequences, racing
 
 | Opcode | Command | Handler | Behaviour | Evidence |
 |---|---|---|---|---|
+| `0x2e` / 46 | `recunload` | `recorder_end_sequence_and_restore_scene` | Ends the film sequence started with `recloadfull` and restores the game ³. | Mafia Script Data Reference: *"Releases the recording from memory after a film sequence loaded with recloadfull."* |
 | `0x43` / 67 | `loaddifferences "ssss"` | `game_load_differences` (`0x005ea0c0`) | Loads a scene-difference `.chg` file for a film sequence ¹. | Mafia Script Data Reference: *"Loads difference file ssss for a film sequence … only a \*.chg file, with extension and without path … The data is released with cleardifferences."* |
+| `0x44` / 68 | `cleardifferences` | `game_request_clear_differences` | Requests that the loaded difference data be dropped; `game_tick` releases it. | Mafia Script Data Reference: *"Releases all difference data from memory after a film sequence loaded with loaddifferences."* |
 | `0x61` / 97 | `gunshop_menu` | `gui_gun_shop_ctor` (`0x0057b3a0`) | Opens the weapon shop as a modal screen and blocks the script until it closes ². | Shipped use: twice in mission `MISE19-MESTO` and once in `MISE20-MESTO`, script `1ProdZ` (*prodavač zbraní*, the arms dealer), each right after `dialog_end` and before `inventory_push` / `inventory_clear`; zero args, modal, weapon-model refresh match. |
 | `0xa6` / 166 | `racing_mission6_init ww, xx, yy, zz` | `race_mission6_init` | Creates `C_racing` if absent, marks a mission race, selects circuit `yy` (index into `g_racing+0x0c`), sets lap count, player car model `zz`, generates opponents, enables damage. | Mafia Script Data Reference: *"Initialises the race"*, with `yy`/`zz` documented as `???`; a statement-level diff against the PS2 body supplies them (§4). |
 | `0xa7` / 167 | `racing_mission6_start xx` | `race_mission6_execute_loop` | Does not race inline: parks `&flt[xx]` at `game+0x2ee0`, sets `game+0x2edc = 2`, returns; `game_tick` then runs the race and writes the result. | Mafia Script Data Reference return map 0 failure / 1 completed / 2 failure / 3 `???` / other = racing — exactly `race_mission6_execute_loop`'s return map. |
@@ -315,6 +333,10 @@ via `inventory_remove_slot`); right band = every `g_game_item_table` entry witho
 Despite the window caption *"Inventory (Drop)"* (textdb 1300) it is a **pickup** screen — textdb 1310
 labels the right band *"Select (Pick Up)"*. No money or score is involved. See `structs/game_menus.md`
 §4e.
+³ Step for step the inverse of `recloadfull`: `game_particle_destroy_all`,
+`recorder_end_sequence_and_restore_scene`, `camera_unlock`, `hud_pop_element_flags`,
+`hud_widescreen_fade_bars(0, 250)`, `human_set_idle_anims_enabled(1)` on the player, the mission sound
+stage raised to 2, `sound_arena_init`, `cutscene_set_active` and `game_clear_film_music`.
 
 ### 3.10 Audio, math, collision, developer commands
 
@@ -326,7 +348,7 @@ labels the right band *"Select (Pick Up)"*. No money or score is involved. See `
 | `0x121` / 289 | `coll_testline` | `collision_test_line_vertical_thunk` | 5-arg ray test; boolean hit into a `flt[]` slot. | Callee; `VLVP` is the next opcode, `0x122`. |
 | `0x138` / 312 | `citymusic_off` | `game_city_music_set_paused(this, 1)` | Disables city music, zero args ¹. | Verified in game with untouched and custom scripts. |
 | `0x139` / 313 | `citymusic_on` | `game_city_music_set_paused(this, 0)` | Re-enables city music, zero args ¹. | Verified in game; keyword table stores `CITYMUSIC_ON = 0x139` (§2). |
-| `0x185` / 389 | `dan_internal_1` | `car_ctor` | Developer cheat, zero args: spawns a Thunderbird (`thunderbird00.i3d`, label `cheat_car`) at `(-841.0, -6.5, -637.0)` ². | Literals `s_cheat_car_0064ff98` + `s_thunderbird00_i3d_0064ff84`; spawn verified in game. |
+| `0x185` / 389 | `dan_internal_1` | `car_ctor` | Developer cheat, zero args: spawns a Thunderbird (`thunderbird00.i3d`, label `cheat_car`) at `(-841.0, -6.5, -637.0)` ². | Literals `s_cheat_car_0064ff98` + `s_thunderbird00_i3d_0064ff84`; verified in game: the car appears beside the East Marshall Bridge and the player is not put into it. |
 | `0x186` / 390 | `dan_internal_2` | `game_play_3d_sound` | Developer cheat, zero args: plays `system\m_pravda.wav` ("pravda" = Czech "truth") ³. | Literal `s_system_m_pravda_wav_0064ff70`; verified in game. |
 
 ¹ Both set `script_scratch_u0` (1 / 0) and fall into `LAB_005c5109` →
@@ -339,8 +361,11 @@ third-party "MafiaScript Extensions v1.1.0" plugin present during testing does n
 controller (`operator_new` + `car_ctor`), sets the position via `i3d_frame_set_position_xyz_ptrs`
 from the literals `0xc4524000` / `0xc0d00000` / `0xc41f4000`, facing via `vec3_set_xyz(1.0, 0, 0)` +
 vt `0xc` / `0x18`, registers via `i3d_scene_set_frame_sector_pos`. On controller vt `0x48` success it
-runs vt `0x64`, `vehicle_controller_set_field_0x214c(1)`, `act_mission_get_game`,
-`game_add_temporary_actor_intern`, `vehicle_settle(100)`, `vehicle_controller_set_field_0x65(1)` (§6).
+runs vt `0x64`, `car_set_remove_at_game_done(1)`, `act_mission_get_game`,
+`game_add_temporary_actor_intern`, `vehicle_settle(100)`, `actor_set_save_excluded(1)`: the car
+becomes a temporary actor that the savegame skips and `game_done` removes. No seat or enter call
+follows, and in game the player stays where he is: run from a trigger at the West Marshall Bridge,
+the command leaves the player to drive to the car beside the East Marshall Bridge.
 ³ Allocates a type-4 (audio) object through the same `g_i3d_driver->vt[0x4c]` factory, loads the wav
 (vt `0x50`), configures it (vt `0x58/0x68/0x64/0x6c/0x24`: channel, volume 1.0, pitch/pan 1.0, no
 loop, autoplay), positions it at the player via `act_mission_get_game`, finalises with
@@ -365,6 +390,7 @@ and `DOOR_LOCK` (`0x26`) each have their own arm.
 | `carlight_indic_l` / `_r` (`0xc2` / `0xc3`) | PS2 `DoLights__9C_VehicleFf` lights bit `0x1` for a negative steering value and bit `0x2` for a positive one. |
 | `gunshop_menu` (`0x61`) | The screen's PS2 twin is `GM_GunShop` (`OnCreate__10GM_GunShopFv` / `OnClick__10GM_GunShopFUi`), matched on five shared constants at identical sites: start index 2, the `0x800000` flag test, base row id 1000, textdb base `0xdac`, the `0x44c` template argument. |
 | `getfilmmusic` (`0x14a`) | The PS2 twin is gutted to a bare `return -1`, which preserves exactly this function's failure return. |
+| `timeron` (`0x31`) | The PS2 arm (`case 0x33`) also calls `ZrusVsechnyMavajici__19C_traffic_generatorFv` right after showing the stopwatch, so the taxi-hail cancel is in both builds. |
 
 ## 5. How to add a verified entry
 
@@ -382,13 +408,5 @@ and `DOOR_LOCK` (`0x26`) each have their own arm.
 | item | state |
 |---|---|
 | `policeitchforplayer` while pursued, unseen and not arrested | the body gives 1 while living officers are assigned and the identity is known, seen or not, which agrees with the Mafia Script Data Reference's *"even when the icon is transparent"*; it gives 0 when no living officer is assigned outside a capture cutscene (board `+0x2c` is set only there). Test: get chased, break line of sight without being arrested, run `policeitchforplayer 0`, read `flt[0]` |
-| `get_pm_humanstate` result value | the helper returns level 0..3 and the float write is dropped by Ghidra; whether scripts see 0/1 (as the Mafia Script Data Reference documents) or 0..3 is unread |
-| `get_pm_crashtime` / `get_pm_firetime` units | ms or game ticks — not established |
 | `policemanager_del` with cops already spawned | reported to misbehave; not verified |
-| `wingman_setindicator` — which actor the indicator tracks | `xx` is not stored; the live source is elsewhere. The setter of `player+0x5e` is not traced |
-| `wingman_delindicator` clearing every slot's pin | intentional or a bug — undetermined |
-| `timeroff` | whether hiding the stopwatch also stops the countdown; and why `timeron` calls `pedestrian_manager_end_all_taxi_waves` |
-| `frameistelephone` on an alarm frame | the helper ignores the `+0x08` type bit, so alarms should also return 1; whether registration filters them first is not located |
-| `dan_internal_1` finalisation | whether the player is placed into the spawned car is not confirmed in game |
 | `pm_setprogress` fill | in game it works only once per game start, and the first-call fill does not follow the clamp (§3.2 note ⁹) |
-| `CLEARDIFFERENCES` (`0x44`) / `RECUNLOAD` (`0x2e`) | bodies read (`game_clear_differences`; a tail call to `game_clear_film_music`); no Mafia Script Data Reference match recorded, so neither is in §3 |

@@ -1,6 +1,6 @@
 # `I3D_frame` — the LS3D scene node (and `I3D_scene`, which derives from it)
 
-**Created** 2026-08-30 19:07 +0200 · **Modified** 2026-10-01 08:56 +0200
+**Created** 2026-08-30 19:07 +0200 · **Modified** 2026-10-11 19:32 +0200
 
 `I3D_frame` is the LS3D engine's **scene-graph node**: a transform, a visual, a name, a sector
 membership and a four-character type tag. Every `C_actor` owns one at `actor+0x68`
@@ -42,13 +42,15 @@ typedef struct I3D_frame {
                                         //     (i3d_camera_get_fov_ptr); on a DUMMY frame (type 6)
                                         //     it is the 0x18-byte bounding box, min then max
                                         //     corner, read out of the scene .bin
-                                        //     (i3d_frame_set_field_0x140_block) - see §4
-    /* +0x154*/ char    *model_name;    // [M] null -> g_empty_string (i3d_frame_get_model_name)
+                                        //     (i3d_dummy_set_bound_box) - see §4
+    /* +0x154*/ char    *model_name;    // [H] the model file name; null -> g_empty_string
+                                        //     (i3d_frame_get_model_name, §4)
     /* +0x18c*/ int      sound_volume;  // [H] reached only when visual_type == 4
                                         //     (i3d_sound_get_volume_ptr)
     /* +0x1d4*/ uint     fourcc;        // [H] class tag, see §3
     /* +0x1e0*/ I3D_mesh_object *mesh;  // [H] the MESH OBJECT, valid when type 1 / 'OBJ_'; see §9
-    /* +0x220*/ /* 0x38-byte records */ // [M] reached only under the 'LMAP' tag
+    /* +0x21c*/ int      active_lmap_level; // [H] the active lightmap level of an 'LMAP' frame (§3c)
+    /* +0x220*/ /* lmap_levels[] */    // [H] one 0x38-byte record per lightmap level (§3c)
 } I3D_frame;
 ```
 
@@ -73,7 +75,7 @@ whose receiver is that pointer. Its vtable slot `+0xbc` is
 
 | bit | meaning | evidence |
 |---|---|---|
-| `0x1` | **[M]** "on" / enabled | `i3d_frame_is_on` returns it (§5, §10) |
+| `0x1` | **[H]** on (the frame is shown) | `i3d_frame_is_on` returns it; the script command `frm_ison` (case `0xf`) reports exactly this bit, and the sound-fade case calls frame slot `+0x24` (the slot `frm_seton` uses) with 1 when it is clear |
 | `0x4` | local matrix valid | `i3d_frame_get_scaled_rot_matrix_ptr` returns early when set |
 | `0x8` | rotation quaternion valid | set by `i3d_frame_get_rotation_ptr` and `i3d_frame_set_orientation` |
 | `0x10` | rotation source is the matrix, not the quaternion | selects which branch rebuilds the 3x3 |
@@ -96,7 +98,7 @@ The frame's class tag, read directly at many sites as `param_1[0x75]` and throug
 | tag | dword | what |
 |---|---|---|
 | `'OBJ_'` | `0x5f4a424f` | a model / object frame — the tag the I3D driver is asked for at `(*g_i3d_driver + 0x48)(g_i3d_driver, 0x5f4a424f)` |
-| `'LMAP'` | `0x50414d4c` | a lightmap frame; carries the `0x38`-stride table at `+0x220` |
+| `'LMAP'` | `0x50414d4c` | a lightmapped frame; carries the per-level lightmap table at `+0x220` (§3c) |
 | `'SNGM'` | `0x4d474e53` | - |
 | `'BBRD'` | `0x44524242` | - |
 | `'MRPH'` | `0x4850524d` | - |
@@ -126,7 +128,7 @@ guard the engine itself enforces; the scene-file arms of `mission_open_bin` (`st
 | `2` | **LIGHT** | scene chunk `0x4040` (the light block) is applied only to a type-2 frame |
 | `4` | **SOUND** | `sound_getvolume` (dispatcher case `0x13f`) bails unless the type is 4, then reads through `i3d_sound_get_volume_ptr` |
 | `5` | **SECTOR** | `ispointinsector` (case `0x13c`) bails unless the type is 5, then calls the frame's own containment vtable slot `+0x68`. `frm_setpos` (case `0xf6`) tests the same value on the PARENT when deciding whether to re-home a frame |
-| `6` | **DUMMY** — carries its bounding box at `+0x140` | `i3d_frame_set_field_0x140_block` (§4) stores it from scene chunk `0x4050`; its readers use it as a min / max corner pair — the car's `"TANK"` frame radius (`structs/car.md` §1a) and the `~DCC` boxes, which are built only on type-6 frames (`structs/car_extended.md` §2d) |
+| `6` | **DUMMY** — carries its bounding box at `+0x140` | `i3d_dummy_set_bound_box` (§4) stores it from scene chunk `0x4050`; its readers use it as a min / max corner pair — the car's `"TANK"` frame radius (`structs/car.md` §1a) and the `~DCC` boxes, which are built only on type-6 frames (`structs/car_extended.md` §2d) |
 | `9` | **MODEL** — a model / driver frame | `actor_duplicate` (case `0xda`) requires it before cloning; the I3D driver is asked for type 9 |
 | `0xc` | **OCCLUDER** | scene chunk `0x4083` (a vertex and triangle list) is applied only to a type-12 frame |
 | `0xe` | **AREA** — a scripted trigger volume | `ispointinarea` (case `0x13d`) bails unless the type is `0xe`, then calls containment vtable slot `+0x5c` |
@@ -151,6 +153,22 @@ Four readers agree, and no other reading survives all four:
    parent"; read as anything else it is unexplainable.
 4. **`actor_duplicate`, case `0xda`** — passes `*(+0x120)` of the source frame as the *parent*
    argument to the new driver object's vtable slot `+0x2c`.
+
+### 3c. The lightmap levels of an `'LMAP'` frame
+
+A type-1 frame tagged `'LMAP'` carries one `0x38`-byte record per lightmap level at `+0x220`, and
+the index of the active level at `+0x21c`:
+
+| record offset | content | evidence |
+|---|---|---|
+| `+0x00` | level present (byte) | `program_switch_light_map` and the `setlmlevel` arm test it before switching |
+| `+0x10` .. `+0x37` | ten per-LOD lightmap pointers | `ls3df.dll` walks them ten at a time from record `+0x10` when it clears or queries a level |
+
+The level is switched through frame slot `+0xa0`: the script command `setlmlevel` (case `0x1e`)
+calls it for one frame and `program_switch_light_map` for a whole subtree. `ls3df.dll` indexes the
+table as `[frame+0x21c] * 0x38 + 0x220`. Every shipped `setlmlevel` call passes layer 0 or 1 (for
+example mission `MISE11-VILA`, script `9lustr`, a chandelier), so the game uses two levels; the
+table's capacity is set inside `ls3df.dll` and `Game.exe` never reads it.
 
 ## 4. The accessors that live in `Game.exe`
 
@@ -178,19 +196,19 @@ reference. The rows in bold sit in the `C_program` translation unit's out-of-lin
 | **`0x005c8370`** | **`i3d_frame_get_rotation_ptr`** | `+0x9c` | lazily `S_quat::Make(rot, local_rot3)` |
 | **`0x005c83a0`** | `i3d_frame_get_world_rotation_quat` | `+0x40` | copies out a quaternion |
 | **`0x005c83f0`** | **`i3d_frame_get_scaled_rot_matrix_ptr`** | `+0x50` | the `_ptr` sibling of `0x00453900` |
-| **`0x005c8510`** | **`i3d_frame_is_on`** | `+0xac & 1` | the noun is [M] |
+| **`0x005c8510`** | **`i3d_frame_is_on`** | `+0xac & 1` | the frame's on state (§2) |
 | **`0x005c8520`** | **`i3d_frame_get_name`** | `+0x100` | the name is an `I3D_frame` field, not a `C_actor` one: every disassembled callsite is `call folded_get_dword_0x68; mov ecx,eax; call <it>` |
 | **`0x005c8530`** | **`i3d_frame_get_child_count_ptr`** | `+0x11c` | - |
 | **`0x005c8580`** | **`i3d_frame_get_tag_ptr`** | `+0x1d4` | - |
 | **`0x005c8590`** | **`i3d_frame_get_mesh_object_ptr`** | `+0x1e0` | - |
 | **`0x005c85a0`** | **`i3d_camera_get_fov_ptr`** | `+0x140` | the receiver is an `I3D_camera`, so the field is a CAMERA field reached through the frame base |
-| **`0x005c85b0`** | **`i3d_frame_get_lmap_entry_ptr`** | `+0x220 + i*0x38` | noun from the caller's `'LMAP'` gate |
-| **`0x005c85d0`** | **`i3d_frame_get_model_name`** | `+0x154` | [M] — see §5 |
+| **`0x005c85b0`** | **`i3d_frame_get_lmap_entry_ptr`** | `+0x220 + i*0x38` | one lightmap level record (§3c) |
+| **`0x005c85d0`** | **`i3d_frame_get_model_name`** | `+0x154` | the model file name: its one consumer, `actor_duplicate` (case `0xda`), strips the directory and opens the model under that name through `i3d_cache_model_open` |
 | **`0x005c85e0`** | **`i3d_scene_get_active_camera_ptr`** | `+0x17c` | - |
 | **`0x005c85f0`** | **`i3d_scene_get_root_frame_ptr`** | `+0x210` | - |
 | **`0x005c8600`** | **`i3d_scene_set_frame_sector_pos`** | scene vtable `+0xbc` | - |
 | **`0x005c8630`** | **`i3d_sound_get_volume_ptr`** | `+0x18c` | under the frame-type-4 gate |
-| `0x00606370` | `i3d_frame_set_field_0x140_block` | `+0x140` | stores the `0x18`-byte bounding box, minimum then maximum corner, that scene chunk `0x4050` carries for a DUMMY frame (`structs/mission.md` §4a). Its one callsite, in `mission_open_bin`, is guarded on `i3d_frame_get_type_ptr` returning type **6** |
+| `0x00606370` | `i3d_dummy_set_bound_box` | `+0x140` | stores the `0x18`-byte bounding box, minimum then maximum corner, that scene chunk `0x4050` carries for a DUMMY frame (`structs/mission.md` §4a). Its one callsite, in `mission_open_bin`, is guarded on `i3d_frame_get_type_ptr` returning type **6** |
 
 ## 5. PC vs PS2
 
@@ -204,9 +222,9 @@ reference. The rows in bold sit in the `C_program` translation unit's out-of-lin
 - **The FourCC and the visual type are VIRTUALS on the PS2 and plain FIELDS on the PC.** PS2 reads
   them as `(**(code **)(*frame + 0xc))(frame) == 0x5f4a424f`; the PC reads `*(frame + 0x1d4)`. A
   cross-build match in this area must not expect a call on both sides.
-- The `model_name` reading of `+0x154` rests on the PS2 pair `SetModelName__9I3D_frame` (384 B) and
-  `ResetModelName__9I3D_frame` (188 B): the frame carries exactly two name strings and the PS2
-  class has exactly two name setters. It is **[M]**, not byte-proven.
+- The PS2 pair `SetModelName__9I3D_frame` (384 B) and `ResetModelName__9I3D_frame` (188 B) agrees
+  with the `model_name` reading of `+0x154` (§4): the frame carries exactly two name strings and
+  the PS2 class has exactly two name setters.
 - `I3D_frame::GetDir` (380 B), `GetWorldPos` (56 B), `GetWorldDir` (348 B), `UpdateMatrix` (404 B)
   and `UpdateWMatrix` (44 B) are the PS2's own out-of-lined copies of the same header inlines this
   file lists — the same construct, a different host translation unit.
@@ -223,7 +241,13 @@ reference. The rows in bold sit in the `C_program` translation unit's out-of-lin
   overrides** of exactly the `I3D_frame` virtuals a scene root has no use for — `LinkTo`, `SetDir`,
   `SetName`, `SetOn`, `Update`, `SetCallback`, `Duplicate` — which is what a derived class that
   suppresses its base's API looks like.
-- **Flag bit `0x1` (§2):** the [M] noun "on / enabled" rests on the PS2 class's `SetOn__9I3D_frame`.
+- **Flag bit `0x1` (§2):** the PS2 class's `SetOn__9I3D_frameFb` sets and clears exactly this bit of
+  its flag word (PS2 `+0xe0`, the word both builds test for bit `0x20` before `UpdateWMatrixProc`).
+- **The lightmap table (§3c)** is PS2 `I3D_lit_object`'s: one `0x1c`-byte record per level at `+0x214`
+  (the present byte, then three per-LOD lightmap pointers at record `+0x10`), the active level at
+  `+0x210`, selected by `SetActiveLevel__14I3D_lit_objectFi` (PS2 vtable slot 58, reached on the PC
+  at `+0xa0`). `SwitchLightMap__Q29C_program24S_help_4741C_program_cppFP9I3D_framei` tests the same
+  present byte. The PC keeps ten LOD pointers per level where the PS2 keeps three.
 - **Three accessors of §4:** the PS2 reaches `i3d_frame_get_child_count_ptr`'s quantity through the
   `GetNumChilds` virtual; `i3d_camera_get_fov_ptr`'s 180/pi conversion is the same on both builds;
   the pointer `i3d_scene_get_root_frame_ptr` returns is passed to the same link virtual as the PS2's
@@ -269,9 +293,3 @@ I3D_frame (type 1, tag 'OBJ_')
 CONFIRMED twin names every hop (§5). The two counts then fall out of `0x004fc8fd`, where each is
 the loop bound of the indexed getter it guards.
 
-## 10. Open items
-
-| item | state |
-|---|---|
-| the `0x38`-stride table at `+0x220` | [U]; reached only under the `'LMAP'` tag |
-| `i3d_frame_is_on`'s noun | the bit is measured, the name "on / enabled" is [M] |

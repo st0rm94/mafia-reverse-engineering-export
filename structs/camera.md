@@ -1,6 +1,6 @@
 # `G_Camera` — the camera manager
 
-**Created** 2026-09-01 22:14 +0200 · **Modified** 2026-09-30 11:44 +0200
+**Created** 2026-09-01 22:14 +0200 · **Modified** 2026-10-12 15:07 +0200
 
 The range `[0x005d4800, 0x005dc180]`. PC prefix **`camera_`**. PS2 class **`G_Camera`**, source
 file `g_camera.cpp`.
@@ -278,8 +278,8 @@ Every one is pinned by a statement that matches on both builds.
 | `0x006f9134` | `g_camera_eye_blend` | weights behind-pose against eye-pose |
 | `0x006f9138` / `0x006f913c` | `g_camera_dialog_look_from` / `_to` | the two speakers |
 | `0x006f9140` / `0x006f9144` | `g_camera_free_look_yaw` / `_pitch` | free-look accumulators |
-| `0x006f8f10` | `g_camera_car_sway_filtered` | `camera_tick` static `S_vector`, modes 0xc/0xd/0xe |
-| `0x006f8f1c` | `g_camera_car_prev_velocity` | `camera_tick` static `S_vector`, a copy of `C_car+0x1f7c` |
+| `0x006f8f10` | `g_camera_car_sway_filtered` | `camera_tick` static `S_vector`, modes 0xc/0xd/0xe: the car's summed wheel vectors in car space, low-passed 0.9 old / 0.1 new; `y` is forced to 1.0 before `SetDir3` |
+| `0x006f8f1c` | `g_camera_car_prev_velocity` | `camera_tick` static `S_vector`, a copy of `C_car+0x1f7c` written at the end of the same block every frame; no instruction reads it |
 | `0x006f8f28` | `g_camera_tick_static_dtor_guard` | bit 0 / bit 1 guard registering the atexit destructors of the two vectors above |
 | `0x006f8f34` | `g_camera_car_old_dir_y_mode_7_9` | modes 7/8/9: look-direction Y, smoothed through `g_camera_stability_factor` |
 | `0x006f8f30` | `g_camera_car_old_dir_y_mode_0xa` | mode 0xa: the same Y, copied unsmoothed; the arm never runs (§3a) |
@@ -376,6 +376,8 @@ statics are PS2 function-local statics of `Tick`, each matched by case label and
 | `g_camera_sniper_sway_phase_yaw` | `kl2$2567` | mode 5, `+= dt·3.0` |
 | `g_camera_dir_yaw` | `cameraDirRot$2605` | 2π wrap |
 | `g_camera_dir_pitch` | `cameraDirUpDown$2608` | the same 0.01..0.99 clamp |
+| `g_camera_car_sway_filtered` | `oldS$2498` | case `0xd`: the old value × 0.9 plus the scaled new one, `y` forced to 1.0 |
+| `g_camera_car_prev_velocity` | `oldSpeed$2495` | case `0xd`: the car's velocity copied at the end of the block; no reader on either build |
 
 ### 6d. `ParheliaSetFov` and `S_auto_hide_machine`
 

@@ -1,6 +1,6 @@
 # `C_railway` — the ambient rail-traffic system (entity kind 8)
 
-**Created** 2026-08-16 22:24 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-16 22:24 +0200 · **Modified** 2026-10-07 21:57 +0200
 
 | | |
 |---|---|
@@ -16,8 +16,10 @@ documented in `entity.md` §3 and is not repeated here.
 **The track switches are a separate class.** `C_turnout` (entity kind `0x18`, PC prefix
 `railway_switch_`, `structs/railway_switch.md`) is the turnout: it swings a blade, shows one of
 two rail-piece frames, and at each end-stop disconnects both `C_web_path` edges from a common node
-and reconnects one — which is what makes a tram take the other branch. Its AI tail-calls
-`C_wagon::RecompileNewPath` immediately afterwards. `railway_switch_` extends this class's
+and reconnects one, and its AI then calls `wagon_rebuild_all_forward_paths`, which rebuilds the
+path of every `C_wagon` (kind `0x1e`). The two shipped turnouts are in `MISE15-PRISTAV`, a scene
+with no `C_railway`, so they route the mission wagons, not the trams. `railway_switch_` extends
+this class's
 `railway_` prefix, so a prefix match on `railway_` also catches the 16 turnout functions.
 
 ---
@@ -36,7 +38,7 @@ carrying passengers who walk to seats, with doors that open at stops.
 | the doors | `rail_doors`, two leaf banks |
 | the windows | `rail_glass` / `rail_window`, `0x14` bytes per window |
 | the boarding points | `rail_entries`, two banks: inner `+0x270`, outer `+0x274` |
-| sound | three slots at `+0x28c`, `+0x290`, `+0x294` |
+| sound | three slots at `+0x28c`, `+0x290`, `+0x294`: running loop, bell or door, curve squeal (§3b) |
 | run state | `+0xdc`, written only by `railway_set_state` |
 | speed | `+0xd4` |
 | boarding lock | `+0x288`, held/released by `railway_lock` / `railway_unlock` |
@@ -58,12 +60,13 @@ carrying passengers who walk to seats, with doors that open at stops.
 | `+0x160` | the rail vehicle ahead on the track | `railway_find_vehicle_ahead` |
 | `+0x1a8` | vagon count | `railway_duplicate_from`, `railway_save_data` |
 | `+0x1b4` | speed scale (designer) | `railway_duplicate_from` |
-| `+0x1d8` | flag cleared for the stop test | `railway_is_in_stop` |
+| `+0x1d8` | the elevated-train flag: 1 when the model file is `metro.i3d`, 0 for a tram; it selects the sound ids (§3b) and is tested by `railway_is_in_stop`, `railway_ai` and `railway_update` | `railway_game_init` |
 | `+0x1e0` / `+0x1e4` | boarding-entry count / array (stride `0x18`) | `railway_get_outer_entry_at` |
 | `+0x254` / `+0x258` | passenger list, begin / end | `railway_do_panic`, `railway_remove_person` |
 | `+0x270` / `+0x274` | inner / outer published entry banks (stride `0x38`) | `railway_gen_entries` |
 | `+0x288` | boarding-lock counter | `railway_lock` / `railway_unlock` |
 | `+0x28c`..`+0x294` | the three sound objects | `railway_game_init`, `railway_on_act_state_changed` |
+| `+0x29c`..`+0x2a4` | the three `sounds.dat` ids, one per sound object (§3b) | `railway_game_init` |
 | `+0x2a8` | in-range state (0 or 2 = eligible) | `railway_any_passenger_wants_off` |
 | `+0x2ac` | collision material id | `railway_get_material_id` |
 | `+0x2b0` | the DRIVER, an embedded `S_rail_human` | `railway_ctor`, `railway_do_panic` |
@@ -78,7 +81,7 @@ A bank is an array of **rows**, stride `0x38`. A row is a *bench*: it stores a s
 at `+0x00` and an end point at `+0x0c`, and seat positions are **linearly interpolated
 between them** by the seat's offset within the row (`rail_seats_get_seat_pos`). The row
 also carries a facing vector at `+0x18`, its base seat index at `+0x24`, its seat count at
-`+0x28`, a category at `+0x2c`, and two parallel arrays: occupancy at `+0x30` and owner at
+`+0x28`, its carriage index at `+0x2c`, and two parallel arrays: occupancy at `+0x30` and owner at
 `+0x34`.
 
 Occupancy is a three-state value, which is what the three mutators are for:
@@ -94,8 +97,11 @@ Occupancy is a three-state value, which is what the three mutators are for:
 passengers spread through a carriage instead of all choosing the same bench. It returns
 `0xffff` when nothing is free.
 
-`rail_seats_duplicate_rows` replicates the row block once per vagon, so every carriage
-shares one layout.
+`rail_seats_duplicate_rows` replicates the row block once per carriage (the engine plus each
+vagon), so every carriage shares one layout, and `rail_seats_init` then stamps each copy's `+0x2c`
+with its carriage index: the row index divided by the rows per carriage, 0 being the engine.
+`rail_seats_find_free_seat` matches the index exactly; `rail_seats_count_free` takes `-1` for any
+carriage.
 
 ### 2b. `S_rail_human` — a passenger (`rail_passenger_`)
 
@@ -105,6 +111,7 @@ shares one layout.
 | `+0x08` | `C_animations_machine_de_luxe*` — a heap machine; `S_rail_human` is one of that class's six owners (`structs/anim_machine.md` §1) |
 | `+0x10` | last applied animation state |
 | `+0x14` | current state |
+| `+0x18` | the carriage index: `railway_game_init` draws it with `rand_range(vagon count + 1)` and the seat search matches it; `railway_do_panic` panics the passengers whose index equals the carriage `railway_hit` was hit in |
 | `+0x20` | animation-finished flag |
 | `+0x3c` / `+0x40` | timers |
 | `+0x44` | saved state while panicking |
@@ -178,10 +185,21 @@ All four file-scope vectors have an MSVC static-init/atexit group in
 | `g_railway_list_*` | every live rail vehicle |
 | `g_rail_semaphore_list_*` | the rail signals |
 | `g_rail_schedule_log_*` | `{node, last-departure-ms}` pairs |
-| `g_rail_clamp_candidates_*` | read, no writer found (§5) |
+| `g_rail_clamp_candidates_*` | never filled: the file holds 11 references to its four addresses — the zero-init, the atexit free and the one reader, `railway_clamp_movement_against_traffic` — so as shipped that loop never runs |
 | `g_rail_rain_dummy` | the shared rain-exclusion volume |
 | `g_rail_seat_search_cursor` | the rotating seat-search cursor |
 | `g_rail_passenger_anims` | the passenger animation table, 12 bytes per state |
+
+### 3b. The three sound slots
+
+`railway_game_init` builds sound object *i* at `+0x28c + 4i` from the `sounds.dat` id at
+`+0x29c + 4i`; the ids depend on the elevated-train flag `+0x1d8`:
+
+| slot | object | tram | elevated train | played by |
+|---|---|---|---|---|
+| 1 | `+0x28c` | 158 `salina_jizda` (`tram1.wav`) | 157 `nadzemka_jizda` (`railway.wav`) | the running loop: `railway_ai`, `railway_update`, `railway_set_state` |
+| 2 | `+0x290` | 160 `salina_cink` (`tram2.1.wav`, `tram2.2.wav`) | 291 `nadzemka_dvere (open)` (`t-door.wav`) | `railway_ai` rebuilds and starts it in its door and departure states |
+| 3 | `+0x294` | 161 `salina_zatacka` (`tram3.1.wav` .. `tram3.3.wav`) | 161, the same | `railway_update_curve_squeal_sound` |
 
 ---
 
@@ -207,12 +225,7 @@ inlined `vector::insert(end(), 1, x)` never runs.
 
 | item | state |
 |---|---|
-| 🥇 **`g_rail_clamp_candidates_*` has no writer** | Read back-to-front by `railway_clamp_movement_against_traffic`, its only consumer, and **no inserting writer is found** — so as read, that loop never runs. Its atexit group is also the only one of the four without a teardown guard bit. Not yet classed as dead code; a `.text` byte scan for the displacement is the next lever |
-| the rider-generation band | four PS2 methods (§6) absent as a unit; a second PC cluster may hold them |
 | `RestoreWindows` | no distinct PC function. Its restore-all loop exists once on the PC, inside `rail_glass_game_done`, so a fold there is the likely explanation; not proven |
-| what the `S_RailSeats` row *category* means | `+0x2c` is matched against the caller's request and `-1` is the wildcard, but nothing traced says what the categories ARE |
-| the three sound slots | only slot 3 (the curve squeal) is pinned. Slots 1 and 2 are built by `railway_game_init` and released by `railway_on_act_state_changed`; no player is located for either |
-| `S_rail_human +0x18` | the panic-cause key `railway_do_panic` matches against; its value domain is untraced |
 | in game | does a tram actually wait 60 s at a stop, and does the squeal fire on the sharp turns? Both are one observation each |
 | in game | shoot a tram window — two hits should break it, and a third shot should kill a passenger |
 
@@ -240,11 +253,13 @@ What is *not* a simple 1:1 is listed here:
 | `CheckDistance`, `GetCheckpoints`, `IsStopPoint`, `InRangeActivate`, `OutOfRangeDeactivate` | **inlined on PC** — proven positively, each is the only call missing at its mirrored position. Marked with `// ===== INLINED ON PC:` comments at those sites in the decomp |
 | `PreduceMovementCar` | **partly inlined**: only its swept-sphere kernel stayed out of line, as `railway_sweep_sphere_along_curve`. One source function, two PC symbols ⇒ STRUCTURAL |
 | `RestoreWindows` | **not located** (§5) |
-| `Place(int, C_web_node*)`, `GeneratePersonTrafic`, `FreePersonTrafic`, `ReGenerate` | **not located as a group** ¹ |
+| `Place(int, C_web_node*)`, `GeneratePersonTrafic`, `FreePersonTrafic`, `ReGenerate` | **no PC counterpart**: on the PS2 they are reached only from `C_rail_generator` ¹ |
 | `MemWrite`, `MemRead` | **present on PC** as the shared `entity_mem_write` / `entity_mem_read`, called ×14 each from the SaveGame pair on both builds |
 
-¹ `Place(node)`'s only PS2 caller is `GeneratePersonTrafic`, so the whole rider-generation band is
-absent from this cluster together (§5).
+¹ `C_rail_generator::AI` calls `ReGenerate`, which calls `Place(node)` and `GeneratePersonTrafic`;
+`C_rail_generator::GetFreeRailHuman` calls `FreePersonTrafic`. None of the four is virtual, and
+`C_rail_generator` (entity kind `0x26`) exists only on the PS2 (`structs/entity.md` §7), so the
+band has no caller a PC function could mirror.
 
 **Field deltas measured** (do NOT extrapolate — this class is not a uniform shift):
 

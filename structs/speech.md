@@ -1,6 +1,6 @@
 # The speech / lip-sync subsystem (`speech_`)
 
-**Created** 2026-08-19 18:06 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-19 18:06 +0200 · **Modified** 2026-10-11 10:48 +0200
 
 | | |
 |---|---|
@@ -48,28 +48,38 @@ visible.
 |---|---|---|
 | `+0x00` | `g_speech_channels` | the viseme table loaded from `tables\dat\%08d.dat` |
 | `+0x04` | `g_speech_channel_time_ms` | ms accumulated into the current line; one viseme per **40 ms**; zeroed by `speech_channel_speak_line` |
-| `+0x08` | `g_speech_channel_stop_flag` | set to 1 by `speech_channel_stop`; `speech_channel_speak_line` writes `200`, or `strlen(text) × 30 + 1000` for a state-4 line ¹ |
+| `+0x08` | `g_speech_channel_countdown_ms` | the channel's countdown in ms: `200` from `speech_channel_speak_line`, or `strlen(text) × 30 + 1000` for a state-4 line; `1` from `speech_channel_stop` ¹ |
 | `+0x0c` | `g_speech_channel_state` | the channel state — see §2a |
 | `+0x14` | `g_speech_channel_sound` | the voice clip loaded from `sounds\%08d.wav` |
 | `+0x18` | `g_speech_channel_owner_frame` | the speaking actor's frame (`C_human+0x68`) |
 | `+0x1c` | `g_speech_channel_morph_frame` | the head morph frame — `+0x110 == 1`, `+0x1d4 == 'SMMR'` |
-| `+0x20` | `g_speech_channel_extra_frame_b` | from `C_human+0x58c`; mask bit 1 (§7) |
-| `+0x24` | `g_speech_channel_extra_frame_a` | from `C_human+0x588`; mask bit 0 (§7) |
-| `+0x28` | `g_speech_channel_field_0x28` | morph parameter, seeded `0.46` ² |
-| `+0x2c` | `g_speech_channel_field_0x2c` | morph parameter, seeded `0` ² |
-| `+0x30` | `g_speech_channel_field_0x30` | morph parameter, seeded `0.53` ² |
-| `+0x34` | `g_speech_channel_field_0x34` | morph parameter, seeded `1.0` ² |
-| `+0x38` | `g_speech_channel_field_0x38` | morph parameter, seeded `0.11` ² |
-| `+0x3c` | `g_speech_channel_field_0x3c` | morph parameter, seeded `0.6` ² |
+| `+0x20` | `g_speech_channel_neck_target_frame` | the speaker's neck aim target, the model frame `targetN` (`C_human+0x58c`); mask bit 1 |
+| `+0x24` | `g_speech_channel_eye_target_frame` | the speaker's eye aim target, the model frame `targetE` (`C_human+0x588`); mask bit 0 |
+| `+0x28` | `g_speech_channel_viseme_param_0x28` | viseme parameter, seeded `0.46` ² |
+| `+0x2c` | `g_speech_channel_viseme_param_0x2c` | viseme parameter, seeded `0` ² |
+| `+0x30` | `g_speech_channel_viseme_param_0x30` | viseme parameter, seeded `0.53` ² |
+| `+0x34` | `g_speech_channel_viseme_param_0x34` | viseme parameter, seeded `1.0` ² |
+| `+0x38` | `g_speech_channel_viseme_param_0x38` | viseme parameter, seeded `0.11` ² |
+| `+0x3c` | `g_speech_channel_viseme_param_0x3c` | viseme parameter, seeded `0.6` ² |
 | `+0x40` | `g_speech_channel_field_0x40` | zeroed by `speech_channel_speak_line` |
 
-¹ So `+0x08` also carries a duration, not only a stop flag; its symbol name is narrower than its
-use (§7).
-² Written by `speech_channel_set_human`, which then reads them straight back to rebuild the
-three morph rows as products of these values (e.g. row 0 = `(0, a·b, (1−a)·b, (1−b)(1−c),
-(1−b)·c)` with `a,b,c` = `+0x28/+0x2c/+0x30`). No other function reads them through these
-symbols. The six fields are named by offset because no reader outside the binder reveals a
-meaning.
+¹ `+0x08` counts down in states 3 and 4: `speech_tick_channels` subtracts the frame delta and frees
+the channel at 0. A clip that ends, or a `speech_channel_speak_line` restart, leaves 200; a stop
+leaves 1, so the fade ends on the next frame; a text-only line counts down its whole duration. In
+state 3 the tick also scales the mouth weights by `countdown × 0.005`, a 200 ms fade.
+² The six parameters of the current viseme (§2b). `speech_channel_set_human` seeds a neutral
+set and reads it straight back to rebuild the three morph rows as products of these values
+(e.g. row 0 = `(0, a·b, (1−a)·b, (1−b)(1−c), (1−b)·c)` with `a,b,c` = `+0x28/+0x2c/+0x30`);
+`speech_tick_channels` writes each frame's values and rebuilds the rows the same way. The
+names keep the offsets because nothing in the game files names what each parameter moves.
+
+### 2b. The viseme table, `tables\dat\%08d.dat`
+
+One file per textdb line: a `u32` entry count, a `u32` that is 1 in every file, then one 8-byte
+entry per **40 ms** of speech. All 3403 non-empty shipped files (4 more are empty) are exactly
+`8 + 8 × count` bytes. Bytes 0..5 of an entry are the six viseme parameters, each byte / 255, and
+every value 0..255 occurs in them; byte 6 is 1 in 98 % of the 195 498 entries and byte 7 is a
+0/1 flag.
 
 ### 2a. The state enum
 
@@ -93,7 +103,8 @@ mission's sound list (`g_act_mission+0x10`), not to the channel.
 2. `speech_get_free_channel` scans **downward** from channel 15 for a free slot; when all
    16 are busy it reuses channel 15 rather than failing.
 3. `speech_channel_set_human` binds the actor: the frame at `C_human+0x68` becomes the
-   owner, `+0x588`/`+0x58c` become the two accessory frames, and `+0x57c` is validated as
+   owner, `+0x588`/`+0x58c` become the eye and neck aim targets (the model frames `targetE`
+   and `targetN`; the model's `Reye` / `Leye` joints aim at `targetE`), and `+0x57c` is validated as
    a morph frame (`frame+0x110 == 1`, `frame+0x1d4 == 'SMMR'`). All **3 × 5 morph channel
    weights** are first set to `(1, 0, 0, 0, 0)` through `frame+0x140` slot 8, then rebuilt from
    the six seeded parameters (§2 ²). The channel goes to state 1.
@@ -111,6 +122,12 @@ mission's sound list (`g_act_mission+0x10`), not to the channel.
 The gas-station attendant is the clearest live example: `pumper_choose_next_action` takes a
 free channel and speaks a line three times over, and `pumper_ai` polls the predicate
 (`structs/pumper.md` §2).
+
+**In a recorded cutscene** the speech keys come from the track: `speech_apply_recorder_key`
+binds the speaker, speaks the line, or points the speaker's eye and neck targets at a named scene
+frame through `speech_channel_set_look_at_frame` (an empty name hides them), and
+`speech_update_look_at_targets` refreshes the targets every frame. Nothing outside a recorded
+sequence moves them.
 
 ---
 
@@ -130,13 +147,13 @@ free channel and speaks a line three times over, and `pumper_ai` polls the predi
 | `0x00547050` | `speech_channel_set_model` | binds by the frame literally named `"base"` |
 | `0x00547210` | `speech_invalidate_channel_for_actor` | from `game_invalidate_actor` |
 | `0x005473b0` | `speech_channel_speak_line` | **the `human_talk` implementation** |
-| `0x00547960` | `speech_channel_attach_accessory_frame` | attaches an accessory frame to a channel |
+| `0x00547960` | `speech_channel_set_look_at_frame` | points the eye and / or neck target at a frame, or hides them |
 | `0x00547a80` | `speech_channel_is_speaking` | the predicate the script waits on |
 | `0x00547b00` | `speech_channel_stop` | **the `human_stoptalk` implementation** |
-| `0x00547b50` | `speech_update_accessory_frames` | per-frame accessory refresh |
+| `0x00547b50` | `speech_update_look_at_targets` | per-frame refresh of the eye and neck targets |
 | `0x00547c10` | `speech_tick_channels` | the per-frame lip-sync tick |
 | `0x00548420` | `speech_pause_all_channels` | pause / resume all |
-| `0x005484b0` | `speech_preload_for_record` | binds a speaker from a recorder track key |
+| `0x005484b0` | `speech_apply_recorder_key` | applies one cutscene speech key: the speaker, a line, or the look-at frame |
 | `0x005485a0` | `speech_morph_frame_list_add` | appends a `G_DabingMorphObj` record |
 
 ---
@@ -159,16 +176,17 @@ bank is not.
 | `speech_channel_set_model` | 448 | `DabingSetModel__FiP9I3D_model` | 644 | 0.70 | CONFIRMED |
 | `speech_invalidate_channel_for_actor` | 416 | `DabingInvalidate__FP7C_human` | 628 | 0.66 | CONFIRMED |
 | `speech_channel_speak_line` | 1456 | `DabingSpeak__FiUibUi` | 2148 | 0.68 | CONFIRMED |
-| `speech_channel_attach_accessory_frame` | 288 | - | - | - | - |
+| `speech_channel_set_look_at_frame` | 288 | - | - | - | - |
 | `speech_channel_is_speaking` | 128 | `DabingIsSpeaking__Fi` | 108 | 1.19 | CONFIRMED |
 | `speech_channel_stop` | 80 | `DabingStop__Fi` | 140 | 0.57 | CONFIRMED |
-| `speech_update_accessory_frames` | 192 | - | - | - | - |
+| `speech_update_look_at_targets` | 192 | - | - | - | - |
 | `speech_tick_channels` | 2064 | `DabingTick__FUi` | 3576 | 0.58 | CONFIRMED |
 | `speech_pause_all_channels` | 144 | `DabingPauseSounds__Fbb` | 284 | 0.51 | CONFIRMED |
-| `speech_preload_for_record` | 240 | `DabingPreLoad__FPCc` | 308 | 0.78 | CONFIRMED |
+| `speech_apply_recorder_key` | 240 | - | - | - | - |
+| - | - | `DabingPreLoad__FPCc` | 308 | - | - |
 | - | - | `DabingPreUnload__Fv` | 44 | - | - |
 
-The four rows graded `-` have no twin on the other build; each is open (§7).
+The rows graded `-` have no twin on the other build (§5e).
 
 ### 5b. The three byte-level confirmations
 
@@ -194,16 +212,35 @@ PS2 `C_game` carries `AddHumanTalk` / `DelHumanTalk` / `DeathHumanTalk` over a
 `std::vector<C_game::S_enemy_talk>` at `C_game+0x135c` — a **script-side registry of who
 is currently talking**, distinct from the 16-channel bank. `DeathHumanTalk` calls
 `DabingStop` on the channel it drops, which is how the two are wired together. The PC
-counterpart is §7.
+counterpart is the talk queue at `C_game+0x2f44`, whose three functions `game_human_talk_add`,
+`game_human_talk_del` and `game_human_talk_stop_for_human` are the twins of the three PS2 methods
+(`structs/game.md` §4g); its element is the 8-byte `{human, speech id}` pair.
+
+### 5e. The functions with no twin
+
+* **The four PC functions without a PS2 twin are reached only from `C_recorder`**, which does
+  not exist on the PS2 build (`structs/recorder.md` §6): `speech_apply_recorder_key` and
+  `speech_update_look_at_targets` are called only by `recorder_tick_tracks`,
+  `speech_channel_set_look_at_frame` only by `speech_apply_recorder_key`, and
+  `speech_release_channels_and_reset_morphs` only by `recorder_end_sequence_and_restore_scene`.
+  A byte scan for `E8` / `E9` callsites and data references finds no other referrer.
+* **`DabingPreLoad` and `DabingPreUnload` are a PS2-only pair.** `C_game::Init` calls
+  `DabingPreLoad` with the mission name: it frees `dabingPreData`, reads a per-mission file into
+  it and turns the file's stored offsets into pointers. `C_game::Done` calls `DabingPreUnload`,
+  which frees it, and `DabingSpeak` looks a line's viseme table up in that buffer. The PC has
+  neither the buffer nor the pair: `speech_channel_speak_line` opens the line's own
+  `tables\dat\%08d.dat` every time it speaks. `speech_apply_recorder_key` sits at
+  `DabingPreLoad`'s emission rank, but its body applies a cutscene key and loads nothing.
 
 ---
 
 ## 6. Cross-references
 
 `structs/recorder.md` (the `C_recorder` TU immediately below this one, and the caller of
-`speech_preload_for_record` / `speech_tick_channels`) · `structs/pumper.md` §2 (the
+`speech_apply_recorder_key` / `speech_tick_channels`) · `structs/pumper.md` §2 (the
 attendant, the clearest live consumer) · `structs/human.md` (`+0x57c` morph frame,
-`+0x588`/`+0x58c` accessory frames) · `script-mapping/artifacts/opcodes-verified.md`.
+`+0x588`/`+0x58c` eye and neck targets) · `structs/game.md` §4g (the talk queue) ·
+`script-mapping/artifacts/opcodes-verified.md`.
 
 ---
 
@@ -211,10 +248,4 @@ attendant, the clearest live consumer) · `structs/human.md` (`+0x57c` morph fra
 
 | Item | State |
 |---|---|
-| The two accessory frames | `C_human+0x588` / `+0x58c` are bound to every channel and refreshed every frame; what they are is unknown. A frame-name dump on a live model would answer it |
-| `+0x08` | written as `1` (stop), `200`, and a text-length duration; one name does not cover all three uses |
-| `+0x28` … `+0x3c` | the morph-weight meaning of each seeded parameter |
-| The three rank-less PC functions | `speech_release_channels_and_reset_morphs`, `speech_channel_attach_accessory_frame`, `speech_update_accessory_frames`. `DabingSetHuman` is 292 B larger than its PC twin, which suggests a fold and proves nothing |
-| `DabingPreUnload` | 44 B on PS2, no PC start; read as folded (inlined) on PC rather than absent, but where the PC frees `dabingPreData` is unlocated |
-| `C_game::S_enemy_talk` | the PC counterpart of the PS2 talk registry (§5d) is unsearched |
 | In game | watch a character's mouth during `human_talk` and confirm the 40 ms viseme rate; check what happens when a 17th line is requested (the code reuses channel 15) |

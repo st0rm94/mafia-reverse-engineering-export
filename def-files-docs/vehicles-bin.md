@@ -1,6 +1,6 @@
 # `tables\vehicles.bin` — per-car physics / CARINIT data (exhaustive field map)
 
-**Created** 2026-07-09 21:46 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-09 21:46 +0200 · **Modified** 2026-10-12 20:59 +0200
 
 The master **car parameter file**: one record per car model, each holding one or more **CARINIT
 levels** (tuning stat blocks). A car with **two** levels is *boostable* — level 0 is the normal
@@ -34,24 +34,29 @@ level_block levels[level_count];
 u32 block_size = 0x1121 (4385)
 u8  carinit[0x1121]
 ```
-Region map of one block (offsets relative to the block's first byte):
+The block is the car's packed save record (`STCars`, `0x111d` bytes, packed without alignment)
+followed by 4 bytes no reader touches. `car_load_model_level_tables` reads it and
+`car_unpack_save_record` expands it into an `S_CARINIT` (`0x1124` bytes, aligned, some arrays
+transposed); `car_pack_save_record` is the inverse, and the mission save stream stores the same
+record. Every offset below is an offset into the packed block. The layout tiles all 103 shipped level
+blocks with no overlap, and every 16-byte name slot holds a NUL-terminated filename or nothing.
 
 | region | offsets | contents |
 |---|---|---|
-| Tuning header | 0x000-0x0E8 | RHAM rows 1-59 (4a) |
-| Internal fields | 0x0EC-0x104 | 7 fields not shown by RHAM (4a) |
-| Extended physics | 0x108-0x130 | RHAM rows 60-70 (4a) |
-| Geometry/wheel/suspension | 0x134-0x7C8 | raw float block, unlabeled (4b); RHAM rows 71-74 are not individually pinned |
-| Sound/string records | 0x7C9-0x1121 | filename slots + interleaved params (4c) |
+| Header | `0x000`-`0x11F` | RHAM rows 1-65 and seven steering angles (§4a) |
+| Axle records | `0x120`-`0x5C5` | 10 records of `0x77` bytes, one per axle (§4b) |
+| Scalar block | `0x5C6`-`0x7C7` | packed scalars (§4c) |
+| Sound records | `0x7C9`-`0x111C` | filename slots and engine-sound records (§4d) |
+| Unread | `0x7C8`, `0x111D`-`0x1120` | 0, and `00 00 00 18`, in every block |
 
 Every field of the `blackha` (Falconer) block is enumerated below. In each table **boost** =
 `**YES**` when the four bytes differ between level 0 and level 1, `-` when they are identical.
 
-## 4a. Tuning header + extended physics (0x000-0x130)
+## 4a. Header (0x000-0x11F)
 
 | off | RHAM row | field | L0 | L1 | boost |
 |---|---|---|---|---|---|
-| +0x000 | 1 | Weight [inferred] | 1520 | 1520 | - |
+| +0x000 | 1 | Weight: the body mass (`C_Vehicle+0x674`) | 1520 | 1520 | - |
 | +0x004 | 2 | Power | 58.8 | 160 | **YES** |
 | +0x008 | 3 | GearSpeedFactor | 78 | 88 | **YES** |
 | +0x00C | 4 | RedLineRPM | 3000 | 3000 | - |
@@ -110,659 +115,235 @@ Every field of the `blackha` (Falconer) block is enumerated below. In each table
 | +0x0E0 | 57 | Front down | 1.4 | 1.4 | - |
 | +0x0E4 | 58 | xRear down speed | 1.2 | 1.2 | - |
 | +0x0E8 | 59 | Rear down | 1.4 | 1.4 | - |
-| +0x0EC | - | internal (not shown in RHAM UI) | 45 | 45 | - |
-| +0x0F0 | - | internal (not shown in RHAM UI) | 25 | 25 | - |
-| +0x0F4 | - | internal (not shown in RHAM UI) | 10 | 10 | - |
-| +0x0F8 | - | internal (not shown in RHAM UI) | 50 | 50 | - |
-| +0x0FC | - | internal (not shown in RHAM UI) | 90 | 90 | - |
-| +0x100 | - | internal (not shown in RHAM UI) | 16 | 16 | - |
-| +0x104 | - | internal (not shown in RHAM UI) | 50 | 50 | - |
+| +0x0EC | - | steering lock at standstill, degrees, at most 50 (`C_Vehicle+0x684`) | 45 | 45 | - |
+| +0x0F0 | - | steering lock at top speed, degrees, at most 50 (`+0x688`) | 25 | 25 | - |
+| +0x0F4 | - | split between the two steered wheels at full lock, degrees, at most `+0x0EC` (`+0x6a8`) | 10 | 10 | - |
+| +0x0F8 | - | turn-in rate at standstill, degrees per second (`+0x690`) | 50 | 50 | - |
+| +0x0FC | - | return rate at standstill, degrees per second (`+0x694`) | 90 | 90 | - |
+| +0x100 | - | turn-in rate at top speed, degrees per second (`+0x698`) | 16 | 16 | - |
+| +0x104 | - | return rate at top speed, degrees per second (`+0x69c`) | 50 | 50 | - |
 | +0x108 | 60 | Axis Z rotate | 0.5 | 0.5 | - |
 | +0x10C | 61 | Center mass | 0.16 | 0.05 | **YES** |
 | +0x110 | 62 | Axis X rotate | 0.6 | 0.52 | **YES** |
 | +0x114 | 63 | Cohesion with road | 10 | 10 | - |
 | +0x118 | 64 | Petrol tank | 60 | 60 | - |
 | +0x11C | 65 | Fuel consumption | 20 | 20 | - |
-| +0x120 | 66 | Front weigh | 68 | 52 | **YES** |
-| +0x124 | 67 | Suspension forward (height) | 0.2 | 0.24 | **YES** |
-| +0x128 | 68 | Shock-absorber forward | 1400 | 1400 | - |
-| +0x12C | 69 | Shock-absorber rear | 2600 | 2600 | - |
-| +0x130 | 70 | Forward control y/n [approx] | 2.588e-41 | 3.714e-41 | **YES** |
 
-## 4b. Geometry / wheel / suspension / collision (0x134-0x7C8)
+The seven steering angles feed `vehicle_update_steering_wheels`. It interpolates the lock and both
+rates between their standstill and top-speed values by `1 − speed / top speed`, where the top speed
+`C_Vehicle+0x404` is the top-gear speed at maximum rpm. The return rate applies while the wheel moves
+back toward the centre; the split is added to one steered wheel and subtracted from the other, scaled
+by the current steering angle over the lock.
 
-Raw per-field dump, not exposed by RHAM or MCVE; what the fields mean, and where RHAM rows 71-74
-sit, is open (§9). The `idx` column is the field's dword index from the start of the block.
+## 4b. Axle records (0x120-0x5C5)
 
-| off | idx | L0 | L1 | boost | note |
-|---|---|---|---|---|---|
-| +0x134 | 77 | 12 | 12 | - | value |
-| +0x138 | 78 | 9 | 7 | **YES** | value |
-| +0x13C | 79 | 0.9 | 0.9 | - | value |
-| +0x140 | 80 | 40 | 40 | - | value |
-| +0x144 | 81 | 1.3 | 1.4 | **YES** | value |
-| +0x148 | 82 | 1.5 | 1.7 | **YES** | value |
-| +0x14C | 83 | 1.3 | 1.4 | **YES** | value |
-| +0x150 | 84 | 1.5 | 1.7 | **YES** | value |
-| +0x154 | 85 | 0.01 | 0.01 | - | value |
-| +0x158 | 86 | 12 | 12 | - | value |
-| +0x15C | 87 | 9 | 9 | - | value |
-| +0x160 | 88 | 0.9 | 0.9 | - | value |
-| +0x164 | 89 | 40 | 40 | - | value |
-| +0x168 | 90 | 1.1 | 1.1 | - | value |
-| +0x16C | 91 | 1.35 | 1.35 | - | value |
-| +0x170 | 92 | 1.1 | 1.1 | - | value |
-| +0x174 | 93 | 1.35 | 1.35 | - | value |
-| +0x178 | 94 | 0.2 | 0.2 | - | value |
-| +0x17C | 95 | 100 | 100 | - | value |
-| +0x180 | 96 | 3.587e-43 | 3.587e-43 | - | value |
-| +0x184 | 97 | 6.129e-39 | 6.129e-39 | - | value |
-| +0x188 | 98 | 6.129e-39 | 6.129e-39 | - | value |
-| +0x18C | 99 | 6.048e-39 | 6.048e-39 | - | value |
-| +0x190 | 100 | 6.030e-39 | 6.032e-39 | **YES** | value |
-| +0x194 | 101 | 6.075e-39 | 6.075e-39 | - | value |
-| +0x198 | 102 | -9.406e+26 | 6.090e-39 | **YES** | value |
-| +0x19C | 103 | 5.714e-39 | 5.740e-39 | **YES** | value |
-| +0x1A0 | 104 | 6.308e-39 | 6.308e-39 | - | value |
-| +0x1A4 | 105 | 4.275e-17 | -0.770058 | **YES** | value |
-| +0x1A8 | 106 | 1.009e-43 | 3.363e-44 | **YES** | value |
-| +0x1AC | 107 | 5.992e-39 | 5.992e-39 | - | value |
-| +0x1B0 | 108 | 2.279e+23 | 2.276e+23 | **YES** | value |
-| +0x1B4 | 109 | 5.822e-39 | 5.822e-39 | - | value |
-| +0x1B8 | 110 | 2.292e+23 | -2.036e+08 | **YES** | value |
-| +0x1BC | 111 | 5.845e-39 | 4.466e-08 | **YES** | value |
-| +0x1C0 | 112 | 2.264e+23 | -2.013e+08 | **YES** | value |
-| +0x1C4 | 113 | 5.845e-39 | 4.466e-08 | **YES** | value |
-| +0x1C8 | 114 | 9.232e-33 | 9.242e-33 | **YES** | value |
-| +0x1CC | 115 | 5.523e-39 | 5.523e-39 | - | value |
-| +0x1D0 | 116 | 5.992e-39 | 5.992e-39 | - | value |
-| +0x1D4 | 117 | 2.279e+23 | 2.279e+23 | - | value |
-| +0x1D8 | 118 | 5.822e-39 | 5.822e-39 | - | value |
-| +0x1DC | 119 | -2.036e+08 | -2.036e+08 | - | value |
-| +0x1E0 | 120 | -2.009e+08 | -2.009e+08 | - | value |
-| +0x1E4 | 121 | -2.010e+08 | -2.010e+08 | - | value |
-| +0x1E8 | 122 | -2.009e+08 | -2.009e+08 | - | value |
-| +0x1EC | 123 | -2.010e+08 | -2.010e+08 | - | value |
-| +0x1F0 | 124 | 5.721e-39 | 5.721e-39 | - | value |
-| +0x1F4 | 125 | 3.578e-38 | 3.578e-38 | - | value |
-| +0x1F8 | 126 | 3.587e-43 | 3.587e-43 | - | value |
-| +0x1FC | 127 | 2.390e-41 | 2.390e-41 | - | value |
-| +0x200 | 128 | 2.396e-41 | 2.396e-41 | - | value |
-| +0x204 | 129 | 2.338e-41 | 2.338e-41 | - | value |
-| +0x208 | 130 | 2.334e-41 | 2.334e-41 | - | value |
-| +0x20C | 131 | 2.347e-41 | 2.347e-41 | - | value |
-| +0x210 | 132 | 0 | 0 | - | unused (0) |
-| +0x214 | 133 | 0 | 0 | - | unused (0) |
-| +0x218 | 134 | 0 | 0 | - | unused (0) |
-| +0x21C | 135 | 2.449e-41 | 2.449e-41 | - | value |
-| +0x220 | 136 | 0 | 0 | - | unused (0) |
-| +0x224 | 137 | 0 | 0 | - | unused (0) |
-| +0x228 | 138 | 2.718e+23 | 2.718e+23 | - | value |
-| +0x22C | 139 | 2.274e-41 | 2.274e-41 | - | value |
-| +0x230 | 140 | 2.372e-41 | 2.372e-41 | - | value |
-| +0x234 | 141 | 0 | 0 | - | unused (0) |
-| +0x238 | 142 | 0 | 0 | - | unused (0) |
-| +0x23C | 143 | 0 | 0 | - | unused (0) |
-| +0x240 | 144 | 0 | 0 | - | unused (0) |
-| +0x244 | 145 | 0 | 0 | - | unused (0) |
-| +0x248 | 146 | 0 | 0 | - | unused (0) |
-| +0x24C | 147 | 2.718e+23 | 2.718e+23 | - | value |
-| +0x250 | 148 | 2.274e-41 | 2.274e-41 | - | value |
-| +0x254 | 149 | 2.372e-41 | 2.372e-41 | - | value |
-| +0x258 | 150 | 0 | 0 | - | unused (0) |
-| +0x25C | 151 | 0 | 0 | - | unused (0) |
-| +0x260 | 152 | 0 | 0 | - | unused (0) |
-| +0x264 | 153 | 0 | 0 | - | unused (0) |
-| +0x268 | 154 | 0 | 0 | - | unused (0) |
-| +0x26C | 155 | 2.396e-41 | 2.396e-41 | - | value |
-| +0x270 | 156 | 0 | 0 | - | unused (0) |
-| +0x274 | 157 | 0 | 0 | - | unused (0) |
-| +0x278 | 158 | -1.084e-19 | -1.084e-19 | - | value |
-| +0x27C | 159 | -2.00002 | -2.00002 | - | value |
-| +0x280 | 160 | -3.852e-34 | -3.852e-34 | - | value |
-| +0x284 | 161 | 9.108e-44 | 9.108e-44 | - | value |
-| +0x288 | 162 | 0 | 0 | - | unused (0) |
-| +0x28C | 163 | 0 | 0 | - | unused (0) |
-| +0x290 | 164 | 131072 | 131072 | - | value |
-| +0x294 | 165 | 9.529e-44 | 9.529e-44 | - | value |
-| +0x298 | 166 | 0 | 0 | - | unused (0) |
-| +0x29C | 167 | 2.524e-29 | 2.524e-29 | - | value |
-| +0x2A0 | 168 | 2.720e+23 | 2.720e+23 | - | value |
-| +0x2A4 | 169 | 1.084e-19 | 1.084e-19 | - | value |
-| +0x2A8 | 170 | 9.249e-44 | 9.249e-44 | - | value |
-| +0x2AC | 171 | 0 | 0 | - | unused (0) |
-| +0x2B0 | 172 | 0 | 0 | - | unused (0) |
-| +0x2B4 | 173 | 0 | 0 | - | unused (0) |
-| +0x2B8 | 174 | 0 | 0 | - | unused (0) |
-| +0x2BC | 175 | 0 | 0 | - | unused (0) |
-| +0x2C0 | 176 | 2.524e-29 | 2.524e-29 | - | value |
-| +0x2C4 | 177 | 2.720e+23 | 2.720e+23 | - | value |
-| +0x2C8 | 178 | 1.084e-19 | 1.084e-19 | - | value |
-| +0x2CC | 179 | 9.249e-44 | 9.249e-44 | - | value |
-| +0x2D0 | 180 | 0 | 0 | - | unused (0) |
-| +0x2D4 | 181 | 0 | 0 | - | unused (0) |
-| +0x2D8 | 182 | 0 | 0 | - | unused (0) |
-| +0x2DC | 183 | 0 | 0 | - | unused (0) |
-| +0x2E0 | 184 | -131072 | -131072 | - | value |
-| +0x2E4 | 185 | 9.249e-44 | 9.249e-44 | - | value |
-| +0x2E8 | 186 | 0 | 0 | - | unused (0) |
-| +0x2EC | 187 | 0 | 0 | - | unused (0) |
-| +0x2F0 | 188 | 20 | 20 | - | value |
-| +0x2F4 | 189 | 6 | 6 | - | value |
-| +0x2F8 | 190 | 17 | 17 | - | value |
-| +0x2FC | 191 | 0 | 0 | - | unused (0) |
-| +0x300 | 192 | 0 | 0 | - | unused (0) |
-| +0x304 | 193 | 0 | 0 | - | unused (0) |
-| +0x308 | 194 | 800 | 800 | - | value |
-| +0x30C | 195 | 0 | 0 | - | unused (0) |
-| +0x310 | 196 | 0 | 0 | - | unused (0) |
-| +0x314 | 197 | 9 | 9 | - | value |
-| +0x318 | 198 | 0.9 | 0.9 | - | value |
-| +0x31C | 199 | 40 | 40 | - | value |
-| +0x320 | 200 | 0 | 0 | - | unused (0) |
-| +0x324 | 201 | 0 | 0 | - | unused (0) |
-| +0x328 | 202 | 0 | 0 | - | unused (0) |
-| +0x32C | 203 | 0 | 0 | - | unused (0) |
-| +0x330 | 204 | 0 | 0 | - | unused (0) |
-| +0x334 | 205 | 0 | 0 | - | unused (0) |
-| +0x338 | 206 | 9 | 9 | - | value |
-| +0x33C | 207 | 0.9 | 0.9 | - | value |
-| +0x340 | 208 | 40 | 40 | - | value |
-| +0x344 | 209 | 0 | 0 | - | unused (0) |
-| +0x348 | 210 | 0 | 0 | - | unused (0) |
-| +0x34C | 211 | 0 | 0 | - | unused (0) |
-| +0x350 | 212 | 0 | 0 | - | unused (0) |
-| +0x354 | 213 | 0 | 0 | - | unused (0) |
-| +0x358 | 214 | 100 | 100 | - | value |
-| +0x35C | 215 | 0 | 0 | - | unused (0) |
-| +0x360 | 216 | 0 | 0 | - | unused (0) |
-| +0x364 | 217 | 0 | 0 | - | unused (0) |
-| +0x368 | 218 | 6.027e-39 | 6.027e-39 | - | value |
-| +0x36C | 219 | 5.946e-39 | 5.946e-39 | - | value |
-| +0x370 | 220 | 6.018e-39 | 6.018e-39 | - | value |
-| +0x374 | 221 | 0 | 0 | - | unused (0) |
-| +0x378 | 222 | 0 | 0 | - | unused (0) |
-| +0x37C | 223 | 0 | 0 | - | unused (0) |
-| +0x380 | 224 | 6.271e-39 | 6.271e-39 | - | value |
-| +0x384 | 225 | 0 | 0 | - | unused (0) |
-| +0x388 | 226 | 0 | 0 | - | unused (0) |
-| +0x38C | 227 | 2.279e+23 | 2.279e+23 | - | value |
-| +0x390 | 228 | 5.822e-39 | 5.822e-39 | - | value |
-| +0x394 | 229 | 6.073e-39 | 6.073e-39 | - | value |
-| +0x398 | 230 | 0 | 0 | - | unused (0) |
-| +0x39C | 231 | 0 | 0 | - | unused (0) |
-| +0x3A0 | 232 | 0 | 0 | - | unused (0) |
-| +0x3A4 | 233 | 0 | 0 | - | unused (0) |
-| +0x3A8 | 234 | 0 | 0 | - | unused (0) |
-| +0x3AC | 235 | 0 | 0 | - | unused (0) |
-| +0x3B0 | 236 | 2.279e+23 | 2.279e+23 | - | value |
-| +0x3B4 | 237 | 5.822e-39 | 5.822e-39 | - | value |
-| +0x3B8 | 238 | 6.073e-39 | 6.073e-39 | - | value |
-| +0x3BC | 239 | 0 | 0 | - | unused (0) |
-| +0x3C0 | 240 | 0 | 0 | - | unused (0) |
-| +0x3C4 | 241 | 0 | 0 | - | unused (0) |
-| +0x3C8 | 242 | 0 | 0 | - | unused (0) |
-| +0x3CC | 243 | 0 | 0 | - | unused (0) |
-| +0x3D0 | 244 | 6.133e-39 | 6.133e-39 | - | value |
-| +0x3D4 | 245 | 0 | 0 | - | unused (0) |
-| +0x3D8 | 246 | 0 | 0 | - | unused (0) |
-| +0x3DC | 247 | 0 | 0 | - | unused (0) |
-| +0x3E0 | 248 | 2.354e-41 | 2.354e-41 | - | value |
-| +0x3E4 | 249 | 2.323e-41 | 2.323e-41 | - | value |
-| +0x3E8 | 250 | 2.351e-41 | 2.351e-41 | - | value |
-| +0x3EC | 251 | 0 | 0 | - | unused (0) |
-| +0x3F0 | 252 | 0 | 0 | - | unused (0) |
-| +0x3F4 | 253 | 0 | 0 | - | unused (0) |
-| +0x3F8 | 254 | 2.449e-41 | 2.449e-41 | - | value |
-| +0x3FC | 255 | 0 | 0 | - | unused (0) |
-| +0x400 | 256 | 0 | 0 | - | unused (0) |
-| +0x404 | 257 | 2.718e+23 | 2.718e+23 | - | value |
-| +0x408 | 258 | 2.274e-41 | 2.274e-41 | - | value |
-| +0x40C | 259 | 2.372e-41 | 2.372e-41 | - | value |
-| +0x410 | 260 | 0 | 0 | - | unused (0) |
-| +0x414 | 261 | 0 | 0 | - | unused (0) |
-| +0x418 | 262 | 0 | 0 | - | unused (0) |
-| +0x41C | 263 | 0 | 0 | - | unused (0) |
-| +0x420 | 264 | 0 | 0 | - | unused (0) |
-| +0x424 | 265 | 0 | 0 | - | unused (0) |
-| +0x428 | 266 | 2.718e+23 | 2.718e+23 | - | value |
-| +0x42C | 267 | 2.274e-41 | 2.274e-41 | - | value |
-| +0x430 | 268 | 2.372e-41 | 2.372e-41 | - | value |
-| +0x434 | 269 | 0 | 0 | - | unused (0) |
-| +0x438 | 270 | 0 | 0 | - | unused (0) |
-| +0x43C | 271 | 0 | 0 | - | unused (0) |
-| +0x440 | 272 | 0 | 0 | - | unused (0) |
-| +0x444 | 273 | 0 | 0 | - | unused (0) |
-| +0x448 | 274 | 2.396e-41 | 2.396e-41 | - | value |
-| +0x44C | 275 | 0 | 0 | - | unused (0) |
-| +0x450 | 276 | 0 | 0 | - | unused (0) |
-| +0x454 | 277 | -1.084e-19 | -1.084e-19 | - | value |
-| +0x458 | 278 | -2.00002 | -2.00002 | - | value |
-| +0x45C | 279 | -3.852e-34 | -3.852e-34 | - | value |
-| +0x460 | 280 | 9.108e-44 | 9.108e-44 | - | value |
-| +0x464 | 281 | 0 | 0 | - | unused (0) |
-| +0x468 | 282 | 0 | 0 | - | unused (0) |
-| +0x46C | 283 | 131072 | 131072 | - | value |
-| +0x470 | 284 | 9.529e-44 | 9.529e-44 | - | value |
-| +0x474 | 285 | 0 | 0 | - | unused (0) |
-| +0x478 | 286 | 2.524e-29 | 2.524e-29 | - | value |
-| +0x47C | 287 | 2.720e+23 | 2.720e+23 | - | value |
-| +0x480 | 288 | 1.084e-19 | 1.084e-19 | - | value |
-| +0x484 | 289 | 9.249e-44 | 9.249e-44 | - | value |
-| +0x488 | 290 | 0 | 0 | - | unused (0) |
-| +0x48C | 291 | 0 | 0 | - | unused (0) |
-| +0x490 | 292 | 0 | 0 | - | unused (0) |
-| +0x494 | 293 | 0 | 0 | - | unused (0) |
-| +0x498 | 294 | 0 | 0 | - | unused (0) |
-| +0x49C | 295 | 2.524e-29 | 2.524e-29 | - | value |
-| +0x4A0 | 296 | 2.720e+23 | 2.720e+23 | - | value |
-| +0x4A4 | 297 | 1.084e-19 | 1.084e-19 | - | value |
-| +0x4A8 | 298 | 9.249e-44 | 9.249e-44 | - | value |
-| +0x4AC | 299 | 0 | 0 | - | unused (0) |
-| +0x4B0 | 300 | 0 | 0 | - | unused (0) |
-| +0x4B4 | 301 | 0 | 0 | - | unused (0) |
-| +0x4B8 | 302 | 0 | 0 | - | unused (0) |
-| +0x4BC | 303 | -131072 | -131072 | - | value |
-| +0x4C0 | 304 | 9.249e-44 | 9.249e-44 | - | value |
-| +0x4C4 | 305 | 0 | 0 | - | unused (0) |
-| +0x4C8 | 306 | 0 | 0 | - | unused (0) |
-| +0x4CC | 307 | 20 | 20 | - | value |
-| +0x4D0 | 308 | 6 | 6 | - | value |
-| +0x4D4 | 309 | 17 | 17 | - | value |
-| +0x4D8 | 310 | 0 | 0 | - | unused (0) |
-| +0x4DC | 311 | 0 | 0 | - | unused (0) |
-| +0x4E0 | 312 | 0 | 0 | - | unused (0) |
-| +0x4E4 | 313 | 800 | 800 | - | value |
-| +0x4E8 | 314 | 0 | 0 | - | unused (0) |
-| +0x4EC | 315 | 0 | 0 | - | unused (0) |
-| +0x4F0 | 316 | 9 | 9 | - | value |
-| +0x4F4 | 317 | 0.9 | 0.9 | - | value |
-| +0x4F8 | 318 | 40 | 40 | - | value |
-| +0x4FC | 319 | 0 | 0 | - | unused (0) |
-| +0x500 | 320 | 0 | 0 | - | unused (0) |
-| +0x504 | 321 | 0 | 0 | - | unused (0) |
-| +0x508 | 322 | 0 | 0 | - | unused (0) |
-| +0x50C | 323 | 0 | 0 | - | unused (0) |
-| +0x510 | 324 | 0 | 0 | - | unused (0) |
-| +0x514 | 325 | 9 | 9 | - | value |
-| +0x518 | 326 | 0.9 | 0.9 | - | value |
-| +0x51C | 327 | 40 | 40 | - | value |
-| +0x520 | 328 | 0 | 0 | - | unused (0) |
-| +0x524 | 329 | 0 | 0 | - | unused (0) |
-| +0x528 | 330 | 0 | 0 | - | unused (0) |
-| +0x52C | 331 | 0 | 0 | - | unused (0) |
-| +0x530 | 332 | 0 | 0 | - | unused (0) |
-| +0x534 | 333 | 100 | 100 | - | value |
-| +0x538 | 334 | 0 | 0 | - | unused (0) |
-| +0x53C | 335 | 0 | 0 | - | unused (0) |
-| +0x540 | 336 | 0 | 0 | - | unused (0) |
-| +0x544 | 337 | 6.027e-39 | 6.027e-39 | - | value |
-| +0x548 | 338 | 5.946e-39 | 5.946e-39 | - | value |
-| +0x54C | 339 | 6.018e-39 | 6.018e-39 | - | value |
-| +0x550 | 340 | 0 | 0 | - | unused (0) |
-| +0x554 | 341 | 0 | 0 | - | unused (0) |
-| +0x558 | 342 | 0 | 0 | - | unused (0) |
-| +0x55C | 343 | 6.271e-39 | 6.271e-39 | - | value |
-| +0x560 | 344 | 0 | 0 | - | unused (0) |
-| +0x564 | 345 | 0 | 0 | - | unused (0) |
-| +0x568 | 346 | 2.279e+23 | 2.279e+23 | - | value |
-| +0x56C | 347 | 5.822e-39 | 5.822e-39 | - | value |
-| +0x570 | 348 | 6.073e-39 | 6.073e-39 | - | value |
-| +0x574 | 349 | 0 | 0 | - | unused (0) |
-| +0x578 | 350 | 0 | 0 | - | unused (0) |
-| +0x57C | 351 | 0 | 0 | - | unused (0) |
-| +0x580 | 352 | 0 | 0 | - | unused (0) |
-| +0x584 | 353 | 0 | 0 | - | unused (0) |
-| +0x588 | 354 | 0 | 0 | - | unused (0) |
-| +0x58C | 355 | 2.279e+23 | 2.279e+23 | - | value |
-| +0x590 | 356 | 5.822e-39 | 5.822e-39 | - | value |
-| +0x594 | 357 | 6.073e-39 | 6.073e-39 | - | value |
-| +0x598 | 358 | 0 | 0 | - | unused (0) |
-| +0x59C | 359 | 0 | 0 | - | unused (0) |
-| +0x5A0 | 360 | 0 | 0 | - | unused (0) |
-| +0x5A4 | 361 | 0 | 0 | - | unused (0) |
-| +0x5A8 | 362 | 0 | 0 | - | unused (0) |
-| +0x5AC | 363 | 6.133e-39 | 6.133e-39 | - | value |
-| +0x5B0 | 364 | 0 | 0 | - | unused (0) |
-| +0x5B4 | 365 | 0 | 0 | - | unused (0) |
-| +0x5B8 | 366 | 0 | 0 | - | unused (0) |
-| +0x5BC | 367 | 2.354e-41 | 2.354e-41 | - | value |
-| +0x5C0 | 368 | 2.323e-41 | 2.323e-41 | - | value |
-| +0x5C4 | 369 | 2.004 | 2.004 | - | value |
-| +0x5C8 | 370 | -2.479e-41 | -2.479e-41 | - | value |
-| +0x5CC | 371 | 2.00421 | 2.00421 | - | value |
-| +0x5D0 | 372 | 2.479e-41 | 2.479e-41 | - | value |
-| +0x5D4 | 373 | 2.327e-41 | 2.327e-41 | - | value |
-| +0x5D8 | 374 | 2.278e-41 | 2.278e-41 | - | value |
-| +0x5DC | 375 | 2.383e-41 | 2.390e-41 | **YES** | value |
-| +0x5E0 | 376 | 2.314e-41 | 2.278e-41 | **YES** | value |
-| +0x5E4 | 377 | -2.008e+08 | -2.008e+08 | - | value |
-| +0x5E8 | 378 | 9.671e-27 | 9.671e-27 | - | value |
-| +0x5EC | 379 | 0 | 0 | - | unused (0) |
-| +0x5F0 | 380 | 0 | 0 | - | unused (0) |
-| +0x5F4 | 381 | 9.957e-32 | 9.957e-32 | - | value |
-| +0x5F8 | 382 | 0 | 0 | - | unused (0) |
-| +0x5FC | 383 | -2.035e+08 | -2.035e+08 | - | value |
-| +0x600 | 384 | -3.956e-23 | -3.956e-23 | - | value |
-| +0x604 | 385 | 5.887e-39 | 5.887e-39 | - | value |
-| +0x608 | 386 | 0 | 0 | - | unused (0) |
-| +0x60C | 387 | 5.900e-39 | 5.900e-39 | - | value |
-| +0x610 | 388 | 1.768e-38 | 1.768e-38 | - | value |
-| +0x614 | 389 | 5.877e-39 | 5.877e-39 | - | value |
-| +0x618 | 390 | 0.7 | 0.7 | - | value |
-| +0x61C | 391 | 0.1 | 0.1 | - | value |
-| +0x620 | 392 | 0.7 | 0.7 | - | value |
-| +0x624 | 393 | 0.1 | 0.1 | - | value |
-| +0x628 | 394 | 0.03 | 0.03 | - | value |
-| +0x62C | 395 | 120 | 120 | - | value |
-| +0x630 | 396 | 25 | 25 | - | value |
-| +0x634 | 397 | 100 | 100 | - | value |
-| +0x638 | 398 | 45 | 45 | - | value |
-| +0x63C | 399 | 0.4 | 0.4 | - | value |
-| +0x640 | 400 | 60 | 60 | - | value |
-| +0x644 | 401 | 30 | 30 | - | value |
-| +0x648 | 402 | 35 | 35 | - | value |
-| +0x64C | 403 | 1.822e-44 | 1.822e-44 | - | value |
-| +0x650 | 404 | 1.962e-44 | 1.962e-44 | - | value |
-| +0x654 | 405 | 120 | 120 | - | value |
-| +0x658 | 406 | 25 | 25 | - | value |
-| +0x65C | 407 | 100 | 100 | - | value |
-| +0x660 | 408 | 40 | 40 | - | value |
-| +0x664 | 409 | 120 | 120 | - | value |
-| +0x668 | 410 | 20 | 20 | - | value |
-| +0x66C | 411 | 100 | 100 | - | value |
-| +0x670 | 412 | 30 | 30 | - | value |
-| +0x674 | 413 | 10 | 10 | - | value |
-| +0x678 | 414 | 60 | 60 | - | value |
-| +0x67C | 415 | 110.526 | 110.526 | - | value |
-| +0x680 | 416 | 18.4211 | 18.4211 | - | value |
-| +0x684 | 417 | 100 | 100 | - | value |
-| +0x688 | 418 | 65 | 65 | - | value |
-| +0x68C | 419 | 70 | 70 | - | value |
-| +0x690 | 420 | 10 | 10 | - | value |
-| +0x694 | 421 | 20 | 20 | - | value |
-| +0x698 | 422 | 30 | 30 | - | value |
-| +0x69C | 423 | 40 | 40 | - | value |
-| +0x6A0 | 424 | 35 | 35 | - | value |
-| +0x6A4 | 425 | 70 | 70 | - | value |
-| +0x6A8 | 426 | 10 | 10 | - | value |
-| +0x6AC | 427 | 100 | 100 | - | value |
-| +0x6B0 | 428 | 15 | 15 | - | value |
-| +0x6B4 | 429 | 25 | 25 | - | value |
-| +0x6B8 | 430 | 15 | 15 | - | value |
-| +0x6BC | 431 | 15 | 15 | - | value |
-| +0x6C0 | 432 | 10 | 10 | - | value |
-| +0x6C4 | 433 | 1 | 1 | - | value |
-| +0x6C8 | 434 | 100 | 100 | - | value |
-| +0x6CC | 435 | 0 | 0 | - | unused (0) |
-| +0x6D0 | 436 | 1 | 1 | - | value |
-| +0x6D4 | 437 | 1 | 1 | - | value |
-| +0x6D8 | 438 | 1 | 1 | - | value |
-| +0x6DC | 439 | 80 | 80 | - | value |
-| +0x6E0 | 440 | -4.316e+08 | -4.316e+08 | - | value |
-| +0x6E4 | 441 | -4.316e+08 | -4.316e+08 | - | value |
-| +0x6E8 | 442 | -4.316e+08 | -4.316e+08 | - | value |
-| +0x6EC | 443 | -4.316e+08 | -4.316e+08 | - | value |
-| +0x6F0 | 444 | -4.316e+08 | -4.316e+08 | - | value |
-| +0x6F4 | 445 | -4.316e+08 | -4.316e+08 | - | value |
-| +0x6F8 | 446 | -4.316e+08 | -4.316e+08 | - | value |
-| +0x6FC | 447 | -4.316e+08 | -4.316e+08 | - | value |
-| +0x700 | 448 | 50 | 50 | - | value |
-| +0x704 | 449 | 10 | 10 | - | value |
-| +0x708 | 450 | 100 | 100 | - | value |
-| +0x70C | 451 | 70 | 70 | - | value |
-| +0x710 | 452 | 20 | 20 | - | value |
-| +0x714 | 453 | 2 | 2 | - | value |
-| +0x718 | 454 | 2 | 2 | - | value |
-| +0x71C | 455 | 2 | 2 | - | value |
-| +0x720 | 456 | 50 | 50 | - | value |
-| +0x724 | 457 | 10 | 10 | - | value |
-| +0x728 | 458 | 100 | 100 | - | value |
-| +0x72C | 459 | 0 | 0 | - | unused (0) |
-| +0x730 | 460 | 5 | 5 | - | value |
-| +0x734 | 461 | 5 | 5 | - | value |
-| +0x738 | 462 | 5 | 5 | - | value |
-| +0x73C | 463 | 50 | 50 | - | value |
-| +0x740 | 464 | 10 | 10 | - | value |
-| +0x744 | 465 | 100 | 100 | - | value |
-| +0x748 | 466 | 20 | 20 | - | value |
-| +0x74C | 467 | 5 | 5 | - | value |
-| +0x750 | 468 | 5 | 5 | - | value |
-| +0x754 | 469 | 5 | 5 | - | value |
-| +0x758 | 470 | 50 | 50 | - | value |
-| +0x75C | 471 | 10 | 10 | - | value |
-| +0x760 | 472 | 100 | 100 | - | value |
-| +0x764 | 473 | 20 | 20 | - | value |
-| +0x768 | 474 | 10 | 10 | - | value |
-| +0x76C | 475 | 5 | 5 | - | value |
-| +0x770 | 476 | 10 | 10 | - | value |
-| +0x774 | 477 | 50 | 50 | - | value |
-| +0x778 | 478 | 10 | 10 | - | value |
-| +0x77C | 479 | 100 | 100 | - | value |
-| +0x780 | 480 | 20 | 20 | - | value |
-| +0x784 | 481 | 10 | 10 | - | value |
-| +0x788 | 482 | 5 | 5 | - | value |
-| +0x78C | 483 | 5 | 5 | - | value |
-| +0x790 | 484 | 50 | 50 | - | value |
-| +0x794 | 485 | 10 | 10 | - | value |
-| +0x798 | 486 | 100 | 100 | - | value |
-| +0x79C | 487 | 20 | 20 | - | value |
-| +0x7A0 | 488 | 10 | 10 | - | value |
-| +0x7A4 | 489 | 5 | 5 | - | value |
-| +0x7A8 | 490 | 5 | 5 | - | value |
-| +0x7AC | 491 | 9 | 9 | - | value |
-| +0x7B0 | 492 | 27 | 27 | - | value |
-| +0x7B4 | 493 | 5 | 5 | - | value |
-| +0x7B8 | 494 | 0 | 0 | - | unused (0) |
-| +0x7BC | 495 | 20 | 20 | - | value |
-| +0x7C0 | 496 | 5.5 | 5.5 | - | value |
-| +0x7C4 | 497 | 0.9 | 1.4 | **YES** | value |
+Record *n* starts at `0x120 + 0x77·n`: 24 dwords, three bytes, five dwords. `vehicle_apply_carinit_params`
+loops over the axle count `C_Vehicle+0x53c` and applies record *n* to wheels 2*n* and 2*n*+1 of the
+wheel array `C_Vehicle+0xcb4`. `blackha` uses record 0 (front axle) and record 1 (rear axle); the other
+eight hold defaults. The record offset is relative to the record start (front `+0x120`, rear `+0x197`);
+the wheel field is the wheel object's offset, and the conversion is applied on load.
 
-## 4c. Sound / string records (0x7C9-0x1121)
+| record | type | wheel field | on load | front L0 | rear L0 | front L1 | rear L1 | note |
+|---|---|---|---|---|---|---|---|---|
+| `+0x00` | f32 | `+0x88` | ×1000 | 68 | 66 | 52 | 52 | the spring rate: the suspension force is `(+0x8c − extension) · +0x88`. RHAM *Front weigh* / *Rear weigh* |
+| `+0x04` | f32 | `+0x8c` | at least 0.009 | 0.2 | 0.18 | 0.24 | 0.25 | the suspension travel: the extension at which the spring force reaches zero, also part of the contact probe's length. RHAM *Suspension forward (height)* / rear height |
+| `+0x08` | f32 | `+0x98` | - | 1400 | 1400 | 1400 | 1400 | the BUMP damping: multiplies the compression speed while the wheel compresses. RHAM *Shock-absorber forward* |
+| `+0x0C` | f32 | `+0x9c` | - | 2600 | 2600 | 2600 | 2600 | the REBOUND damping: multiplies the extension speed while the wheel extends. RHAM *Shock-absorber rear* |
+| `+0x10` | i32 | `+0xa8` | tyre id, resolved to the tyre index `+0xac` | 18468 | 18468 | 26501 | 6335 | RHAM *Forward control y/n*; ids in `tables\tyres.bin` ¹ |
+| `+0x14` | f32 | `+0xb8` | ×1000 | 12 | 12 | 12 | 12 | set 1 |
+| `+0x18` | f32 | `+0xbc` | degrees, at least 1 | 9 | 9 | 7 | 6 | set 1 |
+| `+0x1C` | f32 | `+0xc0` | - | 0.9 | 0.9 | 0.9 | 0.9 | set 1 |
+| `+0x20` | f32 | `+0xc4` | km/h | 40 | 40 | 40 | 40 | set 1 |
+| `+0x24` | f32 | `+0xd0` | stored as `+0xd4` minus the value | 1.3 | 1.3 | 1.4 | 1.6 | set 1 |
+| `+0x28` | f32 | `+0xd4` | - | 1.5 | 1.5 | 1.7 | 1.9 | set 1 |
+| `+0x2C` | f32 | `+0xd8` | stored as `+0xdc` minus the value | 1.3 | 1.3 | 1.4 | 1.6 | set 1 |
+| `+0x30` | f32 | `+0xdc` | - | 1.5 | 1.5 | 1.7 | 1.9 | set 1 |
+| `+0x34` | f32 | `+0xe0` | - | 0.01 | 0.01 | 0.01 | 0.01 | set 1 |
+| `+0x38` | f32 | `+0xe4` | ×1000 | 12 | 12 | 12 | 12 | set 2 |
+| `+0x3C` | f32 | `+0xe8` | degrees, at least 1 | 9 | 9 | 9 | 9 | set 2 |
+| `+0x40` | f32 | `+0xec` | - | 0.9 | 0.9 | 0.9 | 0.9 | set 2 |
+| `+0x44` | f32 | `+0xf0` | km/h | 40 | 40 | 40 | 40 | set 2 |
+| `+0x48` | f32 | `+0xf4` | stored as `+0xf8` minus the value | 1.1 | 1.1 | 1.1 | 1.1 | set 2 |
+| `+0x4C` | f32 | `+0xf8` | - | 1.35 | 1.35 | 1.35 | 1.35 | set 2 |
+| `+0x50` | f32 | `+0xfc` | stored as `+0x100` minus the value | 1.1 | 1.1 | 1.1 | 1.1 | set 2 |
+| `+0x54` | f32 | `+0x100` | - | 1.35 | 1.35 | 1.35 | 1.35 | set 2 |
+| `+0x58` | f32 | `+0x104` | - | 0.2 | 0.2 | 0.2 | 0.2 | set 2 |
+| `+0x5C` | f32 | `+0x11c` | percent, 0..100 | 100 | 100 | 100 | 100 | - |
+| `+0x60` | u8 | flag `0x2` | - | 0 | 1 | 0 | 1 | driven: only driven wheels set the drive circumference `C_Vehicle+0x628` |
+| `+0x61` | u8 | flag `0x1` | - | 1 | 0 | 1 | 0 | steered: `vehicle_update_steering_wheels` turns only these |
+| `+0x62` | u8 | flag `0x4` | - | 0 | 1 | 0 | 1 | handbrake: `vehicle_move` applies `C_Vehicle+0x4b0` only to these |
+| `+0x63` | f32 | `+0x118` | percent of `C_Vehicle+0x440` | 95 | 80 | 95 | 80 | even wheel of the axle |
+| `+0x67` | f32 | `+0x118` | percent of `C_Vehicle+0x440` | 95 | 100 | 95 | 100 | odd wheel of the axle |
+| `+0x6B` | f32 | `+0x170` | degrees, 1..90 | 27.5 | 11 | 27.5 | 11 | - |
+| `+0x6F` | f32 | `+0x174` | degrees, 1..90, at most `+0x73` | 21 | 9 | 22 | 9 | - |
+| `+0x73` | f32 | `+0x178` | degrees, 1..90 | 42 | 15 | 42 | 15 | - |
 
-Each sound is a **0x10-byte filename slot followed by about 8 float params**, whose meaning is
-open (§9). Two clusters: **template/default** (0x7C9-0xC5F), then **car-specific**
-(0xC63-0x1121, the set RHAM rows 75-100 expose). Only plausible params (`|x|` between 1e-3 and 1e6)
-are printed; runs of sentinel/zero fill collapse into a single `padding` row.
+¹ `tables\tyres.bin` holds four tyre types: 42 `michellin`, 18468 `Normal`, 6335 `Racing`, 26501
+`Semi racing`. `blackha` drives on Normal tyres at level 0 and on Semi racing (front) and Racing (rear)
+when boosted.
 
-| off | kind | value | boost | note |
+RHAM rows 66-74 are fields of these records: *Front weigh*, *Suspension forward (height)*, both
+*Shock-absorber* rows and *Forward control y/n* are front-axle fields `+0x120`-`+0x130` (the rear axle has
+its own copies at `+0x197`-`+0x1A7`). Every axle record carries both damping values, so RHAM's
+*forward* / *rear* shock-absorber labels name the two damping directions, not the two axles. The four
+suspension fields are read by `vehicle_wheel_contact_solve` (`basic/artifacts/vehicle-movement.md` §3); *Rear weigh* is `+0x197`, the rear suspension height `+0x19B`,
+the drive layout is the driven byte of each axle (`+0x180` front, `+0x1F7` rear), and the roof flag is
+the scalar `+0x5F6` (§4c).
+
+## 4c. Scalar block (0x5C6-0x7C7)
+
+Packed: a field can start at any byte. **runtime field** = the `C_Vehicle` field
+`vehicle_apply_carinit_params` writes directly, with the conversion applied on load; `-` = a field the
+consumer reads through one of its array loops. A range row lists its fields' values in order.
+
+| off | type | runtime field | L0 | L1 |
 |---|---|---|---|---|
-| +0x7C9 | string | `engine_on.wav` | - | engine idle/run loop |
-| +0x7D9 | string | `engine_off.wav` | - | engine stop |
-| - | padding | (4 dwords sentinel/zero) | - | fill |
-| +0x7F9 | string | `interier.wav` | - | interior sound |
-| +0x809 | param | 0.55 / 0.55 | - | sound param (unknown) |
-| +0x80D | param | 1.9 / 1.9 | - | sound param (unknown) |
-| +0x811 | param | 0.1 / 0.1 | - | sound param (unknown) |
-| +0x815 | param | 100 / 100 | - | sound param (unknown) |
-| +0x819 | param | 5 / 5 | - | sound param (unknown) |
-| +0x81D | param | 100 / 100 | - | sound param (unknown) |
-| +0x821 | param | 1 / 1 | - | sound param (unknown) |
-| +0x825 | param | 0.2 / 0.2 | - | sound param (unknown) |
-| - | padding | (50 dwords sentinel/zero) | - | fill |
-| +0x8EE | string | `interier_X.wav` | - | interior sound |
-| +0x8FE | param | 0.7 / 0.7 | - | sound param (unknown) |
-| +0x902 | param | 1.3 / 1.3 | - | sound param (unknown) |
-| +0x906 | param | 0.1 / 0.1 | - | sound param (unknown) |
-| +0x90A | param | 100 / 100 | - | sound param (unknown) |
-| +0x90E | param | 5 / 5 | - | sound param (unknown) |
-| +0x912 | param | 100 / 100 | - | sound param (unknown) |
-| +0x916 | param | 1 / 1 | - | sound param (unknown) |
-| +0x91A | param | 0.2 / 0.2 | - | sound param (unknown) |
-| - | padding | (50 dwords sentinel/zero) | - | fill |
-| +0x9E3 | string | `interier.wav` | - | interior sound |
-| +0x9F3 | param | 0.55 / 0.55 | - | sound param (unknown) |
-| +0x9F7 | param | 1.9 / 1.9 | - | sound param (unknown) |
-| +0x9FB | param | 0.1 / 0.1 | - | sound param (unknown) |
-| +0x9FF | param | 100 / 100 | - | sound param (unknown) |
-| +0xA03 | param | 5 / 5 | - | sound param (unknown) |
-| +0xA07 | param | 100 / 100 | - | sound param (unknown) |
-| +0xA0B | param | 1 / 1 | - | sound param (unknown) |
-| +0xA0F | param | 0.2 / 0.2 | - | sound param (unknown) |
-| - | padding | (48 dwords sentinel/zero) | - | fill |
-| +0xAD3 | string | `interier_0.wav` | - | interior sound |
-| +0xAE3 | param | 80 / 80 | - | sound param (unknown) |
-| +0xAE7 | param | 1 / 1 | - | sound param (unknown) |
-| +0xAEB | string | `interier_A.wav` | - | interior sound |
-| +0xAFB | param | 0.9 / 0.9 | - | sound param (unknown) |
-| +0xAFF | param | 1.1 / 1.1 | - | sound param (unknown) |
-| +0xB03 | param | 0.1 / 0.1 | - | sound param (unknown) |
-| +0xB07 | param | 47 / 47 | - | sound param (unknown) |
-| +0xB0B | param | 1 / 1 | - | sound param (unknown) |
-| +0xB0F | string | `horn1.wav` | - | horn |
-| - | padding | (4 dwords sentinel/zero) | - | fill |
-| +0xB2F | string | `hand2.wav` | - | handbrake |
-| +0xB3F | string | `gear1.wav` | - | gear change |
-| +0xB4F | string | `gear1.wav` | - | gear change |
-| +0xB5F | string | `slip1.wav` | - | tyre slip |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0xB70 | string | `rzdy_loop.wav` | - | brakes loop (stored literally as `rzdy_loop.wav`; cf. Czech *brzdy* = brakes) |
-| +0xB80 | string | `hit3.wav` | - | impact |
-| - | padding | (4 dwords sentinel/zero) | - | fill |
-| +0xB9F | string | `carglass.wav` | - | glass break |
-| +0xBAF | string | `crashA1in.wav` | - | crash (interior) |
-| +0xBBF | string | `crashA2in.wav` | - | crash (interior) |
-| +0xBCF | param | 1.5 / 1.5 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0xBD4 | string | `crashK1in.wav` | - | crash (interior) |
-| +0xBE4 | string | `crashK2in.wav` | - | crash (interior) |
-| +0xBF4 | param | 2.5 / 2.5 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0xBF9 | string | `crashB1in.wav` | - | crash (interior) |
-| +0xC09 | string | `crashB2in.wav` | - | crash (interior) |
-| +0xC19 | param | 9 / 9 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0xC1E | string | `crashC1in.wav` | - | crash (interior) |
-| +0xC2E | string | `crashC2in.wav` | - | crash (interior) |
-| +0xC3E | param | 35 / 35 | - | sound param (unknown) |
-| - | padding | (9 dwords sentinel/zero) | - | fill |
-| +0xC63 | string | `black_on.wav` | - | sound (car-specific) |
-| +0xC73 | string | `black_off.wav` | - | sound (car-specific) |
-| +0xC83 | string | `startbad1.wav` | - | engine bad-start |
-| +0xC93 | string | `black_NPC.wav` | - | engine (NPC/external) |
-| +0xCA3 | param | 0.65 / 0.65 | - | sound param (unknown) |
-| +0xCA7 | param | 1.35 / 1.35 | - | sound param (unknown) |
-| +0xCAB | param | 1 / 1 | - | sound param (unknown) |
-| +0xCAF | param | 1 / 1 | - | sound param (unknown) |
-| +0xCB3 | string | `black_1.wav` | - | sound (car-specific) |
-| +0xCC3 | param | 0.5 / 0.5 | - | sound param (unknown) |
-| +0xCC7 | param | 1.5 / 1.35 | **YES** | sound param (unknown) |
-| +0xCCB | param | 0.1 / 0.1 | - | sound param (unknown) |
-| +0xCCF | param | 100 / 100 | - | sound param (unknown) |
-| +0xCD3 | param | 6 / 6 | - | sound param (unknown) |
-| +0xCD7 | param | 100 / 100 | - | sound param (unknown) |
-| +0xCDB | param | 0.8 / 0.8 | - | sound param (unknown) |
-| +0xCDF | param | 0.3 / 0.3 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0xCE4 | string | `buick_2.wav` | - | sound (car-specific) |
-| +0xCF4 | param | 0.55 / 0.55 | - | sound param (unknown) |
-| +0xCF8 | param | 1.3 / 1.2 | **YES** | sound param (unknown) |
-| +0xCFC | param | 45 / 45 | - | sound param (unknown) |
-| +0xD00 | param | 100 / 100 | - | sound param (unknown) |
-| +0xD04 | param | 97 / 97 | - | sound param (unknown) |
-| +0xD08 | param | 100 / 100 | - | sound param (unknown) |
-| +0xD0C | param | 1 / 1 | - | sound param (unknown) |
-| +0xD10 | param | 0.3 / 0.3 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0xD15 | string | `black_3.wav` | - | sound (car-specific) |
-| +0xD25 | param | 0.6 / 0.6 | - | sound param (unknown) |
-| +0xD29 | param | 1.3 / 1.2 | **YES** | sound param (unknown) |
-| +0xD2D | param | 0.1 / 0.1 | - | sound param (unknown) |
-| +0xD31 | param | 100 / 100 | - | sound param (unknown) |
-| +0xD35 | param | 5 / 5 | - | sound param (unknown) |
-| +0xD39 | param | 100 / 100 | - | sound param (unknown) |
-| +0xD3D | param | 1 / 1 | - | sound param (unknown) |
-| +0xD41 | param | 0.2 / 0.2 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0xD46 | string | `s1.wav` | - | sound (car-specific) |
-| +0xD56 | param | 0.5 / 0.5 | - | sound param (unknown) |
-| +0xD5A | param | 2 / 2 | - | sound param (unknown) |
-| +0xD5E | param | 10 / 10 | - | sound param (unknown) |
-| +0xD62 | param | 100 / 100 | - | sound param (unknown) |
-| +0xD66 | param | 18 / 18 | - | sound param (unknown) |
-| +0xD6A | param | 46 / 46 | - | sound param (unknown) |
-| +0xD6E | param | 0.35 / 0.35 | - | sound param (unknown) |
-| - | padding | (14 dwords sentinel/zero) | - | fill |
-| +0xDA8 | string | `cheve_X.wav` | - | sound (car-specific) |
-| +0xDB8 | param | 0.6 / 0.6 | - | sound param (unknown) |
-| +0xDBC | param | 1.6 / 1.5 | **YES** | sound param (unknown) |
-| +0xDC0 | param | 0.1 / 0.1 | - | sound param (unknown) |
-| +0xDC4 | param | 100 / 100 | - | sound param (unknown) |
-| +0xDC8 | param | 24 / 24 | - | sound param (unknown) |
-| +0xDCC | param | 100 / 100 | - | sound param (unknown) |
-| +0xDD0 | param | 1 / 1 | - | sound param (unknown) |
-| +0xDD4 | param | 0.3 / 0.3 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0xDD9 | string | `s1.wav` | - | sound (car-specific) |
-| +0xDE9 | param | 0.7 / 0.7 | - | sound param (unknown) |
-| +0xDED | param | 1.8 / 1.8 | - | sound param (unknown) |
-| +0xDF1 | param | 10 / 10 | - | sound param (unknown) |
-| +0xDF5 | param | 70 / 70 | - | sound param (unknown) |
-| +0xDF9 | param | 30 / 30 | - | sound param (unknown) |
-| +0xDFD | param | 40 / 40 | - | sound param (unknown) |
-| +0xE01 | param | 0.42 / 0.42 | - | sound param (unknown) |
-| - | padding | (38 dwords sentinel/zero) | - | fill |
-| +0xE9D | string | `black_1.wav` | - | sound (car-specific) |
-| +0xEAD | param | 0.5 / 0.5 | - | sound param (unknown) |
-| +0xEB1 | param | 1.6 / 1.6 | - | sound param (unknown) |
-| +0xEB5 | param | 0.1 / 0.1 | - | sound param (unknown) |
-| +0xEB9 | param | 100 / 100 | - | sound param (unknown) |
-| +0xEBD | param | 5 / 5 | - | sound param (unknown) |
-| +0xEC1 | param | 100 / 100 | - | sound param (unknown) |
-| +0xEC5 | param | 0.98 / 0.98 | - | sound param (unknown) |
-| +0xEC9 | param | 0.7 / 0.7 | - | sound param (unknown) |
-| +0xECD | string | `revers3.wav` | - | sound (car-specific) |
-| +0xEDD | param | 0.7 / 0.7 | - | sound param (unknown) |
-| +0xEE1 | param | 1.8 / 1.8 | - | sound param (unknown) |
-| +0xEE5 | param | 30 / 30 | - | sound param (unknown) |
-| +0xEE9 | param | 100 / 100 | - | sound param (unknown) |
-| +0xEED | param | 80 / 80 | - | sound param (unknown) |
-| +0xEF1 | param | 100 / 100 | - | sound param (unknown) |
-| +0xEF5 | param | 1 / 1 | - | sound param (unknown) |
-| +0xEF9 | param | 0.6 / 0.7 | **YES** | sound param (unknown) |
-| +0xEFD | string | `buick_2.wav` | - | sound (car-specific) |
-| +0xF0D | param | 0.6 / 0.6 | - | sound param (unknown) |
-| +0xF11 | param | 1.82 / 1.82 | - | sound param (unknown) |
-| +0xF15 | param | 35 / 35 | - | sound param (unknown) |
-| +0xF19 | param | 100 / 100 | - | sound param (unknown) |
-| +0xF1D | param | 70 / 70 | - | sound param (unknown) |
-| +0xF21 | param | 100 / 100 | - | sound param (unknown) |
-| +0xF25 | param | 1 / 1 | - | sound param (unknown) |
-| +0xF29 | param | 0.4 / 0.4 | - | sound param (unknown) |
-| - | padding | (24 dwords sentinel/zero) | - | fill |
-| +0xF8D | string | `black_0.wav` | - | sound (car-specific) |
-| +0xF9D | param | 35 / 35 | - | sound param (unknown) |
-| +0xFA1 | param | 1 / 1 | - | sound param (unknown) |
-| - | padding | (9 dwords sentinel/zero) | - | fill |
-| +0xFC9 | string | `horn5.wav` | - | horn |
-| - | padding | (4 dwords sentinel/zero) | - | fill |
-| +0xFE9 | string | `hand2.wav` | - | handbrake |
-| +0xFF9 | string | `gear2.wav` | **YES** | gear change |
-| +0x1009 | string | `gear1.wav` | **YES** | gear change |
-| +0x1019 | string | `slip1.wav` | - | tyre slip |
-| +0x1029 | string | `break.wav` | **YES** | brakes |
-| +0x1039 | string | `cep.wav` | **YES** | sound (car-specific) |
-| +0x1049 | string | `pneu1.wav` | - | tyre |
-| +0x1059 | string | `carglass.wav` | - | glass break |
-| +0x1069 | string | `crashA1.wav` | - | crash (exterior) |
-| +0x1079 | string | `crashA2.wav` | - | crash (exterior) |
-| +0x1089 | param | 1.5 / 1.5 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0x108E | string | `crashK1.wav` | - | crash (exterior) |
-| +0x109E | string | `crashK2.wav` | - | crash (exterior) |
-| +0x10AE | param | 2.5 / 2.5 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0x10B3 | string | `crashB1.wav` | - | crash (exterior) |
-| +0x10C3 | string | `crashB2.wav` | - | crash (exterior) |
-| +0x10D3 | param | 9 / 9 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0x10D8 | string | `crashC1.wav` | - | crash (exterior) |
-| +0x10E8 | string | `crashC2.wav` | - | crash (exterior) |
-| +0x10F8 | param | 35 / 35 | - | sound param (unknown) |
-| - | padding | (1 dword sentinel/zero) | - | fill |
-| +0x10FD | string | `door04op.wav` | - | door open |
-| +0x110D | string | `door04cl.wav` | - | door close |
-| - | padding | (1 dword sentinel/zero) | - | fill |
+| `+0x5C6` .. `+0x5CE` | f32 ×3 | - | 2500 1900 2500 | 2500 1900 2500 |
+| `+0x5D2` | f32 | `+0x440` ×1000 | 7 | 7 |
+| `+0x5D6` | f32 | `+0x444` | 1 | 1 |
+| `+0x5DA` | f32 | `+0x42c` ×1000 | 60 | 80 |
+| `+0x5DE` | f32 | `+0x430` | 4 | 1 |
+| `+0x5E2` | u8 | `+0x1bc` | 0 | 0 |
+| `+0x5E3` | f32 | `+0x408` | 1 | 1 |
+| `+0x5E7` | f32 | `+0x40c` | 1.1 | 1.1 |
+| `+0x5EB` | i32 | `+0x2a4` | 20 | 20 |
+| `+0x5EF` | u8 | `+0x2a8` | 0 | 0 |
+| `+0x5F0` | u8 | `+0x2a9` | 0 | 0 |
+| `+0x5F1` | u8 | - | 0 | 0 |
+| `+0x5F2` | f32 | `+0x18` | 1 | 1 |
+| `+0x5F6` | u8 | `+0x119` | 1 | 1 |
+| `+0x5F7` | i32 | `+0x4dc` | 12 | 12 |
+| `+0x5FB` | f32 | `+0x4e4` km/h | 35 | 35 |
+| `+0x5FF` | f32 | `+0x4e8` | 0.8 | 0.8 |
+| `+0x603` | f32 | `+0x4ec` | 2.4 | 2.4 |
+| `+0x607` | f32 | `+0x344` | 0 | 0 |
+| `+0x60B` .. `+0x60F` | f32 ×2 | - | 3 -4 | 3 -4 |
+| `+0x613` | f32 | `+0x350` | 2 | 2 |
+| `+0x617` | u8 | - | 0 | 0 |
+| `+0x618` .. `+0x628` | f32 ×5 | - | 0.7 0.1 0.7 0.1 0.03 | 0.7 0.1 0.7 0.1 0.03 |
+| `+0x62C` | f32 | `+0x240` km/h | 120 | 120 |
+| `+0x630` .. `+0x634` | f32 ×2 | - | 25 100 | 25 100 |
+| `+0x638` | f32 | `+0x23c` | 45 | 45 |
+| `+0x63C` | f32 | `+0x22c` | 0.4 | 0.4 |
+| `+0x640` | f32 | `+0x248` | 60 | 60 |
+| `+0x644` | f32 | `+0x24c` | 30 | 30 |
+| `+0x648` | f32 | `+0x250` km/h | 35 | 35 |
+| `+0x64C` | i32 | `+0x254` | 13 | 13 |
+| `+0x650` | i32 | - | 14 | 14 |
+| `+0x654` | f32 | `+0x278` km/h | 120 | 120 |
+| `+0x658` | f32 | `+0x27c` km/h | 25 | 25 |
+| `+0x65C` | f32 | `+0x270` | 100 | 100 |
+| `+0x660` | f32 | `+0x274` | 40 | 40 |
+| `+0x664` .. `+0x678` | f32 ×6 | - | 120 20 100 30 10 60 | 120 20 100 30 10 60 |
+| `+0x67C` | f32 | `C_car+0x1ff4` | 110.526 | 110.526 |
+| `+0x680` | f32 | `C_car+0x1ff8` | 18.4211 | 18.4211 |
+| `+0x684` | f32 | `C_car+0x1ffc` | 100 | 100 |
+| `+0x688` | f32 | `C_car+0x2000` | 65 | 65 |
+| `+0x68C` .. `+0x6DC` | f32 ×21 | - | 70 10 20 30 40 35 70 10 100 15 25 15 15 10 1 100 0 1 1 1 80 | 70 10 20 30 40 35 70 10 100 15 25 15 15 10 1 100 0 1 1 1 80 |
+| `+0x700` | f32 | `+0x144` km/h | 50 | 50 |
+| `+0x704` | f32 | `+0x148` km/h | 10 | 10 |
+| `+0x708` | f32 | `+0x14c` | 100 | 100 |
+| `+0x70C` | f32 | `+0x150` | 70 | 70 |
+| `+0x710` | f32 | `+0x154` | 20 | 20 |
+| `+0x714` .. `+0x7A8` | f32 ×38 | - | 2 2 2 50 10 100 0 5 5 5 50 10 100 20 5 5 5 50 10 100 20 10 5 10 50 10 100 20 10 5 5 50 10 100 20 10 5 5 | 2 2 2 50 10 100 0 5 5 5 50 10 100 20 5 5 5 50 10 100 20 10 5 10 50 10 100 20 10 5 5 50 10 100 20 10 5 5 |
+| `+0x7AC` | f32 | `+0x208` km/h | 9 | 9 |
+| `+0x7B0` | f32 | `+0x20c` km/h | 27 | 27 |
+| `+0x7B4` | f32 | `+0x210` | 5 | 5 |
+| `+0x7B8` | f32 | `+0x6b8` | 0 | 0 |
+| `+0x7BC` | f32 | `+0x6bc` | 20 | 20 |
+| `+0x7C0` | f32 | `+0x6c0` | 5.5 | 5.5 |
+| `+0x7C4` | f32 | `+0x6c4` | 0.9 | 1.4 |
+
+* `+0x5DA` / `+0x5DE` are the handbrake force and ramp (`C_Vehicle+0x42c` / `+0x430`).
+* `+0x5E2` set (9 cars: the hot rods, `toyota`, `xedos`) makes `vehicle_body_coll_resolve` use the car's
+  own friction `+0x5E3` and impulse factor `+0x5E7` instead of the surface material's
+  (`def-files-docs/materialy.md` §1a).
+* `+0x5F6` is the roof flag (`C_Vehicle+0x119`, = `C_car+0x189`). It is clear on the 27 open bodies
+  (roadsters, phaetons, speedsters, tourers, pickups, hot rods, race cars) and set on the other 62;
+  `car_on_collision_apply_damage` applies its hit-from-above occupant damage only to cars without it.
+* `+0x617` set (`FThot`, `toyota`, `xedos`) switches off the surface bumps of
+  `def-files-docs/materialy.md` §1a for the car (`C_Vehicle+0x1bd`).
+* `+0x67C`-`+0x688` go to the `C_car`, not to the `C_Vehicle`; the first two are scaled by
+  `C_car+0x6e0` and converted from km/h on load.
+
+## 4d. Sound records (0x7C9-0x111C)
+
+| offset | count | size | contents |
+|---|---|---|---|
+| `0x7C9` | 3 | `0x10` | filename slots |
+| `0x7F9` | 5 | `0x31` | engine-sound records, set A |
+| `0x8EE` | 5 | `0x31` | engine-sound records, set B |
+| `0x9E3` | 5 | `0x30` | engine-sound records without the flag byte, set C |
+| `0xAD3` | 1 | `0x18` | filename and two params |
+| `0xAEB` | 1 | `0x24` | filename and five params |
+| `0xB0F` | 10 | `0x10` | filename slots |
+| `0xBAF` | 4 | `0x25` | crash records: two filenames, one param, one byte |
+| `0xC43` | 6 | `0x10` | filename slots |
+| `0xCA3` | 4 | 4 | params |
+| `0xCB3` | 5 | `0x31` | engine-sound records, set D |
+| `0xDA8` | 5 | `0x31` | engine-sound records, set E |
+| `0xE9D` | 5 | `0x30` | engine-sound records without the flag byte, set F |
+| `0xF8D` | 1 | `0x18` | filename and two params |
+| `0xFA5` | 1 | `0x24` | filename and five params |
+| `0xFC9` | 10 | `0x10` | filename slots |
+| `0x1069` | 4 | `0x25` | crash records |
+| `0x10FD` | 2 | `0x10` | filename slots |
+
+An engine-sound record is a 16-byte filename, eight floats and (in sets A, B, D, E) a flag byte.
+`vehicle_apply_carinit_params` validates the floats and `vehicle_update_engine_pitch` plays them. Rpm
+values are percent of the range from idle to maximum rpm.
+
+| param | meaning | load check |
+|---|---|---|
+| `p0` | pitch at the lowest audible rpm | at least 0.5 |
+| `p1` | pitch at the highest audible rpm | above `p0`, at most 2.0 |
+| `p2` | lowest audible rpm | 0..100 |
+| `p3` | highest audible rpm | `p2`..100 |
+| `p4` | rpm where the fade-in ends | 0..100 |
+| `p5` | rpm where the fade-out starts | `p4`..100 |
+| `p6` | volume at full weight | 0..1 |
+| `p7` | volume at zero weight | 0..1 |
+| flag | muted while the effective gear `C_Vehicle+0x5d8` is 0 | - |
+
+The sound plays only while the rpm lies in [`p2`, `p3`]; its pitch runs linearly from `p0` to `p1`
+across that band; its volume is `p7 + (p6 − p7)·w`, where *w* is the throttle for some sets and one
+minus the throttle for others, scaled up linearly from `p2` to `p4` and down from `p5` to `p3`.
+
+The `blackha` filenames (a slot whose first byte is NUL is empty even when text follows it):
+
+| off | L0 | boost |
+|---|---|---|
+| `+0x7C9` | `engine_on.wav` | - |
+| `+0x7D9` | `engine_off.wav` | - |
+| `+0x7E9` | `engine_on_nf.wa` (cut to the slot's 15 characters) | - |
+| `+0x7F9` | `interier.wav` | - |
+| `+0x8EE` | `interier_X.wav` | - |
+| `+0x9E3` | `interier.wav` | - |
+| `+0xAD3` | `interier_0.wav` | - |
+| `+0xAEB` | `interier_A.wav` | - |
+| `+0xB0F` | `horn1.wav` | - |
+| `+0xB2F` | `hand2.wav` | - |
+| `+0xB3F` / `+0xB4F` | `gear1.wav` | - |
+| `+0xB5F` | `slip1.wav` | - |
+| `+0xB6F` / `+0xB7F` | empty (`\0rzdy_loop.wav`, `\0hit3.wav`; 52 other blocks name `brzdy_loop.wav` here) | - |
+| `+0xB9F` | `carglass.wav` | - |
+| `+0xBAF`-`+0xC2E` | `crashA1in` / `crashA2in`, `crashK1in` / `crashK2in`, `crashB1in` / `crashB2in`, `crashC1in` / `crashC2in` (`.wav`), params 1.5 / 2.5 / 9 / 35 | - |
+| `+0xC63` / `+0xC73` | `black_on.wav` / `black_off.wav` | - |
+| `+0xC83` | `startbad1.wav` | - |
+| `+0xC93` | `black_NPC.wav` | - |
+| `+0xCB3` / `+0xCE4` / `+0xD15` / `+0xD46` | `black_1.wav`, `buick_2.wav`, `black_3.wav`, `s1.wav` | `p1` of the first three |
+| `+0xDA8` / `+0xDD9` | `cheve_X.wav`, `s1.wav` | `p1` of the first |
+| `+0xE9D` / `+0xECD` / `+0xEFD` | `black_1.wav`, `revers3.wav`, `buick_2.wav` | `p7` of the second |
+| `+0xF8D` | `black_0.wav` | - |
+| `+0xFC9` | `horn5.wav` | - |
+| `+0xFE9` | `hand2.wav` | - |
+| `+0xFF9` / `+0x1009` | `gear2.wav` / `gear1.wav` | **YES** (empty at L1) |
+| `+0x1019` | `slip1.wav` | - |
+| `+0x1029` / `+0x1039` | `break.wav` / `cep.wav` | **YES** (empty at L1) |
+| `+0x1049` | `pneu1.wav` | - |
+| `+0x1059` | `carglass.wav` | - |
+| `+0x1069`-`+0x10E8` | `crashA1` / `crashA2`, `crashK1` / `crashK2`, `crashB1` / `crashB2`, `crashC1` / `crashC2` (`.wav`), params 1.5 / 2.5 / 9 / 35 | - |
+| `+0x10FD` / `+0x110D` | `door04op.wav` / `door04cl.wav` | - |
 
 ## 5. The boost (level 0 → level 1)
 
@@ -788,9 +369,11 @@ fields that differ, from §4a:
 | Front weigh | 68 | 52 |
 | Suspension forward (height) | 0.2 | 0.24 |
 
-More differing fields live in the geometry block (§4b — `+0x138`, `+0x144`-`+0x150`,
-`+0x190`-`+0x1C8` among others) and in a few sound params (§4c). Every one of them carries
-**YES** in the tables above.
+More fields differ outside the header: in both axle records the spring rate `+0x00`, the suspension
+travel `+0x04`, the tyre id `+0x10`, the set-1 angle `+0x18` and the set-1 pairs `+0x24`-`+0x30`, plus
+the front `+0x6F`; in the scalar block the handbrake force and ramp `+0x5DA` / `+0x5DE` and `+0x7C4`;
+in the sound records `p1` of four engine sounds and `p7` of one, and four filenames that are empty at
+level 1 (§4b-§4d).
 
 ## 6. Boostable cars (`level_count == 2`) — all 14
 
@@ -805,22 +388,24 @@ Body variants are separate records with independent level counts: `hudfor` (Terr
 3856 B. Header `u32 total (= 0xF0C)`, one further `u32`, then `u32 field_count (= 83)`, followed by
 the per-field descriptors. Their byte-offset column steps by 4 across the CARINIT floats and each
 carries a type code — `5` = float, `0x11` = other. The file is a layout/type table only; it holds no
-per-car data.
+per-car data. No binary of the game opens it: the name occurs in none of the decrypted `Game.exe`
+variants or shipped DLLs, and the engine reads `vehicles.bin` at the offsets of §4.
 
 ## 8. Cross-references
 
 - `police-system/artifacts/boosting.md` — how the pursuit system activates level 1.
 - `structs/pursuit-event-manager.md` — the `C_sledovacka` chase system.
 - `structs/car.md` and `structs/vehicle.md` — the runtime classes the block is loaded into.
-- Engine entry points: `car_get_model_level_count` (`0x00465a90`), `car_set_model_level`
-  (`0x00465ad0`), `vehicle_apply_carinit_params` (`0x005123d0`).
+- `def-files-docs/materialy.md` §1a — the surface values the own-friction pair and the bump switch
+  override.
+- Engine entry points: `car_load_model_level_tables` (`0x00465290`), `car_unpack_save_record`,
+  `car_get_model_level_count` (`0x00465a90`), `car_set_model_level` (`0x00465ad0`),
+  `vehicle_apply_carinit_params` (`0x005123d0`), `vehicle_update_steering_wheels`,
+  `vehicle_update_engine_pitch`.
 
 ## 9. Open items
 
 | item | state |
 |---|---|
-| the seven internal fields at `0x0EC`-`0x104` | byte-verified constants (45, 25, 10, 50, 90, 16, 50 for `blackha`), no consumer traced |
-| RHAM rows 71-74 | Fuel consumption / Rear weigh / Rear suspension height / RWD & Roof flags fall inside `0x134`-`0x7C8` but are not pinned to individual offsets |
-| the geometry block `0x134`-`0x7C8` | dumped field by field; the semantics of the individual entries are not established |
-| the ~8 floats after each sound filename slot | read as volume / pitch / ranges / priority from their value shapes; no engine reader has been traced to confirm the order |
-| `+0x000` "Weight" and `+0x130` "Forward control y/n" | RHAM's labels; the byte patterns are recorded, the meanings are inferred from the label alone |
+| the axle-record fields `+0x14`-`+0x58` (the two parameter sets), `+0x5C` and the angles `+0x6B`-`+0x73` | runtime wheel fields and conversions are decoded (§4b); what each one means physically is not established |
+| the scalar-block fields with `-` in §4c | read through the consumer's array loops; not traced field by field |

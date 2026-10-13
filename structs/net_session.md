@@ -1,6 +1,6 @@
 # `g_net_session` — the multiplayer session object
 
-**Created** 2026-08-16 18:02 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-16 18:02 +0200 · **Modified** 2026-10-05 15:41 +0200
 
 | | |
 |---|---|
@@ -29,32 +29,45 @@ settings `+0x1ac`, peers `+0x268`, send queues, lobby flags, AI racer slots `+0x
 | `+0xb0` | container base of the relevance-filtered peer vector (begin/end at `+0xb4`/`+0xb8`) | published by `net_session_get_relevant_peer_list`, filled by `net_session_partition_peers_by_relevance` |
 | `+0xb4` | walked to post one state message per peer | `physical_object_broadcast_state_net_event_msg` |
 | `+0xd4`/`+0xd8`/`+0xdc` | `vector<provider*>` — the enumerated connection providers, records `{const char *name, int driver_index, int type}` (`0xc` B) | `net_session_enumerate_providers` |
-| `+0x100` | **session state / role** ¹ | `net_session_is_active`, `net_session_start`, `net_session_init_provider`, `net_multiplayer_run` |
+| `+0x100` | **session state** ¹ | `net_session_set_state`, `net_session_start`, `net_session_init_provider`, `net_session_is_active`, `net_multiplayer_run` |
+| `+0x104` | **the state the load screen waits for**: `race_net_load_sync` sets 6, then 7, and `gui_load_progress_tick` closes the screen once `+0x100` equals it; 8 = none (§3c) | `net_session_ctor` and `net_session_leave` (8), `race_net_load_sync`, `gui_load_progress_tick` |
 | `+0x108` | the **INet connection object**, the target of every session-level forward ² | `net_session_set_name`, `net_session_set_password`, `net_session_create_as_host`, `net_session_list_available` |
 | `+0x10c` | the **INet driver object** from `inet.dll`'s `_CreateINetBase@4`; vtable `+0x14`/`+0x18`/`+0x1c` enumerate providers, `+0x20`/`+0x24` enumerate sessions | `net_session_init_provider`, `net_session_enumerate_providers`, `gui_mp_settings_ctor` |
 | `+0x110` | the `0x9c`-byte network-settings block (§4a) | `net_session_settings_addr` returns `this+0x110`; `gui_mp_settings_ctor` copies exactly `0x27` dwords |
 | `+0x1ac` | the embedded game-settings block; `+0x38` of it is `+0x1e4` | `net_session_game_settings_addr` |
 | `+0x1e4` | **session game mode** — 1 Deathmatch, 2 Team Deathmatch, 3 Single Race, 4 Championship. The disconnect handler's `3..4` gate is a test for a race mode | `net_session_remove_peer`, `net_session_game_settings_ctor`, `net_session_leave` (zeroes it) |
 | `+0x1fc` | the last error's textdb id — **900** = "Error in Direct Play initialization!"; `0x38c` when the session dies | `net_session_init_provider`, `net_session_create_connection`, `net_session_receive_messages` |
-| `+0x200` | byte gate: the session is live enough to broadcast. `net_session_post_event_msg` sends only when it is set **and** the message's `[4]` equals `+0x274`; every outbound racing message tests it too | `net_session_post_event_msg`, `racing_set_damage_enabled`, `net_session_remove_ai_racer`, `racing_tick` phases 2/3 |
+| `+0x200` | **this machine hosts the session.** `net_session_post_event_msg` sets a message's broadcast flag `[5]` only on the host, for a message addressed to the host itself (`[4]` equals `+0x274`); the receive arms re-post a message for the other peers only when it is set; `net_session_return_to_lobby` picks state 4 when set and 3 when clear; `race_net_load_sync` and `gui_mp_lobby_ctor` take their host or client branch on it | `net_session_post_event_msg`, `net_session_return_to_lobby`, `race_net_load_sync`, `gui_mp_lobby_ctor`, `racing_set_damage_enabled`, `net_session_remove_ai_racer`, `racing_tick` phases 2/3 |
 | `+0x204` | **the local player's record, embedded** (not a pointer), so its name field is at `+0x208` | the session banner prints `+0x208`; `racing_do_gates` and `opponent_do_recover` compare the ADDRESS `g_net_session + 0x204`; the latency deserializer skips this peer |
 | `+0x228` | the local player's **driver-appearance model index** into `tables\playerindex.def` | written by `gui_mp_lobby_on_child_result`; read by `gui_mp_lobby_ctor` / `_tick` through `car_database_get_player_model` |
-| `+0x230` | a peer-slot byte: compared against a record's `+0x2c` on disconnect and against `+0x1b` of a wire record; the roster arm also derives the highest peer slot from it (§7) | `net_session_remove_peer`, the type-3 receive arm |
+| `+0x230` | **the local player's slot**: `+0x2c` of the record embedded at `+0x204`. The host takes slot 0; a client takes one past the highest slot in the received roster, the rule the host's join arm uses to assign it. Compared against a record's `+0x2c` on disconnect and against `+0x1b` of a wire record | `net_session_create_as_host`, the type-3 receive arm, `net_session_remove_peer` |
 | `+0x252` | the local player's **ready** flag; greys the Garage and Person buttons, toggled by a type-`0x2e` receive | `gui_mp_lobby_tick`, `net_session_set_ready_flag` |
 | `+0x268` / `+0x26c` | `vector<player*>` — **the human players**, the local one included | `racing_place_cars`, `racing_activate_racers`, `net_session_average_remote_latency`, `net_session_find_peer_by_id`, the disconnect handler |
-| `+0x274` | **session id**, copied into every outbound event message as its `[4]` field and checked on the way out | all 8 message sites, `net_session_post_event_msg` |
+| `+0x274` | **the host's peer id**: the host stores its own id, a client the id of the first roster record, which is the host's. Most producers address a message to it in `[4]`; on the host such a message is relayed to every other peer (§3b) | `net_session_create_as_host`, the type-3 receive arm, `net_session_post_event_msg` |
 | `+0x27c` | ping accumulator; fires past 4000 ms | `net_session_ping_tick` |
+| `+0x280` | **the timeout watchdog is armed**: `net_session_ping_tick` does nothing while it is clear. Set by `net_session_create_as_host` and by the type-`0xa` acknowledgement; cleared by the constructor, `net_session_leave` and `net_session_disable_timeout_watchdog` | `net_session_ping_tick` |
 | `+0x289` | **ready-toggle request in flight** — set by `net_session_request_ready_flag` when a client posts type `0x2f`, cleared when the host's type-`0x2e` echo returns for our own peer; read twice by `gui_mp_lobby_tick` to stop a client toggling ready while a request is outstanding | `net_session_request_ready_flag`, `gui_mp_lobby_tick` |
 | `+0x294` / `+0x298` | `vector<ai_slot*>` — **the AI opponents** configured for the session | `racing_add_racer_for_ai_slot`, `net_session_add_ai_racer`, `net_session_remove_ai_racer` |
 | `+0x2a0` / `+0x2a4` | mid-buffer SUSPEND request and the saved parse offset — the dispatcher can stop part-way through a payload and resume next frame | `net_session_receive_messages` |
 | `+0x2c0` | accumulated microseconds spent inside the transport, measured with `QueryPerformanceCounter` around every call | `net_session_receive_messages` |
 
-¹ Values: **0** no INet provider was ever created — `net_session_init_provider` zeroes `+0x10c` and
-`+0x100` on a failed `_CreateINetBase@4` and stores textdb 900 in `+0x1fc`, and `net_multiplayer_run`
-refuses on `+0x100 == 0`; **5** in game, written by `net_session_start` and by the type-6 receive;
-**7** this machine hosts a networked game — the gate `box_ai_tick`,
-`bottle_post_collision_net_event_msg` and `opponent_do_recover` test. `1` and `5` also appear as
-`gui_mp_lobby_tick` exit codes (`0x3d` start, `0x3f`); for `2`, `3`, `4`, `6` see §7.
+¹ The state is a stage, written by `net_session_set_state` and by the session's own methods:
+
+| value | meaning | writers |
+|---|---|---|
+| 0 | no session: no INet provider, or a step failed, with the error's textdb id in `+0x1fc` | `net_session_init_provider` (textdb 900), `net_session_create_connection`, `net_session_connect_selected_provider`, `net_session_create_as_host`, `net_session_join`, `net_session_list_available` (textdb `0x388`), `net_session_ping_tick`, `net_session_remove_peer`, transport id `0xffff0016`, a scene mismatch in the type-`0xb` arm (textdb `0x391`) |
+| 1 | idle: a provider exists, no session | `net_session_ctor`, `net_session_leave`, `net_multiplayer_run` after a failed host or join |
+| 2 | the selected connection provider is connected | `net_session_connect_selected_provider` |
+| 3 | in a session's lobby as a client | `net_session_join`, `net_session_return_to_lobby` |
+| 4 | in a session's lobby as the host | `net_session_create_as_host`, `net_session_return_to_lobby` |
+| 5 | the game is starting | `net_session_start` (host), the type-6 arm (client) |
+| 6 | every player has the same scene loaded | `race_net_load_sync` and the type-`0xb` arm (§3c) |
+| 7 | the load handshake is complete and the game runs | `race_net_load_sync`, the type-`0xd` arm (host) and the type-`0xe` arm (client) (§3c) |
+
+Every machine waits for 7 before the race runs, so 7 means "a networked game is running" on host
+and client alike. `net_multiplayer_run` refuses on 0; `gui_mp_lobby_tick` closes the lobby with
+code `0x3d` on 5 and `0x3f` on 1; the networked physics gates (`box_ai_tick`,
+`bottle_post_collision_net_event_msg`, `opponent_do_recover` and others) test `== 7`.
 ² 8 vtable slots are used: `+0x14`/`+0x18`/`+0x1c` enumerate sessions, `+0x20` set session name,
 `+0x24` set password, `+0x34` create session, `+0x50` local player id, `+0x54` set player name.
 Layout inside `INet.dll`: §4c.
@@ -74,7 +87,8 @@ final-positions array (`champ_circuit+0x0c`).
 | `+0x24` | chosen car model id | `racing_add_racer_for_player`, `racing_bind_local_player_racer` |
 | `+0x28` | per-player latency, averaged over **remote** players only (`+0x204` skipped, divisor `count - 1`) | `net_session_average_remote_latency`, whose result is the pre-start pacing period in `racing_tick` phase 2 |
 | `+0x2c` | **player id / slot byte** — the disconnect handler's match key and the sort key of `race_compare_participant_slot` | `net_session_remove_peer` |
-| `+0x4d` | a per-player flag tested in the session listing | the `"%s: players: %i / max: %i"` path |
+| `+0x4c` | the player acknowledged the actor-GUID table (§3c) | set by the type-`0xd` arm, the local record's (`session+0x250`) by `race_net_load_sync` |
+| `+0x4d` | the player has the scene loaded (§3c); also tested in the session listing | set by the type-`0xb` arm, the local record's (`session+0x251`) by `race_net_load_sync`; the `"%s: players: %i / max: %i"` path |
 
 ### 2b. AI opponent slot — `+0x294` vector, `0x2c` bytes
 
@@ -92,7 +106,7 @@ final-positions array (`champ_circuit+0x0c`).
 | `+0x00` | peer id | `net_session_find_peer_by_id` compares it |
 | `+0x04` | display name | the chat receiver formats `"%s : %s"` with it |
 | `+0x28` | **mean half round-trip time** | `net_session_peer_update_latency` stores the mean of the `+0x34..+0x38` window |
-| `+0x2c` | player slot; `session+0x230` is its max | the roster message carries it |
+| `+0x2c` | player slot, assigned by the host as one past the highest slot in use; the local player's is `session+0x230` | the roster message carries it |
 | `+0x34` / `+0x38` | a 10-entry rolling window of RTT samples, trimmed by shifting | `net_session_peer_update_latency` |
 | `+0x40` / `+0x44` | timeout countdown pair, rearmed to 8000 ms | `net_session_peer_update_latency` |
 | `+0x4e` | the peer's **lobby ready flag** — written only by the type-`0x2e` / type-`0x2f` receive arms, ANDed across peers by `net_session_all_peers_ready`, rendered by `gui_widget_net_player_set_row` | `net_session_all_peers_ready`, `net_session_can_start` |
@@ -102,6 +116,15 @@ final-positions array (`champ_circuit+0x0c`).
 `racing_find_opponent_by_player` / `_by_ai_slot`, `racing_remove_racer_for_player` / `_for_ai_slot`
 and `race_compare_participant_slot` tell them apart, and how `racing_place_cars` builds a networked
 grid in session order rather than array order.
+
+### 2d. Who adds and removes records
+
+A census of every write to `+0x264..+0x26c` and `+0x290..+0x298` in `Game.exe` closes the set:
+
+| vector | adds | removes |
+|---|---|---|
+| human players `+0x268` | `net_session_create_as_host` (the local record), the type-`0xffff0007` arm (host), the type-3 roster arm and the type-4 arm (client) | `net_session_remove_peer` (from the type-`0xffff0009`, type-5 and type-`0xb` arms, `net_session_ping_tick` and the lobby's kick), `net_session_leave` |
+| AI opponents `+0x294` | `net_session_add_ai_racer`, the type-`0x32` arm | `net_session_remove_ai_racer`, `net_session_clear_ai_racers` |
 
 ## 3. The message layer
 
@@ -127,8 +150,12 @@ consumer of 27 of the 39 message descriptors (`structs/net_event_msg.md`).
 
 ### 3b. Send
 
-Every outbound message is an `operator_new(0x18)` record posted through `net_session_post_event_msg`,
-with the type in `[2]` and `g_net_session+0x274` in `[4]`. The located outbound types (§7):
+Every outbound message is an `operator_new(0x18)` record with the type in `[2]` and the addressee's
+peer id in `[4]`, for most producers `g_net_session+0x274`, the host. It is posted through
+`net_session_post_event_msg`; on the host, a message addressed to the host is relayed to every other
+peer. Type `5`, the type-`7` echo and the host's type-`0xb` answer are sent at once by
+`net_session_send_event_msg_direct`. Every type and its producer is in `structs/net_event_msg.md` §4;
+the lobby and race-control types:
 
 | type | vtable | posted by | meaning |
 |---|---|---|---|
@@ -140,6 +167,22 @@ with the type in `[2]` and `g_net_session+0x274` in `[4]`. The located outbound 
 | `0x38` | `g_event_msg_vt_race_finish` | `racing_do_gates` | a racer finished (slot, time, place) |
 | `0x3b` / `0x3c` | `g_event_msg_vt_base` | `racing_set_damage_enabled` | damage on / off |
 | `0x3d` | `g_event_msg_vt_base` | `opponent_do_recover` | a car respawned |
+
+### 3c. The load handshake
+
+`race_net_load_sync` runs on every machine once a networked race scene is loaded, and walks the
+session through states 6 and 7:
+
+1. **Scene.** A client posts type `0xb` with its scene identity (`C_mission+0x00..+0x07`) and
+   waits for 6. The host sets its own record's `+0x4d`; each arriving `0xb` sets that player's.
+   Once every `+0x4d` is set the host enters 6 and posts its own `0xb`, and a client enters 6
+   when the host's identity matches its own, or 0 with textdb `0x391` when it does not.
+2. **Actor GUIDs.** The host builds the remap table (`net_session_build_actor_guid_table`),
+   applies it, posts it as type `0xc` and sets its own `+0x4c`. Each client applies it
+   (`actor_apply_net_guid_table`) and answers with type `0xd`, which sets that player's `+0x4c`.
+   Once every `+0x4c` is set the host posts type `0xe` and enters 7; a client enters 7 when the
+   `0xe` arrives. A host alone in the session enters 7 at once.
+3. **Wait.** Both sides hold the load screen open until `+0x100` reaches `+0x104` = 7.
 
 ## 4. The DirectPlay / `inet.dll` layer
 
@@ -238,12 +281,3 @@ document is PC-only**. Two consequences invert the usual expectation:
 
 The absence of `inet.dll` on PS2 is the fifth documented reason a method exists on one build only —
 here in the reverse direction.
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| `+0x100` values `2`, `3`, `4`, `6` | no writer or reader identified |
-| `+0x230` | read both as the local peer's slot byte (disconnect match) and as the highest peer slot in the roster arm; which the field is named for is unsettled |
-| the join path | the type-`0xffff0007` arm allocates peer records, but no writer is located for a `+0x268` / `+0x294` entry outside it and the two add paths; the module `[0x00597ab0, 0x0059e120)` is not fully swept |
-| message numbering | only the types listed in §3b are located as outbound; the space is larger |

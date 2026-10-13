@@ -1,6 +1,6 @@
 # The screen-fade object — a cinematic letterbox that is never started
 
-**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-10-07 21:57 +0200
 
 A `0x14`-byte file-scope object at `0x006f9278`, constructed in the `Main.cpp` initializer block
 (`[0x005f79a0, 0x005f8370]`), with a two-method class: a per-frame tick and a destructor. It
@@ -18,7 +18,7 @@ typedef struct {                    /* at 0x006f9278, sizeof = 0x14 */
 /* +0x04 */ float speed;            // [H] g_screen_fade_speed, ctor writes 1.0f
 /* +0x08 */ float t;                // [H] g_screen_fade_t, clamped to [0, 1]
 /* +0x0c */ int   direction;        // [H] +1 / -1, multiplied into the step
-/* +0x10 */ float aspect;           // [M] g_screen_fade_aspect, 0x3f0a60dd = 1/1.85; ctor writes
+/* +0x10 */ float aspect;           // [H] g_screen_fade_aspect, 0x3f0a60dd = 1/1.85; ctor writes
                                     //     it, nothing reads it
 } S_screen_fade;
 ```
@@ -27,12 +27,12 @@ typedef struct {                    /* at 0x006f9278, sizeof = 0x14 */
 
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
-| `+0x00` | `active` | H | `screen_fade_static_ctor`, `screen_fade_tick` | `engine_main`, `race_run`, `net_multiplayer_run` | `if (g_fade_active) screen_fade_tick(dt)` in all three loops; the tick clears it when `t` reaches 0 |
+| `+0x00` | `active` | H | `screen_fade_static_ctor`, `screen_fade_tick` | `engine_game_loop`, `race_game_loop`, `race_game_loop_net` | `if (g_fade_active) screen_fade_tick(dt)` in all three loops; the tick clears it when `t` reaches 0 |
 | `+0x01` | `animating` | H | `screen_fade_tick` | `screen_fade_tick` | the tick's own gate; **nothing sets it** |
 | `+0x04` | `speed` | H | `screen_fade_static_ctor` | `screen_fade_tick` | `1.0f` |
 | `+0x08` | `t` | H | `screen_fade_static_ctor`, `screen_fade_tick` | `screen_fade_tick` | `t += (dt/1000) * speed * direction`, clamped |
 | `+0x0c` | `direction` | H | - | `screen_fade_tick` | **no writer on either build** |
-| `+0x10` | `aspect` | M | `screen_fade_static_ctor` | - | `1/1.85`; see §3 |
+| `+0x10` | `aspect` | H | `screen_fade_static_ctor` | - | `1/1.85`; no reader on either build (§3) |
 
 ---
 
@@ -60,12 +60,13 @@ A measurement over a closed set:
 1. **The object's whole method set is two functions**, `screen_fade_tick` and
    `screen_fade_static_dtor` (§2); no `Start(direction, speed)` member exists to have been inlined
    away (§4).
-2. **A byte scan of `.text` for the object base `0x006f9278` returns five sites**, all accounted
-   for: the constructor, and four `test byte [0x6f9278]; jz …; mov ecx, 0x6f9278; call
-   screen_fade_tick` sequences in `engine_main`, `race_run` and `net_multiplayer_run`. Any starter
-   would have to materialise that address and would appear in the scan.
-3. **`+0x01` and `+0x0c` therefore have no writer**, so `screen_fade_tick` never runs its body: it
-   returns on the `animating` gate every frame.
+2. **A byte scan of the whole file for every address of the object, `0x006f9278` ..
+   `0x006f928b`, returns ten references**: the constructor's four field writes, and in each of
+   `engine_game_loop`, `race_game_loop` and `race_game_loop_net` one `test` (or `cmp`) of
+   `[0x6f9278]` followed by `mov ecx, 0x6f9278; call screen_fade_tick`. A starter or a reader
+   would have to materialise one of those addresses and would appear in the scan.
+3. **`+0x01` and `+0x0c` therefore have no writer and `+0x10` has no reader**, so
+   `screen_fade_tick` never runs its body: it returns on the `animating` gate every frame.
 
 Same family as the seagull flock and `g_console_unused_vector` — code that ships, runs and does
 nothing. Every statement above is about `Game.exe`'s bytes; the in-game confirmation is in §5.
@@ -109,8 +110,10 @@ PS2 writes `silver_screen = 0`, `[0x50a9a4] = 0x3f800000`, `[0x50a9a8] = 0`,
 
 **The method set.** The PS2 class has exactly two symbols, `__dt__15C_silver_screenFv` and
 `Tick__15C_silver_screenFUi`, so there is no `Start(direction, speed)` member on either build to
-have been inlined away. On the PS2 the same two-symbol limit applies, so if a starter exists there
-it is inlined into a caller.
+have been inlined away. The PS2 references to the object (address halves built with `lui 0x51`)
+sit only in `GameLoopSingle__Fv`, `GameLoopSingle1__Fv` and `__sinit_Main.cpp`: the two loops'
+test-and-tick and the constructor's writes, including the one to `+0x10`. The PS2 has no starter
+and no reader of the aspect either.
 
 ---
 
@@ -118,6 +121,4 @@ it is inlined into a caller.
 
 | item | state |
 |---|---|
-| reader of `+0x10` (`1/1.85`) | none on either build; `Tick` does not touch it and the class has no other method. A drawer would reach it through a register, so the way in is a displacement byte scan of `.text` |
-| the starter | unlocated on both builds (§3) |
 | in game | does any cutscene or mission transition letterbox the screen to 1.85:1, or fade through a full-screen curtain? If never, §3 is confirmed; if it does, the writer of `+0x01` / `+0x0c` is the thing to find |

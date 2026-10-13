@@ -1,6 +1,6 @@
 # `C_actor_track` — the base class of `C_actor`, and the `C_recorder` client interface
 
-**Created** 2026-08-04 18:07 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-04 18:07 +0200 · **Modified** 2026-10-12 21:02 +0200
 
 PC prefix **`actor_track_`**.
 
@@ -40,10 +40,17 @@ Read directly from the vtables in `Game.exe`'s `.rdata`:
   `Update` / `NetDirect`, all folded by `/OPT:ICF` onto the single stub
   `stub_noop_args4_004776f0`.
 
-**What is measured:** the 13 form one coherent block (§7); they are emitted as **COMDATs in a
+**What is measured:** the 13 form one coherent block; they are emitted as **COMDATs in a
 shared band** (`0x0044a650`–`0x0044b5c0`) rather than inside any one translation unit —
 `C_actor_shot`'s two overrides sit in that band while its own TU is 0x4000 bytes away — and they
 are a self-contained interface to one subsystem. Because the band is COMDAT-grouped, its emission order carries no information.
+
+**Whether the base is a separate class is not decidable from the binaries.** No class outside the
+`C_actor` family uses the interface. No stand-alone 13-slot vtable exists in `.rdata` — all 28
+vtables holding the slot-0 default run 39 slots or more — and `actor_ctor` and `actor_dtor` each
+store a single vptr, so a separate base could only have been declared `__declspec(novtable)`. The
+PC ships no RTTI and the PS2 has neither the class nor the 13 methods (§5). A `novtable` base and
+13 leading virtuals of `C_actor` produce the same bytes.
 
 ## 2. The vtable slots
 
@@ -159,6 +166,7 @@ the `0x34`-stride table at `car+0x308` — match `C_DropOut`'s two initialisers 
 | `+0x04` | **mode/state flags** — see §3a | zeroed by `actor_ctor` |
 | `+0x08` | `track*` — the `C_recorder` track | written by `recorder_add_track`; every slot reads it |
 | `+0x10` | `kind` (the C_entity type enum) | forwarded to `recorder_new_track`, which switches on it |
+| `+0x60` | the pending event record (`0x48` bytes) | written by `human_track_queue_anim_event`, encoded into the next key and cleared by `human_track_record_key` (`structs/actor.md` §1b) |
 | `+0x68` | `I3D_frame*` — the bound scene frame | slots 1/2/3 write its local pos/quat |
 
 `actor_ctor` calls no base constructor: the base has none to call — it is a pure interface —
@@ -261,6 +269,4 @@ the usual case, where the PS2 port *added* subsystems.
 
 ## 7. Open items
 
-| Item | State |
-|---|---|
-| is the base a real class, or `C_actor`'s first 13 virtuals? | no class outside the `C_actor` family uses the interface. No stand-alone 13-slot vtable exists in `.rdata` — all 28 vtables holding the slot-0 default run 39 slots or more — and `actor_ctor` and `actor_dtor` each store a single vptr, so a separate base could only have been declared `__declspec(novtable)`. The binary cannot tell that apart from 13 leading virtuals |
+Nothing is open.

@@ -1,6 +1,6 @@
 # `C_Debris` — the debris and spark effect
 
-**Created** 2026-09-04 13:25 +0200 · **Modified** 2026-10-01 14:19 +0200
+**Created** 2026-09-04 13:25 +0200 · **Modified** 2026-10-11 20:53 +0200
 
 PC prefix **`debris_`**, code range `[0x0061e100, 0x006243ac]`. Its own translation unit,
 `VE_Debris.cpp`, immediately after `VE_BreakageGlass.cpp`.
@@ -218,8 +218,11 @@ stamped on `debris_list_erase_at` or `std_vector44_insert_at`.
 | `__ct__8S_DEBRISFRC8S_DEBRIS` | 72 B @ 0x003bc730 | the open-coded 7-dword copy loop in `debris_generate` |
 | `__ct__7S_FLASHFRC7S_FLASH` | 64 B @ 0x003bd0f0 | the `0x11`-dword block in `debris_generate_flash` |
 
-Both are graded CANDIDATE-inlined — the direction is a toolchain difference (Metrowerks out-lines a
-POD copy, MSVC splices it) and no image-wide census of MSVC's POD-ctor out-lining exists.
+Both inlinings are measured on the call graph. The image does hold out-of-line single-element
+copy helpers for other element types, and the only two whose copy size matches —
+`stl_construct_stride_0x1c` (7 dwords) and `std_vector44_copy_one` (`0x11` dwords) — are never
+reached from this translation unit: the first is called only by AI, vehicle, HUD and UV-scroll
+code, the second only by `std_vector44_insert_one`, which the debris code does not call.
 
 **Size ratios** run 0.55–1.18. The two above 1.0 (`debris_tick` 1.18, `debris_generate` 1.11) are
 the passes MSVC unrolls hardest; nothing here is an outlier.

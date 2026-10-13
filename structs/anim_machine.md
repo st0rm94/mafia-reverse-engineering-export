@@ -1,6 +1,6 @@
 # `C_animations_machine_de_luxe` — the animation machine (`anim_machine_`)
 
-**Created** 2026-07-13 11:22 +0200 · **Modified** 2026-09-29 19:47 +0200
+**Created** 2026-07-13 11:22 +0200 · **Modified** 2026-10-04 23:41 +0200
 
 The engine's per-object **animation state machine**: it owns the animation tracks, the
 currently-playing clip, the blend state, the "extended" (overlay) animation slot, and the
@@ -120,11 +120,11 @@ typedef struct C_animations_machine_de_luxe {
 | +0xfc | ext_time | H | `anim_machine_del_extended_anim` | - | zeroed when the blend-out starts |
 | +0x100 | ext_blend | H | `anim_machine_del_extended_anim` | - | stored as `-blend` while blending out |
 | +0x10e | ext_clip_id | H | `anim_machine_del_extended_anim` | `pedestrian_end_taxi_wave` | `0xffff` = none; `-0x2357` = the taxi-wave clip |
-| +0x110 | locked | H | `anim_machine_init_from_actor`, `anim_machine_init_from_traffic_element`, `anim_machine_init_from_model`, `anim_machine_reset` (0); `human_force_death`, `human_car_launched_into_air` (1) | `anim_machine_set_anim`, `anim_machine_is_active`, `anim_machine_tick`, `anim_machine_set_extended_anim`, `anim_machine_del_extended_anim`, `anim_machine_stage_blending_tick` | ¹ |
+| +0x110 | locked | H | `anim_machine_init_from_actor`, `anim_machine_init_from_traffic_element`, `anim_machine_init_from_model`, `anim_machine_reset` (0); `human_force_death`, `human_die_in_exploding_car` (1) | `anim_machine_set_anim`, `anim_machine_is_active`, `anim_machine_tick`, `anim_machine_set_extended_anim`, `anim_machine_del_extended_anim`, `anim_machine_stage_blending_tick` | ¹ |
 
 ¹ Set to 1 only when a `C_human` dies outside the normal damage path: `human_force_death` plays the
 death clip directly on the I3D frame and then writes `C_human+0x1cc` (= `+0xbc + 0x110`);
-`human_car_launched_into_air` makes the same three stores (`+0x644` = 0, `+0x5d` = 0, the lock = 1).
+`human_die_in_exploding_car` makes the same three stores (`+0x644` = 0, `+0x5d` = 0, the lock = 1).
 From then on the six readers return without acting, so the death pose is never overwritten. The
 three `Init`s and `Reset` clear it.
 

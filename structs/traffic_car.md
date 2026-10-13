@@ -1,6 +1,6 @@
 # `C_traffic_car` — entity kind `0xc`, the ambient-traffic MANAGER
 
-**Created** 2026-08-17 15:33 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-17 15:33 +0200 · **Modified** 2026-10-11 15:07 +0200
 
 | | |
 |---|---|
@@ -190,12 +190,17 @@ it inline, which enables Ghidra's built-in `alloca_probe` p-code injection.
 | folds onto a shared stub | 3 | `Death` (36 vtables), `NetDirect` (30), `DejSiZatimSlofiiika` |
 | inlined on the PC | 1 | `FindNodesIndex`, into `GetNewPosInfo` (§5) |
 | PS2-port-only | 2 | `ChangeSceneInit`, `ChangeSceneDone` — city streaming, `InterCity` occurs 0× on PC |
-| not located | 1 | `InvalidateActor` (§9) |
+| absent on the PC | 1 | `InvalidateActor`: `game_invalidate_actor` has no kind-`0xc` arm (below) |
 | second PS2 cluster | 1 | `DajDevatemuTyZkurvenyZmrdyAtFurtNevotravuje` — 12 B at PS2 `0x0032ea90`, sole caller `actionTick_2__8C_entity`; its PC twin is in the `C_entity` band, not this TU |
 | PC-only | 1 | the MSVC scalar deleting destructor |
 
 `traffic_car_element_ctor` is also PC-only: the PS2 holds the anim machine as a POINTER at
 element `+0x0`, so no element constructor was emitted there.
+
+**`InvalidateActor` has no PC counterpart.** The PS2 `C_game::InvalidateActor` calls
+`InvalidateActor__13C_traffic_car` for every kind-`0xc` actor and the pedestrian generator's for
+kind `0x12`; the PC `game_invalidate_actor` sends both kinds to the exit of its kind switch, and the
+kinds it does handle match the PS2 set.
 
 **`ActivateElems__13C_traffic_carFbi` ↔ `traffic_car_activate_elements` (CONFIRMED).** An `E8`
 scan of the PC byte range reproduces the PS2 callee multiset: `DeactivateElem` ×9↔×11,
@@ -218,7 +223,12 @@ PS2, `PrepareNextDir` has a single caller, `ActivateElems`.
 `+0x34 != 0 && +0x33 == 0`, which pins **PC `S_ELEMENT+0x0` = PS2 `+0x34` = the active flag**.
 `TakATedSiVasKupim_Vsecky__13C_traffic_carFb` ↔ `traffic_car_deactivate_adopted_elements` matches
 statement for statement, but the PS2 takes a bool choosing between "elements with `+0x34`" and
-"elements with `+0x34` and `+0x33`", and the PC implements only the `param == 0` arm.
+"elements with `+0x34` and `+0x33`", and the PC implements only the `param == 0` arm. The
+other arm has no PC counterpart to implement: its only caller is `G_GarageClass::UdelejBum`, the
+garage explosion, which is reached only from the PS2-only garage menu (`ChangeCar`, `TakeCar`,
+`DoGarageMenu`; `structs/garage.md` §4c), and none of that function's four position constants
+(`-1757.0`, `-1758.0`, `-5.42`, `2.44`) occurs anywhere in the PC image. `Done__6C_game` calls the
+`0` arm, as PC `game_done` does.
 
 **Record-layout differences, measured:**
 
@@ -260,6 +270,4 @@ derived from the body and the caller/callee pairs.
 
 | item | state |
 |---|---|
-| PS2 `InvalidateActor__13C_traffic_car` (548 B) | no PC start in its order position and not a vtable slot; `C_traffic_generator` has the same gap |
-| PS2 `TakATedSiVasKupim_Vsecky` "deactivate ALL" arm | reached from the garage explosion on the PS2; no PC counterpart located |
 | in game: does the cop-car counter cap reinforcements? | `g_traffic_cop_car_count` is watchable in Cheat Engine and the deploy path increments it once per car |

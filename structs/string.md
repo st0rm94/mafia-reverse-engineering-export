@@ -1,6 +1,6 @@
 # `C_string` / `C_str_base` — the refcounted string class
 
-**Created** 2026-07-29 20:59 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-29 20:59 +0200 · **Modified** 2026-10-13 17:48 +0200
 
 PC prefix **`string_`**.
 
@@ -8,9 +8,9 @@ PC prefix **`string_`**.
 |---|---|
 | PC instance size | `4` — a bare handle |
 | PC control block | `C_str_base`, `9 + length` bytes on the heap |
-| PC mapped functions | **8**, of which 3 have a PS2 twin |
+| PC mapped functions | **9**, of which 4 have a PS2 twin |
 | PC clusters | the core at `[0x00448db0, 0x00448fe0]`, plus `0x004626b0`, `0x00464bd0`, `0x004656b0` in a second translation unit (the COMDAT split — `structs/web_node.md` §2) |
-| PS2 class | `C_string` / `C_str_base`, 4 exported symbols (§4) |
+| PS2 class | `C_string` / `C_str_base` and `C_str`, 6 exported symbols in the family (§4) |
 
 `C_string` is the engine's **refcounted string**. It is one pointer to a `C_str_base` control
 block, or `NULL` for the empty string, so a `C_string` costs 4 bytes and copying one is a
@@ -49,7 +49,7 @@ handles as equal, and a NULL against a non-NULL as unequal, without touching eit
 
 ---
 
-## 2. Method family — 8 PC functions, 3 twinned
+## 2. Method family — 9 PC functions, 4 twinned
 
 Ordered by **PC VA**, PC name first. **Every row was body-diffed on both builds.**
 
@@ -59,16 +59,22 @@ Ordered by **PC VA**, PC name first. **Every row was body-diffed on both builds.
 | `0x00448df0` | `string_base_release` | - | CONFIRMED | Decrements the block's refcount and frees at zero. Takes the **block**, with the NULL check hoisted into the caller — the inlined normal-path half of the destructor (§3) |
 | `0x00448e10` | `string_dtor` | `__dt__8C_stringFv` | CONFIRMED | The **out-of-line** half: takes the handle, checks NULL internally. Identical to the PS2 destructor minus its deleting-flag arm, which MSVC emits separately |
 | `0x00448e30` | `string_get_data` | `GetData__Q28C_string10C_str_baseFv` | STRUCTURAL | `block ? block + 8 : &handle`. The PS2 symbol is on the **base** (`return this + 8`); the PC one is on `C_string` and inlines it — one level apart, hence STRUCTURAL |
-| `0x00448e40` | `string_append_cstr` | - | CONFIRMED | Reads the current length from `block+4`, `strlen`s the argument, allocates `len1 + len2 + 9` and concatenates. The fingerprint again |
+| `0x00448e40` | `string_concat_cstr` | - | CONFIRMED | The `operator+` with a C string: reads the length from `block+4`, `strlen`s the argument, allocates `len1 + len2 + 9` and builds a NEW block into the hidden result slot, its second parameter (`ret 8`); `*this` is not written. The fingerprint again. The in-place append, `string_append_cstr_in_place` (`0x00604a10`), builds the same block shape and stores it back into the handle |
 | `0x00448fe0` | `string_format` | `__ct__9C_fstringFPCce` | CONFIRMED | 🔑 `vsnprintf` into a **1024**-byte stack buffer, then build the block. Statement-for-statement with the PS2 including the `strlen + 9` allocation and the NUL write at `+len+8` |
-| `0x004626b0` | `string_assign_cstr` | - | CONFIRMED | `strlen`, allocate, fill, **then release the old block** — the assign half |
-| `0x00464bd0` | `string_ctor_from_cstr` | - | CONFIRMED | The same body **without** the release — the construct half. The presence or absence of the release step is what separates the pair |
-| `0x004656b0` | `string_wildcard_match` | - | CONFIRMED | Compares two `C_string`s with wildcard handling; reads length at `+4` and data at `+8` on both operands. Used against `.i3d` name patterns |
+| `0x004626b0` | `string_assign_cstr` | `__as__5C_strFPCc` | CONFIRMED | `strlen`, allocate, fill, **then release the old block** — the assign half. Statement for statement with the PS2 body, NULL argument included (§4) |
+| `0x00464bd0` | `string_ctor_from_cstr` | - | CONFIRMED | The same body **without** the release — the construct half. The presence or absence of the release step is what separates the pair. No PS2 symbol: the family's PS2 constructors are the format ones (§4) |
+| `0x004656b0` | `string_wildcard_match` | - | CONFIRMED | The class's only comparison. Reads length at `+4` and data at `+8` on both operands and compares case-insensitively; in the second operand, the pattern, `?` matches one character and the first `*` matches the rest, so a pattern without wildcards is plain case-insensitive equality. Used against `.i3d` name patterns. No PS2 counterpart (§4) |
 
 **Not members of this class**, although they refcount something: `string_ref_copy_construct`
-(`0x00608370`) refcounts slot **0** of an 8-byte element, while this class's own pair helpers
-`copy_elem_stride_8_with_string` and `assign_elem_stride_8_with_string` refcount slot **1** of a
-*different* element. Different layouts, different owners.
+(`0x00608370`) refcounts slot **0** of an 8-byte element, while `i3d_cache_items_copy_construct_one`
+and `i3d_cache_items_copy_assign_one` refcount slot **1** of a *different* element, the
+`{T *object, C_string name}` item of `C_I3D_cache<T>` (`structs/i3d_cache.md` §4b). Different
+layouts, different owners.
+
+**No other comparison exists.** Of the 152 `strcmp`-family callsites in the decomp, none compares
+two `C_string` blocks: the one call that compares two `+8` data fields is the MSVC runtime
+matching exception type names, and the functions that take string data out of a `C_string`
+compare it with a plain `char *`.
 
 ---
 
@@ -97,11 +103,17 @@ the two, because their bodies genuinely differ.
 
 ## 4. PC vs PS2
 
-* **The PS2 exports only 4 symbols for this family**, and that is the notable asymmetry:
-  `C_string`'s destructor, `C_str_base::GetData`, and the two format-constructors (`C_fstring`,
-  `fstring`). Metrowerks inlined everything else, so **five of the eight PC functions have no PS2
-  twin at all** — the reverse of the usual situation, where the PS2 has more out-of-line methods
-  than the PC.
+* **The PS2 exports 6 symbols for this family**, and that is the notable asymmetry:
+  `C_string`'s destructor, `C_str_base::GetData`, the two format-constructors (`C_fstring`,
+  `fstring`), and two members of `C_str`, a second class over the same refcounted block:
+  `__as__5C_strFPCc`, the assignment from a C string and the twin of `string_assign_cstr`, and
+  `__ct__5C_strFPCce`, a format constructor with a 1040-byte buffer and a NULL-format test, which
+  `string_format` (1024 bytes, no test) does not match. Metrowerks inlined everything else, so
+  **five of the nine PC functions have no PS2 twin at all** — the reverse of the usual situation,
+  where the PS2 has more out-of-line methods than the PC.
+* **The PS2 model cache compares names with `strcasecmp`.** At the position where the PC
+  `i3d_cache_model_open` runs the wildcard matcher inline, `Open__23C_I3D_cache<9I3D_model>` calls
+  `strcasecmp`, so `string_wildcard_match` has no PS2 counterpart.
 * **Zero layout delta.** `refcount +0x00`, `length +0x04`, `data +0x08`, allocation `strlen + 9`
   — identical on both builds. This is one of the few classes in the project with no rebase table.
 * **`C_fstring` is a subclass used as a temporary**: `C_fstring(fmt, ...)` formats and hands back
@@ -122,13 +134,3 @@ the two, because their bodies genuinely differ.
 `structs/web_node.md` §2 (the COMDAT split) · `structs/crt_runtime_tail.md` (the Dinkumware
 `basic_string<char>` members, a different string class in the same image) ·
 `ghidra/Game-ghidra.exe.functions.md` (the registry rows for this family).
-
----
-
-## 6. Open items
-
-| item | state |
-|---|---|
-| the 8-byte `{dword, C_string}` element | handled by `copy_elem_stride_8_with_string` / `assign_elem_stride_8_with_string` / `uninit_copy_range_stride_8`; the *owning* type is unidentified. Find the vector that holds it and the three names can be promoted off their mechanical form |
-| `string_append_cstr`'s second parameter | read, but its role is not pinned; the function was diffed for its allocation shape, not statement by statement |
-| is there a `C_string` comparison other than `string_wildcard_match`? | nothing in the cluster does a plain `strcmp`-style compare, which is mildly surprising for a string class |

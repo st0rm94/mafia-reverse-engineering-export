@@ -1,6 +1,6 @@
 # `C_sound_table` — the `sounds.dat` sound bank
 
-**Created** 2026-09-04 08:51 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-09-04 08:51 +0200 · **Modified** 2026-10-11 10:47 +0200
 
 PC prefix **`sound_table_`**. Hosted by the tail of the `tools.cpp` translation unit,
 `[0x0061cba0, 0x0061d820)`.
@@ -57,14 +57,17 @@ typedef struct S_sound_table {
 ```
 
 ```c
-typedef struct S_sound_params {        // 0x24 bytes
-/* +0x00 */ byte  mode;                // [H] 0/1/2 -> vtable slot 0x58 arg 3/1/2; 3 = error
-/* +0x04 */ float a, b, c, d;          // [H] pushed to the object's vtable slot 0x5c
-/* +0x14 */ float e, f;                // [H] pushed to slot 0x60
-/* +0x1c */ float g;                   // [H] pushed to slot 0x68
-/* +0x20 */ float h;                   // [H] pushed to slot 0x64
+typedef struct S_sound_params {        // 0x24 bytes; the I3D_sound setters are named in §6
+/* +0x00 */ byte  mode;                // [H] 0/1/2 -> sound type 3/1/2 (vtable slot 0x58); 3 = error
+/* +0x04 */ float range[4];            // [H] the range quadruple, slot 0x5c
+/* +0x14 */ float cone[2];             // [H] inner and outer cone angle in radians, slot 0x60
+/* +0x1c */ float volume;              // [H] slot 0x68
+/* +0x20 */ float out_volume;          // [H] the volume outside the cone, slot 0x64
 } S_sound_params;
 ```
+
+Block 0 of the shipped *Explosion* record is range `10, 155, 0.4, 0.3`, cone `0, 0`, volume 1,
+outside-cone volume 0.
 
 **The `+0x3e` latch.** `sound_table_load_tables` sets it to 1 on every record it reads.
 `sound_table_construct_sound` **clears it to 0** the first time the chosen variant's file fails to
@@ -121,10 +124,10 @@ also the cheapest way to hear a given entry in game: point a sound frame at it f
 | 0x0061d7e0 | `sound_table_clear_invisible_flag` | `ClearInvisibleFlag__13C_sound_tableFv` | 0x003b2340 | CONFIRMED | slot 11 — re-arm `+0x3e` on every record |
 | 0x0061dbb0 | `sound_table_get_num_sounds` | `GetNumSounds__13C_sound_tableFv` | 0x003b4f10 | CONFIRMED | slot 8 — record count |
 | 0x004253a0 | `folded_get_dword_0x10` | `GetSounds__13C_sound_tableFv` | 0x003b4f20 | CONFIRMED | slot 9 — `return this+0x10`; a 3-owner fold (§5) |
-| - | - | `GameInit__13C_sound_tableFv` | 0x003b1950 | PS2-port-only CANDIDATE | §6 |
-| - | - | `GameDone__13C_sound_tableFv` | 0x003b1a20 | PS2-port-only CANDIDATE | §6 |
-| - | - | `PreloadSoundPermanent__13C_sound_tableFUi` | 0x003b1af0 | PS2-port-only CANDIDATE | §6 |
-| - | - | `GetPreloadedSound__13C_sound_tableFUi` | 0x003b20c0 | PS2-port-only CANDIDATE | §6 |
+| - | - | `GameInit__13C_sound_tableFv` | 0x003b1950 | PS2-port-only | §6 |
+| - | - | `GameDone__13C_sound_tableFv` | 0x003b1a20 | PS2-port-only | §6 |
+| - | - | `PreloadSoundPermanent__13C_sound_tableFUi` | 0x003b1af0 | PS2-port-only | §6 |
+| - | - | `GetPreloadedSound__13C_sound_tableFUi` | 0x003b20c0 | PS2-port-only | §6 |
 
 Two container helpers belong to the class's record vector rather than to the class:
 `sound_table_record_list_erase_range` (`0x0061db10`) and `sound_table_record_list_insert_n`
@@ -244,9 +247,12 @@ That array is the whole of the four unmatched methods:
 | `GetPreloadedSound` | picks one of them with `rnd(variant_count)` and plays it without touching the cache | the PC record has no such field |
 | `GameInit` / `GameDone` | release all six pointers of every record and null them | there is nothing to release |
 
-Graded a **PS2-port-only CANDIDATE**, not a terminal tag: the structural no-room argument is strong
-and the 32 MB motive fits — keeping a permanent decoded copy of a sound avoids a cache miss
-mid-gameplay — but the caller set is not closed (§8).
+**PS2-port-only, measured over a closed caller set.** `PreloadSoundPermanent`'s only caller is the
+free function `PreloadPicovinNaZasranyPSKram__Fv` (a vulgar developer name that singles out the
+PS2), called once from `C_game::Init`; the PC `game_init` has no such preload. `GameInit` and
+`GameDone` are called once each, from `C_game::Init` and `C_game::Done`. Where the PS2 callers of
+`GetPreloadedSound` take a preloaded sound, the PC twins open the sound through
+`sound_table_construct_sound` (`human_ai`, `game_tick_shoot`).
 
 **Other differences, all representational rather than behavioural:**
 
@@ -270,6 +276,16 @@ mid-gameplay — but the caller set is not closed (§8).
 **Slot 9 (§5).** The PS2 `GetSounds__13C_sound_tableFv` is `return this+0x10`; comparing **both
 builds' vtable sequences** slot by slot pairs it with PC slot 9, `folded_get_dword_0x10`.
 
+**The playback block's setters (§1a).** The PS2 `ConstructSound` calls the same `I3D_sound`
+virtuals the PC calls by slot, and the PS2 symbol table names them: the mode goes to
+`SetSoundType__9I3D_soundF13I3D_SOUNDTYPE`, the four range floats to `SetRange__9I3D_soundFffff`,
+the two cone floats to `SetCone__9I3D_soundFff`, then `SetVolume__9I3D_soundFf` and
+`SetOutVol__9I3D_soundFf`. Each PC slot is the PS2 slot minus `0x2c` (`0x84`/`0x88`/`0x8c`/
+`0x94`/`0x90` against `0x58`/`0x5c`/`0x60`/`0x68`/`0x64`). The engine code linked into the PS2
+build shows what the setters store: `SetCone` clamps its two angles and keeps the cosine of each
+half-angle; `SetRange` keeps its four floats, whose constructor defaults are `1.0, 10.0, 1.0, 0.0`;
+the default volume is 1.0 and the default outside-cone volume 0.
+
 ---
 
 ## 7. Related
@@ -284,14 +300,7 @@ builds' vtable sequences** slot by slot pairs it with PC slot 9, `folded_get_dwo
 
 ## 8. Open items
 
-* **The four PS2-port-only candidates are not closed.** What would close it: census every PS2
-  caller of `PreloadSoundPermanent` and check they are all in port-added code.
 * **`sound_table_clear_invisible_flag` has no caller.** Its only reference in the whole
   image is the vtable slot. Either the game never re-arms a failed sound within a session,
   or it is reached through a slot-11 dispatch nothing static can see. Worth an in-game
   check across a mission reload.
-* **`S_sound_params`' eight floats are undecoded.** Their consumers are the target
-  `I3D_sound`'s vtable slots `0x5c` / `0x60` / `0x64` / `0x68`, which live in `ls3df.dll`
-  and are therefore not in this binary at all (`basic/artifacts/dll.md`). The shipped values
-  are suggestive — block 0 of *Explosion* is `10, 155, 0.4, 0.3, 0, 0, 1, 0`, and 155 next to
-  10 reads like a max/min audible distance pair — but nothing here proves it.

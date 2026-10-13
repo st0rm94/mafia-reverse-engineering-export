@@ -1,6 +1,6 @@
 # The 3-D line batch — `[0x00591f20, 0x00592050)` (PC prefix `line_batch_*`)
 
-**Created** 2026-08-26 11:13 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-08-26 11:13 +0200 · **Modified** 2026-10-05 11:17 +0200
 
 A translation unit, not a class (like `structs/app_bootstrap.md`). Three functions and one
 fixed buffer implement a **world-space line renderer**: gameplay code calls
@@ -33,12 +33,17 @@ addresses — agree without any of them being derived from another. A vertex is:
 typedef struct S_line_vertex {   /* 0x18 bytes */
     /* +0x00 */ float    x, y, z;
     /* +0x0c */ uint32_t colour;   // ARGB
-    /* +0x10 */ uint8_t  pad[8];   // unread by this TU; the FVF's texcoord slot
+    /* +0x10 */ float    u, v;     // texture coordinate 0; never written, so (0, 0)
 } S_line_vertex;
 ```
 
-`0x18` = 12 + 4 + 8 is the classic D3D `XYZ | DIFFUSE | TEX1` vertex, consistent with the
-trailing eight bytes never being written here.
+`LS3DF.dll` builds its stream-0 vertex buffer with FVF `0x142` (`XYZ | DIFFUSE | TEX1`, stride
+`0x18`) and the matching vertex declaration (position FLOAT3, diffuse D3DCOLOR, texture
+coordinate 0 FLOAT2), so the trailing eight bytes are a UV pair. This TU never writes them, and
+nothing outside it references the array: every reference to `g_line_batch_vertices` and
+`g_line_batch_write_ptr` lies in the three functions below. The array is zero-filled BSS, so
+every UV reads `(0, 0)`, and `line_batch_draw` unbinds the texture before drawing, so the UV has
+no effect on the result.
 
 ## 2. The three functions
 
@@ -60,10 +65,19 @@ census of "what does every caller pass" is therefore a census of the COLOURS, no
 **`line_batch_draw()`** does nothing when the batch is empty. Otherwise, three engine calls:
 
 ```
-g_engine->vt[0x0c](0)                          // drop the current texture / material
+g_engine->vt[0x0c](0)                          // unbind the texture
 g_engine->vt[0x54](&g_line_batch_world_matrix) // install the IDENTITY world matrix
-g_engine->vt[0x58](1, count, &vertices, 0)     // draw primitive type 1 = line list
+g_engine->vt[0x58](1, count, &vertices, 0)     // primitive type 1 = line list, stream 0
 ```
+
+`g_engine` is `LS3DF.dll`'s `IGraph` interface (`structs/app_bootstrap.md` §3a), and the three
+slots are read off the DLL's own bodies:
+
+| slot | what the `LS3DF.dll` body does |
+|---|---|
+| `+0x0c` | sets a texture; with a null argument it calls the D3D8 device's `SetTexture(0, NULL)` |
+| `+0x54` | calls the device's `SetTransform(D3DTS_WORLD, m)` |
+| `+0x58` | maps the LS3D primitive type through a seven-entry table (type 1 = `D3DPT_LINELIST`), takes the vertex format from the stream type (0: stride `0x18` with the stored declaration, 1: stride `0x20` with FVF `0x1c4`) and calls the device's `DrawPrimitiveUP` |
 
 The identity matrix is what makes this a **world-space** renderer: the caller supplies
 absolute positions and nothing further transforms them. `g_line_batch_world_matrix`, read byte
@@ -87,7 +101,11 @@ console_render_all();
 
 so the lines are the **first** thing composited over the 3-D scene, under the HUD and the GUI.
 
-**The located producer: `debris_tick` (`0x006223a0`), `C_Debris::Tick`.** It advances a
+**The only producer: `debris_tick` (`0x006223a0`), `C_Debris::Tick`.** `line_batch_add` has
+exactly one reference in `Game.exe`, a direct call inside `debris_tick`: no tail jump reaches it
+and no stored pointer holds its address, so no wrapper or callback adds lines. `line_batch_draw`
+and `line_batch_reset` each have the one caller `engine_draw_overlay_callback`. `debris_tick`
+advances a
 `0x1c`-stride vector of debris pieces, each holding an `I3D_frame *`, integrating a per-record
 velocity against a gravity vector on a `dt = clamp(ms, 1, 83) * 0.001` clock, and emits one line
 per record from the previous position to the current one with a fading pale-yellow gradient
@@ -101,8 +119,20 @@ a swap-and-pop on a lifetime compare. Receiver byte-proven `C_game + 0x240`; see
 same order: the `0x53` ms clamp, the `6.2831855` spin wrap in both directions, the `-20.0` kill
 and the `0.05` flash-arm gate.
 
-**No PS2 twin is located for any of the three `line_batch_*` functions, and none is tagged
-terminal.** Searched:
+**The line batch is PC-only**, measured at its only flush site and its only producer:
+
+* `engine_draw_overlay_callback` is CONFIRMED against `cbScene__F20SCN_CALLBACK_MESSAGEUiUi`.
+  On message 2 both draw the HUD, then the active menu, then the console, in the same order.
+  The PS2 callback flushes no line batch; it draws the inventory panel
+  (`DrawInventory__17G_IndicatorsClassFv`) and brackets the menu with `LSI_Setup` instead.
+* `Tick__8C_DebrisFUi` makes no call at the position where `debris_tick` adds a line; its
+  callees are vector and quaternion math only.
+
+The PS2 `IGraph` vtable names the three engine slots of §2 `SetTexture`, `SetWorldMatrix` and
+`DrawPrimitiveList` (PS2 offsets `+0x48`, `+0x88`, `+0x8c`). The two vtables are laid out
+differently, so the slots match by body, not by offset.
+
+A name search finds no twin either:
 
 1. The whole PS2 symbol table by name — `Line`, `line`, `Cara`, `Usecka`, `Segment`, `Prid`,
    `Draw`, `Prim`, `Batch`, `Flush`.
@@ -116,23 +146,9 @@ subsystem: every one of those takes **four floats**, i.e. 2-D screen-space corne
 `line_batch_add` takes two `S_vector *`. They are the GUI backend mapped in
 `structs/gui_widget.md`: a name/shape collision, not a twin.
 
-A plausible reason for a genuine absence is that the PS2 draws through the GS directly rather
-than through a D3D-style FVF vertex buffer, so a straight port of this TU would not survive.
-That is a hypothesis; the status is *searched, not located*.
-
 ## 5. Related
 
 * `Game-ghidra.exe.functions.md` — the function registry.
 * `structs/collision.md` §2c — the TU map this range sits in.
 * `structs/debris.md` — the producer's class.
-
-## 6. Open items
-
-* The PS2 side (§4).
-* `g_engine` vtable slots `+0x0c`, `+0x54` and `+0x58` are read from their use here; none is
-  confirmed against the `ls3df.dll` export list, which would name them properly.
-* The trailing 8 bytes of the vertex are never written by this TU. If the FVF really declares
-  a texcoord, the renderer reads uninitialised BSS for it — harmless with no texture bound, but
-  unconfirmed.
-* Producers other than `debris_tick` are not enumerated; `line_batch_add` has one textual
-  callsite, but a `__fastcall` helper reached through a wrapper would not show.
+* `structs/app_bootstrap.md` §3a — the `IGraph` interface behind `g_engine`.

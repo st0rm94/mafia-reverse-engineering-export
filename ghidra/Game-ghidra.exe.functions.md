@@ -106,7 +106,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 96 | 0x0040f350 | std_vector3c_insert_n |  |
 | 97 | 0x0040f650 | uninit_copy_range_stride_0x3c |  |
 | 98 | 0x0040f690 | uninit_fill_n_stride_0x3c |  |
-| 99 | 0x0040f6c0 | copy_elem_stride_0x3c |  |
+| 99 | 0x0040f6c0 | ai_path_node_construct_copy | ai_path_node::{ctor} |
 | 100 | 0x0040f6e0 | copy_elem_stride_0x18 |  |
 | 101 | 0x0040f700 | crt_static_init_guard_0040f700 |  |
 | 102 | 0x0040f720 | crt_atexit_register_0040f720 |  |
@@ -169,8 +169,8 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 159 | 0x00425000 | vec3_add_in_place |  |
 | 160 | 0x00425030 | vec3_sub_in_place |  |
 | 161 | 0x00425060 | clear3_dwords_at |  |
-| 162 | 0x00425070 | vec3_dist |  |
-| 163 | 0x004250f0 | vec3_dist_sq |  |
+| 162 | 0x00425070 | vec3_length | S_vector::Magnitude |
+| 163 | 0x004250f0 | vec3_length_sq |  |
 | 164 | 0x00425110 | vec3_cross_to |  |
 | 165 | 0x00425150 | vec3_cross_global_lhs_to |  |
 | 166 | 0x004251a0 | vec3_cross_global_rhs_to |  |
@@ -194,7 +194,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 184 | 0x004254f0 | ambient_ai_set_suspended |  |
 | 185 | 0x00425500 | police_manager_set_busted_cutscene_lock |  |
 | 186 | 0x00425510 | game_get_camera |  |
-| 187 | 0x00425520 | game_get_temp_actor_list_a |  |
+| 187 | 0x00425520 | game_get_active_actor_list |  |
 | 188 | 0x00425530 | game_get_player_actor |  |
 | 189 | 0x00425540 | game_get_frame_time_ms |  |
 | 190 | 0x00425550 | game_get_sound_arena |  |
@@ -515,8 +515,8 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 505 | 0x00446930 | police_action_on_vehicle_lost | ai_police_action::ZbavSeAutaSmrdi |
 | 506 | 0x004469e0 | police_board_reset | ai_police_nastenka::ZacatekSmeny |
 | 507 | 0x00446b00 | police_board_increment_counter | ai_police_nastenka::JaChcuCislo |
-| 508 | 0x00446b10 | police_board_find_group_by_officer |  |
-| 509 | 0x00446ba0 | police_board_find_group_by_session_id |  |
+| 508 | 0x00446b10 | police_board_find_group_by_officer | ai_police_nastenka::CoVlastneRobimPlukovniku |
+| 509 | 0x00446ba0 | police_board_find_group_by_session_id | ai_police_nastenka::MamCisloDejAkci |
 | 510 | 0x00446c00 | police_board_create_and_engage | ai_police_nastenka::MamProVasAkciHosi |
 | 511 | 0x004474a0 | police_board_end_pursuit | ai_police_nastenka::AkceDokoncenaPlukovniku |
 | 512 | 0x00447610 | police_board_invalidate_actor | ai_police_nastenka::ZinvalidujAktora |
@@ -524,16 +524,16 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 514 | 0x00447820 | police_board_arrest_settle_is_zero |  |
 | 515 | 0x00447830 | police_board_raise_gun_escalation | ai_police_nastenka::PlukovnikuRadsiHoSejmemNebudemSeSrat |
 | 516 | 0x00447950 | police_board_raise_handcuffs_escalation | ai_police_nastenka::PlukovnikuRadsiHoZatknemNebudemSeSrat |
-| 517 | 0x00447a90 | police_board_disband_by_target |  |
+| 517 | 0x00447a90 | police_board_disband_by_target | ai_police_nastenka::MamHoZmrdaUzHoNechte |
 | 518 | 0x00447b00 | police_board_clamp_arrest_settle_12s |  |
 | 519 | 0x00447b10 | police_board_promote_handcuffs_escalation | ai_police_nastenka::PanoveZmenaZatkneteHoZmrda |
 | 520 | 0x00447bb0 | police_board_promote_gun_escalation | ai_police_nastenka::PanoveZmenaZabijteHoZmrda |
 | 521 | 0x00447c40 | police_board_update_sighting | ai_police_nastenka::PanoveKokotPremistujePrdel |
 | 522 | 0x00448150 | police_board_target_matches | ai_police_nastenka::PanoveViditeZmrdaNeboSteTupci |
 | 523 | 0x004481c0 | police_board_refresh_target_vehicle | ai_police_nastenka::PanoveVytahneteBlokyAZapisteSiZmrda |
-| 524 | 0x00448230 | police_board_has_recent_sighting |  |
+| 524 | 0x00448230 | police_board_has_recent_sighting | ai_police_nastenka::PanoveMateOciNaZmrdoviNeboCumitePoBabach |
 | 525 | 0x00448300 | police_board_has_group_for_target | ai_police_nastenka::PanoveJdeteNekdoPoZmrdovi |
-| 526 | 0x00448350 | police_board_broadcast_for_target |  |
+| 526 | 0x00448350 | police_board_broadcast_for_target | ai_police_nastenka::PanoveJaUzHoVarovalZmetka |
 | 527 | 0x004483b0 | police_board_is_busted_cutscene_active |  |
 | 528 | 0x004483c0 | police_board_set_busted_cutscene_active |  |
 | 529 | 0x004483d0 | police_board_is_actor_in_pursuit | ai_police_nastenka::SemTrefenaLocklaKurva |
@@ -552,20 +552,20 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 542 | 0x00448e00 | crt_operator_delete_thunk_00448e00 |  |
 | 543 | 0x00448e10 | string_dtor | C_string::{dtor} |
 | 544 | 0x00448e30 | string_get_data | C_string::C_str_base::GetData |
-| 545 | 0x00448e40 | string_append_cstr |  |
+| 545 | 0x00448e40 | string_concat_cstr |  |
 | 546 | 0x00448fc0 | ascii_toupper |  |
 | 547 | 0x00448fe0 | string_format | C_fstring::{ctor} |
 | 548 | 0x004490b0 | police_action_vector_count |  |
 | 549 | 0x004490e0 | police_action_vector_insert_at | gif::vector<16ai_police_action,8>::reserve |
 | 550 | 0x004493a0 | police_action_uninit_copy_range |  |
 | 551 | 0x004493e0 | police_action_uninit_fill_n |  |
-| 552 | 0x00449410 | uninit_copy_range_stride_8 |  |
+| 552 | 0x00449410 | i3d_cache_items_uninit_copy_range |  |
 | 553 | 0x00449450 | police_action_copy_assign_range |  |
 | 554 | 0x00449620 | police_action_copy_backward_range |  |
 | 555 | 0x00449800 | police_action_copy_ctor | ai_police_action::{ctor} |
-| 556 | 0x00449930 | copy_elem_stride_8_with_string |  |
+| 556 | 0x00449930 | i3d_cache_items_copy_construct_one |  |
 | 557 | 0x00449970 | police_action_assign | ai_police_action::operator= |
-| 558 | 0x00449b60 | assign_elem_stride_8_with_string |  |
+| 558 | 0x00449b60 | i3d_cache_items_copy_assign_one |  |
 | 559 | 0x00449ba0 | crt_static_init_guard_00449ba0 |  |
 | 560 | 0x00449bc0 | crt_atexit_register_00449bc0 |  |
 | 561 | 0x00449bd0 | check_seg_has_index | check_seg::existIndex |
@@ -643,11 +643,11 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 633 | 0x0044e1b0 | actor_post_hit_event |  |
 | 634 | 0x0044e300 | actor_post_collision_event |  |
 | 635 | 0x0044e440 | i3d_cache_sound_open | C_I3D_cache<9I3D_sound>::Open |
-| 636 | 0x0044e880 | refcount_release_at_0x4 |  |
+| 636 | 0x0044e880 | i3d_cache_items_destroy_one |  |
 | 637 | 0x0044e8a0 | actor_get_actor_speed | C_actor::GetActorSpeed |
-| 638 | 0x0044e8c0 | destroy_range_stride8 |  |
-| 639 | 0x0044e8f0 | std_vector8_uninit_fill_n |  |
-| 640 | 0x0044e920 | std_vector8_assign_range |  |
+| 638 | 0x0044e8c0 | i3d_cache_items_destroy_range |  |
+| 639 | 0x0044e8f0 | i3d_cache_items_uninit_fill_n |  |
+| 640 | 0x0044e920 | i3d_cache_items_copy_assign_range |  |
 | 641 | 0x0044e970 | crt_static_init_guard_0044e970 |  |
 | 642 | 0x0044e990 | crt_atexit_register_0044e990 |  |
 | 643 | 0x0044e9a0 | actor_shot_ctor | C_actor_shot::{ctor} |
@@ -803,7 +803,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 793 | 0x00462450 | bridge_shut_down | C_bridge::ShutDown |
 | 794 | 0x00462480 | bridge_collision | C_bridge::Collision |
 | 795 | 0x004624e0 | bridge_set_steamboat_figures |  |
-| 796 | 0x004626b0 | string_assign_cstr |  |
+| 796 | 0x004626b0 | string_assign_cstr | C_str::operator= |
 | 797 | 0x00462730 | bridge_col_vector_insert_n |  |
 | 798 | 0x00462a60 | bridge_col_vector_copy |  |
 | 799 | 0x00462a90 | crt_static_init_guard_00462a90 |  |
@@ -1055,10 +1055,10 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1045 | 0x0047f9e0 | dog_arm_bloody_paw_prints | C_dog::cbCollTester |
 | 1046 | 0x0047fa10 | i3d_cache_anim_create | C_I3D_cache<17I3D_animation_set>::Create |
 | 1047 | 0x0047fe40 | i3d_open_notify_forward_cb |  |
-| 1048 | 0x0047fe60 | std_vector8_insert_one |  |
-| 1049 | 0x0047ffe0 | array_copy_refcounted8 |  |
-| 1050 | 0x00480040 | array_copy_backward_refcounted8 |  |
-| 1051 | 0x004800a0 | refcounted8_scalar_deleting_dtor |  |
+| 1048 | 0x0047fe60 | i3d_cache_items_insert_one |  |
+| 1049 | 0x0047ffe0 | i3d_cache_items_copy_range |  |
+| 1050 | 0x00480040 | i3d_cache_items_copy_backward_range |  |
+| 1051 | 0x004800a0 | i3d_cache_items_scalar_deleting_dtor |  |
 | 1052 | 0x004800c0 | crt_static_init_guard_004800c0 |  |
 | 1053 | 0x004800e0 | crt_atexit_register_004800e0 |  |
 | 1054 | 0x004800f0 | door_ctor | C_door::{ctor} |
@@ -1288,7 +1288,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1278 | 0x004a96b0 | human_do_box_pick_up | C_human::Do_FuckingBox |
 | 1279 | 0x004a9bf0 | human_do_box_cancel | C_human::Do_FuckingBoxCancel |
 | 1280 | 0x004aa190 | human_do_dead_body_pick_up | C_human::Do_DeadBody |
-| 1281 | 0x004aab10 | human_car_launched_into_air | C_human::EineMeineKleineAutoInLuft |
+| 1281 | 0x004aab10 | human_die_in_exploding_car | C_human::EineMeineKleineAutoInLuft |
 | 1282 | 0x004aad00 | human_can_aim | C_human::Can_Aimed |
 | 1283 | 0x004aaed0 | human_do_corner_breath | C_human::Do_CornerBreath |
 | 1284 | 0x004aaf10 | human_do_corner_view | C_human::Do_CornerView |
@@ -1573,7 +1573,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1563 | 0x004d32b0 | pumper_is_pumping | C_pumper::IsPumping |
 | 1564 | 0x004d32d0 | pumper_is_in_panic | C_pumper::IsInPanic |
 | 1565 | 0x004d32e0 | pumper_script_can_pump | C_pumper::ScriptCanPump |
-| 1566 | 0x004d3330 | std_vector8_erase_at |  |
+| 1566 | 0x004d3330 | i3d_cache_items_erase_at |  |
 | 1567 | 0x004d33a0 | crt_static_init_guard_004d33a0 |  |
 | 1568 | 0x004d33c0 | crt_atexit_register_004d33c0 |  |
 | 1569 | 0x004d33d0 | racecam_ctor | C_racecam::{ctor} |
@@ -1614,19 +1614,19 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1604 | 0x004d7300 | crt_static_init_rail_clamp_candidates |  |
 | 1605 | 0x004d7310 | crt_zero_init_rail_clamp_candidates |  |
 | 1606 | 0x004d7330 | crt_atexit_register_004d7330 |  |
-| 1607 | 0x004d7340 | crt_atexit_free_rail_clamp_candidates |  |
+| 1607 | 0x004d7340 | rail_clamp_candidates_static_dtor |  |
 | 1608 | 0x004d7360 | crt_static_init_rail_schedule_log |  |
 | 1609 | 0x004d7370 | crt_zero_init_rail_schedule_log |  |
 | 1610 | 0x004d7390 | crt_atexit_register_004d7390 |  |
-| 1611 | 0x004d73a0 | crt_atexit_free_rail_schedule_log |  |
+| 1611 | 0x004d73a0 | rail_schedule_log_static_dtor |  |
 | 1612 | 0x004d73e0 | crt_static_init_rail_semaphore_list |  |
 | 1613 | 0x004d73f0 | crt_zero_init_rail_semaphore_list |  |
 | 1614 | 0x004d7410 | crt_atexit_register_004d7410 |  |
-| 1615 | 0x004d7420 | crt_atexit_free_rail_semaphore_list |  |
+| 1615 | 0x004d7420 | rail_semaphore_list_static_dtor |  |
 | 1616 | 0x004d7460 | crt_static_init_railway_list |  |
 | 1617 | 0x004d7470 | crt_zero_init_railway_list |  |
 | 1618 | 0x004d7490 | crt_atexit_register_004d7490 |  |
-| 1619 | 0x004d74a0 | crt_atexit_free_railway_list |  |
+| 1619 | 0x004d74a0 | railway_list_static_dtor |  |
 | 1620 | 0x004d74e0 | railway_ctor | C_railway::{ctor} |
 | 1621 | 0x004d7670 | railway_scalar_deleting_dtor |  |
 | 1622 | 0x004d7690 | railway_dtor | C_railway::{dtor} |
@@ -1795,27 +1795,27 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1785 | 0x004f62a0 | crt_static_init_004f62a0 |  |
 | 1786 | 0x004f62b0 | crt_static_ctor_004f62b0 |  |
 | 1787 | 0x004f62d0 | crt_atexit_register_004f62d0 |  |
-| 1788 | 0x004f62e0 | crt_static_dtor_004f62e0 |  |
+| 1788 | 0x004f62e0 | traffic_adopted_elements_static_dtor |  |
 | 1789 | 0x004f6320 | crt_static_init_004f6320 |  |
 | 1790 | 0x004f6330 | crt_static_ctor_004f6330 |  |
 | 1791 | 0x004f6350 | crt_atexit_register_004f6350 |  |
-| 1792 | 0x004f6360 | crt_static_dtor_004f6360 |  |
+| 1792 | 0x004f6360 | traffic_bridge_slots_static_dtor |  |
 | 1793 | 0x004f63a0 | crt_static_init_004f63a0 |  |
 | 1794 | 0x004f63b0 | crt_static_ctor_004f63b0 |  |
 | 1795 | 0x004f63d0 | crt_atexit_register_004f63d0 |  |
-| 1796 | 0x004f63e0 | crt_static_dtor_004f63e0 |  |
+| 1796 | 0x004f63e0 | traffic_car_registry_static_dtor |  |
 | 1797 | 0x004f6420 | crt_static_init_004f6420 |  |
 | 1798 | 0x004f6430 | crt_static_ctor_004f6430 |  |
 | 1799 | 0x004f6450 | crt_atexit_register_004f6450 |  |
-| 1800 | 0x004f6460 | crt_static_dtor_004f6460 |  |
+| 1800 | 0x004f6460 | traffic_parking_cars_static_dtor |  |
 | 1801 | 0x004f64a0 | crt_static_init_004f64a0 |  |
 | 1802 | 0x004f64b0 | crt_static_ctor_004f64b0 |  |
 | 1803 | 0x004f64d0 | crt_atexit_register_004f64d0 |  |
-| 1804 | 0x004f64e0 | crt_static_dtor_004f64e0 |  |
+| 1804 | 0x004f64e0 | traffic_stolen_cars_static_dtor |  |
 | 1805 | 0x004f6520 | crt_static_init_004f6520 |  |
 | 1806 | 0x004f6530 | crt_static_ctor_004f6530 |  |
 | 1807 | 0x004f6550 | crt_atexit_register_004f6550 |  |
-| 1808 | 0x004f6560 | crt_static_dtor_004f6560 |  |
+| 1808 | 0x004f6560 | traffic_mafia_crews_static_dtor |  |
 | 1809 | 0x004f65a0 | traffic_car_ctor | C_traffic_car::{ctor} |
 | 1810 | 0x004f6610 | traffic_car_scalar_deleting_dtor |  |
 | 1811 | 0x004f6630 | traffic_car_dtor | C_traffic_car::{dtor} |
@@ -1984,7 +1984,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1974 | 0x0051cdd0 | vehicle_cb_enum_object_list | CbEnumObj6 |
 | 1975 | 0x0051cf80 | vehicle_cb_enum_body_colls | CbEnumBodyColl |
 | 1976 | 0x0051d280 | vehicle_body_coll_attach_to_parent | IsParent |
-| 1977 | 0x0051d330 | vehicle_colbody_head_dtor |  |
+| 1977 | 0x0051d330 | vehicle_colbody_head_dtor | C_Vehicle::ReleaseBodyColls |
 | 1978 | 0x0051d3b0 | vehicle_collect_coll_spheres | EnumColSphere |
 | 1979 | 0x0051d440 | vehicle_cb_enum_coll_sphere | CbEnumCollsActiveSphere |
 | 1980 | 0x0051d710 | vehicle_prepare_body_colls | C_Vehicle::PrepareBodyColls |
@@ -2125,7 +2125,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2115 | 0x00540db0 | recorder_track_reset_fields |  |
 | 2116 | 0x00540de0 | recorder_set_mode |  |
 | 2117 | 0x00540fb0 | recorder_get_mode |  |
-| 2118 | 0x00540fc0 | recorder_sync_clock_from_system |  |
+| 2118 | 0x00540fc0 | recorder_set_clock |  |
 | 2119 | 0x005411d0 | recorder_get_source_clock_ms |  |
 | 2120 | 0x005411e0 | recorder_get_playback_clock_ms |  |
 | 2121 | 0x005411f0 | recorder_add_track |  |
@@ -2229,7 +2229,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2219 | 0x00546790 | recorder_stop |  |
 | 2220 | 0x005467c0 | recorder_is_sequence_running |  |
 | 2221 | 0x005467e0 | stl_vector_ctor_with_allocator |  |
-| 2222 | 0x00546810 | vector_clear |  |
+| 2222 | 0x00546810 | chunk_open_stack_free |  |
 | 2223 | 0x00546840 | stl_copy_stride_0x58 |  |
 | 2224 | 0x00546880 | stl_fill_n_stride_0x58 |  |
 | 2225 | 0x005468b0 | stl_copy_stride_0x28 |  |
@@ -2249,13 +2249,13 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2239 | 0x00547050 | speech_channel_set_model | DabingSetModel |
 | 2240 | 0x00547210 | speech_invalidate_channel_for_actor | DabingInvalidate |
 | 2241 | 0x005473b0 | speech_channel_speak_line | DabingSpeak |
-| 2242 | 0x00547960 | speech_channel_attach_accessory_frame |  |
+| 2242 | 0x00547960 | speech_channel_set_look_at_frame |  |
 | 2243 | 0x00547a80 | speech_channel_is_speaking | DabingIsSpeaking |
 | 2244 | 0x00547b00 | speech_channel_stop | DabingStop |
-| 2245 | 0x00547b50 | speech_update_accessory_frames |  |
+| 2245 | 0x00547b50 | speech_update_look_at_targets |  |
 | 2246 | 0x00547c10 | speech_tick_channels | DabingTick |
 | 2247 | 0x00548420 | speech_pause_all_channels | DabingPauseSounds |
-| 2248 | 0x005484b0 | speech_preload_for_record | DabingPreLoad |
+| 2248 | 0x005484b0 | speech_apply_recorder_key |  |
 | 2249 | 0x005485a0 | speech_morph_frame_list_add |  |
 | 2250 | 0x00548830 | crt_static_init_guard_00548830 |  |
 | 2251 | 0x00548850 | crt_atexit_register_00548850 |  |
@@ -2401,7 +2401,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2391 | 0x00559a90 | loadsave_apply_key_bindings |  |
 | 2392 | 0x00559ae0 | loadsave_default_settings | G_LoadSaveClass::DefaultSettings |
 | 2393 | 0x00559ba0 | inventory_get_in_hand_item_def | G_Inventory::GetWeaponInRightHand |
-| 2394 | 0x00559bd0 | game_item_table_get | G_Inventory::GetWeaponInLeftHand |
+| 2394 | 0x00559bd0 | inventory_get_left_hand_item_def | G_Inventory::GetWeaponInLeftHand |
 | 2395 | 0x00559be0 | inventory_select_slot | G_Inventory::Select |
 | 2396 | 0x0055a1f0 | inventory_select_by_id | G_Inventory::SelectByID |
 | 2397 | 0x0055a2c0 | inventory_holster | G_Inventory::Holster |
@@ -2501,10 +2501,10 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2491 | 0x0055e6e0 | garage_game_done | G_GarageClass::GameDone |
 | 2492 | 0x0055f510 | garage_run_car_select_menu | G_GarageClass::CarManager |
 | 2493 | 0x0055fa90 | garage_destroy_car | G_GarageClass::DestroyCar |
-| 2494 | 0x0055fc90 | garage_generate_cars | G_GarageClass::GenerateCars |
-| 2495 | 0x0055fca0 | garage_release_cars | G_GarageClass::ReleaseCars |
+| 2494 | 0x0055fc90 | garage_request_add_last_stolen | G_GarageClass::AddLastStolen |
+| 2495 | 0x0055fca0 | garage_request_show_results | G_GarageClass::ShowResults |
 | 2496 | 0x0055fcb0 | garage_show_results | G_GarageClass::GarageShowResultsProc |
-| 2497 | 0x0055fea0 | garage_set_stolen_car | G_GarageClass::CarIsStolen |
+| 2497 | 0x0055fea0 | garage_set_last_entered_car | G_GarageClass::CarIsStolen |
 | 2498 | 0x0055feb0 | garage_set_blocked_car | G_GarageClass::CarCantGetOut |
 | 2499 | 0x0055fec0 | garage_enable_steal_for_letter | G_GarageClass::EnableSteal |
 | 2500 | 0x0055ff00 | garage_can_steal_car_model | G_GarageClass::CanSteal |
@@ -3426,7 +3426,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3416 | 0x005ae660 | force_feedback_effect_periodic_upload_params |  |
 | 3417 | 0x005ae690 | force_feedback_effect_condition_upload_params |  |
 | 3418 | 0x005ae6b0 | force_feedback_manager_ctor |  |
-| 3419 | 0x005ae6f0 | force_feedback_manager_dtor |  |
+| 3419 | 0x005ae6f0 | folded_vector_pair_free_at_0x04_0x14 |  |
 | 3420 | 0x005ae720 | force_feedback_manager_reset_handle_counter |  |
 | 3421 | 0x005ae730 | force_feedback_manager_game_init |  |
 | 3422 | 0x005ae7c0 | force_feedback_manager_game_done |  |
@@ -3531,14 +3531,14 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3521 | 0x005c8660 | mission_set_next_mission_number |  |
 | 3522 | 0x005c8670 | mission_get_mission_number |  |
 | 3523 | 0x005c8680 | mission_commit_next_mission_number |  |
-| 3524 | 0x005c8690 | mission_set_sound_restore_stage |  |
-| 3525 | 0x005c86a0 | mission_get_sound_restore_stage |  |
+| 3524 | 0x005c8690 | mission_set_frame_skip_count |  |
+| 3525 | 0x005c86a0 | mission_get_frame_skip_count |  |
 | 3526 | 0x005c86b0 | using_object_record_ctor |  |
 | 3527 | 0x005c86e0 | actor_get_class_id |  |
 | 3528 | 0x005c86f0 | actor_set_cached_world_pos |  |
 | 3529 | 0x005c8710 | actor_get_direction |  |
 | 3530 | 0x005c8730 | actor_mark_created_at_runtime |  |
-| 3531 | 0x005c8740 | vehicle_controller_set_field_0x65 |  |
+| 3531 | 0x005c8740 | actor_set_save_excluded |  |
 | 3532 | 0x005c8750 | actor_get_global_list |  |
 | 3533 | 0x005c8760 | program_set_ai_priority |  |
 | 3534 | 0x005c8770 | loadsave_set_mission_name_id |  |
@@ -3546,7 +3546,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3536 | 0x005c8790 | vehicle_set_velocity |  |
 | 3537 | 0x005c8840 | vehicle_set_angular_velocity |  |
 | 3538 | 0x005c8880 | vehicle_set_auto_indicators_from_steering |  |
-| 3539 | 0x005c88b0 | vehicle_set_light_bit_0x80 |  |
+| 3539 | 0x005c88b0 | vehicle_set_emergency_lights |  |
 | 3540 | 0x005c88e0 | vehicle_set_left_indicator |  |
 | 3541 | 0x005c8920 | vehicle_set_right_indicator |  |
 | 3542 | 0x005c8960 | vehicle_set_headlights |  |
@@ -3559,7 +3559,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3549 | 0x005c8a40 | car_get_model_name_ptr |  |
 | 3550 | 0x005c8a50 | car_set_show_damage |  |
 | 3551 | 0x005c8a60 | car_adjust_brake_hold_count |  |
-| 3552 | 0x005c8a90 | vehicle_controller_set_field_0x214c |  |
+| 3552 | 0x005c8a90 | car_set_remove_at_game_done |  |
 | 3553 | 0x005c8aa0 | car_set_auto_headlights_suppressed |  |
 | 3554 | 0x005c8ab0 | car_set_effect_mask |  |
 | 3555 | 0x005c8ac0 | car_set_damage_inhibit_mask |  |
@@ -3591,7 +3591,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3581 | 0x005c8d10 | detector_set_signal |  |
 | 3582 | 0x005c8d30 | pedestrian_manager_set_scream_enabled |  |
 | 3583 | 0x005c8d40 | human_pose_set_look_target_frame |  |
-| 3584 | 0x005c8d50 | player_set_wingman_indicator |  |
+| 3584 | 0x005c8d50 | human_set_wingman_indicator |  |
 | 3585 | 0x005c8d70 | human_set_fire_target_frame |  |
 | 3586 | 0x005c8d80 | human_set_no_hit_anim |  |
 | 3587 | 0x005c8d90 | human_set_idle_anims_enabled |  |
@@ -3820,7 +3820,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3810 | 0x005dc240 | game_init | C_game::Init |
 | 3811 | 0x005df210 | gui_show_load_progress | _show_progress_ |
 | 3812 | 0x005df240 | game_create_easter_egg_detectors |  |
-| 3813 | 0x005df610 | game_enum_sectors_for_projector_lights | C_game::S_hlp_3427game_cpp::cbEnumSectors |
+| 3813 | 0x005df610 | game_enum_sectors_for_projector_lights | C_game::S_hlp$3427game_cpp::cbEnumSectors |
 | 3814 | 0x005df650 | anim_track_load_by_name |  |
 | 3815 | 0x005df6b0 | game_done | C_game::Done |
 | 3816 | 0x005e0780 | game_done_intern | C_game::DoneIntern |
@@ -3861,7 +3861,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3851 | 0x005e99b0 | game_free_traffic_signals | C_game::FreeSemaphores |
 | 3852 | 0x005e9a60 | game_tick_traffic_signals | C_game::TickSemaphores |
 | 3853 | 0x005e9b20 | game_load_city_music_areas | C_game::LoadCityMusicAreas |
-| 3854 | 0x005e9b70 | game_enum_city_music_areas | C_game::S_hlp_12237game_cpp::cbCityMusic |
+| 3854 | 0x005e9b70 | game_enum_city_music_areas | C_game::S_hlp$12237game_cpp::cbCityMusic |
 | 3855 | 0x005e9d70 | game_city_music_off | C_game::CityMusicOff |
 | 3856 | 0x005e9df0 | game_city_music_set_paused | C_game::CityMusicPaused |
 | 3857 | 0x005e9e10 | game_set_film_music | C_game::SetFilmMusic |
@@ -3872,12 +3872,12 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3862 | 0x005eb480 | std_vector_deleter_ensure_alloc |  |
 | 3863 | 0x005eb4a0 | std_vector_deleter_assign_alloc |  |
 | 3864 | 0x005eb4e0 | game_clear_differences | C_game::ClearDiffData |
-| 3865 | 0x005eb920 | game_free_frame_placement_recursive | C_game::S_hlp_13685game_cpp::cbFreeFramePlacement |
+| 3865 | 0x005eb920 | game_free_frame_placement_recursive | C_game::S_hlp$13685game_cpp::cbFreeFramePlacement |
 | 3866 | 0x005eb9d0 | game_global_program_run | C_game::GlobalProgramRun |
 | 3867 | 0x005eba30 | game_invalidate_coll | C_game::InvalidateColl |
 | 3868 | 0x005ebac0 | game_invalidate_actor | C_game::InvalidateActor |
 | 3869 | 0x005ebe90 | game_invalidate_frame | C_game::InvalidateFrame |
-| 3870 | 0x005ebeb0 | game_invalidate_frame_recursive | C_game::S_hlp_14436game_cpp::cbDelFrame |
+| 3870 | 0x005ebeb0 | game_invalidate_frame_recursive | C_game::S_hlp$14436game_cpp::cbDelFrame |
 | 3871 | 0x005ebf80 | game_add_frame_placement | C_game::AddFramePlacement |
 | 3872 | 0x005ec250 | game_del_frame_placement | C_game::DelFramePlacement |
 | 3873 | 0x005ec2e0 | game_raise_timer_timeout_script_event | C_game::Timer_TimeOut |
@@ -3936,7 +3936,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3926 | 0x005f1750 | game_lightness_apply_recursive |  |
 | 3927 | 0x005f17c0 | game_add_shoot_light | C_game::AddShootLight |
 | 3928 | 0x005f1900 | game_use_light_cache_system | C_game::UseLightCacheSystem |
-| 3929 | 0x005f1950 | game_light_cache_collect_recursive | C_game::S_hlp_18015game_cpp::cbLight |
+| 3929 | 0x005f1950 | game_light_cache_collect_recursive | C_game::S_hlp$18015game_cpp::cbLight |
 | 3930 | 0x005f19c0 | game_recompute_light_cache | C_game::RecomputeLightCache |
 | 3931 | 0x005f1b10 | game_media_create | C_game::CreateIShow |
 | 3932 | 0x005f1d90 | game_media_open | C_game::OpenIShow |
@@ -3949,13 +3949,13 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3939 | 0x005f22e0 | game_media_fade_all | C_game::IShowFadeDownAll |
 | 3940 | 0x005f2390 | game_media_fade | C_game::IShowFade |
 | 3941 | 0x005f2650 | game_load_road_blocks | C_game::LoadRoadBlocks |
-| 3942 | 0x005f26d0 | game_collect_road_block_node | C_game::S_hlp_18574game_cpp::cbRoadBlock |
+| 3942 | 0x005f26d0 | game_collect_road_block_node | C_game::S_hlp$18574game_cpp::cbRoadBlock |
 | 3943 | 0x005f2790 | game_load_taxi_points | C_game::LoadTaxiPoints |
-| 3944 | 0x005f27e0 | game_collect_taxi_point | C_game::S_hlp_18659game_cpp::cbFindTaxiPoints |
+| 3944 | 0x005f27e0 | game_collect_taxi_point | C_game::S_hlp$18659game_cpp::cbFindTaxiPoints |
 | 3945 | 0x005f2990 | game_is_valid_taxi_passenger | C_game::IsValidTaxiPassenger |
 | 3946 | 0x005f29d0 | game_del_traffic_signal | C_game::DelSemaphore |
 | 3947 | 0x005f2a80 | game_load_telephones | C_game::LoadTelephones |
-| 3948 | 0x005f2e30 | game_collect_telephone | C_game::S_hlp_18990game_cpp::cbTelephones |
+| 3948 | 0x005f2e30 | game_collect_telephone | C_game::S_hlp$18990game_cpp::cbTelephones |
 | 3949 | 0x005f30c0 | game_telephone_list_erase_by_key | C_game::DelTelephones |
 | 3950 | 0x005f3180 | game_telephone_list_contains_key | C_game::IsTelephoneExist |
 | 3951 | 0x005f31e0 | game_human_talk_add | C_game::AddHumanTalk |
@@ -3979,7 +3979,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3969 | 0x005f4af0 | game_add_created_frame | C_game::AddCreatedFrameToVector |
 | 3970 | 0x005f4cc0 | game_del_created_frame | C_game::DelCreatedFrameToVector |
 | 3971 | 0x005f4d30 | game_load_scream_areas | C_game::LoadScreamAreas |
-| 3972 | 0x005f4d90 | game_collect_scream_area | C_game::S_hlp_20556game_cpp::cbScreamArea |
+| 3972 | 0x005f4d90 | game_collect_scream_area | C_game::S_hlp$20556game_cpp::cbScreamArea |
 | 3973 | 0x005f5010 | game_tick_scream_areas | C_game::TickScreamAreas |
 | 3974 | 0x005f51c0 | game_apply_weather_detail_level | C_game::OsefujPocasi |
 | 3975 | 0x005f5310 | game_dying_human_add | C_game::AddDeadHumanForTick |
@@ -4080,15 +4080,15 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 4070 | 0x005f83b0 | engine_set_wbuffer | SetWBuffer |
 | 4071 | 0x005f83e0 | joy_devices_init |  |
 | 4072 | 0x005f8660 | joy_devices_done |  |
-| 4073 | 0x005f86c0 | engine_draw_overlay_callback |  |
+| 4073 | 0x005f86c0 | engine_draw_overlay_callback | cbScene |
 | 4074 | 0x005f8700 | engine_new_mission | InternMissionInit |
 | 4075 | 0x005f9540 | engine_game_loop | GameLoopSingle |
 | 4076 | 0x005f98e0 | engine_igraph_error_callback |  |
 | 4077 | 0x005f99b0 | engine_main | main |
 | 4078 | 0x005fa2a0 | ls3d_setup_set_defaults |  |
-| 4079 | 0x005fa320 | engine_init |  |
+| 4079 | 0x005fa320 | engine_init | InitSystem |
 | 4080 | 0x005fb330 | engine_show_init_error | InitErrorMessageBox |
-| 4081 | 0x005fb4f0 | engine_shutdown |  |
+| 4081 | 0x005fb4f0 | engine_shutdown | CloseSystem |
 | 4082 | 0x005fb6e0 | i3d_cache_model_create | C_I3D_cache<9I3D_model>::Create |
 | 4083 | 0x005fbaf0 | i3d_cache_model_add_dir | C_I3D_cache<9I3D_model>::AddDir |
 | 4084 | 0x005fbcb0 | string_base_init_concat |  |
@@ -4196,7 +4196,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 4186 | 0x00605e90 | mission_actor_sound_cache_store | C_mission::FrmActBuff_StoreActorSound |
 | 4187 | 0x00606100 | mission_actor_sound_cache_take | C_mission::FrmActBuff_GetActorSound |
 | 4188 | 0x006061d0 | mission_carry_caches_clear | C_mission::FrmActBuff_ClearAll |
-| 4189 | 0x00606370 | i3d_frame_set_field_0x140_block |  |
+| 4189 | 0x00606370 | i3d_dummy_set_bound_box |  |
 | 4190 | 0x00606390 | mission_get_uv_scroll |  |
 | 4191 | 0x006063a0 | vec_dword_push_back_by_ref |  |
 | 4192 | 0x00606550 | vec_count_stride_0x10 |  |
@@ -4210,8 +4210,8 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 4200 | 0x00606750 | game_ctor |  |
 | 4201 | 0x00606e20 | game_dtor |  |
 | 4202 | 0x00607400 | uv_scroll_clear_channels |  |
-| 4203 | 0x00607450 | game_subobject_0x208_dtor |  |
-| 4204 | 0x00607500 | game_subobject_0x240_dtor |  |
+| 4203 | 0x00607450 | glass_shatter_dtor |  |
+| 4204 | 0x00607500 | folded_vector_pair_free_at_0x04_0x14_00607500 |  |
 | 4205 | 0x00607530 | frame_map_insert |  |
 | 4206 | 0x00607610 | frame_map_ctor |  |
 | 4207 | 0x00607640 | frame_map_begin |  |
@@ -4458,7 +4458,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 4448 | 0x0061bce0 | using_object_del_object | C_using_object::DelObject |
 | 4449 | 0x0061bdb0 | using_object_clear_objects | C_using_object::ClearObjects |
 | 4450 | 0x0061be50 | using_object_is_any_object_near | C_using_object::IsAnyObjectNear |
-| 4451 | 0x0061bf50 | using_object_find_near_objects |  |
+| 4451 | 0x0061bf50 | using_object_find_near_objects | C_using_object::FindNearObjects |
 | 4452 | 0x0061c1b0 | using_object_clear_invalid_items | C_using_object::ClearInvalidItems |
 | 4453 | 0x0061c1e0 | using_object_add_invalid_item | C_using_object::AddInvalidItem |
 | 4454 | 0x0061c390 | using_object_del_invalid_item | C_using_object::DelInvalidItem |

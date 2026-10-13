@@ -1,6 +1,6 @@
 # `ai_fight_manager` / `ai_fight_followship` — fight parties and the party manager
 
-**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-10-04 20:16 +0200
+**Created** 2026-07-30 16:45 +0200 · **Modified** 2026-10-13 19:12 +0200
 
 Two classes, one translation unit, one subsystem — **how NPCs fight as a group instead of
 individually**:
@@ -81,19 +81,50 @@ the stride claim itself made falsifiable. `+0x10` and `+0x28` are proven by the
 ```c
 typedef struct ai_fight_member {              // 0x14 bytes, both builds
     /* +0x00 */ C_entity *entity;             // [H] the member; also the lookup key
-    /* +0x04 */ uint32_t  _unk_04;            // [U] not written by join_party
-    /* +0x08 */ uint32_t  _unk_08;            // [U] not written by join_party
+    /* +0x04 */ uint32_t  order;              // [H] the member's order code (below);
+                                              //     not written by join_party
+    /* +0x08 */ uint32_t  _unk_08;            // [U] 0 from add_car_member; not written by
+                                              //     join_party
     /* +0x0c */ uint32_t  state;              // [M] join_party: 1 if the entity belongs to an
                                               //     ai_group (entity+0x11ac != 0), else 0;
                                               //     take_car sets 2 on the members it seats
-    /* +0x10 */ uint32_t  _unk_10;            // [U] 0 when join_party creates the record
+    /* +0x10 */ uint32_t  _unk_10;            // [U] 0 when join_party creates the record;
+                                              //     add_car_member leaves it unset
 } ai_fight_member;
 ```
 
-`join_party` builds the record as `{entity, -, -, in_ai_group, 0}`; the two words it leaves unset
-and the readers of `+0x0c` are open (§7). The
-stride `0x14` is shared with `ai_group_event`, which is why the stride-0x14 container helpers are
-COMDAT-folded and must stay mechanical.
+`join_party` builds the record as `{entity, -, -, in_ai_group, 0}` and
+`ai_fight_followship_add_car_member` as `{entity, order, 0, 1, -}`.
+`ai_fight_followship_set_commander` rewrites `+0x0c` for every member — 1 when the member shares
+the key holder's `ai_group` (`entity+0x11ac`), else 0 — and `take_car` sets 2 on the members it
+seats and reads `== 2`.
+
+**`+0x04` is the member's order code.** `add_car_member` turns its 0/1/2 boarding decision into
+0, 6 (after making the entity leave its current car through `human_use_actor(car, 2)`) or 8.
+`ai_fight_manager_tick` runs a per-member state machine over the code (values 0 to 11) and hands
+each member its current step through `entity_lock_substate(member, 3, 8, (float)code)`.
+`entity_switch_ai_state` turns that lock into `entity_force_ai(3, 8, 0, code)`, which stores the
+code at `entity+0xf5c`, and `entity_ai`'s state-3 / substate-8 branch switches on
+`(int)entity+0xf5c`:
+
+| code | what `entity_ai` makes the member do |
+|---|---|
+| 1, 4 | walk to the party car (`ai_action_new_move_to_car`) |
+| 2 | fight its current enemy (`ai_fight_modes_tick`) |
+| 3 | crouch-fight (`ai_action_new_crouch_fight`) |
+| 5 | get into the party car (`human_use_actor(car, 1)`) |
+| 6 | leave its car once the car is nearly stopped (`human_use_actor(car, 2)`) |
+| 7 | breathe (idle) |
+| 8 | fire at its target (`ai_action_new_fire`) |
+| 9 | stop the car (`ai_action_new_car_stop`) |
+| 10 | aim from the car (`ai_action_new_car_aim`) |
+
+Code 0 is the start state the tick replaces, and 11 lies outside the switch. No code outside the
+manager reads a member record: every one of the 24 references to the singleton loads ECX for a
+manager method, and the three outside callers of `ai_fight_manager_get_party` read only the
+party's `+0x30` and `+0x44` and the member index. The stride `0x14` is shared with
+`ai_group_event`, which is why the stride-0x14 container helpers are COMDAT-folded and must stay
+mechanical.
 
 ### 1c. `ai_fight_manager` — the party vector, inside the AI root object
 
@@ -129,7 +160,7 @@ class, and that is why its destructor covers only one vector.
 | `0x00440e10` | `ai_fight_manager_invalidate_actor` | `Invalidate__16ai_fight_managerFP7C_actor` | CONFIRMED | Three-way scrub, §3. Consumer-pinned three times in one body |
 | `0x00443a90` | `ai_fight_manager_dtor` | - ¹ | STRUCTURAL | Walks the party vector (stride 0x48); per party drains and frees its inner `vector<ai_fight_member>` (element `+0x04`, stride 0x14); then frees the buffer. One entry point ⇒ no fold |
 
-¹ No PS2 symbol: inlined into `__dt__10ai_managerFv` (§5).
+¹ No PS2 symbol: inlined into `__dt__10ai_managerFv` (§4).
 
 ### 2b. `ai_fight_followship` — 8 of 8
 
@@ -138,7 +169,7 @@ class, and that is why its destructor covers only one vector.
 | `0x0043ebc0` | `ai_fight_followship_set_commander` | `SetCommander__19ai_fight_followshipFv` | CONFIRMED | Consumer-pinned by `invalidate_actor`'s "members remain, elect a replacement" arm |
 | `0x0043ecc0` | `ai_fight_followship_count_free_seats` | `CountFreeSeats__19ai_fight_followshipFP5C_car` | CONFIRMED | Seat array PC `+0xd90`/`+0xd94` stride `0x24`; same `car_get_owner` per-seat call; same member scan + early `return 0`. A seat that is free but fails the reachability raycast (mask **0x140502**) disqualifies the whole car |
 | `0x0043ee60` | `ai_fight_followship_take_car` | `TakeCar__19ai_fight_followshipFP5C_car` | CONFIRMED | Calls `count_free_seats` first and `new_car_party` last on both builds — one diff that pins three rows. Same 8-slot local index array, same leader-first flag, same three member qualifying tests |
-| `0x0043f110` | `ai_fight_followship_add_car_member` | `AddCarMember__19ai_fight_followshipFP8C_entity` | CONFIRMED | Same current-vehicle field (PC `entity+0x98`), same compare against the party car, same `kind==4 && speed<0.5` branch, same 0/1/2 boarding codes |
+| `0x0043f110` | `ai_fight_followship_add_car_member` | `AddCarMember__19ai_fight_followshipFP8C_entity` | CONFIRMED | Same current-vehicle field (PC `entity+0x98`), same compare against the party car, same `kind==4 && speed<0.5` branch, same 0/1/2 boarding decision, stored as the order code 0/6/8 (§1b) |
 | `0x0043f3f0` | `ai_fight_followship_compute_position` | `ComputePosition__19ai_fight_followshipFv` | CONFIRMED | Two passes: mean member position → `+0x10`, then max squared distance to it → `+0x28` |
 | `0x0043f590` | `ai_fight_followship_must_car_hunt` | `mustCarHunt__19ai_fight_followshipFv` | CONFIRMED | §2e. Shared magics **100.0** / **10000.0** / **2.0**, kind codes 4 and 8, gate `kind == 2 \|\| 0x1b`, the `+0x28` spread threshold, the `car+0x688` speed field |
 | `0x004427f0` | `ai_fight_followship_copy_ctor` | `__ct__19ai_fight_followshipFRC19ai_fight_followship` | CONFIRMED | Same field order, 288/236 B = 1.22 |
@@ -215,7 +246,7 @@ record. It scrubs **three** containers per record where this class scrubs one, a
 container is matched on **two** actor fields rather than one — which is what surfaced the
 `ai_group_event` type (`structs/ai_group.md` §1e).
 
-## 5. PC vs PS2
+## 4. PC vs PS2
 
 - **Party record stride: PC `0x48` / PS2 `0x60`** (PS2 `NewCarParty` allocates `__nw__(0x60)` and
   `JoinParty` issues `memset(…, 0x60)`; the walk divisors agree). The field map is otherwise a
@@ -244,8 +275,8 @@ container is matched on **two** actor fields rather than one — which is what s
 - **`10000` ms formation extension is identical on both platforms**, as is the `kind == 1` car
   test and the three-way `Invalidate` dispatch.
 - **`ComputePosition` uses VU ops on PS2** (`_vadd`/`_vdiv`/`_vmulq`) where the PC uses x87 — a
-  rendering difference, not a factoring one. `AddCarMember`'s boarding codes are 0/1/2 on PC and
-  0/6/8 on PS2.
+  rendering difference, not a factoring one. `AddCarMember` stores the same order codes 0/6/8 on
+  both builds.
 - **PS2 calls `__as__19ai_fight_followship` (`operator=`) to shift records down** when splicing a
   party out; MSVC inlines the same shift as a 0x48-byte field-by-field copy. That is the whole of
   `invalidate_actor`'s size difference.
@@ -290,7 +321,7 @@ container is matched on **two** actor fields rather than one — which is what s
   managers: `0x00655348` is the actor possible-collision table (`actor_posscoll_table_ctor`),
   then `0x0065535c`.
 
-## 6. Related
+## 5. Related
 
 - `structs/ai_manager.md` — the root object this class is a member of.
 - `structs/ai_group.md` — the sibling coordination subsystem sharing this TU.
@@ -303,8 +334,8 @@ container is matched on **two** actor fields rather than one — which is what s
   the shared `ai_fight` stem.
 - `structs/entity.md` §6c — `entity_ai`, the caller of `JoinParty` / `LeaveParty`.
 
-## 7. Open items
+## 6. Open items
 
 | item | state |
 |---|---|
-| `ai_fight_member` `+0x04` / `+0x08` / `+0x0c` / `+0x10` (§1b) | `join_party` writes `+0x0c` (in an `ai_group` or not) and `+0x10` (0), `take_car` sets `+0x0c = 2`; `+0x04` / `+0x08` are not written on the join path, and the readers of all four are not traced |
+| `ai_fight_member` `+0x08` / `+0x10` (§1b) | no reader is located: `ai_fight_manager_tick` never reads them, and no code outside the manager touches a member record |

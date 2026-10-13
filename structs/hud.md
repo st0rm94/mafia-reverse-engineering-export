@@ -1,6 +1,6 @@
 # `G_IndicatorsClass` — the HUD singleton (`hud_state` @ PC `VA 0x00658330`)
 
-**Created** 2026-07-22 11:22 +0200 · **Modified** 2026-10-04 19:22 +0200
+**Created** 2026-07-22 11:22 +0200 · **Modified** 2026-10-11 21:39 +0200
 
 PC prefix **`hud_*`**.
 
@@ -80,7 +80,7 @@ Selected fields; the full per-offset map lives in `basic/artifacts/hud_elements.
 | `+0x91dc` / `+0x91e0` | displayed gear / target gear, pre-scaled `gear * 11.0`; `hud_tick` eases `+0x91dc` toward `+0x91e0` at 0.02 per ms and slides the `g_speedo_gear_vtx` texture window with it | [H] |
 | `+0x91e4` / `+0x91e8` | needle x / y scale factors | [H] |
 | `+0x91fc` | **A/M transmission character** — UV select on the `2intauto*.tga` overlay. **PC-ONLY rendering** (§3) | [H] |
-| `+0x91fd` / `+0x9200` | low-fuel warning flag + its 0.5 s blink phase (red dot draws while phase `< 0.25`) | [H] |
+| `+0x91fd` / `+0x9200` | low-fuel warning flag + its 0.5 s blink phase (red dot draws while phase `< 0.25`; the dot is `2intbenal.tga`, a 16 x 16 red dot held in `g_hud_low_fuel_lamp_texture`) | [H] |
 | `+0x9208` / `+0x9214` | player health number + its `"%d"` text | [H] |
 | `+0x920c` / `+0x9210` / `+0x9224` | ammo mag / reserve + the `"%d/%d"` text | [H] |
 | `+0x9234` | crosshair spread (bit `0x20`) | [H] |
@@ -380,6 +380,9 @@ callers, not on its absence from the PC cluster:
   decrements, restoring the volume at 0. Its callers are the PS2-only script command `PLAY_VIDEO`
   and a mission-name gate in `C_game::Init` that the PC `game_init` does not have, and the
   countdown is missing from `hud_tick`'s lockstep (accumulator, map load, fuel blink, stopwatch).
+  The PC object has no room for it either: the map caption `+0x96e8` is its last field —
+  `hud + 0x96ec` (`0x00661a1c`) is the separate global `g_font_translation_tables` — and no
+  instruction addresses `+0x96ec` or `+0x96f0` off a register.
 * `TutorialAddText` — its only caller is the PS2-only script command `TUTORIAL_OUTTEXT`.
 * `TextSizeMultiLine` — its callers are the PS2-only memory-card and tutorial screens, the free
   function `_GIconDraw`, `DrawMessage`, and `GM_QuestionBox::OnCreate`, whose PC twin

@@ -1,6 +1,6 @@
 # `C_chunk` — the `.dta` archive chunk reader/writer
 
-**Created** 2026-08-14 23:01 +0200 · **Modified** 2026-10-04 11:52 +0200
+**Created** 2026-08-14 23:01 +0200 · **Modified** 2026-10-13 17:49 +0200
 
 **PS2 class:** `C_chunk` (mangled tag `7C_chunk`). **PC prefix: `chunk_`.** Cross-build material
 is in §7.
@@ -64,6 +64,7 @@ seek back.
 | 0x00544590 | `chunk_close` | in write mode unwinds the open-chunk stack, back-patching each chunk's size; then `dtaClose`, handle `-1`, open byte cleared; returns 1, or 0 when not open (§5) |
 | 0x005a5c10 | `chunk_open_stack_insert_at` | vector insert on the open-chunk stack; 18 callsites |
 | 0x005a5db0 | `chunk_open_stack_insert_n` | vector fill-insert on the open-chunk stack; 1 callsite |
+| 0x00546810 | `chunk_open_stack_free` | frees the open-chunk stack through allocator slot 1 and zeroes `+0x04..+0x0c`; 6 calls, each right after `chunk_close` on the same stack `C_chunk`, and 9 unwind funclets (§5) |
 | 0x005a5fe0 | `chunk_enter_next` | reads the 6-byte header, pushes the chunk's end offset, returns the id (§4) |
 | 0x005a61b0 | `chunk_leave` | ascends: back-patch in write mode, seek to the recorded offset, pop. **83 callsites**, 53 in `mission_open_bin` — the most-used `C_chunk` entry point |
 | 0x005a6250 | `chunk_bytes_remaining` | `current_chunk_end - tell()`, 0 on closed / empty stack / seek failure; 18 callsites, each the condition of a `while (remaining) { enter; …; leave; }` loop |
@@ -89,7 +90,7 @@ A class's PC code is not one contiguous cluster:
 
 The stack at `+0x04..+0x0c` is a `std::vector<int>` grown through `chunk_open_stack_insert_at` /
 `chunk_open_stack_insert_n`, which index `C_chunk+0x00..+0x0c` and allocate through the class's own
-2-slot vtable `0x0063c828` rather than `operator_new`.
+2-slot vtable `0x0063c828` rather than `operator_new`, and freed by `chunk_open_stack_free`.
 
 | mode | what an entry holds | measured in |
 |---|---|---|
@@ -156,8 +157,11 @@ handle. They are two functions, not one body emitted twice:
 The unwind funclets are what identify the destructor: they run when an exception leaves a scope
 that holds a stack `C_chunk`, and a funclet only ever calls destructors. Callers that close the
 file early call `chunk_close` and let `chunk_dtor` run at scope exit, where it finds the chunk
-already closed and only frees the vector. `chunk_close` sits in the `C_recorder` TU, 500 KB from
-the rest of the class.
+already closed and only frees the vector. Six other scopes end with `chunk_close` followed by
+`chunk_open_stack_free`, the vector-freeing tail of the destructor called out of line (`chunk_dtor`
+ends with the same four statements inline); their nine unwind funclets jump to
+`chunk_open_stack_free`. `chunk_close` sits in the `C_recorder` TU, 500 KB from the rest of the
+class.
 
 ## 6. The allocator vtable pair and the folded vector ctor
 
@@ -200,6 +204,7 @@ The PS2 build has **6 `C_chunk` symbols**.
 | - | - | - | `chunk_read_dword_and_leave` (`0x00607720`) | PC-side fusion of a read and `Descend`; matches neither |
 | - | - | - | `chunk_ctor` | no PS2 symbol — inlined there |
 | - | - | - | `chunk_dtor` | no PS2 symbol — the PS2 open-chunk stack is an array inside the object, so there is nothing to free |
+| - | - | - | `chunk_open_stack_free` | no PS2 symbol, for the same reason |
 | - | - | - | `chunk_vector_allocate` / `std_allocator_deallocate` | no PS2 symbol; the 2-slot allocator vtable is an MSVC STL artifact |
 
 ¹ The same open test with its 0 return, the same write-path back-patch (read the current position,

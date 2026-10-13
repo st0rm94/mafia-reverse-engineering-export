@@ -1,6 +1,6 @@
 # The Win32 bootstrap translation unit — `winmain`, the host helpers and the CD check
 
-**Created** 2026-08-23 11:15 +0200 · **Modified** 2026-10-01 09:01 +0200
+**Created** 2026-08-23 11:15 +0200 · **Modified** 2026-10-13 17:51 +0200
 
 `[0x00623e10, 0x006242b0)` — **`Winstuff.cpp`** (§6).
 
@@ -199,42 +199,58 @@ name for the block; `display_` is taken by the `C_mission + 0x90` sub-object (38
 
 | offset | field | default | evidence |
 |---|---|---|---|
-| `+0x00` | version tag | `0x14` | `engine_main` refuses the saved blob unless it matches |
-| `+0x01` | adapter index | 0 | passed as element [1] of the `GetIGraph()` init struct |
+| `+0x00` | version tag | `0x14` | `engine_main` refuses the saved blob unless it matches, and then starts `setup.exe` (below) |
+| `+0x01` | adapter index | 0 | the setup program's display-adapter list; passed as element [1] of the `GetIGraph()` init struct |
 | `+0x02` | `g_ls3d_setup_width` | 800 | the RIGHT member of two `SetRect` calls |
 | `+0x06` | `g_ls3d_setup_height` | 600 | the BOTTOM member of the same two |
 | `+0x0a` | `g_ls3d_setup_bpp` | 32 | copied into the `IGraph` init struct |
-| `+0x0e` | `g_ls3d_setup_field_0x0e` | 0 | a dword copied into the `IGraph` init struct beside the bpp |
-| `+0x12` | `g_ls3d_setup_field_0x12` | 0 | compared with 4 and 2 → mode bits `0x2000` / `0x1000` ¹ |
-| `+0x13` | `g_ls3d_setup_field_0x13` | 0 | mode bit `0x4000` ¹ |
-| `+0x14` | `g_ls3d_setup_field_0x14` | 0 | mode bit `0x8000` ¹ |
-| `+0x15` | `g_ls3d_setup_field_0x15` | 0 | mode bit `0x2` ¹ |
-| `+0x16` | `g_ls3d_setup_field_0x16` | 1 | mode bit `0x10` ¹ |
-| `+0x17` | `g_ls3d_setup_field_0x17` | 0 | mode bit `0x100` ¹ |
-| `+0x18` | `g_ls3d_setup_flag_bytes_0x18` | 0, 0, 1, 1 | four bytes with different subjects: byte 0 → **I3D driver state `0x15`**, byte 1 → mode bit `0x4` ¹, byte 2 → driver state `0x22`, byte 3 → driver state `0x19` (`engine_init`) |
-| `+0x1c` | `g_ls3d_setup_flag_bytes_0x1c` | - | written to **I3D driver state `0x11`** by `engine_init` ² |
-| `+0x1d` | byte 1 of the `+0x1c` group | 0 | **gates the sound driver**: `engine_init` calls `ISndGetDriver()` only when it is 0, so non-zero = sound disabled |
-| `+0x1e` | byte 2 of the `+0x1c` group | - | contributes bit `0x10` to the sound-driver init flags |
-| `+0x1f` | byte 3 of the `+0x1c` group | - | contributes bit `0x20` to the IGraph mode word |
-| `+0x20` | `g_ls3d_setup_field_0x20` | 0 | contributes bit `0x20` to the sound-driver init flags |
-| `+0x21` | `g_ls3d_setup_field_0x21` | 1 | written only by the two default fillers (§7) |
-| `+0x22` | `g_ls3d_setup_field_0x22` | 0 | a dword, written only by the two default fillers (§7) |
-| `+0x26` | `g_ls3d_setup_wbuffer_enabled` | 1 | the **W-buffer** setting ³ |
+| `+0x0e` | `g_ls3d_setup_refresh_rate` | 0 | the **refresh rate** list; a dword copied into the `IGraph` init struct beside the bpp |
+| `+0x12` | `g_ls3d_setup_antialiasing` | 0 | the **fullscene antialiasing** list; compared with 4 and 2 → mode bits `0x2000` / `0x1000` ¹ |
+| `+0x13` | `g_ls3d_setup_multipass_rendering` | 0 | **Multipass rendering**; mode bit `0x4000` ¹ |
+| `+0x14` | `g_ls3d_setup_clip_always` | 0 | **Clip always**; mode bit `0x8000` ¹ |
+| `+0x15` | `g_ls3d_setup_fullscreen` | 0 | **Fullscreen**; mode bit `0x2` ¹ |
+| `+0x16` | `g_ls3d_setup_hw_transform_lighting` | 1 | **Hardware Transform & Lighting**; mode bit `0x10` ¹ |
+| `+0x17` | `g_ls3d_setup_vsync` | 0 | **Vertical synchronization**; mode bit `0x100` ¹ |
+| `+0x18` | `g_ls3d_setup_low_detail_textures` | 0 | **Low detail** textures → I3D driver state `0x15` (`engine_init`) |
+| `+0x19` | `g_ls3d_setup_triple_buffering` | 0 | **Triple buffering** → mode bit `0x4` ¹ |
+| `+0x1a` | `g_ls3d_setup_truecolor_lightmaps` | 1 | **Truecolor** lightmaps → I3D driver state `0x22` (`engine_init`) |
+| `+0x1b` | `g_ls3d_setup_compressed_textures` | 1 | **Compressed** textures → I3D driver state `0x19` (`engine_init`) |
+| `+0x1c` | `g_ls3d_setup_truecolor_textures` | 0 | **Truecolor** textures → I3D driver state `0x11` (`engine_init`) ² |
+| `+0x1d` | `g_ls3d_setup_sound_disabled` | 0 | the inverse of the **Sound** check box: `engine_init` calls `ISndGetDriver()` only when it is 0, so non-zero = sound disabled |
+| `+0x1e` | `g_ls3d_setup_eax_disabled` | 1 | **Disable EAX**; bit `0x10` of the sound-driver init flags |
+| `+0x1f` | `g_ls3d_setup_suspend_when_inactive` | 1 | **Suspend when inactive**; bit `0x20` of the IGraph mode word |
+| `+0x20` | `g_ls3d_setup_software_mixing_only` | 0 | **Software mixing only**; bit `0x20` of the sound-driver init flags |
+| `+0x21` | `g_ls3d_setup_speaker_config` | 1 | the **speaker configuration** list; in the game, written only by the two default fillers (§7) |
+| `+0x22` | `g_ls3d_setup_language` | 0 | the **language**, a dword; in the game, written only by the two default fillers (§7) |
+| `+0x26` | `g_ls3d_setup_wbuffer_enabled` | 1 | the **W Buffer** check box ³ |
 | `+0x27 … +0x3b` | the six quality/scale mirrors | 1.0, 1.0, 2, 2, 3, 2 | the persisted copy of `C_mission + 0x90` — `structs/mission.md` §2 |
 
 ¹ The `IGraph` mode word `engine_init` assembles: `+0x12` vs 4 and 2 → `0x2000`/`0x1000`,
 `+0x13` → `0x4000`, `+0x14` → `0x8000`, `+0x15` → `2`, `+0x16` → `0x10`, `+0x17` → `0x100`,
-`+0x19` → `4`, `+0x1f` → `0x20`, plus the constant `0x10090`. These fields keep offset names
-(§7).
-² `engine_igraph_error_callback` clears it before re-saving the blob on a video-memory overflow, so
-it selects something video-memory-hungry. The `+0x1c` group keeps a mechanical offset name because
-its four bytes have different subjects (two graphics, two sound).
+`+0x19` → `4`, `+0x1f` → `0x20`, plus the constant `0x10090`.
+² `engine_igraph_error_callback` clears it before re-saving the blob on a video-memory overflow; the
+setup program likewise warns that truecolor textures are recommended only for cards with 64 MB of
+video memory or more.
 ³ Written 1 by both `ls3d_setup_static_init` and `ls3d_setup_set_defaults`; its only reader is
 `engine_set_wbuffer`, which ANDs a caller's request with it before setting I3D render state 4.
 
 Defaults are written twice by the same source function: `ls3d_setup_static_init` (`0x005f7c00`)
 fills the global, `ls3d_setup_set_defaults` (`0x005fa2a0`) fills a stack copy for `engine_main` to
 validate the registry blob against.
+
+**The setup program names every byte.** `Setup.exe`, shipped with the game, writes the same
+`0x3f`-byte value to the same registry key. Its dialog (resource 101) binds one control to each
+byte: the code that fills the dialog from the block and the code that copies the dialog back into
+it agree for all fifteen check boxes, and each list (adapter, resolution, bit depth, refresh rate,
+antialiasing, speaker configuration, language) stores the selected item's value. The **bold**
+names in the table are the captions of the dialog template; the Sound and Fullscreen check boxes sit
+in the titles of their group boxes.
+
+**A missing or invalid blob opens the setup program.** When the registry key, the value, its
+`0x3f`-byte size or the `0x14` tag is missing, `engine_main` starts `setup.exe` through
+`crt_spawnlp` with mode 1 and returns. Mode 1 does not wait (`crt_dospawn` waits only for mode 0),
+so the game process ends while the setup program runs. In game, deleting the value and starting
+the game opens `setup.exe`.
 
 ## 5c. The `engine_*` free-function family
 
@@ -254,7 +270,7 @@ member.
 | `0x005f98e0` | `engine_igraph_error_callback` | - | IGraph error hook, out-of-memory only ¹ |
 | `0x005f99b0` | `engine_main` | `main` | the real main; called by `winmain` |
 | `0x005fa2a0` | `ls3d_setup_set_defaults` | - | writes the defaults into a stack copy |
-| `0x005fa320` | `engine_init` | `InitSystem__FPvRb` | dta, IGraph, I3D driver, mission, sound, joysticks |
+| `0x005fa320` | `engine_init` | `InitSystem__FPvRb` | dta archives, IGraph, sound, I3D driver, mission, joysticks, the three cache directories, tables, language, network session, logos, load-save init. `__fastcall`: ECX = the instance handle, EDX = a flag set when the load-save init fails, on which `engine_main` goes straight to `engine_shutdown` |
 | `0x005fb330` | `engine_show_init_error` | `InitErrorMessageBox__F11LS3D_RESULTi` | the 21-arm `LS3D_RESULT` message box |
 | `0x005fb4f0` | `engine_shutdown` | `CloseSystem__Fv` | the mirror of `engine_init` |
 
@@ -307,6 +323,15 @@ settings block too, alongside `0x15` / `0x19` / `0x22` fed by the `+0x18` group.
 
 **`engine_draw_overlay_callback`** is scene callback id 6 on both builds.
 
+**`engine_init` and `engine_shutdown` are ordered callee locksteps.** `InitSystem__FPvRb` makes
+the same calls in the same order as `engine_init` (archives, the two rects, `GetIGraph`, the I3D
+driver, the mission, the cursor, the three cache directories with their trailing backslash,
+consoles, tyres, materials, particles, animation index, sound tables, the version file and the
+language select, `G_LoadSaveClass::Init` writing the `bool&`), except that it creates the sound
+driver after the mission; its `bool&` is the PC's EDX flag. `CloseSystem__Fv` matches
+`engine_shutdown` the same way, load-save close first and `FreeTables` last. The PS2 `main` calls
+`CloseSystem` from 12 places; `engine_main` calls `engine_shutdown` from one.
+
 **The `IGraph` slots of §3a have PS2 names.** The PS2 statically links the same class
 (`__vt__6IGraph`), but its vtable order differs from the PC DLL's (it starts with `Init`), so each
 slot is matched by its BODY, not by position:
@@ -327,5 +352,4 @@ casing, independently corroborating that document's four Illusion DLLs.
 
 | item | state |
 |---|---|
-| the `IGraph` mode-word bits (§5b ¹) | `engine_init` assembles them from `+0x12`..`+0x17`, `+0x19` and `+0x1f`; what each bit selects is not decoded |
 | `g_ls3d_setup` `+0x21` / `+0x22` | written only by `ls3d_setup_static_init` and `ls3d_setup_set_defaults`; no reader located |

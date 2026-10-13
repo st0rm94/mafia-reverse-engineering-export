@@ -1,6 +1,6 @@
 # Cheat-code system — *Mafia: The City of Lost Heaven* (Game.exe, v1.0)
 
-**Created** 2026-06-12 19:40 +0200 · **Modified** 2026-09-23 15:58 +0200
+**Created** 2026-06-12 19:40 +0200 · **Modified** 2026-10-12 19:38 +0200
 
 The typed cheat-code subsystem. Entry point is `game_cheat_check` (VA `0x005e3a90`). All
 offsets/VAs are v1.0 (PE image base `0x00400000`).
@@ -11,8 +11,10 @@ offsets/VAs are v1.0 (PE image base `0x00400000`).
 
 `game_cheat_check(this, typed_char)` is called once per frame from `engine_game_loop` (and from
 `race_game_loop`), right after `input_update`, when the second `g_engine` vtable `+0x98` state
-check (`state_recheck`) is true. `this` is the active screen/UI object; `typed_char` is the
-latest key.
+check (`state_recheck`) is true. `this` is the `C_game` singleton — both callers load ECX from
+`*(g_act_mission + 0x24)` — and `typed_char` is the character the engine returns from its
+vtable slot `+0xbc`. The buffer, the flag word and the one-shot gate below are `C_game`
+fields (`structs/game.md` §2).
 
 Per call:
 
@@ -84,8 +86,12 @@ The table has 8 entries at a 36-byte (`0x24`) stride; the code strings occupy
 
 | Field | Address (slot n) | Notes |
 |---|---|---|
-| code string | `0x6508e8 + n*0x24` | `~`-complemented chars, NUL-terminated |
+| code string | `0x6508e8 + n*0x24` | `~`-complemented chars, NUL-terminated and NUL-padded to `0x20` bytes |
 | cheat id (`int`) | `0x650908 + n*0x24` | `-1` = inactive |
+
+Each entry is exactly these two fields: a `0x20`-byte string buffer and the id at `+0x20`.
+Every byte past a code's terminator is zero in all eight entries, and `game_cheat_check` reads
+nothing else. The typed buffer at `C_game+0x2ef4` is reset once it exceeds 30 characters.
 
 - Loop start anchor: `s_hole3_i3d_00650a08` (the `hole1/2/3.i3d` strings above the
   table are unrelated neighbours; the walk pre-decrements `0x24` so the first
@@ -154,11 +160,9 @@ The table has 8 entries at a 36-byte (`0x24`) stride; the code strings occupy
 ## 5. Cross-references
 - `game_cheat_check` docblock: in `ghidra/Game-ghidra.exe.annotated.c` (anchor: the
   function `game_cheat_check`, VA `0x005e3a90`).
-- Main-loop call site: `basic/artifacts/game-loop.md` (`state_recheck` / `screen_obj`).
+- Main-loop call site: `basic/artifacts/game-loop.md` (`state_recheck` / `typed_char`).
 - `structs/bridge.md` — the `C_bridge` receiver of the PARNIK handler.
 
 ## 6. Open items
 - `POLIFUCK` (`8`) and `ROZMAZ` (`0xf`) — no handler in v1.0; whether v1.2 adds `switch`
   cases (as it does for `CORNUFSE`) is unchecked.
-- The layout of the rest of each `0x24`-byte table entry (bytes other than the code string and
-  the id) is undocumented.

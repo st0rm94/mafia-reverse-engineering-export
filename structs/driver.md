@@ -1,6 +1,6 @@
 # `C_driver` — the chase AI-driver record (~0x29C bytes)
 
-**Created** 2026-07-11 13:22 +0200 · **Modified** 2026-10-01 18:52 +0200
+**Created** 2026-07-11 13:22 +0200 · **Modified** 2026-10-11 21:37 +0200
 
 One `C_driver` is the per-car AI that physically **steers / throttles / brakes** a chase car along a
 cached path of nav-graph nodes. It is not police-specific: police pursuits, AI combat chases and
@@ -25,15 +25,15 @@ concept).
 
 ## 1. Field layout (~0x29C bytes)
 
-Offsets relative to the `C_driver` `this`. `car` = the driven `C_Vehicle` at `this+0x10`
-(`structs/vehicle.md`). `node` = a path-node element of the `this+0x164` vector (stride 0x70, §3).
+Offsets relative to the `C_driver` `this`. `car` = the driven `C_car` at `this+0x10`; its
+`C_Vehicle` sub-object is `car+0x70` (`structs/vehicle.md`). `node` = a path-node element of the `this+0x164` vector (stride 0x70, §3).
 
 ```c
 typedef struct C_driver {                 // ~0x29C bytes; pursuit S_ELEMENT record+0x04
     /* +0x04 */ vec_node* motion_begin;         // [H] std::vector<node> (stride 0x70) swept motion samples
     /* +0x08 */ vec_node* motion_end;           // [H]   built by driver_predict_collision; ctor zeroes, dtor frees
     /* +0x0C */ vec_node* motion_cap;           // [H]
-    /* +0x10 */ C_Vehicle* car;                 // [H] the driven vehicle (driver_set_car)
+    /* +0x10 */ C_car*    car;                  // [H] the driven car (driver_set_car); C_Vehicle at +0x70
     /* +0x14 */ float     coef_040;             // [M] 0.4f ctor; accel/steer gain (with +0xec)
     /* +0x18 */ float     coef_070;             // [M] 0.7f ctor; accel/steer gain (with +0xec)
     /* +0x1C */ float     box_corner_a[3];      // [H] +0x1C..+0x24 collision half-box corner A
@@ -106,7 +106,7 @@ typedef struct C_driver {                 // ~0x29C bytes; pursuit S_ELEMENT rec
 
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
-| +0x10 | car (C_Vehicle*) | H | `driver_set_car` | ALL | driven vehicle; base of every `car+off` |
+| +0x10 | car (C_car*) | H | `driver_set_car` | ALL | driven car; base of every `car+off`. `driver_tick` passes it straight to `car_get_ai_probe_point` and adds `0x70` before every `vehicle_*` call (`vehicle_set_gear`, `vehicle_set_handbrake`) |
 | +0x64 | path_node_count | H | `driver_tick` | all helpers | (end-begin)/0x70 |
 | +0x68 | next_node_cursor | H | `driver_fill_start_values` (=cursor+1) | `driver_optimize_next_checkpoints` | **int cursor, not an I3D_frame** |
 | +0x6C..+0x74 | target_pos | H | fill/advance/path_correction | steering/braking helpers | current target-node pos |
@@ -296,6 +296,6 @@ live beside the container helpers, not in the owning class's cluster.
 
 ## 6. Cross-references
 
-- `structs/vehicle.md` — the `C_Vehicle` the driver drives (`this+0x10`) + gas/brake/steer setters.
+- `structs/vehicle.md` — the driven car's `C_Vehicle` (`this+0x10`, then `+0x70`) + gas/brake/steer setters.
 - `structs/pursuit-event-manager.md` — the S_ELEMENT record that owns this driver at `+0x04`.
 - `police-system/artifacts/boosting.md` — `speed_factor` / model-level boost.

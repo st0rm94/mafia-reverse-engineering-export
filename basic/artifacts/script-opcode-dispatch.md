@@ -1,6 +1,6 @@
 # How a script command becomes a `program_process_command` case
 
-**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-10-01 08:56 +0200
+**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-10-12 20:57 +0200
 
 This file answers the question *given a script command name, which `case 0xNN:` in
 `program_process_command` implements it?* The answer is byte-exact for all 391 commands and
@@ -186,6 +186,9 @@ which is what makes it a free check on the PC extraction.
   PS2 arm is an empty stub; its helpers' second body is `glass_shatter_cut_mesh`, whose twin is
   CONFIRMED and which walks the same chain.
 * `program_set_event`'s twin is `SetEvent__9C_programFi`.
+* The PS2 `SETPLAYERHORNEVENT` arm (opcode `0x76`) clears `game+0x119c` / `+0x11a0`, the
+  fire-event pair, when its actor index is invalid — the same slot the PC fallback clears
+  (§8), so the mix-up is in the source on both builds.
 
 ---
 
@@ -196,11 +199,14 @@ makes this range hard to name from behaviour alone (`structs/program.md` §6): a
 accessor tells nothing by itself, and its single consumer is a 50 KB switch. With the case map
 the consumer is readable.
 
-Each callsite is attributed to an arm by taking the greatest jump-table arm start ≤ the
-callsite VA. ⚠️ **This is a strong lead, not a proof:** arms share tails and fall through, so
-a callsite in a shared tail is attributed to whichever arm starts last before it. A row whose
-several commands form a coherent family (the `CARLIGHT_*` block, the `POLICEMANAGER_*` block)
-is self-corroborating; a lone incoherent pair is a tell that a shared tail was crossed. Where
+Each callsite is attributed by control flow: a walk of `program_process_command` from every
+jump-table arm start, following both edges of every branch and stopping at the return to the
+dispatch head, lists the arms that reach it. **255 of the 257 helper callsites are reached
+from exactly one arm.** The other two sit in shared tails, and the table lists every arm that
+reaches them: the `PM_SHOWPROGRESS` arm jumps into `PM_SHOWSYMBOL`'s
+`hud_hide_element(0x4000000)` block, and the invalid-actor fallback of `SETPLAYERHORNEVENT`
+jumps into `SETPLAYERFIREEVENT`'s call block, so a horn registration with a bad actor clears
+the fire-event slot (`game_set_player_fire_event(0, 0)`), not the horn slot. Where
 the attribution is taken from the decompiler's own `case` labels instead, note that **Ghidra
 prints 50 of the 375 case labels in DECIMAL** (`case 199:`), so a `case 0x…` pattern silently
 attributes those callsites to the previous label.
@@ -214,7 +220,7 @@ The names are the validation: every row lands on the command its name predicts �
 | PC VA | Size | Name | Callsites in the dispatcher | Command(s) whose arm calls it |
 |---|---:|---|---:|---|
 | `0x005c7da0` | 13 | `hud_set_element_flags` | 1 (+1 outside) | `0x2c` RECLOADFULL |
-| `0x005c7db0` | 23 | `hud_hide_element` | 9 | `0x1d` SETCOMPASS, `0x32` TIMEROFF, `0x4d` DIALOG_BEGIN, `0x7a` WINGMAN_DELINDICATOR, `0xea` CARDAMAGEVISIBLE, `0x146` PM_SHOWSYMBOL |
+| `0x005c7db0` | 23 | `hud_hide_element` | 9 | `0x1d` SETCOMPASS, `0x32` TIMEROFF, `0x4d` DIALOG_BEGIN, `0x7a` WINGMAN_DELINDICATOR, `0xea` CARDAMAGEVISIBLE, `0x146` PM_SHOWSYMBOL, `0x147` PM_SHOWPROGRESS |
 | `0x005c7dd0` | 18 | `hud_element_is_visible` | 2 | `0x16c` TIMER_GETINTERVAL, `0x16d` TIMER_SETINTERVAL |
 | `0x005c7df0` | 438 | `hud_push_element_flags` | 1 | `0x2c` RECLOADFULL |
 | `0x005c7fb0` | 96 | `hud_pop_element_flags` | 1 | `0x2e` RECUNLOAD |
@@ -257,22 +263,22 @@ The names are the validation: every row lands on the command its name predicts �
 | `0x005c8660` | 10 | `mission_set_next_mission_number` | 1 | `0x54` SETMISSIONNUMBER |
 | `0x005c8670` | 4 | `mission_get_mission_number` | 1 | `0x53` GETMISSIONNUMBER |
 | `0x005c8680` | 14 | `mission_commit_next_mission_number` | 1 | `0x33` CHANGE_MISSION |
-| `0x005c8690` | 10 | `mission_set_sound_restore_stage` | 2 (+1 outside) | `0x2c` RECLOADFULL, `0x2e` RECUNLOAD |
-| `0x005c86a0` | 4 | `mission_get_sound_restore_stage` | 2 | `0x2c` RECLOADFULL, `0x2e` RECUNLOAD |
+| `0x005c8690` | 10 | `mission_set_frame_skip_count` | 2 (+1 outside) | `0x2c` RECLOADFULL, `0x2e` RECUNLOAD |
+| `0x005c86a0` | 4 | `mission_get_frame_skip_count` | 2 | `0x2c` RECLOADFULL, `0x2e` RECUNLOAD |
 | `0x005c86b0` | 34 | `using_object_record_ctor` | 1 | `0x57` CREATEWEAPONFROMFRAME |
 | `0x005c86e0` | 4 | `actor_get_class_id` | 1 | `0x14c` HUMAN_ENTERTOTRUCK |
 | `0x005c86f0` | 26 | `actor_set_cached_world_pos` | 3 | `0x6c` ACTOR_SETPOS, `0x6d` ACTOR_SETPLACEMENT, `0x126` ACTORUPDATEPLACEMENT |
 | `0x005c8710` | 30 | `actor_get_direction` | 2 | `0x6b` ACTOR_SETDIR, `0x6d` ACTOR_SETPLACEMENT |
 | `0x005c8730` | 10 | `actor_mark_created_at_runtime` | 1 | `0xda` ACTOR_DUPLICATE |
-| `0x005c8740` | 10 | `vehicle_controller_set_field_0x65` | 1 | `0x185` DAN_INTERNAL_1 |
-| `0x005c8750` | 6 | `actor_get_global_list` | 3 | `0x73` FINDNEARACTOR, `0xcd` DESTROY_PHYSICALOBJECT, `0x186` DAN_INTERNAL_2 |
+| `0x005c8740` | 10 | `actor_set_save_excluded` | 1 | `0x185` DAN_INTERNAL_1 |
+| `0x005c8750` | 6 | `actor_get_global_list` | 3 | `0x11` FINDACTOR, `0x73` FINDNEARACTOR, `0xcd` DESTROY_PHYSICALOBJECT |
 | `0x005c8760` | 10 | `program_set_ai_priority` | 1 | `0x47` SETAIPRIORITY |
 | `0x005c8770` | 13 | `loadsave_set_mission_name_id` | 1 | `0x78` SETMISSIONNAMEID |
 | `0x005c8780` | 7 | `vehicle_get_special_dynamic_colls` | 3 | `0xa1` CAR_SETSPECCOLL, `0xa2` CAR_GETSPECCOLL |
 | `0x005c8790` | 163 | `vehicle_set_velocity` | 1 | `0xa1` CAR_SETSPECCOLL |
 | `0x005c8840` | 49 | `vehicle_set_angular_velocity` | 1 | `0xa1` CAR_SETSPECCOLL |
 | `0x005c8880` | 36 | `vehicle_set_auto_indicators_from_steering` | 8 | `0xc2` CARLIGHT_INDIC_L, `0xc3` CARLIGHT_INDIC_R, `0xc4` CARLIGHT_INDIC_OFF |
-| `0x005c88b0` | 47 | `vehicle_set_light_bit_0x80` | 3 | `0xc1` CARLIGHT_LIGHT |
+| `0x005c88b0` | 47 | `vehicle_set_emergency_lights` | 3 | `0xc1` CARLIGHT_LIGHT |
 | `0x005c88e0` | 58 | `vehicle_set_left_indicator` | 3 | `0xc2` CARLIGHT_INDIC_L, `0xc4` CARLIGHT_INDIC_OFF |
 | `0x005c8920` | 58 | `vehicle_set_right_indicator` | 3 | `0xc3` CARLIGHT_INDIC_R, `0xc4` CARLIGHT_INDIC_OFF |
 | `0x005c8960` | 53 | `vehicle_set_headlights` | 3 | `0xc0` CARLIGHT_MAIN |
@@ -285,7 +291,7 @@ The names are the validation: every row lands on the command its name predicts �
 | `0x005c8a40` | 7 | `car_get_model_name_ptr` | 3 | `0x5a` GARAGE_DELCAR, `0xc7` GARAGE_CANSTEAL, `0x177` GETCARLINENUMFROMTABLE |
 | `0x005c8a50` | 13 | `car_set_show_damage` | 1 | `0xd5` SHOWCARDAMAGE |
 | `0x005c8a60` | 34 | `car_adjust_brake_hold_count` | 1 | `0x144` CAR_LOCK |
-| `0x005c8a90` | 13 | `vehicle_controller_set_field_0x214c` | 1 | `0x185` DAN_INTERNAL_1 |
+| `0x005c8a90` | 13 | `car_set_remove_at_game_done` | 1 | `0x185` DAN_INTERNAL_1 |
 | `0x005c8aa0` | 13 | `car_set_auto_headlights_suppressed` | 2 | `0xc0` CARLIGHT_MAIN |
 | `0x005c8ab0` | 13 | `car_set_effect_mask` | 1 | `0x182` CAR_SETAXIS |
 | `0x005c8ac0` | 13 | `car_set_damage_inhibit_mask` | 1 | `0x156` CAR_UNBREAKABLE |
@@ -299,7 +305,7 @@ The names are the validation: every row lands on the command its name predicts �
 | `0x005c8b50` | 7 | `game_get_frame_count` | 1 | `0x76` CAMERA_LOCK |
 | `0x005c8b60` | 13 | `game_set_night_mission` | 1 | `0x50` GAME_NIGHTMISSION |
 | `0x005c8b70` | 23 | `game_set_timer_timeout_event` | 1 | `0x6f` SETTIMEOUTEVENT |
-| `0x005c8b90` | 23 | `game_set_player_fire_event` | 1 | `0x72` SETPLAYERFIREEVENT |
+| `0x005c8b90` | 23 | `game_set_player_fire_event` | 1 | `0x72` SETPLAYERFIREEVENT, `0x74` SETPLAYERHORNEVENT |
 | `0x005c8bb0` | 23 | `game_set_player_horn_event` | 1 | `0x74` SETPLAYERHORNEVENT |
 | `0x005c8bd0` | 23 | `game_set_player_water_fall_event` | 1 | `0x128` SETPLAYERWFALLEVENT |
 | `0x005c8bf0` | 10 | `game_set_mission_end_action` | 2 | `0x24` ENDOFMISSION |
@@ -317,7 +323,7 @@ The names are the validation: every row lands on the command its name predicts �
 | `0x005c8d10` | 17 | `detector_set_signal` | 1 | `0x1b` DETECTOR_SETSIGNAL |
 | `0x005c8d30` | 7 | `pedestrian_manager_set_scream_enabled` | 1 | `0x175` NPC_SHUTUP |
 | `0x005c8d40` | 13 | `human_pose_set_look_target_frame` | 2 | `0x51` HUMAN_LOOKTOACTOR, `0x52` HUMAN_LOOKTOFRAME |
-| `0x005c8d50` | 23 | `player_set_wingman_indicator` | 2 | `0x79` WINGMAN_SETINDICATOR, `0x7a` WINGMAN_DELINDICATOR |
+| `0x005c8d50` | 23 | `human_set_wingman_indicator` | 2 | `0x79` WINGMAN_SETINDICATOR, `0x7a` WINGMAN_DELINDICATOR |
 | `0x005c8d70` | 13 | `human_set_fire_target_frame` | 2 | `0x8d` HUMAN_SETFIRETARGET |
 | `0x005c8d80` | 13 | `human_set_no_hit_anim` | 1 | `0xbf` SETNOANIMHIT |
 | `0x005c8d90` | 13 | `human_set_idle_anims_enabled` | 4 | `0x2c` RECLOADFULL, `0x2e` RECUNLOAD, `0x4d` DIALOG_BEGIN, `0x4e` DIALOG_END |
@@ -349,7 +355,7 @@ The names are the validation: every row lands on the command its name predicts �
 | `0x005c9060` | `SETLMLEVEL` | the `'LMAP'` frame-tree walk: `program_switch_light_map` |
 | `0x005c8fe0` | `HUMAN_RETURNFROMPANIC` | the consumer of `entity_set_ai_state_resettable` |
 | `0x005c85b0` | `SETLMLEVEL` | the consumer of `i3d_frame_get_lmap_entry_ptr` |
-| `0x005c8740` / `0x005c8a90` | `DAN_INTERNAL_1` | the two writes that seat the player in the spawned Thunderbird |
+| `0x005c8740` / `0x005c8a90` | `DAN_INTERNAL_1` | `actor_set_save_excluded` and `car_set_remove_at_game_done`: the spawned Thunderbird is a temporary car, skipped by the savegame and removed by `game_done` |
 | `0x005c92d0` / `_9480` / `_90d0` / `_9290` | `GOSUB` / `RETURN` / `CALL` | the script call-stack machinery |
 | `0x005c8880`..`0x005c89e0` (7 fns) | `CARLIGHT_*` | a complete, coherent car-lighting family |
 
@@ -405,7 +411,7 @@ through to `return 0`, a decode failure at script load.
 |---|---|---|
 | **implemented — a MARKER, not a command** (1) | `EVENT` (`0x48`) | Its parser arm resolves the event NAME to an id (`use_AB` → 60000, `death` → 60001, `enemy_to_AI` → 60002, `enemy_to_Script` → …, else `atoi`) and emits an instruction of **type `0x48`**. `program_set_event` scans the instruction vector for `type == 0x48` carrying that id and moves the program counter there. So `event` is a **jump-target label**, exactly like `label` — which is why shipped scripts write it after `end` — and the default arm, a no-op that advances the pc, is the CORRECT fall-through. Matches the in-game report that `event` works |
 | **compiles, then silently ignored** (1) | `HUMAN_CANDIE` (`0x15a`) | Has a parser arm (one `atoi` integer, in the large shared group) and no dispatcher arm. No error, no effect — a genuinely dead command that 16 shipped scripts still use |
-| **fails to COMPILE** (7) | `BEEP` (`0x005`), `DEBUG_TEXT` (`0x037`), `[BREAK]` (`0x0aa`), `[DEBUG_ME]` (`0x0eb`), `[DEBUG_STOP]` (`0x0ec`), `DEBUG_GETFRAMEINFO` (`0x12b`), `[DAN_DEBUG]` (`0x13a`) | No parser arm at all ⇒ `program_decode_params` returns 0 at load time. `DEBUG_TEXT` reproduces this in game as a compilation error, which is what validates the split. The other six are the developers' in-house debugger vocabulary, kept in the keyword table and stripped from both the parser and the VM |
+| **fails to COMPILE** (7) | `BEEP` (`0x005`), `DEBUG_TEXT` (`0x037`), `[BREAK]` (`0x0aa`), `[DEBUG_ME]` (`0x0eb`), `[DEBUG_STOP]` (`0x0ec`), `DEBUG_GETFRAMEINFO` (`0x12b`), `[DAN_DEBUG]` (`0x13a`) | No parser arm at all ⇒ `program_decode_params` returns 0 at load time: its byte index table sends exactly these seven opcodes to one address, `0x005b1782` (`xor al, al` and return, also the out-of-range target), so all seven take a byte-identical path. `DEBUG_TEXT` reproduces this in game as a compilation error, which is what validates the split. The other six are the developers' in-house debugger vocabulary, kept in the keyword table and stripped from both the parser and the VM |
 
 🔑 **`EVENT`'s opcode IS the instruction type.** The compiler stores a command's opcode AS the
 instruction type, so the marker `program_set_event` scans for *is* the `EVENT` command — which
@@ -428,6 +434,4 @@ designer reference).
 
 | item | state |
 |---|---|
-| the nearest-arm attribution in §8 | a lead, not a proof, for any row whose commands do not form a coherent family; arms share tails |
-| `BEEP` | predicted to fail compilation exactly as `DEBUG_TEXT` does (§9a); not tried in game |
 | the 26 PS2-only commands (§7) | whether any corresponds to a visible PS2 feature the PC lacks is untested; `HUMAN_CROUCH` / `HUMAN_ISCROUCH` and `CAR_GETFUEL` / `CAR_SETFUEL` are the interesting pairs |

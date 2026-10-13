@@ -1,7 +1,7 @@
 # Mafia: The City of Lost Heaven (PC, 2002) — reverse-engineering export
 
 <!-- version -->
-**Export version:** `2026.10.04`
+**Export version:** `2026.10.13`
 <!-- /version -->
 
 Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
@@ -29,7 +29,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 
 | directory | files | what |
 |---|---:|---|
-| `basic/artifacts/` | 11 | gameplay and engine write-ups |
+| `basic/artifacts/` | 13 | gameplay and engine write-ups (two in the topic subdirectories `racing/` and `garage/`) |
 | `police-system/artifacts/` | 5 | the police and offence system |
 | `structs/` | 114 | one doc per class/subsystem: layout, fields, methods, PC↔PS2 twin tables |
 | `def-files-docs/` | 5 | shipped data formats and tables |
@@ -37,7 +37,8 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 
 - **basic/artifacts:** `cheats.md`, `crack.md`, `dll.md`, `freeride-score.md`, `game-loop.md`,
   `hud_elements.md`, `npc-player-interactions.md`, `player-interactions.md`, `racing.md`,
-  `script-opcode-dispatch.md`, `vehicle-movement.md`
+  `script-opcode-dispatch.md`, `vehicle-movement.md`; `racing/lap-gates-and-lap-glitch.md` (figures in
+  `racing/img/`), `garage/storing-cars-in-the-garage.md`
 - **police-system/artifacts:** `boosting.md`, `offences.md`, `police-board-action.md`,
   `police-manager.md`, `police-system.md`
 - **structs:** `actor.md`, `actor_shot.md`, `actor_track.md`, `ai_action_manager.md`, `ai_blob_log.md`,
@@ -81,7 +82,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 |---|---|
 | function names | 5,098 functions named, **0 `FUN_` left**; each docblock keeps `Renamed from FUN_xxxxxxxx` |
 | compiler glue | 385 `EHHandler_*` and 1,290 `Unwind_*` funclets named by owner |
-| PS2 twins | 2,590 functions mapped to their original PS2 developer method (`PS2 twin:` line + registry column) |
+| PS2 twins | 2,602 functions mapped to their original PS2 developer method (`PS2 twin:` line + registry column) |
 | docblocks | ~5,400: what it does, parameters, return value, evidence |
 | inline comments | ~9,900 `//` lines inside bodies; ~400 per-`case` docblocks in the script/AI dispatchers |
 | globals and data | ~1,100 `g_*` globals + ~1,800 `s_*` strings named; raw `DAT_` tokens 1,253 → 14 |

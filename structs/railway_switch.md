@@ -1,6 +1,6 @@
 # `C_turnout` — entity kind `0x18`, the railway turnout (points / track switch)
 
-**Created** 2026-08-17 15:33 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-17 15:33 +0200 · **Modified** 2026-10-07 21:57 +0200
 
 | | |
 |---|---|
@@ -15,8 +15,8 @@
 ## 1. What a "turnout" is
 
 A **turnout** is the railway engineering term for the movable track junction — the points,
-a track switch; Czech *výhybka*. It decides which way a tram goes, and this class implements
-exactly that:
+a track switch; Czech *výhybka*. It decides which way a rail vehicle goes, and this class
+implements exactly that:
 
 * **A swinging blade.** `+0x144` is an angle ramped by `+0x74` rad/ms toward `±(+0x70)`.
   The constructor seeds **0.5 rad** of travel at **0.004 rad/ms**, and every AI tick pushes
@@ -26,14 +26,23 @@ exactly that:
   shown per rest position.
 * 🔑 **It rewires the navigation graph.** Three `C_web_path` node ids live at `+0x7c`,
   `+0x80` and `+0x84`. At each end-stop the AI disconnects **both** edges from the common
-  node and reconnects **exactly one**, then tail-calls `wagon_rebuild_all_forward_paths` so the
-  tram recomputes its route. The switch changes where trams can physically go.
+  node and reconnects **exactly one**, then tail-calls `wagon_rebuild_all_forward_paths`, which
+  rebuilds the path of every `C_wagon` (kind `0x1e`). The switch changes where those wagons go.
 * **The player can throw it.** `railway_switch_game_done` withdraws an `S_using_object`
   from the action-menu registry, so the switch is an interactable object.
 * **It has a collision body**, a dyn-coll record at `+0x148` whose centre is offset
   `0.8 ×` the local Y axis from the frame (`railway_switch_set_coll_pos`).
 * **It makes a noise** — a sound object at `+0x194`, opened at `GameInit` from the sound id at
   `+0x78` and started by `railway_switch_start_switching`.
+
+### 1a. The shipped turnouts
+
+Across the 79 shipped `scene2.bin` files exactly two objects are of kind `0x18`, both in
+`MISE15-PRISTAV`: frames `vrch` and `vrch2`, with the rail pieces `vyhbk3` / `vyhbk4` and
+`vyhbk5` / `vyhbk`, web-node ids 1/2/3 and 4/5/6, and sound id `0x85` in their scene data. That
+scene holds no `C_railway` and two `C_wagon`s (`vagcisterna3`, `vagcisterna4`), and the scene's
+script `aktivace vagonu 1` looks `vrch` up with `findactor`, so the turnouts route the harbour
+wagons. No tram network in the shipped game has a turnout.
 
 ## 2. State machine
 
@@ -153,5 +162,4 @@ player-operable.
 
 | item | state |
 |---|---|
-| which physical switches exist in the shipped scenes | no census of kind-`0x18` special objects taken; it would give the number and location of turnouts in the tram network |
-| in game | throw a switch from the action menu and watch a tram take the other branch — confirms the §1 reading end to end |
+| in game | in `MISE15-PRISTAV`, throw a switch from the action menu and watch a wagon take the other branch — confirms the §1 reading end to end |

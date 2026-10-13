@@ -1,6 +1,6 @@
 # The network event message — the PC's multiplayer replication layer
 
-**Created** 2026-08-26 20:52 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-26 20:52 +0200 · **Modified** 2026-10-05 15:41 +0200
 
 PC prefix **`event_msg_`**. Core range `[0x005929c0, 0x00594740)`. **PC-only** — see §7.
 
@@ -16,7 +16,7 @@ COMDAT of its own.
 | `+0x04` | 4 | **body length** on the write side / **read cursor** on the read side | `event_msg_serialize_bytes` advances it; `event_msg_deserialize_bytes` advances it |
 | `+0x08` | 4 | **message type** | `piVar[2] = 0x28` in every producer; slot 0 appends it, slot 1 reads it back |
 | `+0x0c` | 4 | **owned body buffer** | `crt_realloc`'d by `event_msg_serialize_bytes`; NULL at construction |
-| `+0x10` | 4 | **sender id** | every producer stores `g_net_session+0x274` |
+| `+0x10` | 4 | **addressee peer id** | most producers store `g_net_session+0x274`, the host's peer id; the per-peer senders store the peer's own id. `net_session_send_event_msg_direct` sends to it, and a relaying `net_session_post_event_msg` skips it |
 | `+0x14` | 1 | **relay flag** | set to 1 by the host when re-broadcasting |
 
 **The vtable is 4 slots:**
@@ -91,7 +91,7 @@ dwords, every one the slot 0 of a descriptor. Ordered by address.
 | `0x0063e1e8` | `g_event_msg_vt_timeout_watchdog` | `9` | one byte (§3b) |
 | `0x0063e1f8` | `g_event_msg_vt_scene_done` | `0x10` | 16 B `{slot, mission name, param}` (§3b) |
 | `0x0063e208` | `g_event_msg_vt_actor_owner` | `0x26` | 8 B `{actor guid, new owner slot}` (§3b) |
-| `0x0063e224` | `g_event_msg_vt_actor_state` | `0x14` ¹ | the actor-state base |
+| `0x0063e224` | `g_event_msg_vt_actor_state` | `0x14`, `0x21`, `0x23` ¹ | the actor-state base |
 | `0x0063e234` | `g_event_msg_vt_car_state` | `0x1e`, `0x1f` | physics state + car extras |
 | `0x0063e254` | `g_event_msg_vt_car_glass_break` | `0x27` | `{guid, part code, part dword, vec3}` |
 | `0x0063e264` | `g_event_msg_vt_car_hit` | `0x2c` | two dwords |
@@ -109,8 +109,8 @@ dwords, every one the slot 0 of a descriptor. Ordered by address.
 | `0x0063e324` | `g_event_msg_vt_peer_latency_table` | `8` | one dword per peer |
 | `0x0063e334` | `g_event_msg_vt_race_camera` | `0x3a` | none — sent via slot 0 as an 8-byte blob |
 
-¹ Sent and received directly as type `0x14`; its constructor also takes the type as a parameter,
-serving as the base for the actor-state subclasses.
+¹ Received as type `0x14`, and sent as the reduced car snapshot `0x21` / `0x23` (§4); its constructor
+takes the type as a parameter and serves as the base of the actor-state subclasses.
 
 The dispatcher's case labels are the type minus one (§6), so the type-`0x10` arm is `case 0xf` and
 the `g_event_msg_vt_u8` arms are `case 0x10` / `case 0x11`.
@@ -160,7 +160,13 @@ leaves four genuinely foldable pairs, all unfolded.
 
 `folded_get_dword_0x18` (`0x005a17d0`) is not a payload helper: it is a one-line `*(this+0x18)`
 getter serving receivers of two owner classes. At two of its three callsites it reads the `C_actor`
-network GUID (top byte = owning peer slot).
+network GUID (top byte = owning peer slot); at the third, in `program_process_command`, it reads
+`+0x18` of `C_mission`'s settings block, the particles quality (`structs/mission.md` §2). The two
+receivers share no base class and the body occurs once in the image, so the one address is
+identical-code folding of two inline accessors. The unfolded duplicates above do not contradict
+it: they are ordinary functions of this translation unit, and only inline functions, which
+every object file emits on its own, were folded in this build. That split is inferred, not
+measured; it is the one model that fits both observations.
 
 ## 4. Message types, by feature
 
@@ -169,19 +175,29 @@ network GUID (top byte = owning peer slot).
 | `1` | chat text | `net_session_send_chat_message` |
 | `3` | the whole peer roster + session mode | `net_session_receive_messages` |
 | `4` | one peer joining | `net_session_receive_messages` |
+| `5` | a player left; the receiver removes the peer | `net_session_remove_peer` |
 | `6` | go in-game (`session+0x100 = 5`) | `net_session_start` |
 | `7` | clock-sync ping | `net_session_ping_tick` |
 | `8` | the peer latency table | dispatcher |
 | `9` | timeout watchdog on / off | `net_session_enable_timeout_watchdog` / `_disable_timeout_watchdog` |
+| `0xa` | the watchdog-on message is acknowledged: the receiver sets `g_net_session+0x280`, which arms `net_session_ping_tick` | the type-`9` receive arm |
 | `0xb` | the scene identity | `race_net_load_sync` |
 | `0xc` | the actor GUID remap table | `race_net_load_sync` |
+| `0xd` | a client acknowledges the actor GUID table | the type-`0xc` receive arm |
+| `0xe` | every player is synchronised; a client enters the running state | `race_net_load_sync`, the type-`0xd` receive arm |
+| `0xf` | pre-start synchronisation: the receiver calls `racing_set_phase(0)` (the start lights) and `racing_reset_phase_timer(0)` | `racing_tick` phase 2 |
 | `0x10` | a peer's scene released | `net_session_post_scene_done` |
+| `0x11` | a human racer is out: the receiver kills the racer bound to that player slot | `racing_tick` (car wrecked or driver dead), `race_game_loop_net` (the in-race menu's code `0x23`) |
+| `0x12` | an AI racer is out | `racing_tick` |
+| `0x13` | an actor's act state changed | `actor_set_act_state` |
+| `0x14` | a state snapshot applied to kind-`0x15` actors (`C_dog`) | none: only its receive arm and the host's relay of it build this type |
 | `0x15` / `0x16` | `C_bottle` collision / state | `bottle_post_collision_net_event_msg` / `bottle_post_state_net_event_msg` |
 | `0x17` | thrown object spawned | `game_new_grenade` |
 | `0x19` / `0x1a` | explosion / fire | `game_new_explosion` / `game_new_fire` |
 | `0x1b` | rigid-body snapshot | `box_post_state_net_event_msg` / `physical_object_post_state_net_event_msg` |
 | `0x1c` / `0x1d` | hit / collision event | `actor_post_hit_event` / `actor_post_collision_event` |
 | `0x1e` / `0x1f` | `C_car` snapshot | `car_post_state_net_event_msg` |
+| `0x20`–`0x23` | the reduced `C_car` snapshot for far peers, applied to kind-4 actors through vtable `+0x98`. Bit 1 selects the payload: the velocity scaled by `car+0x20b4` while the car moves (speed squared at least 0.001), the forward axis `car+0xd28` when it is nearly at rest. Bit 0 is bit `0x100` of `car+0x2198`, and the sender runs only while that bit is set, so only `0x21` and `0x23` are sent; the host relays both | `car_post_reduced_state_net_event_msg`, from `car_broadcast_state_net_event_msg` |
 | `0x24` | car explosion | `car_post_explosion_net_event_msg` |
 | `0x25` | never sent | - |
 | `0x26` | actor ownership transferred | `net_session_transfer_actor_ownership` |
@@ -197,9 +213,17 @@ network GUID (top byte = owning peer slot).
 | `0x34` | door opened / closed | `door_set_state` |
 | `0x36` | loading progress | `gui_load_progress_set_progress_game_init` / `_mission_open` |
 | `0x37` / `0x38` | a racer finished | `racing_do_gates` |
+| `0x39` | the local racer touched a death-collision volume. The sender kills its own racer (`opponent_set_death`). The receiving dispatcher has no arm for this type (its table entry is the exit), so peers never apply it; the type-`0x11` arm holds a `== 0x39` branch (spawn particle effect `0x25` when the particles quality is above 0) that this routing never reaches | `race_game_loop_net` (`C_game+0x2ad8`) |
 | `0x3a` | race camera selected | inside `camera_tick`, which also writes `g_racing+0x98` |
+| `0x3b` / `0x3c` | racing damage on / off | `racing_set_damage_enabled`; `net_session_receive_messages` sends the current one to a joining peer |
+| `0x3d` | a racer's car recovered onto the track, relayed by the host | `opponent_do_recover` |
+| `0x3e` / `0x3f` | an AI / human racer passed a gate; at the first gate the lap count rises and the best lap is tested | `racing_do_gates` |
+| `0x40` / `0x41` | an AI / human racer's gate passage is taken back; at the first gate the lap count drops | `racing_do_gates` |
 
-Types `0x5`, `0x11`–`0x14`, `0x39`, `0x3b`–`0x41` are also dispatched (§9).
+Every number from `1` to `0x41` has a producer except `2`, `0x14`, `0x18`, `0x25`, `0x30` and `0x35`,
+and of the reduced car snapshot only `0x21` and `0x23` are sent. Every message is posted through
+`net_session_post_event_msg`, except type `5`, the type-`7` echo and the host's type-`0xb` answer,
+which `net_session_send_event_msg_direct` sends at once.
 
 ## 5. The wire format
 
@@ -222,7 +246,8 @@ is the message type minus one. Each arm builds the matching class on the stack, 
 applies the result, and where the local peer is the host rebuilds the message with
 `event_msg_set_body_from_wire` and re-posts it.
 
-It is the single consumer of 27 of the 39 descriptors.
+It is the single consumer of 27 of the 39 descriptors. Its jump table has `0x41` entries; those of
+types `2`, `0x18`, `0x30`, `0x35` and `0x39` point at the exit.
 
 ## 7. PC vs PS2
 
@@ -252,7 +277,4 @@ is also nothing here to mark as "inlined on PC" — there is no PS2 side to have
 
 | item | state |
 |---|---|
-| untraced message types | `0x5`, `0x11`–`0x14`, `0x39`, `0x3b`–`0x41` have no feature name; `net_session_handle_event_msg` is the single lever |
-| the second ready flag | `session+0x289`, set by `net_session_request_ready_flag`, has no located reader |
 | type `0x25` in game | does a second peer ever send it? (§3a) |
-| `folded_get_dword_0x18` sharing | one body serves two owner classes, yet this family shows `/OPT:ICF` unapplied (§3c); whether the sharing is a fold or a common base method is unsettled |

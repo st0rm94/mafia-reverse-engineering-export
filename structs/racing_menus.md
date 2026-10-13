@@ -1,6 +1,6 @@
 # The racing front-end screens — `g_m_race.cpp`
 
-**Created** 2026-08-24 11:05 +0200 · **Modified** 2026-10-01 08:56 +0200
+**Created** 2026-08-24 11:05 +0200 · **Modified** 2026-10-07 21:57 +0200
 
 The single-player racing menus: **14 `GM_Menu` subclasses** in one translation unit,
 `[0x00566280, 0x0056adc0)`, **40 starts, 0 unnamed**.
@@ -113,12 +113,12 @@ the Carcyclopedia on `0x1f6`.
 | `g_racing+0x08` | the circuit vector handed to the circuit picker | - |
 | `g_racing+0x1c` / `+0x20` | the championship vector, begin / end | `CRacing+0x604` / `+0x600` (ptr + count) |
 | `g_racing+0x28` | **the racing mode: 1 = championship, 2 = single race** | `CRacing+0xaa8` |
-| `g_racing+0x34` | the best-times owner used by the launch screens | - |
+| `g_racing+0x34` | the current `C_champ_circuit`: the championship launch and results screens list its `+0x68` best-race table; the single-race launch lists the current `C_circuit`'s `+0x58` best-lap table instead | `CRacing+0xa58` |
 | `g_racing+0x38` | the current championship | `CRacing+0xa5c` |
 | `g_racing+0x3c` | the opponent difficulty, 0..4; label text `0x1ef + level` | - |
 | `g_racing+0x64` | the player's chosen car (packed id) | `CRacing+0x580` |
 | `g_racing+0x27c` | lap count, clamped 1..99 | `CRacing+0xab8` |
-| `g_racing+0x28c` | the opponent count used by the results tables | - |
+| `g_racing+0x28c` | the standings row count (`structs/racing.md` §2a): both results screens walk that many rows of the racer array `+0x228` | - |
 | `g_racing+0x2b4` | track-mode flag (the "Track Mode: Normal" toggle) | `CRacing+0xb04` |
 | `g_racing+0x2b7` | damage-enabled flag; text `0x1ca` on, `0x1cb` off | - |
 | `C_championship+0xac` | the round vector | `+0x44` |
@@ -189,4 +189,3 @@ depend on order.
 | single-race grid size | in game: should hold 20 opponents regardless of circuit (§7) |
 | damage toggle | in game: the toggle on the championship launch screen should change its own label rather than open a sub-screen — the visible form of the missing `GM_DamageDifficulty` |
 | `g_gui_race_champ_launch_circuit_bmp_name` | a shared buffer; its writers outside this TU are not censused |
-| `g_racing+0x34` / `+0x28c` | `structs/racing.md` lists `+0x34` as the current `C_champ_circuit`, while this TU uses it as the launch screens' best-times owner; `+0x28c` is not in `structs/racing.md` |

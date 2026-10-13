@@ -1,6 +1,6 @@
 # `G_LoadSaveClass` and the `g_loadsave` translation unit
 
-**Created** 2026-08-23 16:22 +0200 · **Modified** 2026-10-04 19:18 +0200
+**Created** 2026-08-23 16:22 +0200 · **Modified** 2026-10-11 21:37 +0200
 
 The PC translation unit `[0x00556f10, 0x00561b70)` — 176 function starts, all named. This
 document is the PC's; PS2 material is in §9 and in the twin cells of the coverage tables.
@@ -70,17 +70,24 @@ Offsets are PC. Every row has at least one named reader or writer in the decomp.
 | `+0x168` | 25 × 4 | previous-scene SNAPSHOT of the table above | `garage_show_results` diffs the two, then re-snapshots |
 | `+0x1d4` | 1 | the one-shot save-suppress flag (§9h) | `loadsave_savegame_load` sets it, `loadsave_savegame_from_script` reads and clears it |
 | `+0x1d8` | 0x0c | objectives vector (dword string ids) | the four `loadsave_objectives_*` |
-| `+0x1e8` | 4 | the car currently being stolen | `garage_set_stolen_car` |
+| `+0x1e8` | 4 | the last car the player got into | written by `garage_set_last_entered_car` (from `human_use_actor` on every car entry, `engine_new_mission`, `human_save_game_load`); read by `garage_game_done` (`structs/garage.md` §2a) |
 | `+0x1ec` | 4 | the car the player cannot get out of | `garage_set_blocked_car` |
 | `+0x1f0` | 4 | **Free Ride mode word** | `loadsave_freeride_set_mode`; `>2` gates the script params |
 | `+0x1f4` | 0x2d0 | **key-binding table, 60 entries × 0xC** | the five `loadsave_binding_*` / `loadsave_default_key_bindings` |
 | `+0x4c4` | 0x5c | settings block (volumes, gains, flags) — §2a | `loadsave_default_settings`, `loadsave_apply_settings` |
-| `+0x520` | 0x9c | persisted game-state block | zeroed by `loadsave_all_default` |
-| `+0x5bc` | 0x18 | a further persisted block | zeroed by `loadsave_ctor` |
+| `+0x520` | 0x9c | **the saved multiplayer settings** `g_net_settings_saved` — player name, connection provider, address, port and serial settings (`structs/net_session.md` §4a) | `net_session_settings_save` writes it, `net_session_settings_apply_saved` hands it back to the session; zeroed by `loadsave_all_default` |
+| `+0x5bc` | 0x18 | six dwords, cleared and never used (below) | `loadsave_ctor` |
+| `+0x5d4` | 4 | the load-progress screen shown while a savegame reopens its mission | `loadsave_savegame_load` creates it (`operator_new(0x50)`, `gui_load_progress_ctor`) and destroys it after `game_init`; `loadsave_ctor` zeroes it |
 
 The profile file streams `+0x20` (0x54), `+0x1f4` (0x2d0), `+0x4c4` (0x5c) and `+0x520`
 (0x9c) in that order — `loadsave_profile_load` and `loadsave_profile_save` are exact
 inverses, which is how the block sizes above are byte-proven.
+
+**`+0x5bc` is touched only by the constructor's clear.** No instruction references its absolute
+range `0x0067256c..0x00672583`; inside this translation unit the clear in `loadsave_ctor` is the
+only access at displacements `0x5bc..0x5d3`; and none of the 125 instructions that load the
+singleton's address `0x00671fb0` is followed by an access in that range. It is not part of the
+profile stream.
 
 ### 2a. The settings block `+0x4c4..+0x51f`
 
@@ -304,20 +311,47 @@ seven consecutive translation units**. PS2 code range: `0x002b61d0`–`0x002bfcd
   both builds, which is `garage_show_results` (`0x0055fcb0`). Two independent edges, both
   agreeing.
 
-### 9d. 🔴 Six PS2 methods in this unit are EMPTY STUBS
+### 9d. 🔴 Eight PS2 methods in this unit have no real body
 
-`_Sesyp`, `HaveSpaceFor`, `SetCanHaveBigWeapon` and `SetInCar` (all `G_Inventory`) and
-`Crypt`/`Decrypt` (`G_Stream`) decompile to `{ return; }`; `GenerateCars` and
-`ReleaseCars` are 8-byte empties on **both** builds. The port gutted the PC's four-band
-inventory and its savegame encryption.
+Read as raw instruction words, each is 8 bytes. Seven are `jr ra; nop`, i.e. empty: `_Sesyp`,
+`SetCanHaveBigWeapon` and `SetInCar` (`G_Inventory`), `Crypt` / `Decrypt` (`G_Stream`) and
+`GenerateCars` / `ReleaseCars` (`G_GarageClass`). The eighth, `HaveSpaceFor`, is
+`jr ra; li v0, 1`: it always answers yes, and the decompiler drops the delay-slot load and shows
+`{ return; }`. On the PC the inventory and stream ones are real code: the port gutted the PC's
+four-band inventory and its savegame encryption. `GenerateCars` / `ReleaseCars` are empty on both
+builds: their script arms (`GARAGE_GENERATECARS` / `GARAGE_RELEASECARS`) call the shared empty
+`stub_noop_cdecl_00574a40` on the PC.
 
-⇒ **A PS2 method count is an upper bound whose entries can be hollow.** Four rows in this unit
-are graded STRUCTURAL for exactly this reason: no code diff is possible, so they rest on field,
-rank and arity instead.
+⇒ **A PS2 method count is an upper bound whose entries can be hollow.** Five rows in this unit
+are graded STRUCTURAL for exactly this reason (`HaveSpaceFor`, `SetCanHaveBigWeapon`, `_Sesyp`,
+`Crypt`, `Decrypt`): no code diff is possible, so they rest on field, rank and arity instead.
+`SetInCar` is CONFIRMED on its callers (`structs/inventory.md` §3).
 
 ### 9e. PS2 methods with no PC start
 
-Twelve, listed in §10.
+`RemoveInHand` is inlined into `human_notify_callback` as `inventory_remove_slot(0, 0)`
+(`structs/inventory.md` §3).
+
+**`AddLastStolen` and `ShowResults` ARE located.** Their PS2 bodies store 1 to `+0x7d` / `+0x7c`;
+the PC twins `garage_request_add_last_stolen` / `garage_request_show_results` store 1 to `+0x1cd` /
+`+0x1cc`. Both builds call them from the `GARAGE_ADDLASTSTOLEN` / `GARAGE_SHOW` arms, and both
+`GameDone` bodies test the pair in one condition and open the results screen on the first byte
+alone. `ShowResults` is a flag set, not a forwarder, which is why `garage_show_results` (484 B,
+called from `GameDone`) is `GarageShowResultsProc`.
+
+**Nine have no PC realisation**, measured at every PS2 caller:
+
+| PS2 method | PS2 callers | at that position on the PC |
+|---|---|---|
+| `Vysum__13G_GarageClassFP5C_car` | InterCity code, `C_game::InvalidateActor`, the `C_car` destructor | `game_invalidate_actor` and `car_dtor` call nothing in this unit and touch no garage slot |
+| `AutoVybuchlo__13G_GarageClassFP5C_car` | `C_car::Update` (twice) | `car_update` calls nothing in this unit and touches no garage slot |
+| `CanStart__13G_GarageClassFPUc` | `C_player::AI_drive` (twice) | `player_ai_drive` starts the engine on any pedal above 0.25 with no car-mask test |
+| `GetCarsByRaceMask__13G_CarDatabaseF…` | `C_racing::EndRace`, `G_GarageClass::DoFreerideMenu` | `racing_end_race` makes no car-database call; `DoFreerideMenu` is PS2-only (`structs/garage.md` §4) |
+| `EnableCarsForFree__13G_CarDatabaseFUi` | `FreerideEnableCar` | `loadsave_freeride_enable_car_group` has no such call (below) |
+| `GetWreckageByID__13G_CarDatabaseFi` | `C_racing::PreloadWrecks` | `racing_game_init` has no wreck preload (`structs/racing.md`) |
+| `WriteAdrAtPos__8G_StreamFPvUiUi` | `SaveGameSave` (twice: the actor count and the header, written back) | `loadsave_savegame_save` closes the stream right after the actor walk, and `loadsave_savegame_load` reads `0x8c`-byte actor records until the stream ends |
+| `ObjectivesComplete__15G_LoadSaveClassFUi` | the `C_program` arm of an objectives-complete command | the PC command table has only `MISSION_OBJECTIVES`, `MISSION_OBJECTIVESREMOVE` and `MISSION_OBJECTIVESCLEAR` |
+| `ObjectivesGetList__15G_LoadSaveClassFv` | `GM_GameMenu::OnCreate` | `gui_game_menu_ctor` only builds its components; the PC shows objectives through `loadsave_objectives_display` |
 
 **`FreerideEnableCar` IS located.** Its PC twin is **`loadsave_freeride_enable_car_group`** (VA
 `0x0055ff70`), CONFIRMED: both bodies decode the letter `A`..`Z` / `a`..`z` to a bit index and OR
@@ -336,10 +370,6 @@ is the **Free-Ride enabled-car mask** (§2). See `structs/carcyclopedia.md` §6e
 
 The whole `PSX*` family (memory-card handling, ~35 methods) is PS2-port-only.
 
-`ShowResults` deserves a note: it is **not** a forwarder. Its PS2 body is
-`*(this+0x7c) = 1`, a flag set, which is why `garage_show_results` (484 B, called from
-`GameDone`) is `GarageShowResultsProc` and not `ShowResults`.
-
 ### 9f. Divergent record strides
 
 | record | PC | PS2 |
@@ -349,11 +379,11 @@ The whole `PSX*` family (memory-card handling, ~35 methods) is PS2-port-only.
 | player index (`playerindex.def`) | 0x24 | 0x24 |
 | profile header (`G_SaveGame_FileHead`) | 0x54 | 0x54 |
 
-### 9g. Two PS2 symbols whose names are the mapping, not the meaning
+### 9g. Two PS2 symbols read against their bodies
 
-* `GetWeaponInLeftHand__11G_Inventory` is `return gameItemTable;` — the global
-  `predmety.def` table accessor. PC name: `game_item_table_get`, and it takes no class
-  prefix because it belongs to no class.
+* `GetWeaponInLeftHand__11G_Inventory` is `return gameItemTable;` on both builds: it returns the
+  `predmety.def` table base without reading the inventory. It is still a `G_Inventory` method —
+  both callers pass the human's inventory — so the PC name is `inventory_get_left_hand_item_def`.
 * `RaceCarsAddWin__15G_LoadSaveClassFUi` unlocks whatever a car unlocks; nothing in the
   body mentions a win. PC name: `loadsave_race_cars_unlock_from_car`.
 
@@ -396,7 +426,7 @@ folding put **three unrelated source functions on that one address**:
 |---|---|---|
 | **`G_LoadSaveClass::ProfileGetList`** — this class | `mov ecx, 0x671fb0`, then `[eax+4]` | 9 |
 | the trivial `C_blood` constructor | `operator_new(0x24)`, `mov ecx,eax` — `structs/blood.md` | 1 |
-| no class: a one-argument identity inline on a time value | `mov ecx,[esp+0x14]` in `recorder_sync_clock_from_system` — its first stack argument | 1 |
+| no class: a one-argument identity inline on a time value | `mov ecx,[esp+0x14]` in `recorder_set_clock` — its first stack argument | 1 |
 
 Read the row as *"this class's `ProfileGetList` is realised by the code at `0x005575f0`"*, never
 as *"`0x005575f0` is `ProfileGetList`"*, and expect no `PS2 twin:` stamp on the PC symbol.
@@ -421,8 +451,6 @@ and `g_traffic_ratio_police` = `ratio_police__19C_traffic_generator`.
 
 | item | state |
 |---|---|
-| the `+0x520` (0x9c) and `+0x5bc` (0x18) blocks | persisted, but no individual field has a named reader |
 | settings block `+0x4cc`..`+0x4d7` (§2a) | not decoded |
-| twelve PS2 methods with no PC start (§9e) | `RemoveInHand`, `ShowResults`, `AddLastStolen`, `Vysum`, `AutoVybuchlo`, `CanStart`, `GetCarsByRaceMask`, `EnableCarsForFree`, `GetWreckageByID`, `WriteAdrAtPos`, `ObjectivesComplete`, `ObjectivesGetList`: not located, no terminal tag |
 | in game: profile delete | delete a profile and confirm all its save slots disappear with it (§3) |
 | in game: Free Ride stealing | start a Free Ride and check that every car unlocked for racing is stealable (§5) |

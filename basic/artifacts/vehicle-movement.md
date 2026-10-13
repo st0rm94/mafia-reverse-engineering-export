@@ -1,6 +1,6 @@
 # Vehicle Movement & Physics — Mafia: The City of Lost Heaven
 
-**Created** 2026-06-07 11:06 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-06-07 11:06 +0200 · **Modified** 2026-10-12 20:58 +0200
 
 How a car moves each frame in `Game.exe`. Anchors are VAs / function names / field offsets.
 
@@ -35,7 +35,7 @@ There is no single "Update" — the vehicle is ticked through a cluster of virtu
 | #2  | `+0x08` | `car_track_apply_pose_at_clock` | PLAYBACK: interpolate transform, derive velocity (§4) |
 | #3  | `+0x0c` | `car_track_apply_pose_at_time` | playback over a streamed keyframe list (§4) |
 | #4  | `+0x10` | `car_track_get_pos_at_time` | sample recorded motion vec3 at a time (§4) |
-| #13 | `+0x34` | `car_ai_tick` | ambient-traffic AI (gated on `+0x20bd`, §5): brake/steer, stall timer; audio block, flasher, horn, **the sidewalk-offence check** |
+| #13 | `+0x34` | `car_ai_tick` | the per-frame tick of every car: the traffic brake/steer block (gated on `+0x20bd`, §5), stall timer, flasher and horn, then **`vehicle_tick_drivetrain`, unconditionally** (§3), then **the sidewalk-offence check** |
 | #14 | `+0x38` | `car_update` | camera-distance LOD/cull flags `+0xd54`, path-node lifecycle `+0x210c`, `I3D_frame::UpdateWMatrixProc`, motion cues off `+0x1f7c` |
 | #14 | `+0x38` (`C_car_ex` override) | `car_extended_update` | `C_car_ex::Update`; the burnt-corpse spawn is one of its five blocks |
 | #15 | `+0x3c` | `car_net_apply_remote_state` | 🔴 **NOT the live integrator** — the dead-reckoning extrapolator for a remotely-owned car (§3); inherited unchanged by `C_car_ex` |
@@ -45,6 +45,24 @@ Slot 15 is the network-extrapolation slot family-wide; `C_airplane`'s slot 15 is
 ---
 
 ## 3. Driving physics — what is measured
+
+### The local physics step
+
+A locally simulated car moves through one chain, reached from slot 13:
+`car_ai_tick` → `vehicle_tick_drivetrain` → `vehicle_substep_move` → `vehicle_move` (once per
+sub-step) → `vehicle_wheel_contact_solve` (twice per `vehicle_move`). The offsets in this table
+are relative to the `C_Vehicle` base, `car+0x70`.
+
+| step | function | what it does |
+|---|---|---|
+| input | `vehicle_set_power`, `vehicle_set_brake`, `vehicle_set_handbrake`, `vehicle_set_steer`, `vehicle_set_clutch` | write the gas channels `+0x420` / `+0x424`, the net wheel force `+0x634`, the handbrake `+0x4b0`, the steering target `+0x6a0` and the clutch `+0x65c` (`structs/vehicle.md` §2, §4) |
+| drivetrain | `vehicle_tick_drivetrain` | reads the clutch and gas channels, produces the throttle outputs `+0x5bc` / `+0x5c0`, runs the automatic gearbox (`vehicle_set_gear`), the engine revs (`vehicle_update_motor_revs`) and the motor force (`vehicle_compute_motor_force`, three calls, scaled by the engine-damage factor `+0x230`), then calls `vehicle_substep_move` |
+| sub-steps | `vehicle_substep_move` | when the frame time exceeds `+0xca0` it runs `⌊dt / +0xca0⌋ + 1` equal sub-steps, otherwise one; every `vehicle_move` call receives three speed-squared terms `+0x618² · a · b · 0.65`, from the pairs `+0x5b4` / `+0x5b8`, `+0x44c` / `+0x450` and `+0x454` / `+0x458` |
+| integrator | `vehicle_move` | the only writer in its translation unit of the linear velocity `+0x1f0c..+0x1f14`; also writes the angular velocity `+0x49c..+0x4a4`, the scalar speed `+0x618`, the wheel force sums `+0x1c4` / `+0x1c8` and the body basis `+0xcc4..+0xcd0`; reads the gas, handbrake and force channels; calls the wheel solver twice and `vehicle_body_coll_resolve` once |
+
+`+0xca0` is the sub-step length in seconds: `vehicle_ctor` seeds 0.028, `vehicle_set_cut_time`
+accepts 5 to 50 ms, and `traffic_car_game_init` and `traffic_car_adopt_car_with_new_driver` set
+42 ms on traffic cars.
 
 ### `car_net_apply_remote_state` (`0x0059ad60`) — the REMOTE extrapolator
 `__thiscall(C_car, float ms_delta)`, `C_car` vtable `0x0063bc08` slot 15.
@@ -63,7 +81,39 @@ Each frame it:
 - **Runs the wheel solver** `vehicle_wheel_contact_solve(...)` with dt in seconds.
 
 ### `vehicle_wheel_contact_solve` (`0x005334e0`) — the wheel/suspension solver
-Heavy vec/matrix routine (large `S_matrix` scratch). Resolves each wheel's ground contact and writes the contact surface-material id (`contact->+0xb4 = surface`, at `LAB_005341b4`) — the basis of the sidewalk offence (material id 3 = *Chodník*, "sidewalk"). Called with dt-seconds from `car_net_apply_remote_state`, `car_recompute_velocity` and a wheel-loop caller. Related wheel functions: `car_detect_wheel` (`0x0046b8a0`), `car_collision_filter_wheel` (`0x0046e080`). *(Ghidra's recovered signature param order is approximate — the dt float lands in different operand positions across call sites.)*
+Called twice per `vehicle_move`, and once each by `car_recompute_velocity` and
+`car_net_apply_remote_state`. Per wheel (the wheel-record fields are those of
+`def-files-docs/vehicles-bin.md` §4b):
+
+1. **Contact query.** A settled car (speed `+0x618` below 1.5626 and every wheel's two velocity
+   vectors below their thresholds) reuses each wheel's last contact plane. Otherwise, unless
+   `+0xce4` bit `0x800` is set, two vertical line tests from two points on the body give a front and
+   a rear contact plane, and each wheel intersects its probe with the plane of its half
+   (`wheel+0x18` against `+0x488`); a wheel without a usable plane runs its own
+   `collision_test_line_vertical`. The probe runs from the hub along the down vector over the
+   radius `+0x10c` (`+0x110` while bit 31 of the wheel flags is set), the travel `+0x8c` and
+   `+0x1c0`.
+2. **Surface.** On contact the wheel stores the contact point `+0x28`, the normal `+0x40` and the
+   collision record `+0x124`, and sets flag bit `0x8`. On a new surface material (`+0xb4`, byte 3
+   of the contact record) it looks up the tyre's surface entry (index `+0xb0`) in the tyre's surface
+   list. A record with flag `0x10000` raises the contact latch `+0x28` (`structs/vehicle.md` §2a).
+   Material 3 is the sidewalk the offence check in `car_ai_tick` looks for.
+3. **Spring and damper.** With the extension `x = +0x14 − min(hub height, +0x14)` and
+   `v = (+0x94 − x) / dt`, the suspension force is `+0x90 = (+0x8c − x) · +0x88`, plus `v · +0x9c`
+   while the wheel extends (`v < 0`) or `v · +0x98` while it compresses and has not bottomed out.
+   A negative force clears contact bit `0x8` (the wheel lifts off); `+0x94` keeps `x`.
+4. **Bump stop.** At full compression, when the caller asks for it, the wheel latches bit `0x40`
+   and the solver applies a rigid impulse along the contact normal from the inverse inertia
+   (`+0xda4` scaled by `+0x4b4` / `+0x4b8` / `+0x4bc`) and the inverse mass `1 / +0x670`; the
+   impulses of all bottomed wheels are averaged into the body. A bump stop can deform the body
+   (`vehicle_deform`, `+0xce4` bit `0x8000`), damage it (`vehicle_apply_damage`, `+0xce4` bit
+   `0x4000`) and play the wheel sound above 1.4.
+5. **Wheel axes.** The lateral axis `+0x4c` and the longitudinal axis `+0x58` are rebuilt from the
+   contact normal and the body basis, or the wheel frame's forward axis for a steered wheel
+   (bit `0x1`), and turned by `+0x114` when `+0x188 > 0`.
+
+Related wheel functions: `car_detect_wheel` (`0x0046b8a0`), `car_collision_filter_wheel`
+(`0x0046e080`).
 
 ### Key physics state fields (on the vehicle entity)
 | offset | meaning |
@@ -134,12 +184,14 @@ Two consumers:
 Slot 15's PS2 twin is `C_car::NetDirect(Ui)`, and slot 15 is `NetDirect` across the family, which
 is what makes `C_airplane`'s bare `ret 4` in that slot a network stub (§2).
 
+The local chain of §3 maps one to one: `car_ai_tick` is `C_car::AI`, `vehicle_tick_drivetrain`
+`C_Vehicle::Tick`, `vehicle_substep_move` `C_Vehicle::Engine`, `vehicle_move` `C_Vehicle::Move` and
+`vehicle_wheel_contact_solve` `C_Vehicle::DoWheelsCollision`. The PS2 `Engine` sub-steps by the
+field `SetCutTime` writes (PS2 `+0xefc`, default 0.028 s, 42 ms on traffic cars), exactly as the
+PC does with `+0xca0`.
+
 ---
 
 ## 8. Open items
 
-| item | state |
-|---|---|
-| the local-car integrator | no function has been body-read and confirmed as the one that moves a locally simulated car; `car_update` (slot 14) and the non-network callers of `vehicle_wheel_contact_solve` (`car_recompute_velocity`, a wheel-loop caller) are the candidates |
-| the engine-force / player-input step | the throttle / steer / brake → force → velocity (`+0x2170` linear, `+0x21a8` angular) step for a local car is not traced |
-| `vehicle_wheel_contact_solve` inner body | not read in full; the suspension model is not documented |
+Nothing is open.

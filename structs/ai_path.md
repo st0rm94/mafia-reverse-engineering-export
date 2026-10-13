@@ -1,6 +1,6 @@
 # `ai_path` — one computed route, handed to an NPC action
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-10-11 21:40 +0200
 
 An `ai_path` is a **route object**: the result `ai_wayfind` produces and the thing the movement
 `ai_action` factories carry. It sits one layer above the raw graph — `ai_path` consumes
@@ -218,7 +218,9 @@ Every row with a PS2 twin is body-diffed on both builds. Ratio = PS2 size / PC s
 ⁴ Inline on PS2, so no symbol.
 
 `copy_elem_stride_0x18` (`0x0040f6e0`, 32 bytes) is the spec-waypoint element copy, not a class
-method.
+method. `ai_path_node_construct_copy` (`0x0040f6c0`) is the normal-waypoint element copy: a
+null-guarded copy of one `0x3c`-byte record, reached only through `std_vector3c_insert_at` from
+`ai_wayfind_build_optimal_path`.
 
 ### 2a. The four inline state accessors
 
@@ -304,6 +306,10 @@ by two independent measurements:
 - **Element type names.** The PS2 symbol table names the three containers' element types:
   `ai_path_node` (normal), `ai_path_specnode` (spec) and `ai_actor_evading` (pass-side), matched by
   their `reserve` bodies' element sizes (`0x50`, `0x20` at `0x0035fa90`, `0x10` at `0x0035fbc0`).
+- **`__ct__12ai_path_nodeFRC12ai_path_node`** (72 B) is the twin of `ai_path_node_construct_copy`,
+  graded STRUCTURAL: `GetOptimalPath` copies each new path node with it after `reserve`, at the
+  position where `ai_wayfind_build_optimal_path` inserts through `std_vector3c_insert_at`. The PS2
+  caller does the null test that the PC helper does itself.
 - **`isInNextConn`** has the PC's two arms — gate positions and widths when either end has no web
   node, web-node positions and widths otherwise — and calls `isInConnection` once in each; MSVC
   routes both arms into one shared call at `0x0040eb90`.

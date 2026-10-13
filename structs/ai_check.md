@@ -1,6 +1,6 @@
 # `ai_check_builder` / `ai_check_desc` — the 8-direction space test and the descriptor unpackers
 
-**Created** 2026-07-30 13:41 +0200 · **Modified** 2026-10-04 20:16 +0200
+**Created** 2026-07-30 13:41 +0200 · **Modified** 2026-10-13 17:49 +0200
 
 Two small classes (PS2 class names) that both serve the navigation searches, and that both live in
 the translation unit immediately *below* the `ai_wayfind` / `ai_path` cluster:
@@ -88,7 +88,7 @@ reference direction `(0, 0, 1)` — and round to the nearest 45°. It returns a 
 orientation.
 
 **The PC decomp does not show the rounding arithmetic.** It runs on the x87 stack and Ghidra drops
-it, leaving only the trailing `__ftol` — the same FPU render artifact that makes `vec3_dist_sq`
+it, leaving only the trailing `__ftol` — the same FPU render artifact that makes `vec3_length_sq`
 render as `return;` despite 91 callers. The PC body is not a mismatch (the rounding formula is in
 §4).
 

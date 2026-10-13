@@ -1,6 +1,6 @@
 # `ai_manager` — the AI root object
 
-**Created** 2026-08-03 16:30 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-03 16:30 +0200 · **Modified** 2026-10-12 21:02 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c` and `Game.exe`; PS2 material is in §4.
 
@@ -157,7 +157,9 @@ destroy `stub_noop_args8_00575c00`, so trivially destructible elements) and the 
 that dispose through the same cursor. That is one class whose members are two vectors — the idiom
 `police_board` shows at `+0x90`. The member does not belong to `ai_fight_manager`, which is one
 vector ending at `+0x110`. No function outside the ctor and dtor touches `0x00655328`–`0x00655347`,
-by absolute address or as a receiver, so the member has no PC code. Its likely identity is in §4 [M].
+by absolute address or as a receiver, so the member has no PC code. Its likely identity is in §4 [M],
+and no PC artifact can name it further: with no code reaching either vector, the element types and
+the member's identity stay at [M].
 
 ---
 
@@ -233,6 +235,4 @@ by absolute address or as a receiver, so the member has no PC code. Its likely i
 
 ## 6. Open items
 
-| item | state |
-|---|---|
-| owner of `root+0x110` | one 0x20-byte member of two vectors with no PC code (§3b); position and shape match PS2 `ai_sight_manager` (§4) [M]. No PC artifact names it further |
+Nothing is open.

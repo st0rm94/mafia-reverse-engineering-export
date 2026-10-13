@@ -1,6 +1,6 @@
 # `G_Inventory` — the per-person item/weapon inventory
 
-**Created** 2026-07-26 21:35 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-26 21:35 +0200 · **Modified** 2026-10-11 21:38 +0200
 
 | | |
 |---|---|
@@ -9,7 +9,7 @@
 | Owner class | **`C_human`** — so cops, gangsters, pedestrians and the player all have one |
 | PC instance size | **`0xe4`** ² |
 | PC translation unit | inside `g_loadsave`, `[0x0055a1f0, 0x0055c270)` (next function: `enabled_cars_have_car`), plus three inline members in `C_human`'s object (§4) |
-| PS2 class | `G_Inventory`, 33 methods; 30 mapped (§3) |
+| PS2 class | `G_Inventory`, 33 methods, all accounted for (§3) |
 
 ¹ `lea ecx,[reg+0x480]` at six independent callsites across two methods (`inventory_holster` ×2,
 `inventory_has_item_with_property` ×4); `lea` ⇒ embedded, not a pointer.
@@ -25,37 +25,43 @@ band in the same order), `inventory_reset`, `inventory_holster` and the save pai
 
 ```c
 typedef struct G_Inventory {              // 0xe4 bytes, embedded at C_human+0x480
-    /* +0x00 */ uint32_t unk00;           // [U]
-    /* +0x04 */ uint32_t unk04;           // [U]
+    /* +0x00 */ uint32_t can_carry_big_weapon; // [H] permits the big-weapon slot +0x80
+    /* +0x04 */ uint32_t in_car;          // [H] 1 while the owner sits in a car
     /* +0x08 */ uint32_t extra_count;     // [H] live entries in extra[] at +0x90; both scanners
                                           //     gate the +0x90 loop on != 0
-    /* +0x0c */ std::vector<uint32_t> vec0c; // [H] {alloc, begin, end, cap} to +0x18; contents unknown
-    /* +0x1c */ uint32_t unk1c;           // [M] seeded 0xffffff by inventory_reset; no traced reader
+    /* +0x0c */ std::vector<uint32_t> cycle_order; // [H] {alloc, begin, end, cap} to +0x18: the
+                                          //     weapon-cycle order, item ids
+    /* +0x1c */ uint32_t cycle_current_id; // [H] the id the cycle stands on; 0xffffff = none
     // ---- the four storage bands, all holding 0x10-byte S_GameItem instances ----
     /* +0x20 */ S_GameItem in_hand;       // [H] the item currently HELD (band 0, "Hands")
     /* +0x30 */ S_GameItem belt[5];       // [H] band 1, five weapon slots, stride 0x10
-    /* +0x80 */ S_GameItem coat;          // [M] band 2, one slot; the UI labels it "Coat"
+    /* +0x80 */ S_GameItem big_weapon;    // [H] band 2, one slot for a big weapon; the UI labels
+                                          //     it "Coat"
     /* +0x90 */ S_GameItem extra[4];      // [H] band 3, counted by +0x08, capped at 4
-    /* +0xd0 */ uint32_t stash[4];        // [M] inventory_holster stashes the selection here
-                                          //     before clearing the hand
-    /* +0xe0 */ uint8_t  unke0;           // [U] zeroed by inventory_reset
+    /* +0xd0 */ S_GameItem car_slot;      // [H] the item put away while the owner sits in a car;
+                                          //     the UI's kind 4, "Car"
+    /* +0xe0 */ uint8_t  report_to_console; // [H] 1 on the player's inventory only
 } G_Inventory;
 ```
 
-`inventory_set_can_carry_big_weapon` writes the object's field `[0]` and `inventory_set_in_car` field
-`[1]`; `inventory_can_accept_item` reads both (§8).
+`inventory_set_can_carry_big_weapon` writes `+0x00` and `inventory_set_in_car` writes `+0x04`;
+`inventory_can_accept_item` reads `+0x00`.
 
 ### 1a. `S_GameItem` — the 0x10-byte inventory instance
 
 ```c
 typedef struct S_GameItem {       // 0x10 bytes
     /* +0x00 */ uint16_t item_id;      // [H] index into g_game_item_table; 0 = the slot is EMPTY
-    /* +0x02 */ uint16_t _pad;         // [U]
+    /* +0x02 */ uint16_t magazine_out; // [H] the spent magazine or clip has been dropped
     /* +0x04 */ uint32_t clip_ammo;    // [H] rounds in the weapon now — inventory_get_active_weapon_ammo's return
     /* +0x08 */ uint32_t reserve_ammo; // [H] spare rounds — the same function's out-param
-    /* +0x0c */ uint32_t unk0c;        // [U]
+    /* +0x0c */ uint32_t unk0c;        // [U] copied with the record; nothing addresses it alone
 } S_GameItem;
 ```
+
+`+0x02` is a latch: `human_start_weapon_effect` sets it when it drops the spent magazine or clip of the
+in-hand gun as a physics prop and drops no second one while it is set, the reload animation event in
+`human_ai` clears it, and `human_change_weapon_model` reads it.
 
 Do not confuse the two item records. `S_GameItem` is what an inventory *holds*; `g_game_item_table` is
 the *definition* table loaded from `tables/predmety.def`, stride **`0xbc`**, property flag word at
@@ -69,17 +75,19 @@ id != 0 && id < g_num_game_items && (g_game_item_table[id * 0xbc + 0x20] & mask)
 
 | offset | field | conf | writer(s) | reader(s) | notes |
 |---|---|---|---|---|---|
+| `+0x00` | `can_carry_big_weapon` | H | `inventory_set_can_carry_big_weapon` | `inventory_can_accept_item`, `inventory_place_in_free_slot` | permits the big-weapon slot `+0x80` |
+| `+0x04` | `in_car` | H | `inventory_set_in_car` | `inventory_set_in_car`, `inventory_build_cycle_list` | 1 while the owner sits in a car |
 | `+0x08` | `extra_count` | H | - | `inventory_have_items`, `inventory_has_item_with_property` | gates the `+0x90` loop |
-| `+0x0c` | `vec0c` | H | `human_game_init`, `human_activate`, `inventory_reset` (`end = begin`); copy-assigned in `engine_new_mission` | `inventory_dtor` (frees it) | `vector_erase_range_dwords` indexes `+0x08` as the vector's end ¹ |
-| `+0x1c` | `unk1c` | M | `inventory_reset` | - | seeded `0xffffff` |
+| `+0x0c` | `cycle_order` | H | `inventory_build_cycle_list` (erases the ids no longer carried, appends the new ones), `human_game_init`, `human_activate`, `inventory_reset` (`end = begin`); copy-assigned in `engine_new_mission` | `inventory_build_cycle_list`, `inventory_cycle_to_prev`, `inventory_cycle_to_next`, `inventory_dtor` (frees it) | the weapon-cycle order; a carried id keeps its place, so the order is stable ¹ |
+| `+0x1c` | `cycle_current_id` | H | `inventory_reset` (`0xffffff`), `inventory_cycle_to_prev` / `_next` (the in-hand id, then the id stepped to) | `inventory_build_cycle_list`, `inventory_cycle_to_prev` / `_next` | the id the cycle stands on |
 | `+0x20` | `in_hand` | H | `inventory_holster` (clears to 0) | both scanners | the in-hand-only query reads exactly this |
 | `+0x30..+0x7f` | `belt[5]` | H | - | both scanners | stride `0x10`, exactly 5 iterations |
-| `+0x80` | `coat` | M | - | both scanners | scanned after the belt, before `extra[]` ² |
+| `+0x80` | `big_weapon` | H | `inventory_place_in_free_slot`, `inventory_select_slot`, `inventory_set_can_carry_big_weapon` (spills it when the permission is withdrawn) | both scanners, `inventory_can_accept_item` | the one slot for an item with flag `0x200000`; it takes one only while `+0x00` is set or the item has flag `0x40000` (the sawed-off shotgun alone) ² |
 | `+0x90..` | `extra[]` | H | - | both scanners | stride `0x10`, length from `+0x08` |
-| `+0xd0..+0xdc` | `stash` | M | `inventory_holster` | `inventory_build_cycle_list`, save pair | - |
-| `+0xe0` | `unke0` | U | `inventory_reset` | - | the last field |
+| `+0xd0` | `car_slot` | H | `inventory_holster` (stores the selection), `inventory_set_in_car` (empties it on entering a car) | `inventory_set_in_car` (re-inserts its item on leaving), `inventory_build_cycle_list` (counted only while `+0x04` is set), save pair | an `S_GameItem` |
+| `+0xe0` | `report_to_console` | H | `inventory_reset` (0), `player_game_init` (1) | `inventory_holster`, `inventory_merge_ammo_into_slot` | gates the console messages textdb `0xd70`, `0xd6f` and `0xd6e`, so only the player is told |
 
-¹ Elements are dwords (§8).
+¹ Elements are dwords: `vector_erase_range_dwords` indexes `+0x08` of the vector header as its end.
 ² `inventory_remove_slot`'s band selector 2 is `+0x80`, and the UI's kind 2 is "Coat" (§5).
 
 ## 2. Behaviour
@@ -90,8 +98,8 @@ id != 0 && id < g_num_game_items && (g_game_item_table[id * 0xbc + 0x20] & mask)
   with the in-hand slot and spills what cannot be kept. The UI passes kind **0 Hands / 1 weapon /
   2 Coat / 3 item / 4 Car**.
 - **Weapon cycling.** `inventory_build_cycle_list` collects the cyclable ids (in-hand gated on flag
-  mask `0x24`, the five belt slots, `+0x80`, the `+0xd0` stash) and filters the candidate vector at
-  `+0x10`; `inventory_cycle_to_prev` / `_next` step −1 / +1 with wrap and tail-call
+  mask `0x24`, the five belt slots, `+0x80`, and the car slot `+0xd0` while in a car) and reconciles the
+  cycle order at `+0x0c` with them; `inventory_cycle_to_prev` / `_next` step −1 / +1 with wrap and tail-call
   `inventory_select_by_id`.
 - **Insertion.** `inventory_insert_new_item`: flag `0x2000` forces the in-hand slot; displaced items go
   to the caller's out-vector; `inventory_place_in_free_slot` (called twice) routes into a band.
@@ -112,7 +120,9 @@ id != 0 && id < g_num_game_items && (g_game_item_table[id * 0xbc + 0x20] & mask)
   `+0xd0` stash; `inventory_savegame_load` is the field-for-field inverse.
 - **The armed query.** `ai_logs_tick` calls `inventory_has_item_with_property(true, 0x20)` twice to
   decide whether a target is aiming (feeds `ai_logs_get_aiming_weight`); a script predicate passes
-  `0x20` twice as well — every located caller uses `0x20`.
+  `0x20` twice as well — every located caller uses `0x20`. Bit `0x20` of the item flag word marks a ranged
+  weapon (the firearms and the two throwables), bit `0x04` a melee weapon, so `0x24` is any weapon
+  (`def-files-docs/predmety.md`).
 
 ## 3. Method coverage — PC ↔ PS2
 
@@ -124,7 +134,7 @@ Ordered by PC VA.
 | `0x00498970` | `inventory_reset` | - | CONFIRMED ¹ |
 | `0x004a6090` | `inventory_get_in_hand_item` | - | CONFIRMED ¹ |
 | `0x00559ba0` | `inventory_get_in_hand_item_def` | `GetWeaponInRightHand__11G_InventoryFv` | CONFIRMED ² |
-| `0x00559bd0` | `game_item_table_get` | `GetWeaponInLeftHand__11G_InventoryFv` | CONFIRMED ³ |
+| `0x00559bd0` | `inventory_get_left_hand_item_def` | `GetWeaponInLeftHand__11G_InventoryFv` | CONFIRMED ³ |
 | `0x00559be0` | `inventory_select_slot` | `Select__11G_InventoryFUiUiPQ23gif22vector<10S_GameItem,8>` | CONFIRMED |
 | `0x0055a1f0` | `inventory_select_by_id` | `SelectByID__11G_InventoryFUiPQ23gif22vector<10S_GameItem,8>` | CONFIRMED ⁴ |
 | `0x0055a2c0` | `inventory_holster` | `Holster__11G_InventoryFPQ23gif22vector<>bb` | CONFIRMED |
@@ -142,7 +152,7 @@ Ordered by PC VA.
 | `0x0055b580` | `inventory_remove_slot` | `RemoveByIdx__11G_InventoryFUiUi` | CONFIRMED |
 | `0x0055b600` | `inventory_remove_item_by_id` | `Remove__11G_InventoryFP10S_GameItemPQ23gif22vector<10S_GameItem,8>` | CONFIRMED |
 | `0x0055b940` | `inventory_set_can_carry_big_weapon` | `SetCanHaveBigWeapon__11G_InventoryFbPQ23gif22vector<10S_GameItem,8>` | STRUCTURAL ⁵ |
-| `0x0055bb80` | `inventory_set_in_car` | `SetInCar__11G_InventoryFbPQ23gif22vector<10S_GameItem,8>` | CONFIRMED |
+| `0x0055bb80` | `inventory_set_in_car` | `SetInCar__11G_InventoryFbPQ23gif22vector<10S_GameItem,8>` | CONFIRMED ⁹ |
 | `0x0055bbd0` | `inventory_collect_items_to_list` | `EnemyToList__11G_InventoryFPQ23gif23vector<P10S_GameItem,8>` | CONFIRMED |
 | `0x0055bcd0` | `inventory_remove_item_by_ptr` | `RemoveByPtr__11G_InventoryFP10S_GameItem` | CONFIRMED |
 | `0x0055bd40` | `inventory_get_active_weapon_ammo` | `GetAmmo__11G_InventoryFPi` | CONFIRMED |
@@ -155,23 +165,32 @@ Ordered by PC VA.
 | `0x0055c020` | `inventory_savegame_get_size` | `SaveGameGetSize__11G_InventoryFv` | CONFIRMED |
 | `0x0055c030` | `inventory_savegame_save` | `SaveGameSave__11G_InventoryFPPv` | CONFIRMED |
 | `0x0055c150` | `inventory_savegame_load` | `SaveGameLoad__11G_InventoryFPPv` | CONFIRMED |
-| - | - | `RemoveInHand__11G_InventoryFv` | not located ⁷ |
-| - | - | `ItemPickUp__11G_InventoryF…` | not located ⁸ |
+| - | - | `RemoveInHand__11G_InventoryFv` | INLINED ⁷ |
+| - | - | `ItemPickUp__11G_InventoryF…` | INLINED ⁸ |
 
 ¹ Inline member emitted into `C_human`'s object (§4); no PS2 symbol.
 ² Reads the in-hand id at `+0x20` and returns `g_game_item_table + id*0xbc`, clamped to
 `g_num_game_items` with the table base as the miss value. 9 of 27 callsites are `lea ecx,[esi+0x480]`.
-³ The body is `return g_game_item_table;` — the global table accessor, owned by no class, hence no
-`inventory_` prefix.
+³ The body is `return g_game_item_table;`: it never reads the inventory, because no left-hand slot
+exists, so the answer is always the table's first record. Its one caller, `human_change_weapon_model`,
+passes the human's inventory (`lea ecx,[esi+0x480]`).
 ⁴ Name approximate.
-⁵ The PS2 body is an empty stub, so no code diff is possible (§6).
+⁵ The PS2 body is an 8-byte stub, empty or a constant, so no code diff is possible (§6).
 ⁶ PC-only band router.
-⁷ No PC function start in the gap; plausibly inlined.
-⁸ Takes four vectors and a `vector<G_Inventory*>` — the inventory-to-inventory transfer used when
-looting.
+⁷ At its one call position, the throw event of the human animation callback, `human_notify_callback`
+calls `inventory_remove_slot(0, 0)`: in the band layout the in-hand slot is always band 0, so the
+method reduces to that one call.
+⁸ Both PC callers, `player_do_action_button_on_foot` and `player_do_action_button_in_car`, build the
+action-menu screen (`gui_action_menu_ctor`) at the call position, run it with `gui_menu_execute_modal`
+and post-process the result exactly as the other build does after `ItemPickUp` returns (close code
+`0xa8` on the PC). The PC always shows the menu (§6).
+⁹ The PS2 body is an empty stub (§6), so the grade rests on the callers: 9 callsites on each
+build, with the same two argument shapes, `(1, 0)` and `(0, &dropped)`, and the same non-empty
+guard on the out-vector in the statement-aligned `human_intern_use_car` pair.
 
-**Coverage:** 30 of 33 PS2 methods mapped — 27 CONFIRMED + 3 STRUCTURAL — plus one PC-only method and
-three PC inline members. Not located: `RemoveInHand`, `ItemPickUp`.
+**Coverage:** all 33 PS2 methods accounted for — 28 CONFIRMED, 3 STRUCTURAL and 2 INLINED — plus one
+PC-only method and three PC inline members. The 33 are every symbol whose class column is
+`G_Inventory` in the PS2 symbol table.
 
 ## 4. Inline members in `C_human`'s object, and the heap inventory list
 
@@ -247,12 +266,18 @@ Item flags read from `g_game_item_table+0x20`:
   - **no PS2 constructor symbol**: there is nothing for one to clear.
 - **`S_GameItem` fields** were named from `GetAmmo__11G_InventoryFPi`, which runs the same four-way test
   but reads `slot+4` / `slot+8` of the indexed vector element; the PC reads `this+0x24` / `this+0x28`.
-- **Empty PS2 stubs:** `HaveSpaceFor`, `SetCanHaveBigWeapon`, `_Sesyp` and `SetInCar` all decompile to
-  `{ return; }`. The three STRUCTURAL rows are graded on field + rank + arity:
+- **PS2 stubs:** `SetCanHaveBigWeapon`, `_Sesyp` and `SetInCar` are empty (`jr ra; nop`), and
+  `HaveSpaceFor` is `jr ra; li v0, 1`, a constant yes that the decompiler shows as `{ return; }`.
+  The three STRUCTURAL rows are graded on field + rank + arity:
   `inventory_can_accept_item` on arity 3↔3 and its rank between `IsIn` and `DobijNaboje`;
   `inventory_set_can_carry_big_weapon` because it writes field `[0]`, `inventory_set_in_car` writes
   `[1]`, and the PS2 emits `SetCanHaveBigWeapon` immediately before `SetInCar`;
   `inventory_compact_slots` because it sits immediately before `SaveGameGetSize` on both builds.
+  `SetInCar` is the fourth stub, and `inventory_set_in_car` stays CONFIRMED on its callers (§3 ⁹).
+- **No `G_Inventory` method is port-only.** All 33 have PC code: 31 twins and 2 inlined. The one
+  inventory-related PS2 function inside a port-only subsystem is the free function
+  `InternMissionInit_InterCity__FR11G_Inventory`, part of the city-part streaming code
+  (`structs/mission.md` §5f).
 - **Emission order is monotone:** `SelectByID < Holster < HaveSomeWeapon < HaveItems < Insert <
   SetInCar < GetAmmoByID` ↔ `0x0055a1f0 < 0x0055a2c0 < 0x0055a540 < 0x0055a610 < 0x0055b2d0 <
   0x0055bb80 < 0x0055bd80`.
@@ -260,7 +285,8 @@ Item flags read from `g_game_item_table+0x20`:
 - **Translation unit:** PC emits the class inside `g_loadsave` (`structs/loadsave.md`); the PS2 keeps
   `G_Inventory` in a different file.
 - **`ItemPickUp__11G_InventoryFP11G_Inventory…PQ23std56vector<P11G_Inventory,…>`** takes a
-  `std::vector<G_Inventory*>`, which predicted the scene list of §4a.
+  `std::vector<G_Inventory*>`, which predicted the scene list of §4a. Its body builds a `GM_Menu`, runs `ExecuteMenu` and returns the close
+  code (`0xb3`); for a single item it inserts directly without the menu, a path the PC does not have.
 - `gui_action_menu_pick_up` is `GM_ItemPickUp::PickUp`; the world-vs-NPC asymmetry of §5 is identical
   statement for statement.
 - **Czech method names:** `Vystrel` = a shot, `Nabij` = reload, `NabijJeden` = reload one,
@@ -273,15 +299,3 @@ Item flags read from `g_game_item_table+0x20`:
 `def-files-docs/predmety.md` (the item table) · `structs/human.md` (the owner) · `structs/ai_logs.md`
 (`ai_logs_tick`'s armed query) · `structs/game_menus.md` (the three screens) · `structs/loadsave.md`
 (the host TU) · `basic/artifacts/player-interactions.md` (the action menu).
-
-## 8. Open items
-
-| item | state |
-|---|---|
-| what `vec0c` (`+0x0c`) holds | dword elements; no insert located on either build |
-| field `[0]` / `[1]` offsets, `+0x00`, `+0x04`, `+0x1c`, `+0xe0`, `S_GameItem +0x02` / `+0x0c` | unread; re-reading `inventory_get_ammo_by_id` against its twin is the cheapest lever |
-| `+0x80` | "Coat" per the UI and band selector 2; the owning setter is not traced |
-| property bit `0x20` | every caller passes it; very likely the firearm bit of the `predmety.def` flag word — not checked against `def-files-docs/predmety.md` |
-| `RemoveInHand` / `ItemPickUp` | not located; `ItemPickUp`'s signature is the fingerprint |
-| the 33rd PS2 method | the table accounts for 32 PS2 methods (30 mapped + 2 not located) |
-| PS2-port-only members | not checked |

@@ -1,6 +1,6 @@
 # `C_Vehicle` — the vehicle physics / drivetrain object
 
-**Created** 2026-07-11 13:22 +0200 · **Modified** 2026-10-01 08:56 +0200
+**Created** 2026-07-11 13:22 +0200 · **Modified** 2026-10-13 18:09 +0200
 
 The physics and drivetrain component of a car: gears, throttle ramp, brake, steering, handbrake,
 engine ignition, fuel, size and pivot geometry, wheels, body deformation, doors, windows, lights and
@@ -11,9 +11,9 @@ through this object's setters.
 |---|---|
 | PC prefix | **`vehicle_`** |
 | PC instance | **embedded at `C_car + 0x70`** — not a pointer field |
-| PC code | four translation units spanning `[0x00509430, 0x0053c2b0)`, plus an inline-accessor block at `0x00425440`/`0x004f5a30`/`0x005c8740` (§6) |
-| PC functions | **197** carrying the `vehicle_` prefix |
-| PS2 class | `C_Vehicle`, **153 methods**: 133 with a PC twin, 20 without (§3a) |
+| PC code | four translation units spanning `[0x00509430, 0x0053c2b0)`, plus an inline-accessor block at `0x00425440`/`0x004f5a30`/`0x005c8780` (§6) |
+| PC functions | **195** carrying the `vehicle_` prefix |
+| PS2 class | `C_Vehicle`, **153 methods**: 134 with a PC twin, 19 without (§3a) |
 | Owner | `C_car` — a **different class**, documented in `structs/car.md` (§5) |
 
 **Confidence tags:** **[H]** body-read + writer + reader · **[M]** inferred · **[U]** not observed.
@@ -51,6 +51,7 @@ typedef struct C_Vehicle {                  // partial; offsets relative to the 
                                                 //     bit 0x2000000 contact latch (see 2a);
                                                 //     SetPower/SetBrake clear bit 0x1000000
     /* +0x364 */ void    *callbacks[14];        // [H] the owner callback bank, +0x364..+0x398 - see 8
+    /* +0x404 */ float    top_speed;            // [H] top-gear speed at maximum revs - see 1e
     /* +0x420 */ float    gas_forward;          // [H] forward idle-gas channel
     /* +0x424 */ float    gas_reverse;          // [H] reverse-gas channel (SetPower param_3 == 0)
     /* +0x42C */ float    handbrake_force;      // [H] handbrake output scale (PC only)
@@ -80,7 +81,8 @@ typedef struct C_Vehicle {                  // partial; offsets relative to the 
     /* +0x5C4 */ float    engine_revs_per_sec;  // [H] engine speed in rev/SEC; vehicle_get_engine_rpm
                                                 //     returns it * 60 when +0xca8 is set, else 0.
                                                 //     Feeds the HUD tachometer.
-    /* +0x5D8 */ int32_t  gear_effective;       // [H] SetPower ramps only when < 0 (neutral)
+    /* +0x5D8 */ int32_t  gear_effective;       // [H] -1 = reverse, 0 = neutral, 1.. forward;
+                                                //     the two pedals swap in reverse - see 4
     /* +0x5E0 */ float    redline_revs_per_sec; // [H] CARINIT RedLineRPM / 60
     /* +0x5DC */ int32_t  gear_selected;        // [H] SetGear writes; range -1..gear_max
     /* +0x5E4 */ int32_t  gear_max;             // [H] max gear index / gear count
@@ -88,15 +90,19 @@ typedef struct C_Vehicle {                  // partial; offsets relative to the 
     /* +0x618 */ float    speed;                // [H] the scalar speed; = car+0x688
     /* +0x634 */ float    drivetrain_force_out; // [H] net wheel longitudinal force
                                                 //     = (ramp_accum / ramp_max) * pedal; written by
-                                                //     SetPower (neutral) AND SetBrake (in-gear)
+                                                //     SetPower (reverse) AND SetBrake (forward gears)
     /* +0x65C */ float    clutch_out;           // [M] clutch pedal output
     /* +0x664 */ uint32_t flags_664;            // [M] SetGear bit ops
     /* +0x668 */ float    idle_revs_per_sec;    // [H] CARINIT idling rpm / 60 - see 2
-    /* +0x68C */ float    steer_scale;          // [H] steering scale; +0x6a0 = angle * this
-    /* +0x6A0 */ float    steer_out;            // [H] applied steering output
+    /* +0x684 */ float    steer_lock[2];        // [H] lock at standstill / at top speed - see 1e
+    /* +0x68C */ float    steer_scale;          // [H] current lock; +0x6a0 = angle * this - see 1e
+    /* +0x690 */ float    steer_rates[4];       // [H] turn-in / return rates, slow and fast - see 1e
+    /* +0x6A0 */ float    steer_out;            // [H] steering target set by vehicle_set_steer
+    /* +0x6A4 */ float    steer_current;        // [H] current angle, moves toward +0x6a0 - see 1e
+    /* +0x6A8 */ float    steer_split_max;      // [H] wheel-to-wheel split at full lock - see 1e
     /* +0x6B4 */ uint8_t  engine_on_mirror;     // [H] mirror of engine_on
     /* +0xC9C */ float    engine_timer;         // [M] 5000.0f, reset by the SetEngineOn force path
-    /* +0xCA0 */ float    cut_time;             // [M] shift cut-time = int(5..50) / 1000
+    /* +0xCA0 */ float    physics_substep_s;    // [H] the physics sub-step length in seconds (§6d)
     /* +0xCA8 */ uint8_t  engine_on;            // [H] engine-running flag
     /* +0xCAC */ float    fuel_level;           // [H] ignition refused below 0.02
     /* +0xCB4 */ void   **wheels;               // [H] wheel pointer array - see 1a
@@ -125,7 +131,7 @@ translation unit. Every receiver is byte-proven `C_car + 0x70` by reading the `l
 | `+0x4ac` | horn_on | H | `vehicle_set_horn` | the sound layer | named by the PS2 build (§7) |
 | `+0x4ad` | siren_on | H | reset paths only | `vehicle_get_siren` | directly under `+0x4ae sounds_enabled`, so the triple is complete |
 | `+0x540` | wheel_count | H | `vehicle_apply_carinit_params` | `vehicle_get_wheel_count`, `vehicle_wheel_contact_solve`, `vehicle_game_done`, `vehicle_save_state`, `vehicle_load_state`, `vehicle_get_save_state_size` | length of the array below |
-| `+0xcb4` | wheels[] | H | `vehicle_apply_carinit_params` (87 accesses — it builds them from the CARINIT record) | the same set, plus `vehicle_get_wheel_at` | array of wheel pointers. Element: `+0x04` `I3D_frame*`, `+0x1c` world hub position, `+0x10c` radius, `+0x120` flag word |
+| `+0xcb4` | wheels[] | H | `vehicle_apply_carinit_params` (87 accesses — it builds them from the CARINIT record) | the same set, plus `vehicle_get_wheel_at` | array of wheel pointers. Element: `+0x04` `I3D_frame*`, `+0x1c` world hub position, `+0x10c` radius, `+0x120` flag word (role bits in §1e) |
 | `+0xcb8` | basis_forward (world) | H | `vehicle_reset_from_frame` | the wheel solver | seeded `(0,0,1)`, then multiplied by the body matrix |
 | `+0xcc4` | basis_right (world) | H | `vehicle_reset_from_frame` | the wheel solver | seeded `(1,0,0)` |
 | `+0xcd0` | basis_up (world) | H | `vehicle_reset_from_frame` | `vehicle_get_up_axis`; `vehicle_wheel_contact_solve` reads it 15× | seeded `(0,1,0)`. The contact point is `hub − radius · up`, which is the corroboration |
@@ -133,7 +139,11 @@ translation unit. Every receiver is byte-proven `C_car + 0x70` by reading the `l
 | `+0x5c0` | throttle_out_reverse | H | the throttle path (from `+0x424`) | the same | - |
 
 **Wheel flag `+0x120 & 0x40000000` is what makes the chase AI give up:** `pursuit_event_tick` walks
-the wheel array and, if any wheel carries that bit, drops the record to a terminal state.
+the wheel array and, if any wheel carries that bit, drops the record to a terminal state. The bit
+means **the wheel has come off**: `car_prepare_wheel_dropout` sets it on the live damage path,
+`car_track_spawn_dropout_part` on recorded playback and `car_apply_net_event_msg` from the network;
+`vehicle_reset` and `vehicle_game_init` clear it, and the wheel solver, the integrator and the wheel
+emitters test it. The spike strip does not write it.
 
 `vehicle_get_forward_ptr` hands out `+0xcc4`. The axis is settled by a full three-term dot against
 the velocity vector (`vel·fwd < 0.0` = "moving backwards") and by the seat-swap check, which negates
@@ -151,12 +161,14 @@ Every exterior lamp on a car is one bit of a single flag word on the **`C_Vehicl
 | `0x1` | LEFT turn indicator | H | script case `0xc2` `carlight_indic_l`; the Mafia Script Data Reference gives *"left indicator"*; confirmed in game |
 | `0x2` | RIGHT turn indicator | H | case `0xc3`, resolver-pinned (`script-mapping/artifacts/opcodes-verified.md`); the Mafia Script Data Reference gives *"right indicator"*; confirmed in game |
 | `0x8` | indicators driven **automatically from the steering angle** | H | gates both side setters; the per-frame light update owns the lamps while it is set |
-| `0x80` | unidentified | U | script case `0xc1` `carlight_light`; the Mafia Script Data Reference guesses *"hazard lights ???"*, but testing it in game produced no visible effect. Its setter is therefore named `vehicle_set_light_bit_0x80` |
-| `0x100` | brake lights | M | set when a float field is positive (brake pedal) |
-| `0x800` | gates `0x100` | U | no script setter found |
-| `0x1000` | reverse lights | M | set when a signed field is negative (reverse gear) |
+| `0x10` / `0x20` | the two phases of the emergency light bar | H | `vehicle_apply_light_state` alternates them while `0x80` is set and clears both when it is switched off; they light lamp types 5 and 6 (§1d) |
+| `0x80` | **emergency light bar** — flashes the `LIGHTLI*` lamp pair | H | script case `0xc1` `carlight_light` through `vehicle_set_emergency_lights`, and the police dispatch paths (§1d). An in-game test of `carlight_light` showed no visible effect; only the fire engines and the police cars carry `LIGHTLI*` frames, so only on one of those can the bar be seen |
+| `0x100` | brake lights | H | `vehicle_apply_light_state` sets it from `+0x634 > 0` while `0x800` is set; it lights lamp type 8 (`LIGHTBR*`) and, while their side's indicator is off, types 3 / 4 (`LIGHTBI*`) (§1d) |
+| `0x800` | **automatic brake lights** — `0x100` follows the drivetrain force | H | set with `0x8` and `0x8000` when a car is initialised or a driver takes it (§1d); `driver_tick` sets it, `driver_reset` clears it |
+| `0x1000` | reverse lights | H | `vehicle_apply_light_state` sets it from `+0x5d8 < 0`, the reverse gear, while `0x8000` is set; it lights lamp type 9 (`LIGHTBA*`) (§1d) |
+| `0x8000` | **automatic reverse lights** — `0x1000` follows the gear | H | `vehicle_apply_light_state` sets `0x1000` from `+0x5d8 < 0` only while it is set; set with `0x800` (§1d) |
 | `0x10000` | main headlights | H | case `0xc0` `carlight_main`, confirmed in game; auto-driven by `car_update` while `C_game+0x2d44` (night mission) is set |
-| `0x0ff00000` | script light-override sub-field | H | read and modified by `car_update`, cleared by `car_deactivate`; read by `vehicle_get_light_script_override`, written by `vehicle_set_light_script_override`. **Each override bit belongs to one lamp** — `0x100000` the indicators, `0x200000` the `0x80` lamp, `0x800000` the headlights — and each is set exactly when its `carlight_*` command is given the argument **2** (force) |
+| `0x0ff00000` | script light-override sub-field | H | read and modified by `car_update`, cleared by `car_deactivate`; read by `vehicle_get_light_script_override`, written by `vehicle_set_light_script_override`. **Each override bit belongs to one lamp** — `0x100000` the indicators, `0x200000` the light bar, `0x800000` the headlights — and each is set exactly when its `carlight_*` command is given the argument **2** (force) |
 
 Bit `0x800` gates bit `0x100`, and bit `0x8` gates bits `0x1`/`0x2`; both are confirmed independently
 by `driver_do_lights`, the chase AI's light logic, which also **flashes** bit `0x10000` on a timed
@@ -187,6 +199,65 @@ SECONDARY key binding, 0 once the PRIMARY binding has taken over (`g_player_driv
 pair round-trips them. The ramp gate for the THROTTLE is the brake axis's byte `+0x526`; `+0x525`
 is written and never read.
 
+### 1d. Lamp types, the light bar and the automatic bits
+
+`vehicle_init_lights` gives every lamp frame a type from its name prefix, and
+`vehicle_apply_light_state` switches on that type (`type - 1` indexes its jump table). Each arm
+tests one script-override bit of the `0x0ff00000` sub-field:
+
+| type | frame prefix | lamp bit | override bit |
+|---|---|---|---|
+| 1 / 2 | `LIGHTIN*` | `0x1` / `0x2`, in the blink phase | `0x100000` |
+| 3 / 4 | `LIGHTBI*` | `0x1` / `0x2` in the blink phase while that indicator is on, else `0x100` | `0x400000` |
+| 5 / 6 | `LIGHTLI*` | `0x10` / `0x20` | `0x200000` |
+| 7 | `LIGHTRE*` | `0x10000` | `0x800000` |
+| 8 | `LIGHTBR*` | `0x100` | `0x1000000` |
+| 9 | `LIGHTBA*` | `0x1000` | `0x2000000` |
+
+**The blink phase** is bit `0x10000000`: `vehicle_apply_light_state` adds the frame time to
+`+0x1ac` and toggles the bit each time the sum passes `+0x1a8` (while it is clear) or `+0x1a4`
+(while it is set). An indicator lamp is lit only while its side bit and the phase bit are both
+set, so types 3 / 4 serve as the rear indicator and the brake lamp of their side at once.
+
+**The light bar.** While bit `0x80` is set, `vehicle_apply_light_state` adds the frame time to the
+timer `+0x1b8`; each time it passes the period `+0x1b4` the timer restarts and bit `0x20000000`
+toggles, and that phase lights `0x20` or `0x10` and clears the other. When `0x80` is clear and the
+byte `+0x1a0` has its top bit set, both phase bits are cleared. `LIGHTLI*` frames ship only on
+`fire00` / `fire10`, `polimFor00` / `polimFor10` and `polimTud00` / `polimTud10`. The bit is set by
+`vehicle_set_emergency_lights` and, inline, by `police_manager_deploy_vehicle_from_pool`,
+`police_manager_acquire_from_pool_by_name`,
+`police_manager_spawn_patrol_car_reinforcements_at_radius` and
+`police_manager_try_dispatch_pursuit_for_target`; `car_unpack_light_state` restores it.
+
+**The automatic bits.** `0x8` (indicators from the steering), `0x800` (brake lights from
+`+0x634 > 0`) and `0x8000` (reverse lights from `+0x5d8 < 0`) are set together by `car_game_init`,
+`human_intern_use_car` and `human_put_in_vehicle_at_seat`. `driver_tick` sets `0x800` on its own,
+and `driver_reset` clears `0x8` and `0x800` and sets `0x8000`.
+
+### 1e. Steering geometry and the wheel role bits
+
+`vehicle_apply_carinit_params` converts the seven CARINIT steering angles from degrees
+(`def-files-docs/vehicles-bin.md` §4a), and `vehicle_update_steering_wheels` uses them every frame
+with the speed factor `t = max(0, 1 − +0x618 / +0x404)`.
+
+| Offset | Field | Conf | Source | Use |
+|---|---|---|---|---|
+| `+0x404` | top speed | H | `vehicle_apply_carinit_params`: the drive circumference `+0x628` over the top-gear ratio, times the maximum revs `+0x1f18` | the speed factor `t` |
+| `+0x684` / `+0x688` | steering lock at standstill / at top speed | H | CARINIT `+0x0EC` / `+0x0F0` | `+0x68c = +0x688 + (+0x684 − +0x688)·t` |
+| `+0x690` / `+0x698` | turn-in rate at standstill / at top speed, per second | H | CARINIT `+0x0F8` / `+0x100` | the rate while the angle moves away from the centre |
+| `+0x694` / `+0x69c` | return rate at standstill / at top speed, per second | H | CARINIT `+0x0FC` / `+0x104` | the rate while it moves back toward the centre or changes sign |
+| `+0x6a4` | current steering angle | H | `vehicle_update_steering_wheels` | moves toward the target `+0x6a0` by rate × frame time; set straight to it while `+0x524` is set |
+| `+0x6a8` / `+0x6b0` | split at full lock / current split | H | CARINIT `+0x0F4`; `+0x6b0 = abs(+0x6a4) / +0x684 · +0x6a8` | added to one steered wheel's angle and subtracted from the other's |
+
+**The wheel role bits.** Three bits of the wheel flag word `+0x120` come from the bytes of the
+CARINIT axle record (`def-files-docs/vehicles-bin.md` §4b):
+
+| Bit | Meaning | Reader |
+|---|---|---|
+| `0x1` | steered | `vehicle_update_steering_wheels`, `vehicle_reset`, `vehicle_update_visuals` |
+| `0x2` | driven | `vehicle_apply_carinit_params`: only driven wheels set the drive circumference `+0x628 = 2π·radius` |
+| `0x4` | handbrake | `vehicle_move` applies the handbrake output `+0x4b0` only to these wheels |
+
 ## 2. Field evidence — drivetrain
 
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
@@ -196,14 +267,14 @@ is written and never read.
 | `+0x42c` / `+0x430` / `+0x434` / `+0x4b0` | handbrake force / ramp / accum / out | H | `vehicle_set_handbrake` | the drivetrain | `+0x4b0 = (accum / max) · force` |
 | `+0x444` / `+0x448` / `+0x544` / `+0x526` | throttle ramp max / accum / rate / bypass | H | `vehicle_set_power`, `vehicle_set_brake` | the drivetrain | one shared ease-in |
 | `+0x520` | speed_limit | H | `vehicle_set_speed_limit` | the drivetrain | `driver_tick` sets it to the lookahead distance |
-| `+0x5d8` / `+0x5dc` / `+0x5e4` / `+0x5ec` | gear effective / selected / max / ratios | H | `vehicle_set_gear` writes `+0x5dc` | `vehicle_set_power` (`+0x5d8 < 0` = neutral), `vehicle_get_max_engine_torque_at_rpm` | - |
-| `+0x634` | drivetrain_force_out | H | `vehicle_set_power` (neutral), `vehicle_set_brake` (in-gear) | the integrator | the net applied wheel force |
+| `+0x5d8` / `+0x5dc` / `+0x5e4` / `+0x5ec` | gear effective / selected / max / ratios | H | `vehicle_set_gear` writes `+0x5dc` | `vehicle_set_power` and `vehicle_set_brake` (`+0x5d8 < 0` = reverse, §4), `vehicle_get_max_engine_torque_at_rpm` | the automatic gearbox in `vehicle_tick_drivetrain` writes both, `-1` while the car moves backwards |
+| `+0x634` | drivetrain_force_out | H | `vehicle_set_power` (reverse), `vehicle_set_brake` (forward gears) | the integrator, `vehicle_apply_light_state` (bit `0x100`) | the net applied wheel force |
 | `+0x5c4` / `+0x5e0` / `+0x668` / `+0x1f18` | engine revs / red-line / idle / maximum, all per second | H | `vehicle_update_motor_revs` writes the revs and clamps them to `+0x1f18`; `vehicle_apply_carinit_params` sets the other three from the CARINIT `RedLineRPM`, `idling rpm` and `maximum rpm` ÷ 60 (`def-files-docs/vehicles-bin.md`) | `vehicle_get_engine_rpm`, `vehicle_compute_moment`, `vehicle_update_strips`, `vehicle_update_engine_pitch`, `car_extended_update` | `vehicle_update_strips` and `car_extended_update` use the fraction `(revs − idle) / (max − idle)` |
 | `+0x68c` / `+0x6a0` / `+0x218` / `+0x524` | steer scale / out / linearity / enable | H | `vehicle_set_steer`, `vehicle_set_steering_linearity` | the drivetrain | `+0x6a0 = angle · +0x68c`; `+0x524` in §1c |
 | `+0x65c` / `+0x21c` / `+0x527` | clutch out / linearity / enable | H | `vehicle_set_clutch` | the drivetrain | `+0x527` in §1c |
 | `+0xca8` / `+0x6b4` / `+0xc9c` | engine_on / mirror / timer | H | `vehicle_set_engine_on` | `vehicle_set_power`, `vehicle_set_brake`, `vehicle_set_gear` | ignition |
 | `+0xcac` / `+0x1f1c` | fuel / capacity | H | `vehicle_set_fuel` | `vehicle_set_engine_on` (the `< 0.02` gate) | - |
-| `+0xca0` | cut_time | M | `vehicle_set_cut_time` | the shift logic | `int(5..50) ÷ 1000` |
+| `+0xca0` | physics_substep_s | H | `vehicle_ctor` (0.028), `vehicle_set_cut_time` | `vehicle_substep_move` | the physics sub-step length in seconds, `int(5..50) ÷ 1000`; traffic cars run at 42 ms (§6d) |
 | `+0x4ae` | sounds_enabled | H | `vehicle_enable_sounds` | `vehicle_set_engine_on`, every sound member | calls `SoundOff` when cleared |
 | `+0x1d8` / `+0x1e4` | size_min / max | H | the geometry init | `vehicle_get_size`, `driver_set_car` | bound extents |
 | `+0x1f0` / `+0x1fc` | pivot_min / max | H | the geometry init | `vehicle_get_pivot_pos`, `driver_set_car` | - |
@@ -215,6 +286,7 @@ is written and never read.
 | `+0x140` | the lock reference count | `vehicle_lock` ±1 |
 | `+0x17c` / `+0x180` | the light **vector object** and its begin pointer; stride `0x20`, entry `+0x10` is the type (1/2 = projector) | byte-proven: `lea edi,[ebp + 0x17c]` inside `vehicle_apply_light_state`, and 285 of `vehicle_light_at`'s 301 callsites read that register. `vehicle_set_projector_size` walks it for six selector bits |
 | `+0x18c` / `+0x190` | the **special light projector** vector object and its begin pointer; stride `0x1c`, entry `+0x00` is the `I3D_frame*`, `+0x18` a ushort state word | byte-proven: `lea ecx,[ebp + 0x18c]` at 10 of `vehicle_special_projector_at`'s 51 callsites. Searched by `vehicle_switch_special_projector_texture`, reset by `vehicle_init_damage`. The two vector objects are adjacent — `0x17c + 0x10 = 0x18c` |
+| `+0x1c4` / `+0x1c8` | per-step wheel force sums, side / forward | `vehicle_move` zeroes both and adds `wheel+0xa4` and `min(wheel+0xa0, wheel+0x118)` per wheel; `driver_fill_start_values` reads them as `car+0x234` / `car+0x238`; `vehicle_reset`, `vehicle_game_init`, `vehicle_update_visuals`, `vehicle_substep_move` and `vehicle_wheel_contact_solve` also write them |
 | `+0x1e4` / `+0x1e8` / `+0x1ec` | the position-quantiser ranges (x, y, z) | `vehicle_decode_position` |
 | `+0x1fc` / `+0x200` / `+0x204` | the position-quantiser origins | the same |
 | `+0x28` | the contact latch (byte) | raised by `vehicle_wheel_contact_solve` and `vehicle_body_coll_resolve` when a contact's collision record carries flag `0x10000`; `vehicle_update_visuals` copies it into bit `0x2000000` of `+0x224` and clears it; `vehicle_game_init` clears it |
@@ -228,9 +300,9 @@ is written and never read.
 | `+0x414` / `+0x418` / `+0x41c` | the centre of mass | `vehicle_get_contact_impulse_terms` |
 | `+0x49c` / `+0x4a0` / `+0x4a4` | the angular velocity | the same; `vehicle_settle` zeroes it on the way out |
 | `+0x50d` | the camera-is-inside-the-car flag | every sound member selects its interior or exterior handle on it (§6e) |
-| `+0x528` | the body-collision head vector — `vector<S_COLBODY_HEAD>`, stride `0x74` | `vehicle_game_init` passes it to `vehicle_clear_body_coll_add_track`; built by `vehicle_cb_enum_body_colls` |
+| `+0x528` | the body-collision head vector — `vector<S_COLBODY_HEAD>`, stride `0x74` | `vehicle_game_init` passes it to `vehicle_clear_body_coll_add_track`; built by `vehicle_cb_enum_body_colls`. The `add_track` vectors (head `+0x3c`, sphere `+0x1c`) are written only as zero by `vehicle_clear_body_coll_add_track`: none of the functions that hold a head or sphere pointer (`vehicle_body_coll_resolve`, `vehicle_cb_enum_body_colls`, `vehicle_cb_enum_coll_sphere`, `vehicle_prepare_body_colls`, `vehicle_move`) stores to them or passes their address on |
 | `+0x5e4` / `+0x5ec` | the gear count and the gear-ratio array | `vehicle_get_max_engine_torque_at_rpm` |
-| `+0xd20` | the door/window record array, stride `0x24`; the record object hangs at `+0x20` | **one array serves BOTH doors and windows**: `vehicle_animate_doors` reads the door angle band on the object, while `vehicle_open_window`, `vehicle_animate_windows` and `vehicle_is_window_open` read the window band on the SAME object. A car has one record per door, so the door count, the window count and the count `vehicle_get_seat_count` returns all coincide (§11) |
+| `+0xd20` | the door/window record array, stride `0x24`; the record object hangs at `+0x20` | **one array serves BOTH doors and windows**: `vehicle_animate_doors` reads the door angle band on the object, while `vehicle_open_window`, `vehicle_animate_windows` and `vehicle_is_window_open` read the window band on the SAME object. A car has one record per door, so the door count, the window count and the count `vehicle_get_seat_count` returns all coincide (§7) |
 | door `+0x24` / `+0x28` / `+0x2c` / `+0x30` | current angle / maximum angle / opening speed / flags | `vehicle_open_door`, `vehicle_set_max_door_angle`, `vehicle_set_door_open_speed` |
 | `+0xd2c` | the WINDOW list — a `0x58`-stride vector, one record per `WINDOW*` frame | byte-proven `lea ecx,[ebx + 0xd2c]` in `vehicle_init`; consumed by `vehicle_open_window`, `vehicle_animate_windows`, `vehicle_is_window_open` |
 | `+0xd40` / `+0xd44` | the **wheel vector** — `0x1c`-byte records, the second input to the mass computation | `vehicle_set_seat_mass` (§7) |
@@ -255,7 +327,7 @@ The twin column gives the PS2 name; unless it is written without a class, the me
 |---|---|---|---|---|---|
 | 0x00425440 | `vehicle_get_speed` | - | - | PC-only | `return *(float *)(this + 0x618)` — the **scalar speed**, the field `car.md` §1a documents at `car+0x688` and the police speed gate reads. Consumers compare it against **0.5** ("is the target's car moving at all?") and **2.0** (`ai_fight_followship_must_car_hunt`'s "we need a vehicle to catch this"). 40 references, 24 of them in `pursuit_event_tick` |
 | 0x00425450 | `vehicle_get_velocity_ptr` | - | - | PC-only | returns `&this->+0x1f0c` = `car+0x1f7c`, the velocity vector `car_recompute_velocity` derives each frame and `car_get_actor_speed` copies out |
-| 0x00425460 | `vehicle_get_seat_count` | - | - | PC-only | `(end − begin) / 0x24` over the array at `+0xd20`/`+0xd24`; 0 when unallocated. Three consumers feed the index straight into `car_get_owner(i)`. The seat RECORDS — occupancy, occupant, placements — are a **different** array at `car+0x210c`, stride `0xa0`; both share one index space (§11) |
+| 0x00425460 | `vehicle_get_seat_count` | - | - | PC-only | `(end − begin) / 0x24` over the array at `+0xd20`/`+0xd24`; 0 when unallocated. Three consumers feed the index straight into `car_get_owner(i)`. The seat RECORDS — occupancy, occupant, placements — are a **different** array at `car+0x210c`, stride `0xa0`; both share one index space (§9) |
 | 0x00425490 | `vehicle_get_forward_ptr` | - | - | PC-only | returns `&this->+0xcc4` = `car+0xd34..+0xd3c`, the world-space forward axis (§1a) |
 | 0x004f5a30 | `vehicle_get_engine_on` | - | - | PC-only | - |
 | 0x004f5a40 | `vehicle_set_clutch_gate` | - | - | PC-only | - |
@@ -298,8 +370,8 @@ The twin column gives the PS2 name; unless it is written without a class, the me
 | 0x005123d0 | `vehicle_apply_carinit_params` | `InitCar` | 0x002399f0 | CONFIRMED | builds the wheel array from the CARINIT record — 87 accesses to `+0xcb4` |
 | 0x00517370 | `vehicle_get_carinit_params` | `GetInit` | 0x0023f380 | CONFIRMED | copies the `S_CARINIT` block out of `+0xde8` |
 | 0x005173a0 | `vehicle_set_gear` | `SetGear` | 0x0023f3c0 | CONFIRMED | `+0x5dc`: select gear, range −1..gear_max |
-| 0x00517460 | `vehicle_set_power` | `SetPower` | 0x0023f4e0 | CONFIRMED | `+0x634` (neutral) / `+0x420` (idle): AI engine power |
-| 0x00517600 | `vehicle_set_brake` | `SetBrake` | 0x0023f650 | CONFIRMED | `+0x634` (in-gear): brake through the drivetrain force. Byte-exact (§4) |
+| 0x00517460 | `vehicle_set_power` | `SetPower` | 0x0023f4e0 | CONFIRMED | the throttle `+0x420` while idling or in a forward gear, `+0x634` in reverse (§4): the accelerator |
+| 0x00517600 | `vehicle_set_brake` | `SetBrake` | 0x0023f650 | CONFIRMED | `+0x634` in a forward gear, the throttle `+0x420` in reverse: the brake pedal. Byte-exact (§4) |
 | 0x00517790 | `vehicle_set_clutch` | `SetClutch` | 0x0023f7b0 | CONFIRMED | `+0x65c`: clutch pedal, linearity blend |
 | 0x00517800 | `vehicle_set_steer` | `SetSteer` | 0x0023f830 | CONFIRMED | `+0x6a0 = angle · +0x68c` |
 | 0x005178a0 | `vehicle_set_steering_linearity` | `SetSteeringLinearity` | 0x0023f8e0 | CONFIRMED | `+0x218`, range [0,1] |
@@ -308,7 +380,7 @@ The twin column gives the PS2 name; unless it is written without a class, the me
 | 0x00517a10 | `vehicle_set_fuel` | `SetFuel` | 0x0023fb00 | CONFIRMED | `+0xcac`, clamped against `+0x1f1c` |
 | 0x00517a40 | `vehicle_set_handbrake` | `SetHandbrake` | 0x0023fb30 | CONFIRMED | `+0x4b0` through the ramp — the parking brake (§4) |
 | 0x00517ab0 | `vehicle_enable_sounds` | `EnableSounds` | 0x0023fb90 | CONFIRMED | `+0x4ae`; calls `SoundOff` when cleared |
-| 0x00517ae0 | `vehicle_set_cut_time` | `SetCutTime` | 0x0023fbe0 | CONFIRMED | `+0xca0 = int(5..50) / 1000` |
+| 0x00517ae0 | `vehicle_set_cut_time` | `SetCutTime` | 0x0023fbe0 | CONFIRMED | the physics sub-step length: `+0xca0 = ms / 1000` for 5..50 ms, refused (returns 0) otherwise; `traffic_car_game_init` and `traffic_car_adopt_car_with_new_driver` pass 42 (§6d) |
 | 0x00517b10 | `vehicle_apply_external_impulse` | `ExternalImpuls` | 0x0023fc30 | CONFIRMED | - |
 | 0x00517f00 | `vehicle_apply_external_force` | `ExternalForce` | 0x0023fea0 | CONFIRMED | - |
 | 0x005180a0 | `vehicle_do_collision` | `DoCollision` | 0x0023ffa0 | CONFIRMED | - |
@@ -334,7 +406,7 @@ The twin column gives the PS2 name; unless it is written without a class, the me
 | 0x00519b60 | `vehicle_set_special_dynamic_colls` | `SetSpecialDynamicColls` | 0x00241b40 | CONFIRMED | sets the mode byte `+0x1f26` |
 | 0x00519d30 | `vehicle_set_dynamic_colls_off` | `SetDynamicCollsOn` | 0x00241de0 | CONFIRMED | a change-guarded toggle on `+0x118` that inserts or erases the vehicle's dynamic-collision records — either the single record at `+0x2ac` or, when `+0x1f26` is set, every `0x48`-byte record in the vector at `+0x1f38`. The PS2 method takes two bools; the PC folds the second into the `+0x1f26` read, and its single parameter is the INVERSE of the PS2 `on` (1 = erase), hence `_off`. Callers: `traffic_car_change_state` (×2) and `traffic_car_registry_set_enabled` (×1), `pursuit_event_tick`, `police_board_release_all_group_vehicles`, `program_process_command` |
 | 0x00519e50 | `vehicle_update_cached_transform` | `UpdateImportantVariables` | 0x002420d0 | CONFIRMED | - |
-| 0x0051a150 | `vehicle_clear_body_coll_add_track` | `ClearBodyCollAddTrack` | 0x00242420 | CONFIRMED | zeroes the add_track vector at `S_COLBODY_HEAD+0x3c` and at each `0x3c`-stride sphere `+0x1c`, recursively over the tree at `+0x528`. The sole caller on both builds is `GameInit`. `add_track` is the developers' field name; what accumulates there is open (§11) |
+| 0x0051a150 | `vehicle_clear_body_coll_add_track` | `ClearBodyCollAddTrack` | 0x00242420 | CONFIRMED | zeroes the `add_track` `S_vector` (three floats) at `S_COLBODY_HEAD+0x3c` and at each `0x3c`-stride sphere `+0x1c`, recursively over the tree at `+0x528`. The sole caller on both builds is `GameInit`. `add_track` is the developers' field name; on the PC it is only ever written as zero (§2a) |
 | 0x0051a250 | `vehicle_add_projector_lights_to_sectors` | `AddProjectorLightsToSectors` | 0x002424c0 | CONFIRMED | walks the light array `+0x180` (stride `0x20`, light pointer at elem `+0x0c`); for each light not also in the special-projector array `+0x190` (stride `0x1c`) it calls `I3D_sector` slot `0x50` on every entry of the projector-sector list |
 | 0x0051a3b0 | `vehicle_remove_projector_lights_from_sectors` | `DeleteProjectorLightsFromSectors` | 0x002425f0 | CONFIRMED | the sibling above with sector slot `0x50` → `0x54`, plus a slot-`0x2c` reset per light |
 | 0x0051a520 | `vehicle_register_projector_light_sector` | `AddSectorForProjectorLights` | 0x002426f0 | CONFIRMED | push-back-if-absent onto the projector-sector list |
@@ -348,7 +420,7 @@ The twin column gives the PS2 name; unless it is written without a class, the me
 | 0x0051cdd0 | `vehicle_cb_enum_object_list` | `CbEnumObj6` | 0x00246df0 | CONFIRMED | a free function |
 | 0x0051cf80 | `vehicle_cb_enum_body_colls` | `CbEnumBodyColl` | 0x00246f10 | CONFIRMED | a free function; builds the `+0x528` tree |
 | 0x0051d280 | `vehicle_body_coll_attach_to_parent` | `IsParent` | 0x00246e40 | CONFIRMED | a free function |
-| 0x0051d330 | `vehicle_colbody_head_dtor` | - | - | PC-only | - |
+| 0x0051d330 | `vehicle_colbody_head_dtor` | `ReleaseBodyColls` | 0x00234110 | STRUCTURAL | frees one head's sphere vector and child-head vector, recursing into every child head; `vehicle_dtor` reaches it through `vehicle_colbody_head_scalar_deleting_dtor` (§9) |
 | 0x0051d3b0 | `vehicle_collect_coll_spheres` | `EnumColSphere` | 0x002471b0 | CONFIRMED | a free function |
 | 0x0051d440 | `vehicle_cb_enum_coll_sphere` | `CbEnumCollsActiveSphere` | 0x00247240 | CONFIRMED | a free function |
 | 0x0051d710 | `vehicle_prepare_body_colls` | `PrepareBodyColls` | 0x002473e0 | CONFIRMED | recursive walk of the `S_COLBODY_HEAD` tree baking each sphere into world space — `UpdateWMatrixProc` then two `S_vector::operator*=(S_matrix&)` per sphere on both builds, then the parent-frame arm |
@@ -399,7 +471,7 @@ The twin column gives the PS2 name; unless it is written without a class, the me
 | 0x0052a1b0 | `vehicle_update_motor_particles` | `UpdateMotorParticles` | 0x00256c10 | CONFIRMED | - |
 | 0x0052a670 | `vehicle_update_steering_wheels` | `UpdateSteeringWheels` | 0x002570a0 | CONFIRMED | called ×1 from BOTH `Tick` and `Update` on both builds |
 | 0x0052aa30 | `vehicle_update_rotation_wheels` | `UpdateRotationWheels` | 0x00257770 | CONFIRMED | - |
-| 0x0052af10 | `vehicle_update_wheel_particles` | `UpdateWheelParticles` | 0x00258120 | CONFIRMED | one of only two functions per build that touch the material-id lookup table |
+| 0x0052af10 | `vehicle_update_wheel_particles` | `UpdateWheelParticles` | 0x00258120 | CONFIRMED | one of the two per-frame emitters that read the material-id lookup table: the moving-wheel and slipping-wheel particles of the surface (`def-files-docs/materialy.md` §1a) |
 | 0x0052b8a0 | `vehicle_update_exhaust_particles` | `UpdateExhaustParticles` | 0x00258960 | CONFIRMED | - |
 | 0x0052bf20 | `vehicle_emit_body_collision_particles` | `UpdateBodyParticles` | 0x00258fa0 | CONFIRMED | emits one material-keyed impact particle at a contact point with the body's point velocity `v + ω × (p − com)`. Five shared constants settle it: the gate bit `0x200` of `+0xce4`; the byte-identical material lookup `abs(materials[conv_tbl[id] * 0x30 + 0x28])`; the six `SetParam` ids `0xd 0xe 0xf 0x10 0x11 0x12` in the same order; the `0x1d`/`0x1e` velocity vectors scaled by `+0x130`; and the frame-flag rewrite `& 0xfffffedf \| 0x40000000`. The PC restructured it into an immediate, rate-limited per-contact emitter called from `vehicle_body_coll_resolve` (§9) |
 | 0x0052c350 | `vehicle_light_at` | - | - | PC-only | indexes the light vector `+0x180`; 301 callsites |
@@ -409,7 +481,7 @@ The twin column gives the PS2 name; unless it is written without a class, the me
 | 0x0052dfa0 | `vehicle_compute_motor_force` | `MotorForce` | 0x0025d530 | CONFIRMED | drive force; calls `ComputeMoment` ×1 |
 | 0x0052e220 | `vehicle_compute_moment` | `ComputeMoment` | 0x0025d8c0 | CONFIRMED | the mid-gap anchor of the kernel unit, size ratio exactly 1.00 |
 | 0x0052e3c0 | `vehicle_update_motor_revs` | `MotorRot` | 0x0025da60 | CONFIRMED | revs and gearbox — **the engine model**; fires `GearSnd` ×1 |
-| 0x0052e6d0 | `vehicle_substep_move` | `Engine` | 0x0025dff0 | CONFIRMED | despite the PS2 name this is **not** the engine model: it latches two counters, calls `vehicle_move` once at the full delta and then in a loop at `delta / n` |
+| 0x0052e6d0 | `vehicle_substep_move` | `Engine` | 0x0025dff0 | CONFIRMED | despite the PS2 name this is **not** the engine model: it latches two counters and calls `vehicle_move` once when the frame time is at most the sub-step length `+0xca0`, otherwise `n = ⌊dt / +0xca0⌋ + 1` times at `dt / n` (§6d) |
 | 0x0052ea80 | `vehicle_move` | `Move` | 0x0025e390 | CONFIRMED | the integrator; six float parameters |
 | 0x005334e0 | `vehicle_wheel_contact_solve` | `DoWheelsCollision` | 0x00262850 | CONFIRMED | the wheel solver; reads `+0xcd0` 15× |
 | 0x00535610 | `vehicle_body_coll_resolve` | `BodyCollision` | 0x00264de0 | CONFIRMED | the body-collision tree solver (§6d, §9) |
@@ -438,55 +510,55 @@ The twin column gives the PS2 name; unless it is written without a class, the me
 | 0x0053b850 | `vehicle_open_sound` | `OpenSnd` | 0x0026de10 | CONFIRMED | a three-argument forwarder to the shared `i3d_cache_sound_open`, matching the PS2 signature at the exact rank |
 | 0x0053b880 | `vehicle_sound_slot_init` | `SoundInit` | 0x0026e2a0 | CONFIRMED | nine arguments at every callsite, matching the nine-parameter PS2 signature. Defaults: min distance 4.0, max 50.0, volume 0.3 |
 | 0x0053bbf0 | `vehicle_release_sounds` | `ReleaseSounds` | 0x0026e800 | CONFIRMED | releases every handle band |
-| 0x005c8740 | `vehicle_controller_set_field_0x65` | - | - | PC-only | - |
 | 0x005c8780 | `vehicle_get_special_dynamic_colls` | - | - | PC-only | reads the mode byte `+0x1f26` |
 | 0x005c8790 | `vehicle_set_velocity` | - | - | PC-only | writes `+0x1f0c` |
 | 0x005c8840 | `vehicle_set_angular_velocity` | - | - | PC-only | writes `+0x49c` |
 | 0x005c8880 | `vehicle_set_auto_indicators_from_steering` | - | - | PC-only | bit `0x8`; the only light setter that does NOT notify (§1b) |
-| 0x005c88b0 | `vehicle_set_light_bit_0x80` | - | - | PC-only | bit `0x80`, script `carlight_light` / case `0xc1`; the lamp is unidentified, so the name records the bit (§1b) |
+| 0x005c88b0 | `vehicle_set_emergency_lights` | - | - | PC-only | bit `0x80`, the emergency light bar (§1d), plus notify. Script `carlight_light` / case `0xc1` |
 | 0x005c88e0 | `vehicle_set_left_indicator` | - | - | PC-only | bit `0x1`, gated on bit `0x8` clear, plus notify. Script `carlight_indic_l` / case `0xc2` |
 | 0x005c8920 | `vehicle_set_right_indicator` | - | - | PC-only | bit `0x2`, gated on bit `0x8` clear, plus notify. Script `carlight_indic_r` / case `0xc3` |
 | 0x005c8960 | `vehicle_set_headlights` | - | - | PC-only | bit `0x10000`, plus notify. Script `carlight_main` / case `0xc0` |
 | 0x005c89a0 | `vehicle_set_light_script_override` | - | - | PC-only | writes the `0x0ff00000` sub-field (§1b) |
 | 0x005c89e0 | `vehicle_get_light_script_override` | - | - | PC-only | reads it |
-| 0x005c8a90 | `vehicle_controller_set_field_0x214c` | - | - | PC-only | - |
 
 ### 3a. PS2 methods with no PC twin
 
-Twenty of the 153. Seven are accounted for by a fold or an inline on the PC side; thirteen are not
-located (§11).
+Nineteen of the 153. Seventeen are accounted for — a fold or an inline on the PC side, or a PS2-only
+mechanism; two are not located (§11).
 
 | PS2 VA | PS2 method | State |
 |---|---|---|
-| 0x002331c0 | `InitSpecialLightProjectors` | not located |
-| 0x002335a0 | `CloseSpecialLightProjectors` | not located |
-| 0x00233a80 | `CloseVehicle` | not located |
-| 0x00234110 | `ReleaseBodyColls` | not located |
-| 0x00238bb0 | `ClearParticleRef` | not located |
-| 0x00238d60 | `LockParticle` | not located |
-| 0x00239270 | `UnlockParticle` | not located |
-| 0x002397f0 | `TickParticles` | not located |
+| 0x002331c0 | `InitSpecialLightProjectors` | inlined into `vehicle_init_lights` (§9) |
+| 0x002335a0 | `CloseSpecialLightProjectors` | inlined into `vehicle_dtor` (§9) |
+| 0x00233a80 | `CloseVehicle` | inlined into `vehicle_dtor` (§9) |
+| 0x00238bb0 | `ClearParticleRef` | PS2-only: the particle-slot pool (§9) |
+| 0x00238d60 | `LockParticle` | PS2-only: the particle-slot pool (§9) |
+| 0x00239270 | `UnlockParticle` | PS2-only: the particle-slot pool (§9) |
+| 0x002397f0 | `TickParticles` | PS2-only: the particle-slot pool (§9) |
 | 0x00240370 | `DoCollisionStatic` | inlined into both PC callers (§9) |
 | 0x00240ad0 | `ComputeMass` | inlined into `vehicle_set_seat_mass` (§7) |
 | 0x00241a50 | `IsDoor` | not located (§11) |
-| 0x00242c30 | `GetForwardForceMax` | not located |
-| 0x00242c80 | `GetSideForceMax` | not located |
-| 0x00242cd0 | `DuplicateDamageAndDeform` | not located (§11) |
+| 0x00242c30 | `GetForwardForceMax` | folded into `vehicle_move` (§9) |
+| 0x00242c80 | `GetSideForceMax` | folded into `vehicle_move` (§9) |
+| 0x00242cd0 | `DuplicateDamageAndDeform` | PS2-only (§9) |
 | 0x00245290 | `GetVehicleDamageDeformSize` | folded into `vehicle_get_save_state_size` (§9) |
 | 0x00245650 | `SaveVehicleDamageDeform` | folded into `vehicle_save_state` (§9) |
 | 0x00245f70 | `LoadVehicleDamageDeform` | folded into `vehicle_load_state` (§9) |
-| 0x002480a0 | `SetCallbackLP` | not located (§11) |
-| 0x002480b0 | `SetCallbackCP` | not located |
+| 0x002480a0 | `SetCallbackLP` | PS2-only (§9) |
+| 0x002480b0 | `SetCallbackCP` | PS2-only (§9) |
 | 0x0024cd30 | `UpdateDeformPart` | not located (§11) |
 
 ## 4. Power / brake delivery notes
 
-* **`+0x634` is the net wheel longitudinal force**, written by BOTH `SetPower` (the neutral,
-  `gear_effective < 0` path) and `SetBrake` (the in-gear path) through the same
-  `(ramp_accum / ramp_max) · pedal` ramp. `driver_tick`'s tail calls
-  `vehicle_set_power(speed_factor · scale)` and then `vehicle_set_brake(brake_out)`; the two cover
-  mutually exclusive gear states, so they cooperate rather than clobber. `pedal == 0` means "cut and
-  coast". There is no separate "SetGas".
+* **`+0x634` is the net wheel longitudinal force, and the two pedals swap it in reverse.** In a
+  forward gear `vehicle_set_brake` writes it and `vehicle_set_power` drives the throttle `+0x420`;
+  in the reverse gear (`gear_effective < 0`) `vehicle_set_power` writes it and `vehicle_set_brake`
+  drives `+0x420`, so in reverse the brake pedal drives the engine and the accelerator brakes. Both
+  writes of `+0x634` go through the same `(ramp_accum / ramp_max) · pedal` ramp, and the brake
+  lamps follow it (§1b). `driver_tick`'s tail calls `vehicle_set_power(speed_factor · scale)` and
+  then `vehicle_set_brake(brake_out)`; in either gear state the two calls write different fields,
+  so they cooperate rather than clobber. `pedal == 0` means "cut and coast". There is no separate
+  "SetGas".
 * **The dedicated brake is `vehicle_set_brake`; the parking brake is `vehicle_set_handbrake`**
   (`+0x4b0`). The chase AI's `driver+0xdc` is the brake pedal and feeds `vehicle_set_brake` and the
   brake light (`driver_do_lights`).
@@ -517,7 +589,7 @@ files, bounded by the CRT static-init/atexit boundary pairs. Any "no PC twin" cl
 | `[0x005373e0, 0x0053c2b0)` | `C_Vehicle_sounds.cpp` | 26 | 20 176 | 31 320 | 0.64 |
 
 The cluster is closed: 206 starts, all named. Not every `vehicle_` function lives inside it — the
-one-line accessors at `0x00425440`, `0x004f5a30`..`0x004f5ac0` and `0x005c8740`..`0x005c8a90` are
+one-line accessors at `0x00425440`, `0x004f5a30`..`0x004f5ac0` and `0x005c8780`..`0x005c89e0` are
 out-of-line inline members MSVC emitted into whichever object first used them, so they land in the
 `entity_action_tick`, `C_sledovacka` and script-VM units instead.
 
@@ -590,8 +662,11 @@ and the slots are looked up afterwards. `vehicle_set_callback_break_glass` write
 
 **The seven per-frame emitters** (`vehicle_update_strips`, `_motor_particles`, `_steering_wheels`,
 `_rotation_wheels`, `_wheel_particles`, `_exhaust_particles` and
-`vehicle_emit_body_collision_particles`) are a forced 7-for-7 block. Only two functions on each build
-touch the material-id lookup table, which is what separates the wheel emitter from its neighbours.
+`vehicle_emit_body_collision_particles`) are a forced 7-for-7 block. Only two of the seven emitters on
+each build touch the material-id lookup table, which is what separates the wheel emitter from its
+neighbours. Outside the emitters the table is read by `vehicle_update_visuals` (the surface bumps),
+`vehicle_body_coll_resolve`, `vehicle_emit_wheel_skid_segment`, `vehicle_update_skid_sound` and
+`car_on_collision_apply_damage` (`def-files-docs/materialy.md` §1a).
 
 ### 6d. `C_Vehicle_kernel.cpp` — the motor model and the integrator
 
@@ -615,6 +690,12 @@ The two per-frame drivers are named for their callee sets rather than for the PS
 `Update` read as synonyms while their callee sets are disjoint, so the PC names carry the split —
 drivetrain against visuals.
 
+**The sub-step.** `vehicle_substep_move` runs one `vehicle_move` when the frame time is at most
+`+0xca0`, otherwise `⌊dt / +0xca0⌋ + 1` equal sub-steps. `+0xca0` is a length in seconds:
+`vehicle_ctor` seeds 0.028, `vehicle_set_cut_time(ms)` accepts 5 to 50 ms, and the traffic code
+passes 42. The whole local chain, from the pedal setters to the velocity writes, is in
+`basic/artifacts/vehicle-movement.md` §3.
+
 **The two function-local static sort vectors.** `vehicle_body_coll_resolve` builds two MSVC
 magic-statics on first call, both `vector<T8>`:
 
@@ -623,9 +704,7 @@ magic-statics on first call, both `vector<T8>`:
 | `g_vehicle_body_coll_sphere_sort_list` `0x00656344` | `0x00656348` | the `0x3c`-stride sphere array at `S_COLBODY_HEAD+0x00` | `vehicle_body_coll_sphere_sort_list_static_dtor` |
 | `g_vehicle_body_coll_head_sort_list` `0x00656354` | `0x00656358` | the `0x74`-stride `S_COLBODY_HEAD` vector at `+0x528` | `vehicle_body_coll_head_sort_list_static_dtor` |
 
-The PS2 instantiates `vector<S_SORT>` **and** `vector<S_COLBODY_EMITOR>` in this unit and nowhere
-else, so those are the two element types — but which is which is not resolved (§11), and the PC
-names deliberately describe the measured role instead of asserting a PS2 type. Both destructors are
+Both vectors have one element type (§9); the PC names describe the measured role. Both destructors are
 taken by address only (`atexit(&…)`), so a census that counts `E8` call instructions reports zero
 callsites and zero datarefs for them; that is the signature of an address-referenced function, not
 evidence of dead code.
@@ -690,7 +769,7 @@ setters. For a `C_car` the installer is `car_init`.
 | `+0x378` | `vehicle_set_callback_prepare_dropout` | body-panel drop-out | `car_prepare_body_part_dropout` |
 | `+0x37c` | `vehicle_set_callback_prepare_wheel_dropout` | wheel drop-out | `car_prepare_wheel_dropout` |
 | `+0x380` | `vehicle_set_callback_break_glass` | glass shatter | `car_break_glass` |
-| `+0x384` | - | never written by `car_init` — [U] | - |
+| `+0x384` | - | an `Init`-time hook that no code installs (§8b) | - |
 | `+0x388` | `vehicle_set_callback_wake_up` | wake a sleeping car | NULL at init; `car_on_act_state_changed` later installs `car_wake_up` |
 | `+0x38c` | `vehicle_set_callback_body_collision_filter` | body-contact surface filter | `car_on_body_surface_contact` |
 | `+0x390` | `vehicle_set_callback_wheel_collision_filter` | wheel-contact surface filter | `car_collision_filter_wheel` |
@@ -716,6 +795,12 @@ that is asleep — act state 1, so a handler is installed — wakes it; on a car
 is NULL and the call is skipped. `car_wake_up`'s whole body is `actor_set_act_state(0)`, which is
 exactly what "a light changed, so this car is not dormant any more" should do. There is no second
 notify mechanism behind the light bits.
+
+### 8b. `C_Vehicle+0x384` — a hook nothing installs
+
+`vehicle_ctor` zeroes it and `vehicle_init` calls it when it is non-null, once per element of a
+list it is building, with the owner pointer `+0xcf0` in ECX and the element in EDX. No setter
+exists and no instruction writes any other value, so in the shipped game the call never happens.
 
 ## 9. PC vs PS2
 
@@ -758,6 +843,7 @@ what fixes the PC bit semantics:
 | the bit `0x8` block: `fabs(steer) > threshold(+0x58c)` lights the side matching the steering SIGN, else clears both | bit `0x8` is **automatic indicators**, not "indicators disabled" |
 | `steer < 0` sets bit `0x1`; `steer > 0` sets bit `0x2` | corroborates LEFT = `0x1`, RIGHT = `0x2` |
 | `0.0 < *(float *)(this+0x88c)` sets bit `0x100` | brake lights |
+| the bit `0x80` block: a timer `+0x594` against a period `+0x590`, `0x10` / `0x20` alternated, both cleared when the previous word `+0x57c` had `0x80` | bit `0x80` is the light-bar flasher (§1d) and `+0x1a0` holds the previous word |
 | `*(int *)(this+0x81c) < 0` sets bit `0x1000` | reverse lights |
 
 **No PS2 twin exists for any of the one-line light setters of §1b, and that is a measurement.** All
@@ -770,8 +856,8 @@ what fixes the PC bit semantics:
 `Process__9C_program`; MSVC out-lined it into the one-line members listed in §3.
 
 **The callback bank as an identification lever.** PS2 `Init__5C_carFP9I3D_frame` calls
-`SetCallbackXX__9C_Vehicle(this + 0x80, <literal method address>)` thirteen times, naming each
-callback method outright. The PC `car_init` calls the thirteen setters of §8 with a literal function
+`SetCallbackXX__9C_Vehicle(this + 0x80, <literal method address>)` fifteen times, naming each
+callback method outright: the thirteen of §8 and the two particle callbacks below. The PC `car_init` calls the thirteen setters of §8 with a literal function
 pointer each time. Because the PC setters write consecutive offsets, the two sequences align without
 any body diff — and slot 9 being NULL on **both** builds is a free alignment check. That single diff
 named thirteen `C_car` callbacks and thirteen `C_Vehicle` setters at once.
@@ -780,6 +866,76 @@ named thirteen `C_car` callbacks and thirteen `C_Vehicle` setters at once.
 `SetCallbackWU__9C_VehicleFPFPCv_v(this + 0x80, 0)`, and PS2 `ChangeState__5C_carFv` installs
 `Wake_Up__5C_carFPCv` at exactly the two points where `car_on_act_state_changed` installs and clears
 `car_wake_up`.
+
+**The slot without a setter sits in the same place on both builds.** PS2 `C_Vehicle+0x654` lies
+between `SetCallbackBG` (`+0x650`) and `SetCallbackWU` (`+0x658`); the constructor zeroes it,
+`Init` calls it when it is non-null, and nothing else writes it — the twin of PC `+0x384` (§8b).
+The two extra PS2 setters, `SetCallbackLP` (`+0x670`) and `SetCallbackCP` (`+0x674`), sit past
+`SetCallbackVR`; `Init__5C_car` installs `Load_Particle__5C_car` and `Change_Particle__5C_car`
+there, particle callbacks the PC does not have (`structs/car.md`).
+
+**The particle-slot pool is PS2-only.** `LockParticle`, `UnlockParticle` and `ClearParticleRef`
+manage a shared pool of `0x50`-byte slots (`v_particle__9C_Vehicle`, capped by
+`max_particle_emitors__9C_Vehicle`) through the `SetCallbackCP` callback, and `C_game::Tick` runs
+`TickParticles` between `ClientTick__17C_ParticleManager` and the blood manager's `Tick`. The PC
+per-frame emitters call no lock or unlock, and PC `game_tick` goes from `particle_manager_tick`
+straight to `blood_manager_tick`.
+
+**`GetForwardForceMax` and `GetSideForceMax` are folded into `vehicle_move`.** On the PS2 each sums
+a per-wheel force limit (`wheel+0x1b0` / `+0x1b4`) into a cache field (`+0x5a0` / `+0x59c`) on
+demand, and `FillStartValues__8C_driver` calls both. The PC accumulates the two sums inside
+`vehicle_move`'s wheel loop into `+0x1c8` / `+0x1c4` (§2a), and `driver_fill_start_values` reads
+those fields at the mirrored position.
+
+**`vehicle_get_seat_count` has no PS2 symbol because GCC inlines it.** The three script arms that
+call it on the PC (`car_setdooropen`, `car_getseatcount`, `car_disable_uo`) compute
+`(car+0xfd4 - car+0xfd0) / 0x30` inline on the PS2 — the count of the `+0xf50` record array that
+`SetSeatMass` indexes by seat.
+
+**`DuplicateDamageAndDeform` is PS2-only.** Its only caller chain is
+`C_traffic_car::SebraliMiKaaaruSvine` to `C_car::DuplicateDamageAndDeform`, which copies the dummy
+cruiser's damage onto the car that replaces it. The PC twin of that caller,
+`traffic_car_take_over_cruising_car`, goes from the release call straight to the random
+`vehicle_set_fuel` at the mirrored position, with no copy called or inlined.
+
+**`UpdateDeformPart`'s callers** are `C_car::Hit`, `LoadVehicleDamageDeform` and `Deform`. Their PC
+twins (`car_hit`, `vehicle_load_state`, `vehicle_deform`) call `vehicle_deform_glass` directly on a
+type-3 zone, and none of the five PC callers of `vehicle_deform_glass` tests zone type 8, so the
+PS2 method's pass that breaks every window whose parent is a broken type-8 zone has no PC
+counterpart. The projector-texture switch it calls is reached only from `vehicle_deform` (three
+callsites), but the callee counts do not line up one for one, so a fold of the rest is not proven
+(§11).
+
+**`ReleaseBodyColls` became the head record's destructor.** The PS2 keeps a head's spheres and
+child heads in linked lists (spheres through `+0x48`, the first child at `+0x64`, siblings at
+`+0x74`) and frees them recursively in `ReleaseBodyColls`, which `CloseVehicle` calls. The PC keeps
+both as vectors in the `0x74`-byte head, and `vehicle_colbody_head_dtor` frees the sphere vector and
+the child-head vector, recursing into every child; `vehicle_dtor` reaches it through
+`vehicle_colbody_head_scalar_deleting_dtor`. The role, the recursion and the call from the teardown
+agree; the container types differ, so the twin is STRUCTURAL. **`CloseVehicle`** is called first
+by the PS2 destructor and by `C_car::CloseCar`; the PC has no `CloseCar`, and `CloseVehicle` is
+inlined into `vehicle_dtor`, the one PC function that frees the head tree. So is
+`CloseSpecialLightProjectors`, which `CloseVehicle` calls: after emptying the projector-sector
+list, `vehicle_dtor` walks the `0x1c`-stride special-projector vector at `+0x190` and, per record,
+detaches and releases the light at `+0x04`, releases the three textures at `+0x10` / `+0x14` /
+`+0x0c` and detaches and releases the object at `+0x08` when it is set — the PS2 method's per-record
+steps in the same order. The method's other PS2 caller, `C_car::SetOwner`, has no such walk in
+`car_set_owner`.
+
+**`InitSpecialLightProjectors` is inlined into `vehicle_init_lights`.** The PS2 method, called by
+`InitLights`, enumerates the model's frames of type `0x10020` named `PROJECTOR` and then of type
+`0x10021` named `LIGHT` through `CbEnumObj6`; the tail of `vehicle_init_lights` makes the same two
+enumerations through its twin `vehicle_cb_enum_object_list`, with the same type codes and names.
+
+**The two kernel sort vectors are both `vector<S_SORT>`.** `BodyCollision` constructs both of its
+function-local statics with the `S_SORT` allocator and registers the `vector<S_SORT>` destructor
+for both. `vector<S_COLBODY_EMITOR>` is the element type of a MEMBER vector at PS2
+`C_Vehicle+0x744`, to which `BodyCollision` appends one record per hard impact for the body
+particle emitter — the queue the PC replaced with immediate emission from
+`vehicle_body_coll_resolve`.
+
+**`ClearBodyCollAddTrack`'s PS2 body is an empty stub**; the PC body clears the `add_track`
+vectors (§3).
 
 **Factoring differences, all marked in the decomp at their sites.**
 
@@ -863,19 +1019,11 @@ skid-mark ring slot `0x14` against `0x0c`.
 - `basic/artifacts/hud_elements.md` §6b — the tachometer that consumes `vehicle_get_engine_rpm`.
 - `script-mapping/artifacts/opcodes-verified.md` — the `carlight_*` script cases of §1b.
 - `police-system/artifacts/boosting.md`, `def-files-docs/vehicles-bin.md` — the CARINIT model levels.
+- `def-files-docs/materialy.md` §1a — the `S_VEH_MATERIAL` fields behind the material list of §6a.
 
 ## 11. Open items
 
 | Item | State |
 |---|---|
-| light bit `0x80` | script case `0xc1` `carlight_light` sets it, but testing it in game produced no visible effect and no consumer explains it |
-| light bit `0x800` | it gates bit `0x100` (brake lights); no script setter writes it and no producer has been located |
-| wheel flag `+0x120 & 0x40000000` | the chase AI treats it as terminal, but the bit's own meaning — burst, destroyed — is not proven. The spike strip (`structs/spike_strip.md`) is the obvious suspect and has not been checked |
-| `add_track`, the vector at `S_COLBODY_HEAD+0x3c` | `vehicle_clear_body_coll_add_track` zeroes it every `GameInit` and the PS2 supplies the field name, but what accumulates there is unknown: an offset census across the band finds no writer with a literal displacement |
-| the two kernel sort vectors | the PS2 instantiates `vector<S_SORT>` and `vector<S_COLBODY_EMITOR>` in that unit and nowhere else, so those are the element types, but which vector has which is not resolved (§6d) |
-| `vehicle_get_seat_count` | it counts the `+0xd20` record array, which also serves the doors and the windows. A car has one record per door, so all three counts coincide and no count has ever contradicted any of the three readings — but the name has not been settled against the PS2 body |
-| bank slot `+0x384` | `car_init` never writes it, and no PC setter targets it; `SetCallbackLP` is the PS2 method whose slot it would be |
-| `IsDoor` | no PC start located — the odd one out of an otherwise forced 4-for-5 door block |
-| `UpdateDeformPart` | no PC start at its rank; a fold into `vehicle_deform` is the leading hypothesis, unverified |
-| `DuplicateDamageAndDeform` | 2156 B on the PS2, no PC start; the copy-assign family in the first unit's tail is the leading lead for what a PC `Duplicate` would be built from |
-| the other unlocated PS2 methods | listed in §3a; each is a candidate for another of the four units before it is a candidate for inlining |
+| `IsDoor` | no PC start located — the odd one out of an otherwise forced 4-for-5 door block; its PS2 callers are `C_grenade::LoadData`, `C_human::Do_ClimbInCarLR`, `C_player::GoToCar_Process` and `C_player::Do_AB_OwnerNULL` |
+| `UpdateDeformPart` | no PC start; its PS2 callers are `C_car::Hit`, `LoadVehicleDamageDeform` and `Deform`. Its parent-to-window pass has no PC counterpart (§9); whether the rest is inlined into the three PC twins is not yet diffed |

@@ -1,6 +1,6 @@
 # `C_rmorf` — the random-morph tickable module
 
-**Created** 2026-08-31 15:07 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-31 15:07 +0200 · **Modified** 2026-10-07 21:57 +0200
 
 The translation unit `[0x005ca290, 0x005cad40)`, the second of the three translation units in
 `[0x005c9720, 0x005d14a0)`.
@@ -85,7 +85,7 @@ typedef struct RMRF_S_SETREF {     /* 0x430 bytes */
 /* +0x018 */ uint     period_ms;        // [H] current period; re-drawn each cycle
 /* +0x01c */ float    weight[16][8];    // [H] current channel weights
 /* +0x21c */ float    delta[16][8];     // [H] per-cycle increment towards the target
-/* +0x41c */ int      mode;             // [M] 1 = cosine ease, <0 = additive, else linear
+/* +0x41c */ int      mode;             // [H] 1 = cosine ease, low byte <0 = additive, else linear
 /* +0x420 */ int      period_base_ms;   // [H] default 1000
 /* +0x424 */ int      period_spread_ms; // [H] default 1; rand() % this is added
 /* +0x428 */ int      pick_base;        // [H] default 1; channels chosen per cycle
@@ -104,7 +104,7 @@ typedef struct RMRF_S_SETREF {     /* 0x430 bytes */
 | +0x018 | period_ms | H | `random_morph_tick` | `random_morph_tick` | re-drawn every cycle |
 | +0x01c | weight | H | `random_morph_set_load_raw` (seed), `random_morph_tick` | `random_morph_tick` | row 0 of each set seeded to 1.0f |
 | +0x21c | delta | H | `random_morph_set_load_raw` (zero), `random_morph_tick` | `random_morph_tick` | |
-| +0x41c | mode | M | `random_morph_set_load_raw` (from the file) | `random_morph_tick` | [M] — see §8 |
+| +0x41c | mode | H | `random_morph_set_load_raw` (from the file) | `random_morph_tick` | the three arms: §5a |
 | +0x420..+0x42c | timing / pick tuning | H | `random_morph_set_load_raw` (from the file) | `random_morph_tick` | defaults 1000 / 1 / 1 / 1 |
 
 **The per-cycle algorithm** (`random_morph_tick`, byte-identical across builds): mark each
@@ -164,7 +164,10 @@ frames (`s_jalovec00.Box14`, `s_jalovec.Box14`) and 14 tree frames (`s_oranz*` /
 
 **Mode.** `random_morph_tick` tests the mode twice, at two widths: the additive arm fires when the
 LOW BYTE is negative (`(char)mode < 0`), the eased arm when the whole dword equals 1. So the shipped
-values split three ways: 0 ramps linearly, 1 eases, and 128 and 129 take the additive arm.
+values split three ways: 0 ramps linearly, 1 eases, and 128 and 129 take the additive arm. The
+eased arm applies `(1 - cos(pi * t)) / 2`, and the additive arm accumulates the deltas without
+picking a new target. No string, symbol or script of either build names the modes, so what a
+designer called them is not recoverable.
 
 ---
 
@@ -232,10 +235,6 @@ callers in the CRT band at `0x0062xxxx`, so they are genuinely shared.
 
 ## 8. Open items
 
-* **`+0x41c` (`mode`) is [M].** The three arms are measured exactly — `== 1` applies a
-  `(1 − cos(pi·t)) / 2` ease, a negative low byte accumulates deltas additively without picking
-  a new target, anything else ramps linearly — and the shipped files use 0, 1, 128 and 129
-  (§5a), but nothing says what a level designer calls them.
 * **What actually morphs in game has not been observed.** The MISE09 files name laundry,
   juniper, tree and truck frames (§5a); the other ten are not yet matched to their models. **In game:**
   load a mission with an `rmorf.bin` and look for a model that deforms on a ~1 s random cycle.

@@ -1,6 +1,6 @@
 # HUD elements & the `hud_state` singleton (`VA 0x00658330`)
 
-**Created** 2026-05-30 22:55 +0200 · **Modified** 2026-10-04 19:30 +0200
+**Created** 2026-05-30 22:55 +0200 · **Modified** 2026-10-12 19:38 +0200
 
 The engine HUD-state singleton, the functions that operate on it, the script commands that drive HUD
 elements, and the per-bit / per-field map of what is known and what is not. Everything here is anchored
@@ -39,7 +39,7 @@ The central field is the **`+0x90a4` flag word** — a 32-bit set of per-element
 | `hud_render_all()` | `0x0054d180` | reads `+0x90a4` + most per-element fields | the per-frame HUD draw function; branches per element bit and emits each widget's quads. Master early-out mask `& 0x801`. Draws the indicator cluster (gate bit `0x4`): weapon-ammo via `hud_build_ammo_icon_quads`/`hud_build_ammo_mag_reserve_quads`, player-health + wingman slots via `hud_build_indicator_icon_quads`/`hud_build_indicator_value_digits`. |
 | `hud_game_done()` | `0x00549590` | releases `+0x9090`, then resets 6 subsystems | HUD scene teardown: radar edges, Free Ride score, intro subtitles, race place, stopwatch interval. |
 | `hud_load_speedometer_odometer_texture()` | `0x005494b0` | `+0x9084`, `g_transmission_indicator_texture` | loads the instrument-panel artwork `2int.tga` / `2intmph.tga` / `2intnoc*.tga` (unit system `g_speed_unit_is_mph`, night flag `C_game+0x2d44`) + the auto-transmission overlay. **PC-only.** |
-| `hud_speedometer_set_values(speed, b, c)` | `0x0054a7a0` | `+0x916c` (km/h), `+0x9190`, `+0x91b4` | drives the in-car instrument cluster: `speed * 3.6`, three change-gated needles, and the odometer digit strip. |
+| `hud_speedometer_set_values(speed, rpm, fuel, odometer)` | `0x0054a7a0` | `+0x916c` (km/h), `+0x9190`, `+0x91b4` | drives the in-car instrument cluster: `speed * 3.6`, three change-gated needles, and the odometer digit strip from the fourth argument. |
 | `hud_speedometer_set_gear(gear, show)` | `0x0054a780` | `+0x91e0` (`gear * 11.0`), `+0x91fc` | gear readout of the instrument cluster. |
 | `hud_build_needle_quad(def, val, origin, vtx)` | `0x00549770` | needle scale `+0x91e4`/`+0x91e8` | rotates one needle by `angle = def.start + clamp((v-min)/range) * sweep` and emits its 4-corner quad. Builds every HUD needle: the speedometer's speed / rpm / fuel needles and the mission timer's hour / minute / second hands (callers `hud_speedometer_set_values`, `hud_rebuild_layout_for_resolution`, `hud_tick`). The needle definition/value records are `G_RafickaDef` / `G_RafickaValue`. |
 | `hud_timer_get_time(out_h,out_m,out_s)` / `hud_timer_get_interval(out_s)` | `0x005496e0` / `0x00549710` | `+0x9150/54/58`, `+0x9168` | read the stopwatch back out — the reason those fields are the TIME VALUE, not hand geometry. |
@@ -77,7 +77,7 @@ The central field is the **`+0x90a4` flag word** — a 32-bit set of per-element
 | `hud_set_theft_indicator_value(this, value)` | `0x0054c160` | `+0x9450`; element bit `0x1000` | fill `[0,1]` of the **timed-action / theft progress bar**. The four writers are the car-theft path and two held-action timers (car theft `1.0 - remaining/total` with the steal time clamped 2000..30000 ms; a held action `(t-400)/1600`; a second `(t-200)/300`), each preceded by `g_hud_flags \|= 0x1000`. |
 | `hud_wingman_set_portrait_for_slot(this, slot, portrait)` | `0x0054aa40` | `+0x9244 + slot*4` (4 entries) | slot-keyed wingman portrait setter; `slot < 4`; portrait masked `& 7` (domain 0..7) (§7) |
 | `hud_wingman_set_indicator_value_for_slot(this, slot, value)` | `0x0054aa60` | `+0x9254 + slot*4` (4 entries) | slot-keyed wingman indicator-value setter; `slot < 4` (§7) |
-| `player_set_wingman_indicator(player, slot, portrait)` | `0x005c8d50` | `player+0x6d8` (slot), `player+0x6dc` (portrait) — **on the PLAYER struct, not `hud_state`** | records the pinned (slot, portrait) pair; persisted to `.sav`; per-frame player-tick reapply pushes it into the HUD singleton (§7) |
+| `human_set_wingman_indicator(human, slot, portrait)` | `0x005c8d50` | `human+0x6d8` (slot), `human+0x6dc` (portrait) — **on the wingman's own `C_human`, not `hud_state`** | records which slot and portrait a human's indicator uses; saved with the human (§7) |
 | `hud_push_blood_splat(...)` | `0x0054bf40` | `+0x9424` ring (10 slots), `+0x944c` count; gated on bit `0x2000000` | the **screen blood splatter**: `hud_render_all` binds `g_hud_blood_overlay_texture` (`2blood.bmp`) and draws the ring with `count*2`. `[user-verified]` — blood stains appear on the player's screen when hit |
 | `player_indicator_set_aimed(player)` | `0x004ccc80` | `+0x90a4` bits `0x20` / `0x8000000` | **C_player method** — recomputes the **aim-indicator (crosshair)** bit `0x20` and the weapon-ammo bit `0x8000000` from player state. Sets BOTH while the human's weapon class `+0x1e8` is in `[1,4)` — a firearm (`structs/human.md` §2c) — and clears both otherwise. Only **`0x20`** reads the vehicle slots (`+0x98`/`+0x9c`) + seat `+0xac`; **`0x8000000`** is NOT vehicle-gated (§4/§6). |
 | `hud_set_player_health_value(value)` | `0x0054a9d0` | `+0x9208` (number) + `+0x9214` (`"%d"` text) | player-health number store (always-on indicator value) |
@@ -151,6 +151,7 @@ element itself was observed in game · **`[PS2-CONFIRMED]`** = pinned by a body-
 | `0x00020000` | **Sniper scope** (SNIPERMODE) `[E]` | full-screen scope overlay; engine shows it while the player holds the aim key with a scoped weapon equipped. |
 | `0x00040000` | **Airplane-damage gauge** (small rectangle, top-centre) `[user-verified]` | shown by script command `airplaneshowdamage` (case 0x14f). `hud_render_all`'s `& 0x40000` branch draws a ~100×8px quad at ≈`(scale·350, scale·20)` + a value-driven fill. Used **only** in MISE16-LETISTE, where the player shoots down a plane from a car and this bar visualises the plane's accumulating damage — which is why it is never a normally-visible HUD element otherwise. Toggled by `airplane_hud_damage_toggle` (VA `0x004538b0`) for the airplane actor; the actor's damage ratio `(actor+0x1c8 + actor+0x1cc)/(2*actor+0xa8)` → `hud_state+0x9454` via `hud_set_airplane_damage_fill`. The two summed fields `actor+0x1c8` / `actor+0x1cc` are the plane's **two engines the player must shoot**; the gauge shows their combined condition, and `airplane_isdestroyed` (case 0x90, `airplane_is_destroyed` VA `0x00453190`) reports destroyed once **both** reach 0. Tier-1 anchor: string literal `s_AIRPLANESHOWDAMAGE_0064e950`. |
 | `0x00080000` | **In-car instrument / RADAR panel** `[PS2-CONFIRMED]` | **the radar's visibility bit.** `hud_render_all` draws the whole panel under this bit: the backdrop sub-rect of `+0x9084` (`2int*.tga`), then the car blips (`+0x9494`), the object blips (`+0x94a8`) and the destination cross. It is never set on its own, which is why single-bit searches find no writer: the writers use the combined masks `\| 0x80002` (in-car, 5 sites) and `\| 0x180006` / `\| 0x190006` (the standard gameplay HUD enable, e.g. `racing_activate_racers`) — the same situation as bit `0x4`. |
+| `0x00100000` | **Racing-mission text block** | the five 64-byte race readouts — Time `+0x94cc`, Lap Time `+0x950c`, Best `+0x954c`, Pos `+0x958c`, Lap `+0x95cc` — drawn by `hud_render_all` under `& 0x100000` as five lines through `hud_text_draw_line`, height 10.0. The buffers are cleared by `hud_reset_values` and written only by the `hud_set_race_*` setters. Never set on its own: `racing_activate_racers` ORs in `0x180006`. |
 | `0x00200000` | **Racing-mission place indicator** | current place/position with a prev→cur transition animation; set/cleared by `hud_set_race_start_flag` (VA `0x0054cf10`; fields `+0x94bc..+0x94c8`); `place` 4/-1 = hide. Racing-mission only ⇒ no visible change when toggled on a normal map. |
 | `0x00400000` | **Racing-mission banner text** | banner/message string; set by `hud_set_race_banner_text` (VA `0x0054d0e0`; strncpy 0x80 → `+0x960c`). Racing-mission only. |
 | `0x00800000` | **"Wrong way" warning** `[E]` | the WRONG-WAY message shown during the racing mission when the car drives the wrong direction. Part of the racing-mission HUD group with `0x200000`/`0x400000`. |
@@ -158,7 +159,7 @@ element itself was observed in game · **`[PS2-CONFIRMED]`** = pinned by a body-
 | `0x02000000` | **Screen blood splatter** `[user-verified]` | the `+0x9424` ring (10 slots) with count `+0x944c`, pushed by `hud_push_blood_splat` and drawn by `hud_render_all` with `g_hud_blood_overlay_texture` (`2blood.bmp`). Toggling the bit alone via show/hide produces no visible change `[E]` — the ring also needs entries pushed. |
 | `0x04000000` | **Police status icon** | `pm_showsymbol` (case 0x146); symbol `+0x96d8`, alpha `+0x96dc` |
 | `0x08000000` | **Weapon ammo display** `[E]` | weapon/ammo readout (icon + numeric counter at screen bottom; shows automatically while a weapon is equipped). Drawn by `hud_render_all` under cluster-gate bit `0x4`, via `hud_build_ammo_icon_quads` (VA `0x00549bc0`) + `hud_build_ammo_mag_reserve_quads` (VA `0x0054a080`). **Sole writer = `player_indicator_set_aimed`** (VA `0x004ccc80`), which *sets* this bit whenever the actor's weapon class `+0x1e8` is in `[1,4)` — a firearm in hand — and clears it otherwise — it is **not vehicle-gated** (only bit `0x20` depends on the vehicle slots), so the weapon HUD **stays up in a car**. |
-| `0x10000000`–`0x80000000` | **Wingman-indicator 4-slot array** | one bit per slot (`0x10000000`=slot 0, `0x20000000`=slot 1, `0x40000000`=slot 2, `0x80000000`=slot 3); set by `wingman_setindicator` (case 0x79), cleared by `wingman_delindicator` (case 0x7a); per-slot HUD portrait stored at `+0x9244 + slot*4`, per-slot value at `+0x9254 + slot*4`; persistent pin lives on the **player struct** at `+0x6d8`/`+0x6dc` (see §7) |
+| `0x10000000`–`0x80000000` | **Wingman-indicator 4-slot array** | one bit per slot (`0x10000000`=slot 0, `0x20000000`=slot 1, `0x40000000`=slot 2, `0x80000000`=slot 3); set by `wingman_setindicator` (case 0x79), cleared by `wingman_delindicator` (case 0x7a); per-slot HUD portrait stored at `+0x9244 + slot*4`, per-slot value at `+0x9254 + slot*4`; the pin lives on the wingman's own `C_human` at `+0x6d8`/`+0x6dc` (see §7) |
 
 **HUD-flag save/restore stack.** Menus, loading screens and cutscenes temporarily reconfigure the HUD by *pushing* the current `g_hud_flags` onto the `std::vector<uint>` at `+0x90b0` (fields in §5), setting a temporary flag word, then *popping* to restore. Examples: `gui_notice_panel_present_once` and `gui_menu_execute_modal` push then set `(g_hud_flags & 0x2c000) | 1` (suppress the HUD via bit `0x1` but keep sniper / fade / letterbox); the race-replay screen `race_winners_replay_begin` pushes then sets `g_hud_flags = 0x4000` (letterbox bars only), and `race_winners_replay_end` pops to restore. Push = `std_vector4_insert_n(end, 1, &g_hud_flags)`, pop = read `*(end-4)` then `std_vector4_erase_at`. `0x006613d4` is the HUD flag word on every one of these paths; the `float` typings Ghidra puts on some of these writes are type-inference noise.
 
@@ -169,7 +170,7 @@ element itself was observed in game · **`[PS2-CONFIRMED]`** = pinned by a body-
 | Offset | Meaning | Confidence |
 |---|---|---|
 | `+0x9070`..`+0x907c` | the four HUD font slots; each carries a metric block at `hud + index*0x101c`; setter `hud_load_font` | high |
-| `+0x9084` | **instrument-dial texture** (`2int*.tga`); loaded by `hud_load_speedometer_odometer_texture`. Also supplies the backdrop sub-rect of the bit-`0x80000` radar panel | high |
+| `+0x9084` | **instrument-dial texture** (`2int*.tga`); loaded by `hud_load_speedometer_odometer_texture`. Also supplies the backdrop of the bit-`0x80000` radar panel: texels u 1-109, v 148-255 of the 256-texel sheet (`u` `0x3b800000`..`0x3eda0000`, `v` `0x3f140000`..`0x3f7f0000`), drawn as a 144 × 144 square at (29, 29) times the HUD scale `+0x90c0` / `+0x90c4`, vertex colour `0xbfffffff` | high |
 | `+0x9090` | **full-map texture** (`0mapar.bmp`) — lazily loaded by `hud_tick` when the map-enabled bool `+0x96e4` is set and the slot is still null; bound by `hud_render_all` (texture slot `+0xc`, then a 2-triangle strip); released in `hud_destroy` / `hud_game_done` | high |
 | `+0x90a4` | flag word (§4) — abs `0x006613d4` = `g_hud_flags` | high |
 | `+0x90ac` / `+0x90b0` | **HUD-flag save/restore stack** — `std::vector<uint>` (begin = abs `0x006613dc`, end = abs `0x006613e0`); push = `std_vector4_insert_n`, pop = `std_vector4_erase_at` (§4) | high |
@@ -302,10 +303,10 @@ goes — **flag-word bit `0x00000002`** — but it draws eight distinct panels, 
 | **Speed needle** | `+0x916c` (km/h) | def `g_speedo_needle_def_speed` → `g_speedo_needle_vtx_speed` | The large needle. Value is `m/s × 3.6`. |
 | **RPM needle** (tachometer) | `+0x9190` | def `g_speedo_needle_def_rpm` → `g_speedo_needle_vtx_rpm` | Smaller needle built into the dial. Normalised `[0,1]` — the producer divides live RPM by the car's maximum. |
 | **Fuel needle** | `+0x91b4` | def `g_speedo_needle_def_fuel` → `g_speedo_needle_vtx_fuel` | Smallest needle. Normalised `[0,1]` = tank level ÷ capacity. |
-| **Low-fuel warning** | `+0x91fd` flag, `+0x9200` phase | drawn at `scale×668, scale×559`, 16 px | Red dot next to the fuel gauge. Raised when the fuel value drops **below 0.02**; blinks at 50 % duty (6b.3). |
+| **Low-fuel warning** | `+0x91fd` flag, `+0x9200` phase | drawn at `scale×668, scale×559`, 16 px | Red dot next to the fuel gauge, the texture `2intbenal.tga` (6b.4). Raised when the fuel value drops **below 0.02**; blinks at 50 % duty (6b.3). |
 | **Dial faces** | - | `g_speedo_dial_verts`, two quads on the `+0x9084` sheet: speedometer 180×180 at `+0x91ec`/`+0x91f0`, tachometer 76×76 at `+0x91f4`/`+0x91f8` | The speed and fuel needles pivot on the speedometer face's origin, the RPM needle on the tachometer's. Built by `hud_rebuild_layout_for_resolution`. |
 | **Gear panel** | `+0x91e0` | `g_speedo_gear_vtx`, one quad (alpha `0x70`) on the `1int.tga` sheet (`+0x9080`) | Stored pre-scaled as `gear × 11.0` — 11 is the atlas cell pitch, the same one the indicator digits use. The quad is a window onto the digit strip that slides toward the new gear (6b.3). |
-| **Odometer** | `g_speedo_odometer_digit_verts` | 5 digits, 0xc0 bytes (6 vertices) each | Total distance. Digits are emitted least-significant-first; each glyph's atlas V is `130.0 − (d0×1.3 + d1×13.0)`. |
+| **Odometer** | `g_speedo_odometer_digit_verts` | 5 digits, 0xc0 bytes (6 vertices) each | Not a distance: the five low digits of ⌊`car+0x1f90` × 0.1⌋, a random reading `car_game_init` stores once (`251000 + 150 × crt_rand()`) and nothing advances. Digits are emitted least-significant-first; each glyph's atlas V is `130.0 − (d0×1.3 + d1×13.0)`. |
 | **Transmission indicator** | `+0x91fc` | `g_transmission_indicator_texture`, 32×32 at `scale×758, scale×558` | The **A** / **M** character. The flag picks one of two UV rects on the same sprite sheet. |
 
 ### 6b.2 Where the values come from
@@ -319,6 +320,7 @@ One producer drives the whole cluster, per frame, from the player's current vehi
 | `+0x91b4` fuel | `car+0xd1c ÷ car+0x1f8c` | tank level ÷ tank capacity |
 | `+0x91e0` gear | `car+0x648` | the gearbox gear index (`-1` = reverse) |
 | `+0x91fc` transmission | `car+0x5b8` | the per-car transmission-mode flag that selects A vs M |
+| odometer digits | `car+0x1f90` | the fourth float argument of `hud_speedometer_set_values`, shown as ⌊value × 0.1⌋ |
 
 `hud_reset_values` clears the cluster by calling `hud_speedometer_set_gear(0, 0)` and
 `hud_speedometer_set_values(0, 0, 0, 0)`.
@@ -356,11 +358,16 @@ variants: `2int.tga` / `2intmph.tga` by unit system (`g_speed_unit_is_mph`) and 
 `2intnocmph.tga` at night (`C_game+0x2d44`). The A/M overlay `2intauto.tga` / `2intauton.tga` goes to
 `g_transmission_indicator_texture` in the same call.
 
+The low-fuel dot is `2intbenal.tga`, a 16 × 16 red dot on a transparent ground. `hud_create` loads it
+once into `g_hud_low_fuel_lamp_texture` and `hud_destroy` releases it; `hud_render_all` binds it through
+the renderer's texture slot `+0x0c` and draws its quad with `+0x58` while `+0x91fd` is set and the
+blink phase passes.
+
 ---
 
 ## 7. The wingman-indicator system
 
-The 4 high HUD flag-word bits `0x10000000`..`0x80000000`, the field tables at `+0x9244`/`+0x9254` and the player-struct fields at `+0x6d8`/`+0x6dc` form a single **4-slot wingman-indicator subsystem** driven by two script commands: `wingman_setindicator` (case 0x79) and `wingman_delindicator` (case 0x7a).
+The 4 high HUD flag-word bits `0x10000000`..`0x80000000`, the field tables at `+0x9244`/`+0x9254` and two fields on the wingman's own `C_human`, `+0x6d8`/`+0x6dc`, form a single **4-slot wingman-indicator subsystem** driven by two script commands: `wingman_setindicator` (case 0x79) and `wingman_delindicator` (case 0x7a).
 
 **Per-slot resources (slot ∈ 0..3):**
 
@@ -373,27 +380,37 @@ The 4 high HUD flag-word bits `0x10000000`..`0x80000000`, the field tables at `+
 
 Each slot displays a **portrait** (face icon, `portrait_id` 0..7 masked `& 7` by `hud_wingman_set_portrait_for_slot`; scripts use 1..5) paired with the wingman's **health** (§8). The engine-side init loop resets all 4 slots to `(portrait=0, value=100)` on startup / scene-reset.
 
-**The persistent pin (on the PLAYER struct, not `hud_state`):**
+**The pin, on the wingman's own `C_human`** (any human of kind 2 or `0x1b`, `structs/human.md`):
 
-| Player offset | Meaning |
+| Human offset | Meaning |
 |---|---|
-| `player+0x6d8` | pinned wingman slot index (0..3; `0xffffffff` = -1 = "no pin, indicator system idle") |
-| `player+0x6dc` | pinned portrait_id |
-| `player+0x5e` | `C_actor+0x5e`, the once-only death latch (`actor_is_death_processed`, `structs/actor.md` §1); the reapply pipeline branches on it |
-| `player+0x5d` | a second byte read on the same path; its meaning is open (§10) |
+| `+0x6d8` | the slot this human's indicator occupies (0..3; `-1` = none) |
+| `+0x6dc` | its portrait_id |
 
-The `(slot, portrait)` pair is the **source of truth** — it is recorded by `player_set_wingman_indicator` (called from cases 0x79 and 0x7a), serialized into the `.sav` record at record-offsets `+0x169`/`+0x16d` (so wingman-indicator state survives save/load), and re-applied to the HUD singleton's slot tables **every frame** by the per-frame player tick (three reapply sites covering on-foot / in-vehicle / cutscene contexts). The HUD singleton's portrait+value tables are therefore **frame-volatile caches**, not authoritative state.
+`human_set_wingman_indicator` writes the pair (cases 0x79 and 0x7a), `human_save_game_save` /
+`human_save_game_load` carry it in the human's save record (record offsets `+0x169` / `+0x16d`), and
+`human_game_init` / `human_activate` reset the slot. The value shown is always the human's health
+as a percentage, `cur_health (+0x644) / max_health (+0x604) × 100`. The HUD tables are written at
+these moments, each for the human that carries the pin:
 
-**Per-frame reapply pipeline** (when `player+0x6d8` is non-sentinel):
-1. `hud_wingman_set_portrait_for_slot(player+0x6d8, player+0x6dc)` — push portrait
-2. `switch(player+0x6d8) { 0..3 → DAT_006613d4 |= per_slot_bit; }` — light the indicator
-3. compute indicator value: if `player+0x5e` set → use script-supplied FPU-derived scalar (`__ftol` of TOS); else → an engine-live value through `stl_max_int_ptr` (its source is open, §10)
-4. `hud_wingman_set_indicator_value_for_slot(player+0x6d8, value)` — push value
+1. **`wingman_setindicator`** — the portrait, then the value, raised to at least 1 unless the human
+   is death-processed (`+0x5e`, `actor_is_death_processed`); `stl_max_int_ptr` receives the value
+   and the constant 1. Then the slot's bit is shown.
+2. **A hit** — `human_hit` and `human_hit_in_car` push the new percentage, raised to at least 1 while
+   the human is alive (`C_actor+0x5d`); `human_die_in_exploding_car` pushes 0.
+3. **A save load** — `human_save_game_load` re-applies the portrait, the slot's bit and the value.
+4. **The character-stack pop** — `game_character_stack_pop` pushes the value again (`structs/game.md` §4f).
+
+Nothing re-applies the pin per frame; between those moments the HUD tables keep the last value.
 
 **Script command semantics** (full case bodies: `script-mapping/artifacts/opcodes-verified.md`):
 
-- `wingman_setindicator <npc_id>, <portrait_id>, <slot>` — pins the indicator. `npc_id` is validated against the NPC table (`param_1[0x17]`) but is NOT carried into the recorded pin — only the bounds check proves the wingman actor exists. **npc_id 0 = the player** (user-asserted; the Mafia Script Data Reference maps id 0 to Paulie for this opcode, which does not hold). Lights one of the per-slot bits via `hud_show_element(bit)`.
-- `wingman_delindicator <npc_id>, <slot>` — clears the pin and hides one per-slot bit. **Quirk:** the player-struct pin clear is GLOBAL (`(slot=-1, portrait=0)`), not per-slot — calling `wingman_delindicator` for one slot wipes the pinned state for all slots; other slots' HUD bits stay set until the next frame stops reapplying them, then go stale.
+- `wingman_setindicator <xx>, <portrait_id>, <slot>` — `xx` is an actor register, `act[xx]`, and the
+  human in it is the wingman: the pin is stored on it and its health feeds the slot. The arm requires
+  kind 2 or `0x1b` and a slot below 4. The user observed `0` naming the player; the Mafia Script Data
+  Reference maps id 0 to Paulie for this opcode.
+- `wingman_delindicator <xx>, <slot>` — clears the pin of `act[xx]` (slot `-1`, portrait 0) and hides
+  the given slot's bit. Every other human's pin and every other slot stays as it is.
 
 ---
 
@@ -422,6 +439,7 @@ The two builds share the class, the flag word and most of the field layout, but 
 | bit `0x20` = crosshair, not radar | `player_indicator_set_aimed` is a 1:1 body-diff of `IndicatorSetAimed__8C_playerFv`, which sets bit `0x20` then immediately calls `NastavTypKrizkuPodleZbraneAtToTiSuliniOdSebePoznaji` — *"set the crosshair type according to the weapon"*. |
 | `+0x9450` = the theft/timed-action bar | All four PC writers match all four callers of `ThiefIndicatorSetValue` constant-for-constant. |
 | `+0x9254` wingman value = health | The setter is `PlayerSetWingmanLives`. |
+| the pin lives on the wingman's `C_human` | The PS2 `WINGMAN_SETINDICATOR` arm stores the pair at `C_human +0x734` / `+0x738` behind the same kind 2 / `0x1b` guard, and computes the value as `+0x6a8 / +0x668 × 100`, raised to at least 1 unless the human's death latch is set. |
 | bit `0x40` vs `0x1000000` | `SubtitlesClear`/`SubtitlesAdd` operate on the `+0x93e8` vector and `MissionHelpAdd` on `+0x93f8`, which separates subtitles from mission help. `MissionHelpAdd` also shares the TTL constant `strlen(text) * 0x28 + 0x9c4` byte-for-byte. |
 | bit `0x4000` = the letterbox bars | `hud_widescreen_build_bars` is `WideScreenSetRatio__17G_IndicatorsClassFf` statement-for-statement, sharing six magic constants (`801.0`, `601.0`, the ratio multiply, `0xc0000000` = -2.0f, the diffuse `0xaf0000ff`, `+3.0`, `(h-band)*0.5`). |
 | `+0x94a8` holds `tDynamicCollObject*` entries | The PS2 add/remove signatures name the element type. |
@@ -463,8 +481,4 @@ side.
 |---|---|
 | bit `0x4000` (cinematic letterbox bars) | mechanism and geometry known; not confirmed in game |
 | bit `0x200000` (`hud_set_race_start_flag`) | a semantic conflict, not a mapping one: the PC hide-gate (`!= 4 && != -1`) implies a place/position domain of at most four, while the PS2 name is `RaceSetStartFlag`. One in-game observation settles what the widget depicts |
-| bits `0x400`, `0x800`, `0x100000` of the flag word | no element identified; `0x800` is half of the renderer's `0x801` early-out mask, and `0x100000` is set by the standard gameplay masks `0x180006` / `0x190006` |
-| the wingman-indicator value source | which actor field the engine-live path reads (§7 step 3), and the two arguments to `stl_max_int_ptr` (Ghidra dropped both at the case-0x79 callsite) |
-| `player+0x5d` | read on the wingman reapply path; untraced |
-| the radar panel backdrop sub-rects | `+0x9084` supplies both the instrument dial sheet and the bit-`0x80000` radar backdrop; the exact sub-rects are not mapped |
-| the odometer's units | the dial art follows `g_speed_unit_is_mph`, but nothing has been traced that converts the *distance value* itself |
+| bits `0x400`, `0x800` of the flag word | no element identified; `0x800` is half of the renderer's `0x801` early-out mask |

@@ -1,6 +1,6 @@
 # `C_blood` / `C_blood_manager` — the blood-drop and decal system
 
-**Created** 2026-08-30 15:50 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-30 15:50 +0200 · **Modified** 2026-10-11 15:07 +0200
 
 PC prefixes **`blood_`** and **`blood_manager_`**. This doc also owns the **decal pool** the drops
 write into (§5), which serves bullet marks, grenade scorches and bloody prints as well.
@@ -57,7 +57,7 @@ typedef struct C_blood_manager {  // embedded at C_game + 0x2d90
 The `C_blood` constructor has no address of its own: `blood_manager_add_blood` calls
 `folded_return_this` (`0x005575f0`, body `mov eax,ecx; ret`) on the `operator_new(0x24)` result.
 That body is a three-owner fold — 9 callsites take the `G_LoadSaveClass` singleton, 1 is this
-`C_blood` constructor, and 1 takes a stack parameter in `recorder_sync_clock_from_system`.
+`C_blood` constructor, and 1 takes a stack parameter in `recorder_set_clock`.
 
 The **manager's constructor and destructor** are the two-owner folds `folded_vector_ctor_at_0x04`
 and `folded_vector_free_at_0x04` (the other owner is the `C_tshift` at `C_mission + 0x28`).

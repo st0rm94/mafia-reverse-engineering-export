@@ -1,6 +1,6 @@
 # `C_wagon` — entity kind `0x1e`, the tram / train wagon
 
-**Created** 2026-08-18 21:09 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-18 21:09 +0200 · **Modified** 2026-10-11 15:07 +0200
 
 | | |
 |---|---|
@@ -109,24 +109,57 @@ The node records live in the rail web-node table hanging off `g_act_mission+0x2c
 |---|---|---|
 | `+0x10` | kind = `0x1e` | the filter in `wagon_rebuild_all_forward_paths` |
 | `+0x68` | the body frame | index 0 of `wagon_apply_spring_sway` |
+| `+0x70`..`+0x78` | a direction vector | `wagon_ai` re-seeds it when its length is zero; persisted (§5a) |
 | `+0x80`/`+0x84` | back node path | §4 |
 | `+0x8c` | back-path radius | the stop condition in `wagon_extend_back_node_path` |
 | `+0x90`..`+0x98` | the wagon's position | `wagon_distance_to_next_stop` measures from it |
+| `+0x9c`..`+0xa4` | a second position | advanced by the frame's displacement in `wagon_ai`; read by `wagon_update` |
 | `+0xac`/`+0xb0` | forward node path | §4 |
 | `+0xb8` | per-wheel spring phase array | `wagon_apply_spring_sway` advances `[i]` |
 | `+0xc4` | **wheel frame array** | filled by `wagon_cb_collect_wheel_frames` |
-| `+0xd4` | speed | numerator of the braking distance |
+| `+0xd0` | target speed | set to `+0x18c` on departure, to 0 when braking |
+| `+0xd4` | speed | numerator of the braking distance; restarts from 0 on departure |
+| `+0xd8` | halted at a stop | while set, `wagon_ai` counts `+0xdc` and departs after 10 000 ms |
+| `+0xdc` | halt timer, ms | the same |
 | `+0xe0` | dynamic collider | `collision_dyn_insert` / `_erase` |
+| `+0x168` | forward-path state flag | `wagon_build_forward_node_path` sets and clears it; `wagon_game_init` seeds it to 1 |
 | `+0x180` | wheel count | sizes the six arrays `wagon_game_init` allocates |
-| `+0x18c` | speed normaliser | the sway phase rate is `speed / +0x18c` |
+| `+0x18c` | cruising speed | the target speed a departure restores; the sway phase rate is `speed / +0x18c` |
 | `+0x190` | deceleration | denominator of the braking distance `v² / 2a` |
-| `+0x194` | a released sub-object | torn down by `wagon_game_done` through slots 0x2c/0x24/0x00 |
+| `+0x194` | the running sound, an `I3D_sound` | `wagon_game_init` creates it as driver object type 4 and loads `nadzemka.wav` through the sound cache; `wagon_ai` restarts it on departure; `wagon_game_done` stops and releases it through slots 0x2c / 0x24 / 0x00 |
 | `+0x198` / `+0x19c` | script event: `C_program *`, event id | `wagon_set_event` (§6a) |
+| `+0x1a0` | a countdown | `wagon_update` decrements it; at zero it empties the forward path and puts the wagon in act state 1 |
+| `+0x1a4` | a linked actor | while set, `wagon_ai` does nothing else: the actor's `+0x1c` at 2 raises the wagon's script event and parks it in act state 2, at 0 drops the link |
 
 **The wheels are named by a Czech string.** `wagon_cb_collect_wheel_frames` collects
 every frame whose name suffix matches the 4-character literal **`"kolo"`**
 (`s_wagon_wheel_frame_tag`, `0x0064c9b8`) — Czech for *wheel*. That single literal is what
 makes `+0xc4` a wheel array rather than an anonymous frame list.
+
+### 5a. The persisted record
+
+`wagon_save_game_save` writes, after the `C_actor` block, a `0x5f`-byte header and then the node
+ids of both paths:
+
+| record offset | size | content |
+|---|---|---|
+| `+0x00` | 1 | version, 1 |
+| `+0x01` | 0x18 | `+0x24`..`+0x38`, the cached position and forward vector (`structs/actor.md`) |
+| `+0x19` | 0x0c | `+0x90`..`+0x98`, the position |
+| `+0x25` | 0x0c | `+0x9c`..`+0xa4`, the second position |
+| `+0x31` | 4 | `+0xd0`, the target speed |
+| `+0x35` | 4 | `+0xd4`, the speed |
+| `+0x39` | 1 | `+0xd8`, halted at a stop |
+| `+0x3a` | 4 | `+0xdc`, the halt timer |
+| `+0x3e` | 1 | `+0x168`, the forward-path state flag |
+| `+0x3f` | 4 | `+0x1a0`, the countdown |
+| `+0x43` | 4 | the savegame GUID (`actor+0x18`) of the linked actor `+0x1a4`, -1 when none |
+| `+0x47` | 4 | the GUID of the actor owning the event program `+0x198`, -1 when none |
+| `+0x4b` | 4 | `+0x19c`, the event id |
+| `+0x4f` | 2 | forward-path node count |
+| `+0x51` | 2 | back-path node count |
+| `+0x53` | 0x0c | `+0x70`..`+0x78`, the direction vector |
+| `+0x5f` | 4 per node | the forward-path node ids, then the back-path node ids |
 
 ## 6. Behaviour
 
@@ -140,6 +173,9 @@ The wagon drives itself along the rail web graph. Each frame `wagon_ai`:
   (phase advanced by `speed / +0x18c`, wrapped at 2π, offset `cos(phase) × 0.01`);
 * resolves collisions — and in the **kind-4 arm** (it hit a `C_car`) the PC has
   `C_Vehicle::DoCollisionStatic` **inlined**, which is marked in the decomp.
+* halts at a stop: after 10 000 ms halted (`+0xd8`, `+0xdc`) it departs — the target speed
+  `+0xd0` becomes the cruising speed `+0x18c`, the speed `+0xd4` restarts from 0 and the running
+  sound `+0x194` is restarted.
 
 `wagon_rebuild_all_forward_paths` is the global re-plan: when a `C_turnout` is thrown, every
 wagon in the world rebuilds its look-ahead path (`structs/railway_switch.md` §1).
@@ -153,6 +189,16 @@ wagon in the world rebuilds its look-ahead path (`structs/railway_switch.md` §1
 
 The FIRST entry of the back path is the wagon's last stop, which is why `+0x80` is only ever read
 for its first node.
+
+### 6b. Code shared with `C_railway`
+
+Two members are compiled from the same source as their `C_railway` namesakes
+(`structs/railway.md`):
+
+| `C_wagon` | `C_railway` | how they compare |
+|---|---|---|
+| `wagon_apply_spring_sway` (1040 B) | `railway_spring_process` (1040 B) | the same 289 instructions; the only differences are the speed field (`+0x18c` here, `+0x1b4` there) and the sway amplitude constant (0.01 here, 0.03 there) |
+| `wagon_find_point_on_back_path` (1472 B) | `railway_find_back_pos` (1424 B) | the instruction sequences agree to 92 % |
 
 ## 7. Off-family finds from this TU
 
@@ -188,15 +234,12 @@ for its first node.
 
 `structs/railway.md` (`C_railway`, the tram system) · `structs/railway_switch.md`
 (`C_turnout`, which triggers the global re-plan) · `structs/vehicle.md` §6 (the cluster
-map that ends at this class) and §17 (the `DoCollisionStatic` inlining) ·
+map that ends at this class) and §9 (the `DoCollisionStatic` inlining) ·
 `structs/recorder.md` (the TU immediately after) · `structs/entity.md` §1-3 (the kind map).
 
 ## 10. Open items
 
 | item | state |
 |---|---|
-| `wagon_save_game_save`'s persisted band | `+0x24..+0x38`, `+0x90..+0xa4`, `+0xd0..+0xdc`, `+0x19c`, `+0x1a0`, linked object `+0x1a4` — enumerated, only partly interpreted |
-| `+0x194` | the object `wagon_game_done` releases through three vtable slots is not identified |
-| relationship to `C_railway` | `structs/railway.md` (126/126) is unexamined here: `FindBackPos` and `SpringProcess` exist on both classes under the same names |
 | in game: end stop | ride a tram to an end stop and watch whether the wagon reverses in place (`wagon_node_is_stop_point` / `wagon_distance_to_next_stop` / `wagon_extend_back_node_path`) |
 | in game: switch | throw a switch: every wagon should re-plan at once |

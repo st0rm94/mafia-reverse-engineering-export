@@ -1,6 +1,6 @@
 # `C_box_new` — the physics-base box that replaced `C_box`
 
-**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-10-05 15:41 +0200
 
 A thin `C_PhThing` subclass: it holds a **six-field descriptor**, decides at mission start whether
 the body behaves as a *box* or as a *wheel*, hands that descriptor to the shared physics base, and
@@ -69,7 +69,7 @@ Read from the stack stores in `box_new_game_init` and from the loads in
 | `S_THING_BOX` | `+0x04` | initial velocity (vec3) | 0 | `+0x1e0` |
 | `S_THING_BOX` | `+0x10` | friction | `+0x3c0` | `+0x1f8` |
 | `S_THING_WHEEL` | `+0x00` | wheel radius | `+0x3b4` | `+0x220` |
-| `S_THING_WHEEL` | `+0x04` | wheel parameter (§5) | `+0x3b8` | `+0x21c` |
+| `S_THING_WHEEL` | `+0x04` | wheel parameter, read by `physical_object_move_wheel` (`structs/physical_object.md` §4b) | `+0x3b8` | `+0x21c` |
 | `S_THING_WHEEL` | `+0x08` | mass | `+0x3bc` | `+0x190` |
 | `S_THING_WHEEL` | `+0x0c` | initial velocity (vec3) | 0 | `+0x1e0` |
 | `S_THING_WHEEL` | `+0x18` | friction | `+0x3c0` | `+0x1f8` |
@@ -182,9 +182,3 @@ field from its own build's offset, so the difference is a declaration order, not
 - `structs/physical_object.md` — `C_PhThing`, where all the dynamics live (26/26 methods named).
 - `structs/box.md` — `C_box`, the PC-only class this one replaced (kind 9).
 - `structs/entity.md` — the kind enum (`0x23`, `0x20`, `0x25`).
-
-## 5. Open items
-
-| item | state |
-|---|---|
-| the wheel parameter (`S_THING_WHEEL +0x04`) | carried from `+0x3b8` to `C_PhThing +0x21c` (§1a); no consumer traced |

@@ -1,6 +1,6 @@
 # `C_web_node` — one navigation-web node
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-10-12 21:04 +0200
 
 A `C_web_node` is one position in the navigation web, owning its own outgoing connection list. The
 nodes live in a flat array on `C_web_path` (`structs/web_path.md`), kept sorted by X so that
@@ -63,10 +63,15 @@ legality from it; the cross-build diff that confirms it is in §4.
 
 | Bit | Meaning | Evidence |
 |---|---|---|
+| `0x0001` | the pedestrian WALKWAY class: crowd pedestrians search with the filter `1` (`pedestrian_activate`) or `3` (`pedestrian_activate_free`), held at `pedestrian+0x1f4` and passed to `web_path_find_nearest_node` | the three pedestrian callers of `web_path_find_nearest_node` |
 | `0x0002` | a distinct node class; downgrades the resulting connection kind to **2** | the `(A\|B) & 2` arm of `web_path_is_connection_legal` |
 | `0x000c` | a two-bit node category (bits 2\|3); may **not** be joined to a node in the `0x13` category — the sole reject condition. Yields connection kind **4** | the `0x0c` vs `0x13` incompatibility test ¹ |
 | `0x0010` | a third node class; yields connection kind **0x10** | same function |
+| `0x0200` | pedestrian TURN-BACK node: a walker that reaches one swaps its current and previous node and walks back | `pedestrian_tick` |
+| `0x0800` | railway SEMAPHORE node: set by `railway_game_init`, which allocates an 8-byte record for the node; `railway_is_semaphore_point` tests the bit, then searches `g_rail_semaphore_list` for a record whose `+0x04` is the node | `railway_game_init`, `railway_is_semaphore_point` |
+| `0x1000` | railway-pass marker: `railway_game_init` sets it on the nodes its pass walks and skips the pass when a railway's first node carries it; `game_init` clears it on every node through `web_path_clear_marker_bits` | the three functions |
 | `0x4000` | **SELECTED** (node-level): set then cleared around every endpoint resolve so the search can exclude nodes it has already tried | `ai_wayfind_resolve_start_node` / `ai_wayfind_resolve_end_node` ² |
+| `0x8000` | no reader: no instruction tests, sets or clears it on its own; it can only match a caller's filter that includes it (the dog code passes `0xffff`) | a census of every bit operation on `+0x0c` and `+0x0d` in `.text` |
 
 ¹ The PC tests bits 2 and 3 as one `&0xc` (§4).
 ² They set `|0x40` on the **byte at `+0x0d`**, the high byte of this ushort (§4).
@@ -77,7 +82,31 @@ by the route search as a visited marker). The other is on the **connection**
 reading `*(byte *)(x + 0xd) |= 0x40` is the NODE one; `*(byte *)(x + 3) |= 0x40` is the CONNECTION
 one.
 
-The `0x13` mask covers bits 0\|1\|4; the remaining bits of `+0x0c` are open (§6).
+The `0x13` mask covers bits 0\|1\|4. `web_path_find_nearest_node` accepts a node only when its
+word shares a bit with the caller's filter and `0x4000` is clear.
+
+**The word in the shipped webs.** In the node chunk of all 71 shipped `check.bin` files the low
+byte is one-hot: every node carries exactly one of `0x0001`, `0x0002`, `0x0004`, `0x0008` and
+`0x0010`. The high byte carries `0x0200` (1 708 nodes, all `0x0001`), `0x0800` (282, all
+category 1 or 2), `0x1000` (20 135, all category 1 or 2) and `0x8000` (6 402, with `0x0001`,
+`0x0002`, `0x0004` or `0x0010`). The shipped `0x1000` bits do not survive into play: `game_init`
+clears the bit on every node.
+
+**The two-bit category in the shipped webs.** A census of the node chunk of all 71 shipped
+`check.bin` files finds the values 0, 1 (`0x0004`) and 2 (`0x0008`); value 3 occurs nowhere.
+Value 2 is carried by 32 webs, and every value-2 node has exactly two connections:
+
+| web | value-2 nodes | their connections |
+|---|---|---|
+| `MISE06-AUTODROM` | 26 of 860 | two each, neither one-way; one per race camera (`structs/racecam.md` §2b) |
+| the 31 other webs | 23 to 79 | two each, exactly one of them one-way |
+
+`circuit_load_gates_from_scene` is the one live reader that tests value 2 on its own. Outside the
+race track nothing distinguishes value 2 from value 1 at run time: the railway code
+(`railway_game_init`, `railway_save_game_load`, `wagon_ai`) searches with the filter `0xc` and
+tests `0xc`, accepting both values alike, and the only other reader of value 2 alone is
+`seagull_flock_game_init` (filter `8`), whose class is never constructed
+(`structs/seagull_flock.md` §2).
 
 ### 1b. The two descriptor dwords at `+0x10` and `+0x14`
 
@@ -125,7 +154,7 @@ since its flag bits are only ever read and written by `web_path_*` methods.
 ⁴ Same `+0x1d` count, `+0x18` array, stride 8, same sentinel; `web_path_set_connection_one_way` and
 `web_path_insert_node_in_connection` each call it twice, in the same positions, on both builds.
 
-**Unmapped PS2 methods (2):** `GetPos`, `ClearConn` (§6).
+**PS2 methods without a PC function (2):** `GetPos`, `ClearConn` (§4).
 
 ### 2a. VA proximity is not evidence for this class
 
@@ -157,9 +186,13 @@ function inside a cluster is not evidence for it. The receiver's field signature
   `C_web_node::~C_web_node` to `__destroy_new_array`.
 - **The class is emitted in three places on PS2 as well.** `GetPos` sits far outside the PS2 class
   cluster (`0x0011c210` vs the rest at `0x0039xxxx`), so its PC twin need not be inside the main
-  `web_*` cluster either — the same inline-COMDAT effect as §2a.
-- `ClearConn` (60 B) belongs to the same second-cluster group as the `C_web_path` `*HlpMem` trio
-  (`structs/web_path.md` §5), not to the PC `web_node_*` cluster.
+  `web_*` cluster either — the same inline-COMDAT effect as §2a. On the PC it is inlined: the twins
+  of its three callers, `airplane_fly_along_route`, `racing_create_segments` and
+  `opponent_create_driver_path`, read the node fields in place and call no `web_node_*` function.
+- `ClearConn` (60 B) has no PC function. Its only caller, `C_web_path::ClearNode`, runs it per
+  node; the PC inlines the non-arena part of `ClearNode` into `mission_close`
+  (`structs/web_path.md` §5), and the connection arrays are released by `web_node_dtor` through
+  `crt_ehvec_dtor`.
 
 ## 5. Cross-references
 
@@ -168,8 +201,4 @@ function inside a cluster is not evidence for it. The receiver's field signature
 
 ## 6. Open items
 
-| item | state |
-|---|---|
-| PC twin of `ClearConn` | not located; expected outside the `web_node_*` cluster (§4) |
-| PC twin of `GetPos` | not located; low priority |
-| remaining bits of `+0x0c` | unidentified; the `0x13` mask (bits 0\|1\|4) implies at least bit `0x0001` is also meaningful (§1a) |
+Nothing is open.

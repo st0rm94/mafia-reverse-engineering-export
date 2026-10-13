@@ -1,6 +1,6 @@
 # NPC ↔ player voice interactions (greeting / brush-off)
 
-**Created** 2026-06-20 14:42 +0200 · **Modified** 2026-09-29 09:31 +0200
+**Created** 2026-06-20 14:42 +0200 · **Modified** 2026-10-12 19:38 +0200
 
 How ambient NPCs vocally react to the player: the **interaction-button response** (live) and the
 **proactive greeting** (built but dead). Static analysis of the decomp, cross-checked against
@@ -75,15 +75,19 @@ the player (frame vtable `+0x38` with the `"neck"` bone string `s_neck`, VA `0x0
 
 **The gate (all must hold):**
 - `npc+0x1fc` voice-enabled; `npc+0x19e == 0` (wander mode);
-- player exists and is in the **same scene sector** (`frame+0x120` match);
-- **police are not chasing the player** — `police_manager_count_officers_for_target(player) == 0`
-  (early return if non-zero);
+- player exists and has the **same parent frame** (`frame+0x120` match);
+- **police are not chasing the player** — while the police manager is enabled (its `enabled`
+  byte at `C_game+0x2da0`), `police_manager_count_officers_for_target(player) == 0` (early return
+  if non-zero; with the manager disabled the count is not tested);
 - **player is "engaged"** — `police_board_is_actor_in_pursuit(player) != 0`;
-- player **on foot** (`player+0x98 == 0`);
-- within ~5 units (`dist² < 25`) and facing it (`S_vector::AngleTo < 2.0`).
+- player **on foot** (`player+0x98 == 0`).
+
+With those met it sets `npc+0x1fd = 1`. Only the greeting line and the head-track need more:
+the player within ~5 units (`dist² < 25`) and facing it (`S_vector::AngleTo < 2.0`).
 
 **Why it is dead:** the gate requires the player to be **"engaged"** (in a police squad — mixed up
-in a chase) **and** to have **no officers** chasing him at the same time. Those two states do not
+in a chase) **and**, while the police manager is enabled, to have **no officers** chasing him at
+the same time. Those two states do not
 co-occur in normal play, so the gate never passes, `npc+0x1fd` is never set, and the greeting is
 never heard — matching the user's in-game test. Same shape as the dead police-call path
 (`police-system/artifacts/offences.md` §5.4): a fully built NPC reaction whose trigger conditions

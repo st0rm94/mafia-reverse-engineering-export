@@ -1,6 +1,6 @@
 # `game_menus` — the in-game and front-end SCREEN translation unit
 
-**Created** 2026-08-25 17:18 +0200 · **Modified** 2026-10-04 16:37 +0200
+**Created** 2026-08-25 17:18 +0200 · **Modified** 2026-10-12 15:11 +0200
 
 PC range **`[0x00575c50, 0x0057d6e0)`**, closed at both ends by a CRT static-init pair
 (`crt_static_init_guard_00575c20` / `_0057d6e0`). It is the translation unit that immediately
@@ -183,7 +183,7 @@ the speedometer texture.
 
 Free ride stores the chosen car at `+0x4c` and the mode at `+0x48`; modes `0x1c`..`0x20` each
 have their own preview bitmap and their own label (textdb `0x41a`..`0x41e`). Mode `0x1c` starts
-immediately; the others open a location picker first (§4f).
+immediately; the others open a location picker first (§4f), as observed in game.
 
 ### 4a. Audio & Video — design 8 *(PC-only)*
 
@@ -546,12 +546,23 @@ Each of these carries a `// PS2-INLINED HERE:` banner at the fold site in the an
   `::DrawInventory`, all taking a `G_Inventory *`). Measured against the closed roster plus a
   named alternative location.
 
+### 10d. PS2-only, measured at the PS2 callers
+
+Each PS2 method below is reached from one PS2 caller or one vtable slot, and at that position the
+PC builds nothing or keeps the base `GM_Menu` method.
+
+| PS2 method | its PS2 caller or slot | the PC at that position |
+|---|---|---|
+| every `GM_HotRodMessage` method | `GameDone__17G_IndicatorsClassFb`, when the HUD holds a hot-rod unlock that the PS2's rewritten `IntroSubtitlesAddSimple` recorded | `hud_game_done` ends after its six resets and has no such branch |
+| every `GM_TutorialMessage` method | `TutorialAddText__17G_IndicatorsClassFUi` | the HUD method itself has no PC counterpart (`structs/hud.md`) |
+| every `GM_PressStart` method | `Init__15G_LoadSaveClassFv`, before the front end opens | `loadsave_init` builds one screen, `gui_profile_select_ctor` |
+| every `GM_GameMap` method | `GameLoopSingle__Fv`, on the map key | `engine_game_loop` builds one screen, `gui_game_menu_ctor` (the ESC menu) |
+| `GM_LoadGame::PreloadTextures`, and `IsTexturePreloaded`, which only it calls | `OnCreate__11GM_LoadGameFv` | `gui_load_game_ctor` loads no texture; `gui_load_game_tick` binds `shot%03d.bmp` by name |
+| `GM_LoadGame::ReleasePreloadedTextures` | `OnClose__11GM_LoadGameFv` | the load-game vtable `0x0063dfb4` keeps the base `gui_menu_close` in slot 4 |
+| `GM_LoadProgress::Destroy` | its own vtable slot; the body unloads the resources, then calls the base | the load-progress vtable `0x0063e0a4` keeps the base `gui_menu_destroy` in slot 2 |
+
 ---
 
 ## 11. Open items
 
-| item | state |
-|---|---|
-| `GM_LoadGame::{IsTexturePreloaded, PreloadTextures, ReleasePreloadedTextures}` | no PC counterpart located, not searched. The PC binds `shot%03d.bmp` by name instead of pre-loading `ITexture`s |
-| `GM_LoadProgress::Destroy` | no PC counterpart located, not searched |
-| every `GM_PressStart` / `GM_GameMap` / `GM_TutorialMessage` / `GM_HotRodMessage` method | the four console-shell screens; no PC counterpart located, not searched |
+Nothing is open.

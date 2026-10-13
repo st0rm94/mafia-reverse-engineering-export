@@ -1,6 +1,6 @@
-# `C_smoke_trail` — entity kind `0xf`, the explosion smoke streak
+# `C_smoke_trail` — entity kind `0xf`, the pieces an explosion throws
 
-**Created** 2026-08-17 11:24 +0200 · **Modified** 2026-10-04 11:51 +0200
+**Created** 2026-08-17 11:24 +0200 · **Modified** 2026-10-11 10:45 +0200
 
 PC prefix **`smoke_trail_`**.
 
@@ -15,8 +15,9 @@ PC prefix **`smoke_trail_`**.
 
 `C_smoke_trail` is a **`C_bottle` subclass** — the same family as `C_cartridge`
 (`structs/cartridge.md`), `C_grenade` (`structs/grenade.md`) and the bottle itself
-(`structs/bottle.md`). It is a short-lived, self-retiring actor that owns one
-particle-effect object and removes itself from the world once the effect has faded.
+(`structs/bottle.md`). It is a short-lived, self-retiring actor: an explosion throws it on
+`C_bottle` flight physics, it shows one mesh through its own model frame, and it removes itself
+from the world once its flight has stopped.
 
 Every twin that owns a PC function of its own was body-diffed; the seven that do not are shared
 stubs or folds and are listed in §3 with the reason.
@@ -40,7 +41,7 @@ Only the fields this class's own methods touch are listed; everything below `+0x
 |---|---|---|---|---|
 | `+0x10` | `+0x50` | entity kind = `0xf` | H | both constructors |
 | `+0x65` | `+0x69` | `C_actor` save_excluded, set to 1 by `GameInit` | H | `smoke_trail_game_init` and its twin |
-| `+0x68` | `+0x70` | **the particle-effect object** | H | `smoke_trail_update` dispatches one virtual on it; `smoke_trail_game_done` calls three |
+| `+0x68` | `+0x70` | the inherited `C_actor` model frame: an `'OBJ_'` frame showing the `2stone.i3d` mesh | H | `smoke_trail_update` calls its `Tick`; `smoke_trail_game_done` its `SetOn(false)`, `LinkTo(0, 0)` and `Release` (§4) |
 | `+0x6d` | `+0x75` | inherited `may_broadcast`, cleared by the constructor | H | read by the host-role guard of the chained `bottle_ai_tick`, so a smoke trail never broadcasts |
 | `+0x7c` | `+0xe0` | inherited `flight_speed` | H | `smoke_trail_ai_tick` retires when it and `+0x80` are both `<= 1e-08` |
 | `+0x80` | `+0xe4` | inherited `fall_accum` | H | same test, plus the independent `> 50.0` retire gate |
@@ -89,7 +90,9 @@ many-to-one mapping belongs in this table.
 smoke trails into a ring at `C_game+0x324` (cursor `+0x3a4`); the entity factory has no `0xf` arm.
 `game_new_smoke_trail` re-arms the next one in the ring with a random direction and length, and its
 only caller is `game_new_explosion`, which fires 8 + a random number of them per explosion when the
-detail level is above 1 (`structs/game.md` §1).
+detail level is above 1 (`structs/game.md` §1). Each one gets an `'OBJ_'` frame sharing the mesh
+of `2stone.i3d` (a single `Box02` mesh with the texture `0LASFALT.BMP`) and is initialised with
+it through slot 18.
 
 **Construction.** `smoke_trail_ctor` chains `bottle_ctor`, installs vtable `0x0063cd80`,
 stamps entity kind `0xf` and clears two fields. `Init` (the shared fold) refuses a null
@@ -99,8 +102,8 @@ parented to a model frame.
 **Arming.** `smoke_trail_game_init` chains `bottle_game_init`, then seeds the fade band:
 `+0xa4 = 0.1f`, `+0xac = 1.0f`, three cleared words, and the save-exclusion byte `+0x65 = 1` (`structs/actor.md` §1b).
 
-**Per frame.** `smoke_trail_update` advances the `C_bottle` half and then ticks the
-particle-effect object at `+0x68` through its own vtable. `smoke_trail_ai_tick` chains
+**Per frame.** `smoke_trail_update` advances the `C_bottle` half and then calls the model
+frame's `Tick` (frame vtable `+0x14`). `smoke_trail_ai_tick` chains
 `bottle_ai_tick` and applies the **retire test**, which has two independent arms:
 
 ```c
@@ -110,13 +113,21 @@ if ((+0x7c <= 1e-08 && +0x80 <= 1e-08) || 50.0 < +0x80) {
 }
 ```
 
-— i.e. *the plume has faded to nothing*, **or** *it has simply aged out*.
+— i.e. the flight has come to rest, **or** the fall accumulator has passed 50.0. No function of
+the class or of its `C_bottle` base calls the particle manager.
 `game_remove_temporary_actor` is the deferred retire queue (`structs/game.md`), so the actor
 disappears at the end of the frame rather than mid-tick.
 
 **Teardown.** `smoke_trail_game_done` chains `bottle_game_done` and then releases the
-effect object with three virtual calls in a fixed order (PC slots `0x24`, `0x2c(0,0)`,
-`0x00`).
+model frame with three virtual calls, in this order: `SetOn(false)` (`0x24`),
+`LinkTo(0, 0)` (`0x2c`) and `Release` (`0x00`).
+
+**A damaged car's smoke is not this class.** It comes from `vehicle_update_motor_particles`: once
+the engine damage pool `C_Vehicle+0x234` drops below the threshold `+0x248` while the car is
+slower than `+0x250`, the engine bay emits particle `+0x254`, and once the pool is also below
+`+0x24c` it emits particle `+0x258` instead — the white, then black smoke a damaged car shows in
+game (`structs/vehicle.md`). The emitters are the `tables\particles.def` records that
+`car_load_particle_effects` builds (`structs/def_tables.md` §2a).
 
 ## 5. PC vs PS2
 
@@ -125,10 +136,11 @@ effect object with three virtual calls in a fixed order (PC slots `0x24`, `0x2c(
   PC kind field `+0x10` (`structs/entity.md` §1).
 * **Retire constants.** Both constants of the §4 retire test, `1e-08` and `50.0`, are byte-shared
   with the PS2 `AI` body.
-* **Vtable slot numbering differs**: PC slot `0x14` ↔ PS2 slot `0x28` for the effect
-  object's per-frame call, and PC `0x24`/`0x2c`/`0x00` ↔ PS2 `0x38`/`0x40`/`0x08` for the
-  teardown triple. The ORDER is identical on both builds, which is what makes the mapping
-  safe.
+* **Vtable slot numbering differs**: PC slot `0x14` ↔ PS2 slot `0x28` for the frame's
+  per-frame call, and PC `0x24`/`0x2c`/`0x00` ↔ PS2 `0x38`/`0x40`/`0x08` for the teardown
+  triple. The ORDER is identical on both builds. The PS2 `I3D_frame` vtable names all four:
+  `Tick__9I3D_frameFi`, `SetOn__9I3D_frameFb`, `LinkTo__9I3D_frameFP9I3D_frameUi` and
+  `Release__9I3D_frameFv`, on the PS2 actor frame field `+0x70`.
 * **Seven of the fifteen PS2 methods are 8-byte symbols**, and each was read rather than
   counted: `NetDirect` is a tail jump (the PC mirrors it with a 5-byte `jmp` thunk), the
   `SaveGame*` triple and `SaveData`/`LoadData` return constants, and `Collision`/`Hit` return 0.
@@ -143,11 +155,5 @@ effect object with three virtual calls in a fixed order (PC slots `0x24`, `0x2c(
 `structs/bottle.md` — the base class, and the slot map this class inherits ·
 `structs/cartridge.md` and `structs/grenade.md` — the sibling subclasses; all three share
 `bottle_subclass_init_require_frame` · `structs/entity.md` §1 — the kind map, row `0xf` ·
-`structs/game.md` — the deferred retire queue.
-
-## 7. Open items
-
-| item | state |
-|---|---|
-| the particle-effect object's class | `+0x68` holds an object with at least vtable slots `0x14`, `0x24`, `0x2c`, `0x00`; not identified, likely the same effect type the `game_new_*` factories return (`structs/grenade.md` §5) |
-| a damaged car's smoke | in game a damaged car smokes, white first and then black (gameplay observation; the Mafia Script Data Reference's `car_switchshowenergy` selects among the car's damage types). That smoke is not this class, whose only producer is `game_new_explosion`; which code draws it is not traced |
+`structs/game.md` — the deferred retire queue · `structs/vehicle.md` — the engine damage pool
+that drives a damaged car's smoke.

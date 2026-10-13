@@ -1,6 +1,6 @@
 # The Mafia PC executables — SafeDisc, the two cracks, and what is authentic
 
-**Created** 2026-08-20 12:18 +0200 · **Modified** 2026-10-01 14:25 +0200
+**Created** 2026-08-20 12:18 +0200 · **Modified** 2026-10-12 19:38 +0200
 
 Read this before any byte-level claim about `Game.exe`, before any "the original binary does X"
 statement, and before diffing the PC exes against each other.
@@ -91,7 +91,9 @@ Retail vs our `Game.exe`, section by section:
 | `stxt371` | 36 | - | six case-only edits (§5e) |
 
 ⇒ **The retail file cannot supply or verify any game-code byte.** For the missing prologue at
-`0x006240e0` the *only* source is `Game-racing-mod.exe` (§8).
+`0x006240e0` the *only* source is `Game-racing-mod.exe` (§8). Decrypting it offline is not
+practical either: reproducing our `Game.exe` needs the disc or a SafeDisc emulator, which is how
+it was made.
 
 ### 3b. What SafeDisc did to the imports
 
@@ -137,7 +139,11 @@ simply persisted the post-restore state. Two artifacts, two methods, one answer
 
 **Consequence worth remembering:** our `.data` is a *snapshot* taken at the OEP, not the linked
 initial image. Nothing of the CRT has run yet at `crt_startup`, so the two are expected to agree,
-but whether they do is open (§12). Any claim about a global's **initial** value carries that caveat.
+but the retail `.data` that would check it is encrypted, so the question cannot be settled from
+these files. What can be measured agrees: the 64 KB of initialized `.data` hold no pointer outside
+the image (every dword of that shape is a ctype table, a float limit, bitmap-font data or a
+string), unlike the two dump-time pointers in `.text` (§5f); a plain scalar written by the stub
+would not show in that scan. Any claim about a global's **initial** value carries that caveat.
 
 ---
 
@@ -156,7 +162,7 @@ Ten sites. Only #8 changes what the game does.
 | 7 | `stxt371` DLL-name casing, 6 sites | 36 B | §5e — dead code |
 | 8 | **`.text` @ VA `0x006240e0`** | **4 B** | **the CD-check crack** (§5c, §8) |
 | 9 | `.text` @ VA `0x00629aaa` | 2 B | reconstructed IAT operand. **Ours is the correct one** (§7) |
-| 10 | `.text` @ VA `0x0040bc9d`, `0x0040c5bd` | 2 B | **unexplained — deliberately unattributed** (§5f) |
+| 10 | `.text` @ VA `0x0040bc9d`, `0x0040c5bd` | 2 B | byte 2 of two dump-time pointers (§5f) |
 
 ### 5b. The banner
 
@@ -176,8 +182,8 @@ CRLF-terminated; line lengths in bytes are `0, 0, 70, 70, 70, 70, 70, 67, 0` (th
 carries 13 trailing spaces before its CRLF). The last byte of the blob is the `0a` at `0x4d0`.
 
 The **measured** identity marker is the PE `TimeDateStamp`, which literally spells **`GiMP`**. The
-figlet-style letterforms segment as `G i M P S R … S`; the release-group name behind them is open
-(§12).
+figlet-style letterforms segment as `G i M P S R … S`; the release-group name behind them is not
+recoverable from these files.
 
 #### `Where is the weed?` — the exact bytes
 
@@ -249,13 +255,17 @@ Six runs, 36 bytes, every one a letter-case change in a DLL-name string inside t
 | `0x007020e4` | `IMAGEHLP` | `imagehlp` |
 
 `stxt371` is a **writable** section (`0xE0000020`), so the stub can rewrite its own DLL-name table
-at run time; whether these edits come from *dumping* or from *patching* is open (§12). The `.rdata`
+at run time. Its own code does not: nothing in the image references the names except the ten
+descriptors of the retail import directory (`DataDirectory[1]` = `0x00701f70`), the 53 strings the
+stub decodes name no case-conversion API, and its `0x325c` bytes hold no `'A'` / `'Z'` compare and
+no `0x20` case flip. Whether the extracted SafeDisc DLL or the dumping tool wrote them needs the
+retail exe run under a debugger. The `.rdata`
 name strings
 are lowercased too (`IMAGEHLP.dll` → `imagehlp.dll`, while the unused `MPR.dll` string keeps its
 case), but `.rdata` is read-only, so those must have been written into the file by the import
 rebuilder. Two mechanisms, one appearance.
 
-### 5f. The two unexplained bytes — measured, not attributed
+### 5f. The two dump-time pointer bytes
 
 | VA | context | retail | ours | mod |
 |---|---|---|---|---|
@@ -263,8 +273,17 @@ rebuilder. Two mechanisms, one appearance.
 | `0x0040c5bd` | byte\[2] of the 5-byte run `0x0040c5bb..0x0040c5bf`, same shape after `ret 0xc` | **encrypted — unreadable** | `a0` | `0a` |
 
 Both runs are exactly 5 bytes, both differ in exactly byte\[2], both deltas are `−0x96`, and within
-each file the two values are consecutive (`a1`/`a0`, `0b`/`0a`). **Zero absolute references anywhere
-in the image.** Not attributed to the crack or to racing; open (§12).
+each file the two values are consecutive (`a1`/`a0`, `0b`/`0a`).
+
+**Read as dwords, both runs are pointers into one block outside the image:** `0x02a19bbe` /
+`0x02a0ff1e` here, `0x020b9bbe` / `0x020aff1e` in the mod — the same low word, the high word
+moved by `0x96`, one block captured at two load bases by two dumps. No absolute reference reaches
+either run. The `0x0040c5bb` slot is read by `thunk_jmp_via_retaddr_plus_0x953b` (`0x00402cd4`:
+`pop` the return address, add `0x953b`, load, `jmp`); its only caller,
+`push ecx; push eax; call 0x00402cd4` at `0x00403079`, sits in the padding after a `ret 4`,
+nothing branches to it, and `0x00403080 + 0x953b = 0x0040c5bb`. The `0x0040bc9b` slot has no
+reader. The values were written before the dump; which code wrote them is not recoverable,
+because the retail `.text` is encrypted.
 
 ---
 
@@ -315,8 +334,8 @@ in mapped sections, at 7 addresses**:
 
 | VA | ours | mod | reading | which is original |
 |---|---|---|---|---|
-| `0x0040bc9d` | `a1` | `0b` | dead padding | open (§5f, §12) |
-| `0x0040c5bd` | `a0` | `0a` | dead padding | open (§5f, §12) |
+| `0x0040bc9d` | `a1` | `0b` | dump-time pointer | §5f |
+| `0x0040c5bd` | `a0` | `0a` | dump-time pointer | §5f |
 | `0x0057699d..e` | `9b 1b` | `cd 1c` | `push 0xf1b9b` → `push 0xf1ccd` (menu id) | **ours** — mod = the racing edit |
 | `0x005769b7..8` | `9b 1b` | `cd 1c` | same, second call | **ours** |
 | `0x0062407e` | `75` | `eb` | `jne` → `jmp` inside `cd_require_disc` | **ours** — mod = FairLight's crack |
@@ -449,7 +468,7 @@ retail and both cracked builds, so all of this shipped from Illusion Softworks.
 |---|---|---|
 | `DIALOG` **`IDD_PASSWORD`** | `#1029` = 0x405 **Czech** | `MAFIA` · `Password:` · `Cancel` · **`FOR INTERNAL USE OF TAKE2 ONLY!`** · **`THIS VERSION WILL EXPIRE ON xxxxxxxx.`** · `(C)1998-2002 ILLUSION SOFTWORKS` |
 | `DIALOG` **`IDD_CRASH`** | `#1033` = 0x409 English | `Program crash...` · `Send crash info by e-mail` · `Close` |
-| `MENU/#103` | `#1029` | 0x3e bytes, contents not decoded |
+| `MENU/#103` | `#1029` | 0x3e bytes: one greyed end item, `MAFIA - Illusion Softworks`, id `0xffff` |
 
 **Both are unreachable in the shipped product, and that is an import-table fact rather than a failed
 search.** `Game.exe` imports **no dialog API at all** — no `DialogBoxParamA`, no
@@ -457,7 +476,8 @@ search.** `Game.exe` imports **no dialog API at all** — no `DialogBoxParamA`, 
 exactly two resource functions, `LoadStringA` (`0x0063b218`) and `LoadIconA` (`0x0063b21c`), which
 are the two `structs/app_bootstrap.md` §3 documents. The Illusion DLLs cannot supply the gap either:
 `LS3DF.dll` imports `LoadMenuA` but no dialog creator, and `IJoy.dll` / `INet.dll` import none.
-Nothing in the shipped product can instantiate either dialog.
+Nothing in the shipped product can instantiate either dialog, and nothing loads `MENU/#103`:
+`LS3DF.dll`'s single `LoadMenuA` call loads menu `0x7b` from the module named `LS3D.DLL`.
 
 `IDD_PASSWORD` is a **press / review-build gate**: a password prompt plus a hard expiry notice whose
 date is still the literal placeholder `xxxxxxxx`, meaning the retail build was produced from the
@@ -470,12 +490,6 @@ would have mailed diagnostics home.
 
 | item | state |
 |---|---|
-| the two padding bytes (§5f) | permanently unresolvable from these files — the retail `.text` that would arbitrate is encrypted |
 | the 0x30-byte gap before `Where is the weed?` and its odd start `0x501` (§5b) | measured, not attributed; a 20-byte write of `\0Where is the weed?\0` at `0x500` would produce exactly this layout |
-| does `.data` in our exe equal the linked initial image? | an inference from the OEP dump (§4), not a measurement; the retail `.data` that would check it is encrypted |
-| the `stxt371` lowercasing mechanism (§5e) | the leading reading is that the stub lowercases its own table at run time and the dump captured the result; settling it needs the retail exe run under a debugger |
-| the exact release-group name behind the `GiMP` tag (§5b) | the banner letterforms are not a measurement |
 | `Where is the weed?` in other Mafia builds (§6) | not examined: the 1.1 patch executable, a demo, other territory releases. A retail-provenance file carrying the string would be new evidence |
 | the two bytes the `Game-norng.exe` patch overwrites before `rand_float` (§7d) | no function start is recorded there and the build is in community use; whether they are dead is not verified |
-| can the retail `.text` be decrypted offline? | practically no — reproducing our `Game.exe` needs the disc or a SafeDisc emulator, which is how it was made in the first place |
-| were either `.rsrc` dialog reachable in some *other* build (§11)? | unmeasured, deliberately: this file is a statement about the executables in §1 only. `LS3DF.dll`'s `LoadMenuA` import may relate to `MENU/#103`; not chased |

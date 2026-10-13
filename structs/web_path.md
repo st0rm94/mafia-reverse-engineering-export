@@ -1,6 +1,6 @@
 # `C_web_path` — the navigation web (the game's road/path graph)
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-10-04 20:16 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-10-12 21:05 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c`, cross-checked against the non-stripped PS2 ELF
 (`SLUS_206.71`). This documents the PC build; the PS2 symbol table supplies the original developer
@@ -16,7 +16,7 @@ it. It is what `ai_wayfind` and `ai_path` (the layer above — `structs/ai_wayfi
 | PC prefix | `web_path_*`; nodes are `web_node_*` (`structs/web_node.md`) |
 | Singleton | `*(g_act_mission + 0x2c)` |
 | PS2 methods | 33 — **24 mapped**, all CONFIRMED by body-diff (§3) |
-| PC cluster | `[0x006081e0, 0x0060b710]`, 43 aligned function starts |
+| PC cluster | `[0x006083c0, 0x0060b710]`, 35 function starts; the eight before `0x006083c0` close `Mission.cpp` (`structs/mission.md` §4) |
 
 **What the graph is, and is not:**
 
@@ -39,18 +39,26 @@ typedef struct C_web_path {          // singleton at *(g_act_mission + 0x2c)
     /* +0x04 */ C_web_node *nodes;   // [H] node array base. Record stride 0x1e.
     /* +0x08 */ uint32_t   _unk_08;  // [U]
     /* +0x0c */ uint32_t   node_count; // [H] every scan bounds on this
-    /* ... */
-    /* +0x14 */ void      *search_scratch;   // [M] parallel per-node search state, 6 bytes/node:
-                                             //     ushort predecessor + float cost. Seeded to
-                                             //     0xffff / 0x501502f9 (~1e10) before each search.
-    /* +0x18 */ uint32_t   scratch_capacity; // [M] reallocated when != node_count
+    /* +0x10 */ uint32_t   grow_step; // [H] capacity increment of web_path_resize_node_array;
+                                     //     the constructor seeds 0x32
+    /* +0x14 */ C_web_path::S_pathfind *search_scratch; // [H] one record per node, 6 bytes:
+                                             //     +0x00 ushort predecessor id, +0x02 float path
+                                             //     cost. Seeded to 0xffff / 0x501502f9 (~1e10)
+                                             //     before each search.
+    /* +0x18 */ uint32_t   scratch_capacity; // [H] reallocated when != node_count
     /* +0x1c */ uint8_t    search_in_progress; // [H] re-entry guard; set around the roads diversion
                                                //     in web_path_find_path, cleared after
 } C_web_path;
 ```
 
-`+0x14`/`+0x18`/`+0x1c` are graded from the PC search bodies only. `web_path_find_path` inlines its
+`+0x14`/`+0x18`/`+0x1c` are read on both builds (§5); the scratch element type is named by the PS2. `web_path_find_path` inlines its
 scratch handling and calls no helper.
+
+The constructor is inlined into `mission_init` (`operator_new(0x1d)`, the vtable, `+0x10` = `0x32`,
+every other field zeroed), and `mission_close` resets the graph in place: the count `+0x0c` to 0,
+the scratch `+0x14` freed and `+0x18` cleared, and the guard `+0x1c` cleared. The node and
+connection arrays are freed by `web_path_dtor` and by `web_path_load_nodes`' destroy-and-zero
+preamble.
 
 ## 2. `C_web_connection` — the edge record (8 bytes)
 
@@ -67,11 +75,15 @@ Stored per node, not centrally: the array pointer is at `node+0x18` and the coun
 
 | Bit | Meaning | Evidence |
 |---|---|---|
+| `0x01` / `0x02` / `0x04` / `0x10` | the connection **kind**, exactly one per connection | H — the value `web_path_is_connection_legal` reports and `web_path_validate_node_connections` rewrites |
 | `0x40` | **SELECTED** — the map editor's current selection | H — `web_path_find_selected_connection` scans for exactly this bit and returns the owning node + neighbour; pairs with PS2 `SelectLine` / `ReleaseSelect` |
 | `0x80` | **ONE-WAY** — this direction is not traversable | H — `web_path_set_connection_one_way` is the only writer: it clears `0x80` on both directions, or flips which direction carries it |
 
-Other bits are unidentified. Every `web_path_find_*` takes a trailing `ushort` **filter mask** tested
-against this word.
+In the 71 shipped `check.bin` files (2 405 202 connections) the word uses only these bits: kind
+`0x01` 435 394, `0x02` 1 875 268, `0x04` 92 174 and `0x10` 2 366; `0x80` on 45 376 connections and
+`0x40` on 26, editor selections saved with the map. The search markers `0x1000` / `0x4000` that
+`web_path_clear_marker_bits` clears never occur in a shipped file. Every `web_path_find_*` takes a
+trailing `ushort` **filter mask**.
 
 ⚠️ **Do not confuse this `0x40` with the node-level bit.** There are two, on two different
 records: this one is `C_web_connection+0x02` bit `0x40` (the map editor's selection); the other is
@@ -120,7 +132,7 @@ the absence of the destroy-and-zero preamble.
 byte.
 
 **Order-align check:** across the region the 15 confirmed anchors come out **monotone** (PS2 ranks
-1→28 against PC indices 9→24). The region is not a forced gap, so every row was established by
+1→28 against PC indices 1→16, counted from `0x006083c0`). The region is not a forced gap, so every row was established by
 behaviour plus an exact callee multiset, never by rank interpolation.
 
 **Unmapped PS2 methods (10):** `AllocHelpMem`, `FreeHelpMem`, `GetNextHlpMemBlock`, `ClearNode`,
@@ -143,10 +155,12 @@ text for split-body markers does not flag either shape.
 
 ## 4. `check.bin` — the node chunk
 
-The node chunk is tagged `0x1abcedf`. Two readers use the **same** chunk layout:
+The node chunk is tagged `0x1abcedf`, and a shipped `check.bin` opens with that magic directly,
+with no chunk header. Two readers use the **same** chunk layout:
 `web_path_load_nodes` (destroy-and-replace) and `web_path_merge_nodes` (append + neighbour-id
 rebase). Record order: magic, node count, node records (stride `0x1e`), then per-node connection
-arrays (stride 8). The rest of the file format is undocumented (§7).
+arrays (stride 8, `conn_count` records per node). That is the whole file: all 71 shipped
+`check.bin` files end exactly after the last connection array.
 
 ## 5. PC vs PS2
 
@@ -155,8 +169,16 @@ arrays (stride 8). The rest of the file format is undocumented (§7).
 - **Node record stride: PC `0x1e`, PS2 `0x20`.** Every *field offset* inside the record is
   identical — the difference is a trailing alignment pad only, so field-level findings transfer
   directly. `C_web_connection` has **zero delta** (8 bytes on both).
+- **The search scratch is an array of `C_web_path::S_pathfind`.** The PS2 `FindPath` builds it with
+  `__construct_new_array(…, __ct__Q210C_web_path10S_pathfindFv, 0, 8, count)`: 8 bytes there
+  (`+0x00` predecessor, `+0x04` cost) against 6 on the PC (`+0x00` predecessor, `+0x02` cost) — the
+  same 2-byte packing that makes the PC node stride `0x1e` against `0x20`. Both builds seed
+  `0xffff` / `1e10`, reallocate when the capacity differs from the node count, and run the same
+  relaxation over it.
 - **Container header differs.** PC keeps `nodes` at `+0x04` and `node_count` at `+0x0c`; PS2 keeps
-  them at `+0x00` and `+0x08`. PS2's search-in-progress guard is at `+0x2c` (PC `+0x1c`).
+  them at `+0x00` and `+0x08`. PS2's search-in-progress guard is at `+0x2c` (PC `+0x1c`), and its
+  scratch buffer pair at `+0x24` / `+0x28` (PC `+0x14` / `+0x18`): `ClearNode` frees and clears it
+  exactly as PC `mission_close` does.
 - **Shared magic constants that carried the twins:** `250000.0` (500² — the roads threshold in
   `FindPath`, byte-identical), `r*r + 0.001` (the radius guard in `GetNearNode`), `0x1abcedf` (the
   node-chunk magic in `LoadNodes`), `0xffff` (the connection-index miss sentinel).
@@ -166,8 +188,9 @@ arrays (stride 8). The rest of the file format is undocumented (§7).
   predicate is `int(*)(ushort)`. None of that is visible from the PC decomp.
 - **PS2 names the array element type** inside `LoadNodes`' teardown
   (`__destroy_new_array(..., C_web_node::~C_web_node)`), independently confirming it.
-- 🔴 **The `*HlpMem` trio is PS2-only — an arena allocator the PC build does not have** (graded
-  HIGH: an allocation-strategy inference from callsites, not a body diff of the trio). The PS2
+- 🔴 **The `*HlpMem` trio is PS2-only — an arena allocator the PC build does not have.** The
+  arena's lifecycle pair belongs to the PS2-only city streaming: `AllocHelpMem`'s only caller is
+  `C_mission::InterCity_Prebuffering` and `FreeHelpMem`'s is `C_mission::InterCity_Done`. The PS2
   caller list:
 
   | PS2 site | What it does | PC equivalent |
@@ -180,10 +203,15 @@ arrays (stride 8). The rest of the file format is undocumented (§7).
   call the global `operator_new` at exactly the same point** (body-read on both). Same pattern as
   `ai_spageman` — memory infrastructure the 32 MB console needed. Do not hunt the trio for a PC
   twin. The PC `+0x14` search scratch is not managed by it.
-- **`ClearNode`, `ClearConn` and the `C_web_path` ctor** are ordinary methods (`ClearNode` calls
-  `ClearConn` per node) and are not in this PC cluster; they may have PC twins elsewhere (§7).
-- **`SaveNodes` (284 B) has no PC counterpart anywhere in the region** — every other editing
-  method is present, and `SaveNodes` is the one that *writes* `check.bin` (§7).
+- **`ClearNode`, `ClearConn` and the `C_web_path` ctor are inlined on the PC.** The ctor's two
+  PS2 callers are `C_mission::Init` and the PS2-only `InterCity_Init`; PC `mission_init` spells the
+  same construction inline (§1). `ClearNode` (called from `C_mission::Close` and the destructor)
+  runs `ClearConn` per node and frees the arrays only when no helper-memory arena is active; PC
+  `mission_close` carries its reset inline (§1), and the arrays are freed where §1 says.
+  `ClearConn` is called only from `ClearNode`.
+- **`SaveNodes` (284 B) has no PC counterpart, and no caller on the PS2 either.** It is the one
+  method that would *write* `check.bin`; on the PC the node magic `0x1abcedf` occurs only twice in
+  the image, in the two readers of §4.
 - **`SelectLine` (8 B) and `DrawConnections` (8 B)** are stubs on PS2, almost certainly inlined or
   compiled out on PC; **`DebugFindPath`** is a debug entry point. None is worth hunting.
 
@@ -196,11 +224,4 @@ arrays (stride 8). The rest of the file format is undocumented (§7).
 
 ## 7. Open items
 
-| item | state |
-|---|---|
-| the `+0x14` search scratch | graded [M] from PC only; confirm against PS2 |
-| remaining connection flag bits | unidentified beyond `0x40` / `0x80` |
-| `*HlpMem` trio PS2-only grade | identify the single PS2 caller of `AllocHelpMem`; if it belongs to level load/teardown, the grade is settled |
-| `ClearNode` / `ClearConn` / `C_web_path` ctor | not located on PC |
-| `SaveNodes` | plausibly absent because retail ships without the map editor's save path — a hypothesis, not graded PS2-only |
-| rest of `check.bin` | only the node chunk is documented (§4) |
+Nothing is open.

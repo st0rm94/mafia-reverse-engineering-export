@@ -1,6 +1,6 @@
 # Mafia script-VM - the complete opcode table (GENERATED)
 
-**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-09-18 15:43 +0200
+**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-10-12 20:58 +0200
 
 Generated from `Game.exe`; regenerate it rather than editing it by hand.
 
@@ -418,7 +418,5 @@ Validated on generation: 391 records, opcodes a bijection onto `0x000..0x186` (n
 
 ## Open items
 
-| item | state |
-|---|---|
-| does `beep` fail to compile in game? | predicted from the missing `program_decode_params` arm, like `debug_text`; not tested |
+Nothing is open.
 

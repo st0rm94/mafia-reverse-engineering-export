@@ -1,6 +1,6 @@
 # `C_bottle` — the small thrown-physics-prop base class
 
-**Created** 2026-08-05 12:38 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-05 12:38 +0200 · **Modified** 2026-10-12 19:38 +0200
 
 A `C_actor` subclass: a small prop that flies a ballistic arc, tumbles, bounces off people,
 reacts to being shot, and is replicated to other machines. Its own twenty functions are the
@@ -72,7 +72,8 @@ typedef struct C_bottle {                /* extends C_actor */
     /* +0x124 */ int        send_pending;    // [M] cleared after a broadcast
     /* +0x128 */ char       broadcast_on;    // [H] ctor = 1; gates the state broadcast
     /* +0x12c */ int        ground_material; // [H] surface material of the ground hit. saved
-    /* +0x130 */ void      *ground_dyn_obj;  // [M] dynamic object the ground ray hit, else 0
+    /* +0x130 */ void      *ground_dyn_obj;  // [H] dynamic object the ground ray hit, else 0;
+                                             //     C_grenade parents its fire to its frame
     /* +0x134 */ char       ray_all_layers;  // [H] ground-ray mask: 0 = mask 2, 1 = every layer
 } C_bottle;
 ```
@@ -87,7 +88,7 @@ typedef struct C_bottle {                /* extends C_actor */
 | +0x98 | tumble_rate | H | `bottle_game_init`, `bottle_on_collision`, `bottle_hit` (3× `rand_float` each) | the render transform | re-rolled on *every* impact, which is why a bottle never tumbles the same way twice |
 | +0xa4 | radius | H | `bottle_game_init` | collision | half the diagonal of the frame's hierarchical bound volume, after world scale |
 | +0xa8 | frame_axis | H | `bottle_ai_tick` (rotated by the tumble each tick), `cartridge_game_init` (= (0, 1, 0)) | `bottle_update`, the savegame pair | passed to `S_matrix::SetDir3` together with `+0x30` |
-| +0x100 / +0x104 / +0x12c / +0x130 | the ground-contact band | H | `bottle_ai_tick` (each ground ray); `grenade_on_collision` / `grenade_hit` also bump `+0x100` | `cartridge_ai_tick` (`+0x100` > 15 retires a casing; `+0x104` and `+0x12c` pick the landing sound), the savegame pair | bounce count, ray hit this tick, the hit's surface material, the dynamic object hit (else 0); `+0x104` clears when the flight ends at speed < 3.0 on a surface within 0.5 rad of level |
+| +0x100 / +0x104 / +0x12c / +0x130 | the ground-contact band | H | `bottle_ai_tick` (each ground ray); `grenade_on_collision` / `grenade_hit` also bump `+0x100` | `cartridge_ai_tick` (`+0x100` > 15 retires a casing; `+0x104` and `+0x12c` pick the landing sound), `grenade_ai_tick` (`+0x130`), the savegame pair | bounce count, ray hit this tick, the hit's surface material, the dynamic object hit (else 0). When a grenade's fire starts, `grenade_ai_tick` takes that object's frame (`+0x68`), converts the fire position into the frame's local space and passes the frame to `game_new_fire`, so the fire moves with whatever the projectile landed on. `+0x104` clears when the flight ends at speed < 3.0 on a surface within 0.5 rad of level |
 | +0x134 | ray_all_layers | H | `cartridge_game_init` (= 1), `bottle_game_init` (clear) | `bottle_ai_tick` | selects the ground-ray mask: 2 when clear, every layer when set |
 | +0xb4 / +0xfc | dyn-coll proxy + its flag | H | `bottle_ctor` (flag = 1), `bottle_update` | `bottle_game_done` (`collision_dyn_erase`) | the proxy position is mirrored from `+0x24` every frame |
 | +0x108 / +0x114 / +0x120 | the dead-reckoning band | H | `bottle_apply_net_event_msg` (type 0x16) **only** | `bottle_net_apply_remote_state` **only** | one writer, one reader — which is what identifies both |
@@ -201,9 +202,10 @@ byte-wise (store offsets 1, 5, 9, …) while PS2 writes dword-aligned slots.
 
 ### 3a. The PS2 port emptied the per-class network replication bodies
 
-Networking is **not** PC-only — PS2 has `GM_NetPlayer` with a full `G_Factory<12GM_NetPlayer>`
-(`{ctor}`, `Make`, `MakeDup`, `Key`, `GetType`, `Get/SetPointer`). What the port did was
-**empty the per-class replication code**:
+The PS2 build has no networking. Its ELF names eight IOP modules (`SIO2MAN`, `PADMAN`, `LIBSD`,
+`SOUND`, `SOUND2`, `SDRDRV`, `MCMAN`, `MCSERV`) and none is a network module; `GM_NetPlayer` is a
+`GM_Component` GUI widget, not a network class (`structs/net_event_msg.md` §7). What the PS2 keeps
+is the `NetDirect` slot of the shared class interface, with **empty bodies**:
 
 | PS2 `NetDirect` size | classes |
 |---|---|
@@ -356,7 +358,6 @@ which have **zero** scene instances and no located construction path at all.
 
 | item | state |
 |---|---|
-| `+0x130` reader | `bottle_ai_tick` stores the dynamic object its ground ray hit; no reader is traced in the `C_bottle`, `C_grenade`, `C_cartridge` or `C_smoke_trail` code |
 | in game: do the two dynamic cans move when shot? | shoot the four cans in `MISE18-SALIERY` one at a time and watch only for movement: `xplechovka3`/`xplechovka4` are the dynamic pair, `xplechovka`, `xplechovka2`, `xplechovka5`, `xplechovka6` are static. Candidates if they do not move: the launch is too small to read (the ×15 scale acts on an unmeasured hit vector); the dynamic pair was not the pair shot; the `Hit` never reaches them; or a degenerate bound volume leaves the collision proxy unhittable while `+0xa4` looks correct |
 
 **Related:** `structs/actor.md` (base class) · `structs/airplane.md` (the preceding class in

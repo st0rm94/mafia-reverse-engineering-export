@@ -1,6 +1,6 @@
 # Force feedback — the manager, the effect class family, and the effects the game plays
 
-**Created** 2026-08-13 23:54 +0200 · **Modified** 2026-10-04 11:49 +0200
+**Created** 2026-08-13 23:54 +0200 · **Modified** 2026-10-06 19:17 +0200
 
 Two classes live here and this file covers both:
 
@@ -65,7 +65,7 @@ initializer block:
 | `0x005f8370` | `force_feedback_manager_static_init` | `.CRT$XCU` slot `0x006462b0` |
 | `0x005f8380` | `force_feedback_manager_static_ctor` | `mov ecx, 0x6f91e0; jmp force_feedback_manager_ctor` |
 | `0x005f8390` | `force_feedback_manager_register_atexit_dtor` | `atexit(&…_static_dtor)` |
-| `0x005f83a0` | `force_feedback_manager_static_dtor` | `mov ecx, 0x6f91e0; jmp force_feedback_manager_dtor` |
+| `0x005f83a0` | `force_feedback_manager_static_dtor` | `mov ecx, 0x6f91e0; jmp folded_vector_pair_free_at_0x04_0x14` |
 
 The cross-build placement is in §6c. The same TU defines the joy device vector. The receiver is
 byte-proven from both stubs' `mov ecx, 0x6f91e0`; the dtor is reached only as
@@ -105,7 +105,7 @@ two bytes are the force-feedback capability of the device bound to each.
 |---|---|---|
 | `0x004a6070` | `force_feedback_manager_is_enabled` | `sel ? +0x2c : +0x2d`. Inline member out-lined into the `C_human.cpp` TU |
 | `0x005ae6b0` | `force_feedback_manager_ctor` | zeroes both lists, period = 1000 |
-| `0x005ae6f0` | `force_feedback_manager_dtor` | frees both lists |
+| `0x005ae6f0` | `folded_vector_pair_free_at_0x04_0x14` | frees both lists. The same body destroys the pursuit-event manager embedded in `C_game`, whose two vectors sit at the same offsets (`structs/pursuit-event-manager.md` §1), so it carries no class prefix |
 | `0x005ae720` | `force_feedback_manager_reset_handle_counter` | `+0x20 = 0`; sole caller `engine_init` |
 | `0x005ae730` | `force_feedback_manager_game_init` | probes bindings 1 and 0x26; sole caller `game_init` |
 | `0x005ae7c0` | `force_feedback_manager_game_done` | destroys every effect in both lists; sole caller `game_done` |

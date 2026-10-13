@@ -1,6 +1,6 @@
 # Car "Boosting" — the pursuit model-level / CARINIT swap
 
-**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-10-12 20:59 +0200
 
 **Status:** static analysis complete, byte-verified against `Game.exe`. The in-game Cheat Engine
 confirmation is open (§10).
@@ -162,7 +162,9 @@ repeat car_count times:
 ```
 The container is a straight array of 89 records; the parse ends exactly at EOF. `vehicles.dat`
 (3856 B) is the companion **field-schema** table: per-field `{byte-offset (steps by 4), type
-(5=float / 0x11=other)}` descriptors that map named CARINIT fields to record offsets.
+(5=float / 0x11=other)}` descriptors that map named CARINIT fields to record offsets. No binary of
+the game opens it: the engine reads `vehicles.bin` at constant offsets, mapped byte by byte with each
+runtime field in `def-files-docs/vehicles-bin.md`.
 
 ### Boostable = `level_count == 2`, verified
 
@@ -297,11 +299,10 @@ direct callsites of `pursuit_event_set_change_tables`:
 | Function | Count | Role |
 |---|---|---|
 | `police_board_create_and_engage` | 3 | fresh pursuit creation (new cop chase begins) |
-| `police_action_tick` | 8 | normal active re-dispatch branches |
+| `police_action_tick` | 9 | normal active re-dispatch branches |
 | `police_action_dispatch_officer_commands` | 1 | (re)issue officer orders |
 | `police_action_disband` (with-vehicle path) | 1 | set just before removing the vehicle |
 | `entity_dispatch_event` | 1 | event-driven dispatch |
-| `police_board_raise_gun_escalation` | 1 | (a non-dispatch call in the raiser) |
 
 **DISABLE (CL = 0) — 3 sites:**
 
@@ -311,13 +312,11 @@ direct callsites of `pursuit_event_set_change_tables`:
 | `police_board_raise_gun_escalation` | 0x004478B8 | escalation to gun tier |
 | `police_action_tick` (teardown branch) | 0x00444121 | pursuit collapses / re-evaluates (exit-vehicle path) |
 
-The escalation raisers each contain both an enable and the disable — the disable is the one that
-fires on the fresh re-dispatch path, VAs above.
+Each escalation raiser makes one call, with `CL = 0`.
 
-The `pursuit_event_set_change_tables` and `car_set_model_level` docblocks state this polarity. The
-inline comments at the `police_action_tick` (8 enable + 1 disable), `police_action_disband` (1
-enable) and `police_action_dispatch_officer_commands` (1 enable) sites state the recovered `CL`
-value, re-derived from the disassembly and agreeing with the tables above in every case.
+The `pursuit_event_set_change_tables` and `car_set_model_level` docblocks state this polarity, and
+the inline comment at each of the 18 sites states the recovered `CL` value, read from the
+disassembly.
 
 ## 7. PC vs PS2
 
@@ -412,5 +411,3 @@ break `Game.exe+EC5F0`/`+2B016`.
 | item | state |
 |---|---|
 | which disable site fires on "exit car → identity pending" | needs an in-game break-on-write at `0x0064C6D8` while leaving a car with a police record; expected: the `police_action_tick` teardown site `0x00444121` |
-| full CARINIT offset map | only the MCVE-named fields are pinned; the exact `vehicles.dat` schema semantics are not decoded |
-| inline `CL` comments at the remaining sites | `police_board_create_and_engage` (3), `entity_dispatch_event` (1) and the two escalation raisers' sites do not yet state the recovered value |

@@ -1,6 +1,6 @@
 # `ai_wayfind` — the route planner (checkpoint-based wayfinding)
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-10-04 20:16 +0200
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-09-30 23:08 +0200
 
 PC prefix **`ai_wayfind_*`**.
 

@@ -1,6 +1,6 @@
 # The PC multiplayer front end — `gui_mp_*`
 
-**Created** 2026-08-24 11:05 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-24 11:05 +0200 · **Modified** 2026-10-05 11:19 +0200
 
 PC translation units `[0x00563b30, 0x00566250)` (the menus) and the second class inside
 `[0x00561b70, 0x00563b00)` (the driver-appearance picker), plus six `inet.dll` helpers around
@@ -57,7 +57,8 @@ left untouched.
 
 `net_multiplayer_run` calls `net_session_init_provider` first. That function creates the INet driver
 through the `inet.dll` import `_CreateINetBase@4`; on failure it zeroes both the driver
-pointer (`g_net_session+0x10c`) and the session role (`g_net_session+0x100`) and stores
+pointer (`g_net_session+0x10c`) and the session state (`g_net_session+0x100`, the enum of
+`structs/net_session.md` §1) and stores
 textdb **900** in `+0x1fc`. `net_multiplayer_run` then refuses with a message box —
 textdb **907 "Network error!"** over **900 "Error in Direct Play initialization!"** — and
 returns to the menu.
@@ -83,11 +84,20 @@ data one.
 | `0x78` | 606 | Settings | opens `gui_mp_settings_ctor` (§5) |
 | `0x82` | 607 | Back to Main Menu | return `0x38` |
 
-🔴 **`0x65` and `0x66` — the two DEATHMATCH modes — are fully implemented in code and have
-no `menu.def` record in retail.** Both `gui_mp_menu_ctor` and
+🔴 **`0x65` and `0x66` — the two DEATHMATCH modes — have menu logic but no game behind them,
+and no `menu.def` record in retail.** Both `gui_mp_menu_ctor` and
 `gui_mp_menu_refresh_mode_items` compute their enable state from bits 1..4 of the session's
 supported-mode mask `session+0x4c`, and `gui_mp_menu_tick` writes the mode. The labels ship
-in all four languages. Only the two records are gone.
+in all four languages.
+
+Past the menu, nothing plays a deathmatch. `net_host_session_start` names the session
+`"Mafia Deathmatch"` or `"Mafia Team Deathmatch"` and creates it, building no `g_racing` (modes
+3 and 4 build one), and the lobby opens. On the lobby's start code `0x3d`,
+`net_multiplayer_run` launches a game only for mode 3 (`race_run`) or mode 4 (the championship
+loop); any other mode falls through to the exit tail, which returns to the menu scene. Every
+other reader of the mode tests for 3 or 4, gates the lobby design on it, or only copies it (the
+roster message, the wait for a non-zero mode). So a deathmatch session can be hosted and its
+lobby reached, but no game ever starts.
 
 The `0x36` (Join) return is handled by `net_multiplayer_run`, which opens the "Select session:"
 browser `gui_session_list_ctor` (`0x0057b150`, design `0x2f`, textdb 610; `structs/game_menus.md`).
@@ -326,6 +336,4 @@ character model from `+0x17c`, chosen by code. Only the PC lets a human choose i
 
 | item | state |
 |---|---|
-| `g_net_session+0x100`'s full enum | `0` = no provider was ever created, `7` = host, `5` and `1` appear in `gui_mp_lobby_tick`'s exit codes; `2`, `3`, `4` and `6` are unexplained |
-| deathmatch | `session+0x38` modes 1 and 2 have labels, enable logic and a mode write, but nothing downstream of `net_multiplayer_run` is traced for them; whether a deathmatch session can run is unknown |
 | in game (modded install, DirectPlay enabled) | confirm that Racing → Multiplayer opens the mode menu, that Host SingleRace reaches the lobby, and that the **Person:** button lists 66 `civilNN.i3d` rows with a walking preview |

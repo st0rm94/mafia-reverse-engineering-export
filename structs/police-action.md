@@ -1,6 +1,6 @@
 # `police_action` — Pursuit-Squad Struct (0x6C bytes)
 
-**Created** 2026-07-08 22:08 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-08 22:08 +0200 · **Modified** 2026-10-06 20:32 +0200
 
 Type `ai_police_action`. One `police_action` is one officer squad chasing one suspect.
 Reconstructed from `Game.exe` disassembly and static analysis of the annotated decomp; no runtime
@@ -73,8 +73,8 @@ The squad's own per-frame driver is `police_action_tick`; the sighting helper is
 | +0x34 | on_foot_phase_flag | H | see ³ | `police_action_tick` (phase branch in every tier case); `police_action_tick_sighting_timers` (`==0` fast path); `police_action_dispatch_officer_commands` (tier 7 reads the stash back) | 0 = vehicle phase, 1 = on-foot phase — **except on the disband path, §3a**. |
 | +0x38 | arrest_grace_deadline | H | `police_board_create_and_engage`, once: `= game_time + 60000 + rand_range(...)` | `police_action_tick` (2nd switch: `+0x38 < game_time` ⇒ `police_manager_enable_roadblock_flag_for_target` + the per-officer `ai_logs_get_log_for_actor` loop) | ~60 s grace with jitter, from squad creation. |
 | +0x3C | created_ts_ms | H | `police_board_create_and_engage`, once: `= game_time`; no other writer outside the copy-ctor / assignment helpers | `police_action_tick` tier 1 only (`game_time - +0x3c > 30000` ⇒ escalate the wanted substate) | Never re-armed: the tier-1 gate means "this squad is older than 30 s", **not** "the search has run 30 s". |
-| +0x40 | los_timestamp_ms | H | `police_action_tick_sighting_timers` (= game time while target perceivable) | `police_action_tick` (`los_age = game_time - +0x40` gates the 5s/10s/15s/30s/40s officer-recall tiers) | Line-of-sight anchor. |
-| +0x44 | sighting_accum_ms | H | `police_action_tick_sighting_timers` (`+= dt` while perceivable) | `police_action_tick` (`>40000` / `>15000` ⇒ `police_manager_record_begin_wanted_substate`) | Tracking accumulator. |
+| +0x40 | los_timestamp_ms | H | `police_action_tick_sighting_timers` (= game time while target perceivable; in the in-car fast path, `+0x34 == 0`, only while `pursuit_event_record_is_chase_tracking_by_vehicle(+0x5c)` returns 0) | `police_action_tick` (`los_age = game_time - +0x40` gates the 5s/10s/15s/30s/40s officer-recall tiers) | Line-of-sight anchor. |
+| +0x44 | sighting_accum_ms | H | `police_action_tick_sighting_timers` (`+= dt` while perceivable; same fast-path condition as `+0x40`) | `police_action_tick` (`>40000` / `>15000` ⇒ `police_manager_record_begin_wanted_substate`) | Tracking accumulator. |
 | +0x48 | search_rearm_deadline | H | `police_action_tick` (`= game_time + 3000`; `+= 10000` after a dispatch) | `police_action_tick` (gate before sending officers to a callable device via event 0x12) | Game-time deadline. |
 | +0x4C | cancel_order_timer_ms | H | `police_action_tick` (`+= dt` when `car_is_usable(2)` false; `= 0` when true; `= 20000` when channel-1 false) | `police_action_tick` (`>10000` ⇒ cancel vehicle order + advance FSM) | Stuck-vehicle watchdog. |
 | +0x50 | flags | H | `police_action_tick` (bit0 recompute via `ai_action_manager_has_action(0x23)`; clear bit1 after dispatch; set `0x20\|0x40` on backup re-request); `police_action_on_vehicle_lost` (set bit2) | `police_action_tick`; `police_board_has_active_group_for_target` (bit0); `police_board_target_matches` | bit0 = active, bit1 = redispatch request, bit2 = vehicle lost. |

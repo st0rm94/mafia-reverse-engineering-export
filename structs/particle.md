@@ -1,6 +1,6 @@
 # The particle system — `[0x005a1b00, 0x005a5fb0)` (PC prefixes `particle_*`, `particle_effect_*`, `particle_manager_*`)
 
-**Created** 2026-08-30 10:03 +0200 · **Modified** 2026-10-04 17:00 +0200
+**Created** 2026-08-30 10:03 +0200 · **Modified** 2026-10-11 19:32 +0200
 
 Three consecutive translation units implement every particle effect in the game — engine
 smoke, exhaust, sparks, the damage plume, the level-placed ambient effects. They are
@@ -54,7 +54,7 @@ base register is known — here it holds `g_act_mission`, not the `C_game` `this
 | `+0x00` .. `+0x0c` | `vector<{effect*, guid}>`, **stride 8** — the LIVE effects, kept sorted by guid | `particle_manager_find_by_guid` binary-searches it; `particle_manager_tick` walks it |
 | `+0x10` .. `+0x1c` | `vector<effect_type*>` — the `0x3c`-byte types loaded from `tables\effects.tbl` | filled by `particle_manager_load_data`, indexed by `particle_manager_create_particle` |
 | `+0x20` .. `+0x2c` | `vector<effect*>` — the LEVEL-PLACED effects from `effects.bin` | filled by `particle_manager_create_static_particle`, ticked first each frame |
-| `+0x30` | guid counter / armed flag; `-1` means "not armed" | set to `-1` by `mission_start` and `mission_done`; `particle_manager_tick` skips the live list while it is `-1` |
+| `+0x30` | **the last effect guid issued**: `particle_manager_create_particle_from_type` increments it, stores the new value beside the effect in the live vector and returns it as the effect's guid; `-1` until the first effect | set to `-1` by the constructor, `mission_start` and `mission_done`; `particle_manager_tick` skips the live list while it is `-1`; `particle_manager_find_by_guid` binary-searches the live vector on these values |
 | `+0x34` | started flag | gates `mission_start` and `mission_done` |
 
 ### 3b. `particle_effect` — 0x4c bytes, allocated from `g_particle_effect_pool`
@@ -63,7 +63,7 @@ base register is known — here it holds `g_act_mission`, not the `C_game` `this
 |---|---|---|
 | `+0x00` | parent `I3D_frame *` | written by `particle_effect_init`; cleared by `particle_effect_destroy` |
 | `+0x04` .. `+0x10` | `vector<emitter_record*>` — one per emitter definition in the type | drained by `particle_effect_destroy`, freed by `particle_effect_dtor` |
-| `+0x14` | **guid** (short) — minted from the engine driver's counter at `I3DGetDriver()+0x58` | `particle_effect_init` post-increments the counter |
+| `+0x14` | **engine id** (short), taken from the engine driver's counter at `I3DGetDriver()+0x58`; not the manager's guid (§3a `+0x30`) | `particle_effect_init` post-increments the counter; `particle_effect_spawn_particle` hands it to `particle_create`, which stamps it into the particle frame's `+0x21c` |
 | `+0x18` .. `+0x23` | local position offset | `particle_effect_init` |
 | `+0x24` .. `+0x2f` | local direction | `particle_effect_init` |
 | `+0x30` .. `+0x47` | two further vectors the creators pass through | `particle_effect_init` |
@@ -187,12 +187,14 @@ install sequence in the inlined `0x3c` constructor inside `particle_manager_load
 | `g_particle_data_type_vt` | `0x0063e344` | the `0x9c` **emitter** definition | 2 |
 | `g_particle_data_phase_vt` | `0x0063e348` | the `0x68` **phase** definition | 3 |
 
-`particle_manager_ctor` itself calls `particle_manager_load_data`.
+`particle_manager_ctor` itself calls `particle_manager_load_data`, so the table is loaded when
+`mission_init` creates the manager (§2); `particle_manager_mission_start` loads it only while the
+type list is empty.
 
 ### 5b. `missions\%s\effects.bin` — the level-placed effects
 
 Read by `particle_manager_load_static_particles`. Outer chunk id must be **100** (the PC
-accepts no other version). Each inner chunk id **1000** is one placement:
+accepts no other version, and all 79 shipped PC files are version 100). Each inner chunk id **1000** is one placement:
 
 | field | size | meaning |
 |---|---|---|
@@ -256,6 +258,9 @@ The only genuine structural difference is **where the particles live**: the PS2 
 particle list on `C_ParticleEmitter+0xb4`; the PC gives each `0xc0` record its own list at
 `record+0x20`. Both builds keep one runtime record per emitter definition.
 
+The manager's guid counter is PC `+0x30` ↔ PS2 `+0xc34`: `CreateParticle__17C_ParticleManager`
+increments it, stores it beside the emitter and returns it, as the PC creator does.
+
 ### 7b. What the PC folds that the PS2 keeps out of line
 
 Each site is marked in the decomp by an inline banner.
@@ -268,22 +273,28 @@ Each site is marked in the decomp by an inline banner.
 | `__ct__10C_ParticleFv`, `__ct__17C_ParticleEmitterFv`, `__ct__15C_PData_EmitterFv` | inlined at each `operator_new` site |
 | `C_ParticleEmitter::Init`'s record construction | hoisted into the manager's two creators |
 
-### 7c. The PS2 vertex-buffer path
+### 7c. The eight PS2 methods with no PC function
 
-`SortParticlesAndCreateBBOX`, `PrepareVBuffer`, `UpdateOptimized` and `ReInit` are the PS2's own
-vertex-buffer path; the PC delegates particle rendering to `ls3df.dll`'s `I3D_emitor` (§9).
+| PS2 method | why the PC has no function |
+|---|---|
+| `UpdateOptimized` | an empty body (`jr ra; nop`); `particle_effect_init` makes no call where the PS2 `Init` and `ReInit` call it |
+| `SortParticlesAndCreateBBOX`, `PrepareVBuffer` | the PS2 `Tick` sorts the particles and fills one vertex buffer per emitter; each PC particle owns its own `I3D_frame` (§3d), a visual of type `'PRTB'` (`I3D_VISUAL_PART_BASE` in `LS3DF.dll`'s type table) that `particle_tick` positions, and `particle_effect_tick` calls nothing between the particle update and the spawn |
+| `ReInit` | the PS2 `CreateParticle` takes an emitter from a per-type free list and re-initialises it; the PC takes the effect from the type-agnostic `g_particle_effect_pool` and always runs `particle_effect_init` and one `particle_type_init` per emitter |
+| `PreloadTextures`, `ReleasePreloadedTextures` | a texture-handle list (manager `+0xc28..+0xc30`) filled by the game-init preloader `PreloadPicovinNaZasranyPSKram__Fv` and released by `Done__6C_gameFv`; the PC manager's `0x38` bytes are all mapped (§3a) and hold no such list |
+| `LoadStaticParticles_100`, `LoadStaticParticles_201` | the PS2 `LoadStaticParticles` dispatches on the outer chunk id; the PC accepts one version and parses it inline (§7d) |
 
 ### 7d. Two shipped behavioural differences
 
-* **Effect-file versions.** PS2 splits static-effect parsing into `LoadStaticParticles_100`
-  and `LoadStaticParticles_201`; the PC accepts version `100` only and prints *"different
-  version"* otherwise.
+* **Effect-file versions.** The PC reads outer chunk `0x64` only (all 79 shipped PC files) and
+  prints *"different version"* otherwise. The PS2 dispatches chunk `0x65` to
+  `LoadStaticParticles_100` (2 of the 104 shipped PS2 files) and `0xc9` to
+  `LoadStaticParticles_201` (the other 102). Both read the PC's record (inner chunk 1000: matrix,
+  type index, frame name); `_100` multiplies the matrix by the frame's world matrix before creating
+  the effect, while `_201` passes it as read, as the PC does.
 * **The pause bit.** PS2 `PauseParticle` toggles `flags & 4` — the PC's `+0x49` pause byte.
   The PC's same-slot function `particle_manager_set_particle_emitting` writes `+0x48`, the
   spawn-enable byte, instead. Same manager slot and the same `(guid, bool)` signature, different
   bit; the twin is STRUCTURAL for that reason.
-* **The constructor.** `particle_manager_ctor` calls `particle_manager_load_data`; the PS2
-  constructor does not (there, `Mission_Start` loads).
 
 ### 7e. PS2 `C_mission` embeds the manager; the PC holds a pointer
 
@@ -296,6 +307,12 @@ Consequence: every PS2 `C_mission` field above `+0x64` sits roughly **`0xc2c` hi
 counterpart, purely because of this member. Below `+0x64` the two maps agree. Do not carry a PS2
 `C_mission` offset onto the PC by a constant (`structs/mission.md`).
 
+The construction site also decides where `effects.tbl` is loaded. The PS2 constructor has no load
+(the PS2 also builds a static `C_ParticleManager` in `__sinit_C_ParticleManager_cpp`), and
+`Mission_Start` loads when the type list is empty. The PC constructor runs from `mission_init`
+and loads there, through a real call; `particle_manager_mission_start` keeps the same empty-list
+test. On both builds the table is therefore loaded once, before the first mission starts.
+
 ## 8. Cross-references
 
 `structs/game.md` (the `+0x2c8` registry) · `structs/mission.md` (the `+0x6c` pointer) ·
@@ -305,14 +322,6 @@ counterpart, purely because of this member. Below `+0x64` the two maps agree. Do
 
 ## 9. Open items
 
-* **The `+0x30` guid counter is never incremented by the manager** — the guid comes from
-  the engine driver's own counter in `particle_effect_init`. What `+0x30` counts, beyond
-  "not `-1` means armed", is undecoded.
-* **Eight PS2 methods have no PC counterpart located**, and none has been measured absent:
-  `SortParticlesAndCreateBBOX`, `PrepareVBuffer`, `UpdateOptimized`, `ReInit` (the vertex-buffer
-  path of §7c, where a PC counterpart is not expected — an expectation, not a measurement),
-  `PreloadTextures`, `ReleasePreloadedTextures`, `LoadStaticParticles_100`,
-  `LoadStaticParticles_201`.
 * **In game:** does a street plume visibly stop emitting under an awning or a bridge, and
   resume when the camera moves it clear? (§6, step 3.)
 * **In game:** the 150-unit destroy radius of §6 step 2 should make distant ambient effects

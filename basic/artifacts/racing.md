@@ -1,6 +1,6 @@
 # Racing mode — the PC feature that was cut at the last minute
 
-**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-10-12 19:38 +0200
 
 Class layouts: `structs/racing.md`, `structs/racecam.md`, `structs/race_session.md`,
 `structs/racing_menus.md`.
@@ -103,8 +103,8 @@ The mapped-code differences are **13 bytes at 7 addresses**:
 | `0x0062407e` | `jne 0x6240a5` | `jmp 0x6240a5` | CD check — a crack, not racing |
 | `0x006240e0` | `xor eax,eax; inc eax; ret` | `sub esp,0x18c` | CD check — a crack, not racing |
 | `0x00629aaa` | `[0x63b100]` | `[0x63b06c]` | `LCMapStringW` vs `CompareStringW` — an import-rebuild error in the mod; `Game.exe` has the correct one ([`crack.md`](crack.md) §7a) |
-| `0x0040bc9d` | `a1` | `0b` | 1 byte in dead inter-function padding, 0 references |
-| `0x0040c5bd` | `a0` | `0a` | 1 byte in dead inter-function padding, 0 references |
+| `0x0040bc9d` | `a1` | `0b` | byte 2 of a pointer value captured by the dump (`crack.md` §5f) |
+| `0x0040c5bd` | `a0` | `0a` | byte 2 of a pointer value captured by the dump (`crack.md` §5f) |
 
 So the mod:
 
@@ -149,7 +149,7 @@ definition, `cd_scan_drives_for_disc`; that deliberate 4-byte divergence is list
 The two padding bytes `0x0040bc9d` and `0x0040c5bd` each sit in a 5-byte run of
 inter-function padding after a `ret`, are not 16-aligned function starts, and have **zero
 absolute references anywhere in the image**. They are not reachable code. Both change by
-exactly `-0x96`, and what they are is open (§9); the byte-level context of both runs is in
+exactly `-0x96`: each is byte 2 of a pointer value captured by the dump, and the evidence is in
 [`crack.md`](crack.md) §5f.
 
 ## 5. The data files, decoded
@@ -267,7 +267,9 @@ lap count and the player's car model, generates the opponents and enables damage
 `game_tick` (`structs/race_session.md` §4). The mission's `scene2.bin` carries 26 `C_racecam`
 actors, and they register with the camera because `g_racing` is set (`structs/camera.md` §3b).
 **Confirmed in game:** after the race finishes, the player watches the other racers from those
-trackside cameras.
+trackside cameras. Each camera record also carries three designer floats (70.0, 70.0, 1.0) that
+no code reads on either build (`structs/racecam.md` §2a); the camera choice uses only the frame
+and the two neighbouring track gates.
 
 Every other mission leaves `g_racing` NULL, so there the ~310 `g_racing == 0` gates in ordinary
 gameplay code answer "no race is running".
@@ -289,6 +291,4 @@ main-menu item (§3).
 
 | item | state |
 |---|---|
-| the two padding bytes | `0x0040bc9d` / `0x0040c5bd`, both `-0x96`, both unreferenced. Measured, unexplained |
-| the two `C_racecam` `70.0f` floats | which one is the field of view and which the activation distance. The cameras do cut in (§8a) |
 | the race start lights | does `hud_set_race_start_flag` render as three lights plus GO, matching the four countdown steps `racing_tick` feeds it? Not observed |

@@ -1,6 +1,6 @@
 # The racing classes — `C_racing` and the five objects it owns
 
-**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-10-07 21:57 +0200
 
 One translation unit, **`[0x0060b770, 0x00617a60)`**, **131 starts**, holding **six classes** plus
 the free comparators. **131 of 131 PC starts are named — the translation unit is CLOSED.**
@@ -72,7 +72,7 @@ only through the `Racing` main-menu item the shipped executable deletes.
 | +0x1c / +0x20 / +0x24 | `vector<C_championship*>` | H | `racing_load_champs` fills it, `racing_dtor` frees it |
 | +0x28 vs +0x2c | menu mode vs race mode — two different fields | H | distinguished by `racing_can_run_race`; `racing_tick` branches on race mode `== 2` to tick a single racer instead of all of them |
 | +0x30 | current `C_circuit` | H | `racing_get_current_circuit` returns it; `racing_do_gates` and `racing_get_distance_by_gates` index its gate vector through it |
-| +0x34 | current `C_champ_circuit` (the round being raced) | H | `racing_fill_champ_results` stops summing points at it; `racing_tick` reads its `+0x04` |
+| +0x34 | current `C_champ_circuit` (the round being raced) | H | `racing_fill_champ_results` stops summing points at it; `racing_tick` reads its `+0x04`; the championship launch and results screens list its `+0x68` best-race table (`structs/racing_menus.md` §6) |
 | +0x38 | current `C_championship` | H | written by `racing_set_current_champ`; read by `racing_fill_champ_results` and `race_compare_champ_points` |
 | +0x3c | difficulty level, 0-4 | H | the switch selector in `racing_get_power_coeff_by_difficulty`; copied from championship `+0xd0` |
 | +0x40 | an embedded `C_opponent` — **the player's entrant** | H | `racing_tick` ticks it alone in race mode 2; `racing_fill_champ_results` appends it as the last result row; `racing_update_driver_power_coeff` measures every AI racer's distance from it |
@@ -81,10 +81,11 @@ only through the `Racing` main-menu item the shipped executable deletes.
 | +0x27c | the race's total lap count | H | `racing_do_gates` pushes it to the HUD with the current lap |
 | +0x284 | entrant count | H | `racing_get_opponent_count` (`0x00610870`) reads it; it excludes the player entrant |
 | +0x288 | live racer count | H | `racing_get_racer_count` (`0x005c8280`) reads it. Two adjacent counts, two accessors — `+0x284` and `+0x288` are not interchangeable |
+| +0x28c | standings row count: how many rows of `+0x228` the results tables and the finish-place count walk | H | `racing_init_racers` sets it to 1, then to `+0x284` + 1 in race modes 2 and 3; `racing_end_race` sets it to `+0x284` + 1 before sorting `+0x228` by qualifying time; `racing_remove_opponent_at` decrements it with `+0x288`; read by `racing_next_finish_place`, both results screens, `camera_tick` and `net_session_handle_event_msg` |
 | +0x290 | elapsed race time | H | `racing_tick` computes `now - +0x298` and feeds `hud_set_race_time_text` |
 | +0x294 | pause-clock stamp | H | the two `racing_pause_clock_*` helpers |
 | +0x298 | race start timestamp | H | `racing_tick` stamps it with `timeGetTime()` when the countdown ends |
-| +0x29c / +0x2a0 | tick accumulator / period | H | `racing_tick`; the period is **1000 ms** in both states. Reset together by `racing_reset_phase_timer` (`0x005a14d0`), a `C_racing` setter emitted inside the `g_net_session` translation unit and called from the type-`0xe` arm of `net_session_handle_event_msg` right after `racing_set_phase(0)` |
+| +0x29c / +0x2a0 | tick accumulator / period | H | `racing_tick`; the period is **1000 ms** in both states. Reset together by `racing_reset_phase_timer` (`0x005a14d0`), a `C_racing` setter emitted inside the `g_net_session` translation unit and called from the type-`0xe` arm of `net_session_handle_event_msg` right after `racing_set_phase(0)`. In race phase 1 `racing_do_gates` runs only when the accumulator passes the period, so every racer's gates are checked about once per second (§3b) |
 | +0x2a4 | race phase | H | `racing_tick`'s switch: 0 countdown / start lights, 1 racing, 2 post-race delay, 3 cooldown. 2 and 3 are the networked pre-start phases |
 | +0x2a8 | countdown step | H | `racing_tick` feeds it to `hud_set_race_start_flag` as 0,1,2,3 and starts the race at 4 |
 | +0x2ac | wrong-way timer | M | `racing_tick` stamps it when the player faces backwards and raises HUD bit `0x800000` after 5001 ms |
@@ -166,14 +167,46 @@ Instance **0xdc B**. Constructed one per record of
 | 0x0060bed0 | `circuit_load_path` | `LoadPaths__9C_circuitFUiP…vector<P10C_web_node…>` | CONFIRMED |
 | 0x0060bfb0 | `circuit_determine_race_cams` | `DetermineRaceCams__9C_circuitFv` | CONFIRMED |
 | 0x0060c0a0 | `circuit_save_best_times` | `SaveBestTimes__9C_circuitFR8G_Stream` | CONFIRMED |
+| 0x0060c130 | `circuit_load_best_times` | `LoadBestTimes__9C_circuitFR8G_Stream` + `LoadBestTimesDta__9C_circuitFi` | CONFIRMED ² |
 | 0x0060c360 | `circuit_get_class_qualify_time_min` | - | PC-only ¹ |
 | 0x0060c380 | `circuit_get_class_qualify_time_max` | - | PC-only ¹ |
 
 ¹ An accessor the PS2 inlines.
+² One PC function serves both PS2 loaders (§7).
 
-PS2 methods with no PC counterpart in this class: `LoadBestTimes`, `LoadBestTimesDta`,
-`GetLeftPath`, `GetRightPath`. The two path getters are 8-byte `return this + N` inlines;
-`LoadBestTimesDta` is the `.dta`-archive profile path (§9d).
+### 3b. `C_racing_gate` — one lap gate (0x2c bytes)
+
+`circuit_load_gates_from_scene` builds the gates from the mission's navigation web (`check.bin`).
+Starting at the web node with ID `0x27c`, each node of the walk becomes a gate's **track node**;
+its neighbour with exactly one connection is the gate's **outer marker**, the neighbour with more
+connections is the next node of the walk, and neighbours with node category bit `0x8`
+(category value 2, `structs/racecam.md` §2b) are race-camera nodes collected for `+0xcc`. The gates are linked into a ring. A gate prints the
+checkpoint time when the first connection of its outer marker carries flag bit `0x80`. Circuit 0
+(mission 6) has 27 gates; gates 9, 14 and 20 print.
+
+| Offset | Field | Conf | Witness |
+|---|---|---|---|
+| +0x00 | `C_web_node*` track node | H | `circuit_load_gates_from_scene`; one end of the gate line |
+| +0x04 | `C_web_node*` outer marker | H | the node with one connection; the other end of the gate line |
+| +0x08 | `S_vector` midpoint of the two nodes | H | `circuit_load_gates_from_scene` |
+| +0x14 | `C_racing_gate*` next gate | H | ring link; `racing_test_gate` |
+| +0x18 | `C_racing_gate*` previous gate | H | ring link; `racing_test_gate`, `racing_test_gate_crossing` |
+| +0x1c | gate number (index in the gate vector) | H | `race_compare_position`, `racing_get_distance_by_gates` |
+| +0x20 | prints checkpoint time (bool) | H | the outer marker's connection bit `0x80`; read by `racing_do_gates` |
+| +0x24 | stored split time | H | `racing_do_gates` clears it on every gate at each forward step, so the compare-with-split branch never runs |
+| +0x28 | distance to the next gate's midpoint | H | summed by `racing_get_distance_by_gates` |
+
+**The zone test.** `racing_test_gate_crossing` puts a point inside gate *G*'s zone when, on the
+X/Z plane, it lies between the infinite line of the previous gate and the infinite line of *G*:
+`t = d_prev / (d_prev + d_cur)`, inside when `0 <= t <= 1`. The lines are unbounded, so a zone
+has no side limit and appears again, mirrored, past the crossing point of two non-parallel
+lines. Zones of different gates therefore overlap widely.
+
+**The gate check.** Every 1000 ms (`C_racing+0x29c`) `racing_do_gates` runs for each racer.
+`racing_test_gate` tests the current gate's zone, then the next gate's, then the previous gate's,
+always in that order; when none holds the car, `racing_test_all_gates` hands back the
+lowest-numbered gate whose zone does. Stepping forward off the finish gate adds a lap unless
+`C_opponent+0x45` is set; stepping back onto it subtracts one.
 
 ---
 
@@ -228,18 +261,20 @@ The heaviest class of the family: 30 PS2 methods, of which the overtaking AI
 | +0x30 / +0x34 | the two `I3D_model`s: the car model and the driver-man rig | H | both released by `opponent_game_done` |
 | +0x38 | qualification time (`-1` = no time) | H | `racing_generate_qualification` writes it, `race_compare_qualification_time` reads it |
 | +0x44 | retired-once / place-settled guard | H | `opponent_set_death` |
-| +0x45 | a flag in the standings order | M | read by both comparators |
+| +0x45 | start-crossing flag: while set, a finish crossing adds no lap | H | set by both constructors and `racing_init_racers`; `racing_do_gates` clears it when gate 2 becomes current and on a backward finish crossing; `race_compare_position` ranks a racer heading for the finish gate with it clear ahead of one with it set |
+| +0x46 | timed-lap flag | H | `racing_do_gates` sets it when gate 2 becomes current or on an untimed lap completion; while set, a finish crossing runs `racing_test_best_lap`; cleared by a backward finish crossing and by `opponent_game_init` |
 | +0x48 | `C_driver*` | H | `opponent_tick` deletes it when the car dies |
-| +0x4c | distance to next gate | M | the final tie-break in `race_compare_position` |
+| +0x4c | zone parameter `t`: 0 at the previous gate's line, 1 at the current gate's line | H | written by `racing_test_gate_crossing`; the final tie-break in `race_compare_position` |
 | +0x50 | back-pointer to a **human player's session record** | H | **PC-only.** Written by `racing_add_racer_for_player`; read by `racing_activate_racers`, `racing_find_opponent_by_player` and `race_compare_participant_slot`, which orders on the id byte at `player+0x2c` (`structs/net_session.md`) |
 | +0x54 | back-pointer to an **AI opponent slot** | H | **PC-only.** Written by `racing_add_racer_for_ai_slot`; `race_compare_participant_slot` orders on the slot index at `slot+0x28` |
-| +0x5c | gate/progress record | M | both comparators dereference it and read `+0x1c` |
+| +0x5c | `C_racing_gate*` current gate: the gate the racer is heading for | H | seeded with the finish gate by `racing_init_racers`, moved by `racing_do_gates`; `race_compare_position` reads its gate number `+0x1c` |
 | +0x68 | finishing place | H | `opponent_set_death` |
 | +0x6c | lap counter | H | `race_compare_position` |
 | +0x7c | current lap / finish time | H | zeroed by `opponent_set_death` |
 | +0x80 | retired flag | H | `opponent_set_death` writes it, both comparators sort on it |
 | +0x84 | stuck timer | H | `opponent_tick` accumulates it while `car_is_usable(2)` is false |
-| +0x88 / +0x8c | `0` / `200` constructor seeds | U | written by both constructors (§11) |
+| +0x88 / +0x8c | recovery step timer / period | H | both constructors seed `0` / `200`; `opponent_tick_recover` adds the frame time to `+0x88` and advances the step counter every `+0x8c` ms (200, then 1000) |
+| +0x90 | recovery step counter | H | `opponent_tick_recover`: the player's entrant shows it on the HUD start flag; the car fades in from 0.2 opacity over the steps, and at step 4 it gets its dynamic collisions back and full opacity |
 | +0x178 / +0x17c | current overtaking direction bit; accumulated rejection mask | M | the overtaking AI |
 | +0x194 | the grid start frame (`"start%i"`) | H | `opponent_game_init` resolves it by name and copies its transform onto the car |
 
@@ -269,6 +304,11 @@ The heaviest class of the family: 30 PS2 methods, of which the overtaking AI
 ⁵ Takes the place as an argument.
 
 `opponent_set_death` stops after clearing the lap time (§7).
+
+**An entrant's look is its car.** `opponent_game_init` builds the car model's file name from
+the car database record selected by `+0x24` (`car_database_get_car_model`, `"%s%02d.i3d"`,
+whose two digits are that record's colour variant). No other `C_opponent` field carries a
+colour or a skin.
 
 ---
 
@@ -330,7 +370,13 @@ All cross-build material for these classes lives in this section.
 | `C_circuit` instance | 0xdc B | 0xc8 B |
 | championship ctor seed at `+0xcc`/`+0xd0` | `{2, 1}` | `{2, 2}` |
 | `SetDeath` tail | stops after clearing the lap time | also writes the championship final position and refills the results |
-| `LoadBestTimesDta` (×3 classes) | no rank located | present — the `.dta`-archive / memory-card profile path |
+| best-time loading | `racing_load_best_times` reads `savegame\mrtimes.sav` circuit by circuit through `circuit_load_best_times`; on failure `racing_ctor` saves the defaults the constructors seeded | `LoadBestTimes(0)`; on failure `LoadBestTimes(1)`, which reads the `.dta` archive through `LoadBestTimesDta` (×3 classes); on failure again `CreateBestTimes` (sorted with `compSegID`); then `SaveBestTimes` |
+| circuit best-time loaders | one function, `circuit_load_best_times` | two, `LoadBestTimes` and `LoadBestTimesDta` |
+| best-time file scope | circuits only | circuits and championships (`C_championship` / `C_champ_circuit` `SaveBestTimes`, `LoadBestTimes`, `LoadBestTimesDta`) |
+| next race-camera racer | `racing_tick` calls `racing_set_race_camera_index(current + 1)`, `racing_end_race` calls it with 0 | both sites call `SetRCamIndexFirstRacer`: the first racer not yet placed, else the next one |
+| segment completeness | no total-time test anywhere: qualifying times interpolate the circuit tables, `racing_init_racers` derives none, `opponent_create_driver_path` reads the bank directly | `GetSegmentTotalTime` in `GenerateQualification`, `InitRacers` and `CreateDriverPath` |
+| recovery length | 4 steps of 1000 ms in `opponent_tick_recover`, constant | `GetRecoverTime` (0..3, from the difficulty) in `TickRecover` |
+| wreck models | no preload step in `racing_game_init` (`racing_init_racers`, `racing_place_cars`, `racing_activate_racers`) | `PreloadWrecks` between `InitRacers` and `PlaceCars` loads every racer's wreck model |
 | scene web-path node stride | 0x1e B | 0x20 B |
 | the class emission run | a run of its own around `0x0060b770`, reached from the `.text` string xrefs | run 1, immediately after `C_racecam.cpp` |
 | championship standings table (`C_championship+0x00`) | **21** `{C_opponent*, points}` slots ⇒ 20 entrants + the player | **6** slots ⇒ 5 entrants + the player |
@@ -343,6 +389,10 @@ All cross-build material for these classes lives in this section.
 | `G_CarDatabase` car-list record | **0xa4 bytes** | 0xa8 bytes |
 | camera-mode latches | **two** — `g_camera_last_vehicle_mode` (modes 7-15) and `g_camera_last_onfoot_mode` (modes 1-3) | one (`DAT_004f6290`, modes 7-15 only) |
 | race phases in `Tick` | **four** — 0 countdown, 1 racing, **2 post-race delay (posts event `0xf`)**, **3 cooldown** | two (0 and 1); anything else falls through |
+| gate check period in `Tick` | **1000 ms** | 500 ms |
+| neighbour order in `TestGate` | current, next, previous, always | current, then previous first when the racer's last zone parameter is below 0.5, otherwise next first |
+| backward crossing of the finish gate in `DoGates` | lap counter −1, start-crossing flag cleared | lap counter kept, start-crossing flag set so the next finish crossing adds nothing |
+| circuit 0 gates (`MISE06-AUTODROM/check.bin`) | 27 gates from 860 nodes | the same 27 gates, identical coordinates, from 409 nodes |
 
 **The divergence runs BOTH ways.** The PS2 has the extra championship record fields, the
 memory-card profile path and the champ-results tail; the PC has race phases 2 and 3 that the PS2
@@ -386,14 +436,23 @@ of a *different placement* — a second translation unit (§10) — not of absen
 | `C_opponent` | `+0x30` / `+0x34` | `+0x148` / `+0x14c` | car model / driver rig |
 | `C_opponent` | `+0x38` | `+0x188` | qualification time |
 | `C_opponent` | `+0x44` | `+0x1df` | place-settled guard |
+| `C_opponent` | `+0x45` | `+0x1e0` | start-crossing flag |
+| `C_opponent` | `+0x46` | `+0x1e1` | timed-lap flag |
 | `C_opponent` | `+0x48` | `+0x144` | `C_driver*` |
+| `C_opponent` | `+0x4c` | `+0x1cc` | zone parameter `t` |
+| `C_opponent` | `+0x5c` | `+0x13c` | current gate |
 | `C_opponent` | `+0x68` | `+0x198` | finishing place |
 | `C_opponent` | `+0x6c` | `+0x19c` | lap counter |
 | `C_opponent` | `+0x7c` | `+0x1a4` | current lap / finish time |
 | `C_opponent` | `+0x80` | `+0x1e4` | retired flag |
 | `C_opponent` | `+0x84` | `+0x1a8` | stuck timer |
-| `C_opponent` | `+0x88` / `+0x8c` | `+0x154` / `+0x158` | constructor seeds |
+| `C_opponent` | `+0x88` / `+0x8c` | `+0x154` / `+0x158` | recovery step timer / period |
+| `C_opponent` | `+0x90` | `+0x1dc` | recovery step counter |
 | `C_opponent` | `+0x194` | `+0x150` | grid start frame |
+| `C_racing_gate` | `+0x00` / `+0x04` | `+0x10` / `+0x14` | track node / outer marker |
+| `C_racing_gate` | `+0x14` / `+0x18` | `+0x18` / `+0x1c` | next / previous gate |
+| `C_racing_gate` | `+0x1c` | `+0x20` | gate number |
+| `C_racing_gate` | `+0x20` | `+0x2c` | prints checkpoint time |
 
 ¹ The sides are pinned by `RadarSetLeftEdge` taking `circuit+0x64` on PS2 and `+0xac` on PC, and
 by `RadarSetRightEdge` for the right line.
@@ -401,7 +460,7 @@ by `RadarSetRightEdge` for the right line.
 **The PC↔PS2 delta is NOT uniform** — `+0x228`↔`+0xa3c` is `0x814`, `+0x288`↔`+0xac4` is
 `0x83c`, `+0x2b7`↔`+0xb07` is `0x850`. Do not rebase band-wise; the two builds are different
 revisions of the class, not a shifted copy (the same holds for `structs/detector.md` §7 and
-`structs/pumper.md` §7).
+`structs/pumper.md` §6).
 
 ---
 
@@ -496,14 +555,20 @@ The full write-up of that cluster is §10.
 
 ### 9d. PS2 methods with no PC start in this TU
 
-`CreateBestTimes`, `compSegID`, `GetOpponentFromCar`, `GetRecoverTime`, `PreloadWrecks`, and the
-six `C_championship` / `C_champ_circuit` best-time streamers (§11).
+Each was checked at the position of its PS2 callers inside the matching PC function.
 
-Genuinely inlined, and marked in the PC decomp with `//` banners at the exact statement:
+Inlined, and marked in the PC decomp with `//` banners at the exact statement:
 `GetLeftPath` / `GetRightPath` (in `racing_game_init` and `racing_activate_racers`),
-`GetOpponentName` / `GetOpponentNameIdx` (in `racing_fill_opponent_name_and_model`), the
-four `OjedMe*` quadrant arms (in `opponent_overtake`), and the four small `FinalPositions*`
-siblings (in `champ_circuit_final_positions_set`).
+`GetOpponentName` / `GetOpponentNameIdx` (in `racing_fill_opponent_name_and_model`),
+`GetOpponentFromCar` (twice in `racing_predict_car_collision`), the four `OjedMe*` quadrant
+arms (in `opponent_overtake`), and the four small `FinalPositions*` siblings (in
+`champ_circuit_final_positions_set`).
+
+Absent, with the PC doing something else at the caller's position (§7):
+`SetRCamIndexFirstRacer`, `GetSegmentTotalTime`, `GetRecoverTime`, `PreloadWrecks`,
+`CreateBestTimes` with its comparator `compSegID`, and the six `C_championship` /
+`C_champ_circuit` best-time streamers. The two `C_circuit` loaders are one PC function,
+`circuit_load_best_times` (§3a).
 
 ### 9e. Field facts
 
@@ -549,6 +614,11 @@ typedef struct C_racing_optimal_segment {   /* 0xa8 bytes */
 /* +0xa4 */ int      time_ms;    // [H] elapsed ms for this stretch; -1 = never recorded
 } C_racing_optimal_segment;
 ```
+
+The class name `C_racing_osegment` does not settle whether its "o" stands for *optimal* or
+*opponent*: the records are written by the best-time learner (§10b) and read by the
+opponents' path builder (§10e), and no symbol or string of either build spells the word out.
+The PC prefix follows the learner.
 
 **`C_racing` EMBEDS one at `+0x334`** as the scratch record being recorded — byte-proven
 by `lea ecx,[esi+0x334]` in `racing_ctor` calling `racing_optimal_segment_ctor`. The three
@@ -606,17 +676,18 @@ selects `C_racing`'s methods by `startswith("racing_")` pulls `racing_optimal_se
 unless the longer prefix is excluded — the same situation `car_extended_` and `car_database_`
 create for `car_`.
 
+### 10e. Who reads it — the AI racers' driving line
+
+`opponent_create_driver_path` resolves the bank of the racer's car class
+(`racing_get_segment_id_for_car`, then `C_racing+0x2c4 + class * 0x10`) and copies each
+segment's points and per-point speeds into the racer's `C_driver` path (`structs/driver.md`
+§3). The stored line is what the AI racers drive along, at the speeds recorded with it.
+
 ---
 
 ## 11. Open items
 
 | item | state |
 |---|---|
-| `SetRCamIndexFirstRacer__8C_racingFv` | no PC start located. The band between `racing_set_race_camera_index` and `opponent_get_race_points` is empty, and PC `racing_tick` calls `racing_set_race_camera_index(current + 1)` — cycle to the next racer — where the PS2 calls `SetRCamIndexFirstRacer()`. Recorded as an open hunt, never as "inlined" |
-| `GetSegmentTotalTime__8C_racingFUiUi` | no located PC site. The PS2 sums each segment's time over a bank and returns 0 if any is still `-1`; nothing in the PC racing code was found doing that. Deliberately NOT tagged inlined |
-| the PS2 class name's leading "o" in `C_racing_osegment` | not established on either build. *optimální* (optimal) fits the best-time gate and is why the PC prefix reads `racing_optimal_segment_`; *opponent* fits the consumers. Neither is proven, so the letter is recorded only in the twin cell |
-| the consumer of the stored racing line | the banks are indexed per car class and the per-point speeds are obviously a driving target, but which AI reads them has not been traced |
-| whether the PC applies a car colour / skin per entrant | `opponent_game_init` allocates the car and sets its model level; `C_opponent+0x50`/`+0x54` are the session back-pointers (§5). Which field, if any, carries a skin is unresolved |
-| the PS2 methods of §9d | not searched; none is tagged terminal. `CreateBestTimes` sorts with `compSegID`, i.e. by segment id, so the segment cluster (§10) is where to look first |
-| `C_opponent+0x20` and `+0x88` / `+0x8c` | constructor seeds (`0x3a`; `0` / `200`) written by both constructors; no reader located (§5) |
+| `C_opponent+0x20` | a constructor seed (`0x3a`) written by both constructors; no reader located (§5) |
 | in game (needs the racing mod) | drive a circuit twice, improving on one stretch, and check that `savegame\mrseg<circuit>.sav` grows or changes — that would confirm the learner runs in the shipped build rather than only in a developer configuration |

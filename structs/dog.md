@@ -1,6 +1,6 @@
 # `C_dog` — the guard dog (kind `0x15`)
 
-**Created** 2026-08-13 12:57 +0200 · **Modified** 2026-10-01 14:22 +0200
+**Created** 2026-08-13 12:57 +0200 · **Modified** 2026-10-11 11:00 +0200
 
 PC prefix **`dog_`**.
 
@@ -247,8 +247,8 @@ is a role, not a twin.
 | `0x0047ab10`–`0x0047ab50` | **five `C_detector` functions**, COMDAT-placed after the CRT pair that closes the detector TU — four `sub ecx,0x70; jmp` adjustor thunks plus `detector_get_program`. See `structs/detector.md` §2 |
 | `0x0047fa10` | `i3d_cache_anim_create` — a method of the model/animation cache singleton at `0x006f93c8`, 12 callsites across `human_*`, `npc_*`, `anim_machine_set_anim`, `program_process_command` (`structs/i3d_cache.md`) |
 | `0x0047fe40` | `i3d_open_notify_forward_cb` — an `I3D_frame` enumeration callback taken by address at 3 sites; 0 direct callsites |
-| `0x0047fe60` / `0x0047ffe0` / `0x00480040` | `std_vector8_insert_one` / `array_copy_refcounted8` / `array_copy_backward_refcounted8` — shared container helpers for `C_I3D_cache<T>::S_itm` `{T *object, C_string name}`, the model / sound / animation cache record (`structs/i3d_cache.md`; 65 / 30 / 1 references) |
-| `0x004800a0` | `refcounted8_scalar_deleting_dtor` — the scalar deleting destructor of that element type; 2 callers, both outside this TU |
+| `0x0047fe60` / `0x0047ffe0` / `0x00480040` | `i3d_cache_items_insert_one` / `i3d_cache_items_copy_range` / `i3d_cache_items_copy_backward_range` — container helpers for `C_I3D_cache<T>::S_itm` `{T *object, C_string name}`, the model / sound / animation cache record (`structs/i3d_cache.md`; 65 / 30 / 1 references) |
+| `0x004800a0` | `i3d_cache_items_scalar_deleting_dtor` — the scalar deleting destructor of that element type; 2 callers, both outside this TU |
 
 ## 10. PC vs PS2
 

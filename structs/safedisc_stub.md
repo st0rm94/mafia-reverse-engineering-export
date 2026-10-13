@@ -1,6 +1,6 @@
 # The SafeDisc 2.70.030 protection stub — `stxt774` + `stxt371`
 
-**Created** 2026-09-07 16:52 +0200 · **Modified** 2026-10-04 20:16 +0200
+**Created** 2026-09-07 16:52 +0200 · **Modified** 2026-10-07 21:57 +0200
 
 50 functions, all named, prefix `safedisc_`. PC range `[0x00633d75, 0x00701f20]`.
 
@@ -46,7 +46,7 @@ cannot supply a single byte of game code. `stxt*` is plaintext in both files: me
 **self-modifying**. It reads the mode byte `g_safedisc_stub_mode`, computes a `jmp`
 displacement, and overwrites its own first five bytes with it; the section is writable, so
 a second entry short-circuits. In mode 0 the displacement comes from `safedisc_jmp_oep`, so
-re-entry goes straight to the game.
+re-entry goes straight to the game. A non-zero mode is the DLL form of the same stub (§2a).
 
 Then `safedisc_run` (`0x006ff120`) does the work:
 
@@ -58,14 +58,30 @@ Then `safedisc_run` (`0x006ff120`) does the work:
 4. **drop the stub's own section header** (`safedisc_pe_drop_last_section`), so the loaded
    image does not mention it;
 5. extract the payload under a named mutex (`safedisc_extract_under_mutex`);
-6. load the extracted DLL (`safedisc_load_extracted_dll`) and call into it;
+6. load the extracted DLL (`safedisc_load_extracted_dll`), resolve its export `Ox12121212`
+   (string `0x01`) through `safedisc_get_proc_address` and call it with a context block; a
+   non-zero result aborts;
 7. `jmp` to `safedisc_jmp_oep` → `crt_startup`.
 
 The extraction itself: `safedisc_extract_payload` opens the module's own file, makes a
-unique temp directory, and `safedisc_extract_archive` walks a directory of **0x121-byte
-entry records** appended to the executable, handing each to `safedisc_extract_one_file`,
-which creates the output file and runs the payload cipher into it. On failure
+unique temp directory, and `safedisc_extract_archive` walks the directory of variable-length
+entry records appended to the executable (§5a, each read through a 0x121-byte buffer), handing
+each selected record to `safedisc_extract_one_file`, which creates the output file and runs the
+payload cipher into it. On failure
 `safedisc_rollback_extraction` deletes everything it wrote.
+
+### 2a. The non-zero mode: the DllMain wrapper
+
+When `g_safedisc_stub_mode` is non-zero, `safedisc_stub_entry` behaves as the entry point of a
+DLL. It passes its first stack argument, DllMain's `hinstDLL`, to `safedisc_run` (mode 0 passes
+0); it rewrites its own first bytes into a `jmp` to the handler at `0x006ff0d3` instead of to
+the original entry point; and on a failed `safedisc_run` it rewrites itself into `ret 0xc` and
+re-enters, returning 0 with DllMain's three arguments popped, where mode 0 calls
+`g_safedisc_abort_callback`. The handler at `0x006ff0d3` passes every call straight to the
+original entry point except `DLL_PROCESS_DETACH` (`fdwReason == 0`): for that one it swaps its
+return address so that, after the real DllMain returns, two cleanup calls run from the block at
+`0x006ff02d` (each a function pointer and its argument) before control goes back to the caller.
+The shipped byte is 0, so in `Game.exe` this path never runs.
 
 ## 3. The obfuscated string table — decoded
 
@@ -108,7 +124,9 @@ A running XOR over the previous **plaintext** byte. All 53 entries decode:
 
 Entries `0x19`–`0x1d` are empty. `XeTuM bOY759` is the **global mutex name** — SafeDisc's
 own, not a cracker artifact: the whole blob is inside the 36-byte-identical `stxt371`.
-`\C-Dilla` is the Macrovision C-Dilla driver directory.
+`\C-Dilla` is the Macrovision C-Dilla driver directory. `Ox12121212` (`0x01`) is the export name
+`safedisc_run` resolves in the extracted DLL (§2). `~df394b.tmp` (`0x00`) and `~f1d055.tmp`
+(`0x17`) are the two directory records the stub extracts (§5a).
 
 ## 4. The API dispatch table — 33 slots
 
@@ -154,10 +172,54 @@ per byte:
 The key register shifts in each recovered plaintext byte, so the stream is
 self-synchronising over the whole file. Blocks are 0x800 bytes.
 
-**The payload cannot be decrypted from `Game.exe`.** It is an OEP memory dump with no
-overlay; the retail file has the 754,902-byte overlay, but the starting offset comes from
-the 0x121-byte entry records that `safedisc_extract_archive` reads — and that function is
-the one the anti-disassembly protects (§6).
+**The payload cannot be decrypted from `Game.exe`**: it is an OEP memory dump with no overlay.
+`Game-uncracked.exe` carries the 754,902-byte overlay, and its directory records (§5a) give each
+file's offset; the two files the stub extracts decrypt with this cipher to `MZ` executables.
+
+### 5a. The overlay directory
+
+`safedisc_extract_archive` reads one record at the current file offset into a 0x121-byte buffer
+and decrypts it in place with a keystream seeded by that offset (the value `SetFilePointer`
+returns):
+
+```
+s = offset
+per byte:
+    s     = s * 0x13C6A5 + 0xD8430DED          ; mod 2^32
+    plain = cipher ^ ((s ^ s>>8 ^ s>>16 ^ s>>24) & 0xff)
+```
+
+| record offset | type | field |
+|---|---|---|
+| `+0x00` | u32 | 1 in every record; the walker requires it |
+| `+0x04` | u32 | 0; required |
+| `+0x08` | u32 | the record id; a record is extracted only when it equals the walker's id argument |
+| `+0x0c` | u32 | the file data size |
+| `+0x10` | u32 | the header size, `0x1c` + name length + 1 |
+| `+0x14` | u32 | 0: the file goes into the sub-directory the caller names; 1: into the extraction directory itself |
+| `+0x18` | u32 | the name length |
+| `+0x1c` | char[] | the file name, NUL-terminated |
+
+The file data follows the header, and the next record starts at offset + header size + data
+size. `Game-uncracked.exe`'s overlay starts at file offset `0x25f000` and holds nine records
+followed by an 84-byte tail that is not a record:
+
+| file offset | id | data size | name |
+|---|---|---|---|
+| `0x25f000` | 1 | `0x2c345` | `~def8c9.tmp` |
+| `0x28b36d` | 1100 | `0x2e90` | `clcd32.dll` |
+| `0x28e224` | 1100 | `0x1016` | `clcd16.dll` |
+| `0x28f261` | 1101 | `0x944f` | `mcp.dll` |
+| `0x2986d4` | 2 | `0x19d5` | `SECDRV.SYS` |
+| `0x29a0d0` | 2 | `0x49a8` | `DrvMgt.dll` |
+| `0x29ea9f` | 11 | `0x1542` | `SecDrv04.VxD` |
+| `0x2a000a` | 0 | `0xb600` | `~f1d055.tmp` |
+| `0x2ab632` | 0 | `0x6be28` | `~df394b.tmp` |
+
+`safedisc_extract_payload` passes id 0, so the stub extracts only the last two; `~f1d055.tmp` is
+the one record with `+0x14 = 1`. Both decrypt to `MZ` with the §5 cipher. The other seven are
+left for a later stage: none of them reads as the §5 stream at its offset, and all seven begin
+with the same raw bytes `5f 60`.
 
 ## 6. Anti-disassembly in `safedisc_extract_archive`
 
@@ -169,9 +231,10 @@ displacements. Both branches of each pair are taken, so the byte between them is
 executed — and a linear disassembler is permanently desynchronised. Ghidra renders
 `halt_baddata()`; Capstone loses sync at the same instruction.
 
-The row is **STRUCTURAL and capped**: its name rests on the disassembled prologue
-(`GetFileSize` → `SetFilePointer` → a loop of 0x121-byte `ReadFile`s), its API set and its
-callee set. The middle needs a recursive-descent trace (§11).
+A trace that carries the flag values each taken branch implies resolves the maze: on every
+path the conditional jumps that follow a known flag have one successor, and what remains is the
+directory walk of §5a — the record read, the in-place keystream decryption, the three field
+tests and the call to `safedisc_extract_one_file`.
 
 Ghidra's `size` for it is **329**, because the size stops at the first `ret` run; the body
 actually runs to `0x007008b9`, about 1065 bytes.
@@ -223,7 +286,7 @@ possible. SafeDisc statically linked the same MSVC helpers into its own object.
 |---|---|---|
 | `0x006ff009` | `g_safedisc_saved_data_directories` | the saved `DataDirectory[1]` and `[12]` — see below |
 | `0x006ff029` | `g_safedisc_abort_callback` | failure-path function pointer; zero in the dump |
-| `0x006ff03d` | `g_safedisc_stub_mode` | the mode byte the entry stub branches on; zero in the shipped file |
+| `0x006ff03d` | `g_safedisc_stub_mode` | the mode byte the entry stub branches on; zero in the shipped file; non-zero selects the DllMain form (§2a) |
 | `0x007013d9` | `g_safedisc_string_table` | the 639-byte obfuscated blob inside `safedisc_string_at`'s code (§3) |
 
 **`g_safedisc_saved_data_directories` closes `crack.md` §4 step 4 from the other end.**
@@ -239,15 +302,7 @@ There is nothing to compare. `safedisc` and `dilla` return **0** hits in the PS2
 table: the PS2 has no disc protection of this kind, so every twin cell is `-`, and that is a
 measurement over a closed set, not a failed search.
 
-## 11. Open items
-
-| item | state |
-|---|---|
-| `safedisc_extract_archive` past `0x007005b8` | unread (§6); a recursive-descent trace through the opaque predicates would decode the 0x121-byte entry record layout — the last gap in a full description of the payload format |
-| `g_safedisc_stub_mode` non-zero branch | undecoded; the shipped byte is 0, so only the mode-0 path is exercised |
-| `Ox12121212` (string `0x01`) | no located consumer in the functions read |
-
-## 12. Related
+## 11. Related
 
 * `basic/artifacts/crack.md` — what was *modified*: the SafeDisc encryption, both cracks, the four
   patched bytes, the banner. **The authority on all of that.**

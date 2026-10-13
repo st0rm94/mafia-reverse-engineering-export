@@ -1,6 +1,6 @@
 # `police_board` — the pursuit board singleton
 
-**Created** 2026-05-26 11:43 +0200 · **Modified** 2026-10-04 11:53 +0200
+**Created** 2026-05-26 11:43 +0200 · **Modified** 2026-10-13 17:50 +0200
 
 The pursuit **board** singleton that owns and drives all active `police_action` squads. Functions
 whose receiver is this singleton carry the `police_board_*` prefix; the contained per-squad
@@ -200,7 +200,7 @@ All 30 are reached via `MOV ECX, 0x006552a8; CALL <method>`. Counts are the numb
 | 0x00447c40 | `police_board_update_sighting` | 13 | refreshes the per-squad sighting timestamp |
 | 0x00448150 | `police_board_target_matches` | 1 | predicate: any squad has target == npc |
 | 0x004481c0 | `police_board_refresh_target_vehicle` | 1 | refreshes the cached vehicle pointer for a squad |
-| 0x00448230 | `police_board_has_recent_sighting` | 4 | predicate: any squad sighted within the last 2000 ms |
+| 0x00448230 | `police_board_has_recent_sighting` | 4 | predicate: an officer of a squad on the target holds an entry for the target in its own AI log (officer `+0xe88`) updated within the last 2000 ms |
 | 0x00448300 | `police_board_has_group_for_target` | 2 | predicate: any squad, of any tier, has target == actor; `police_manager_tick` uses it to pick the identity branch (`structs/police_manager.md` §3.2) |
 | 0x00448350 | `police_board_broadcast_for_target` | 1 | fans event 0x17 to every squad targeting an NPC |
 | 0x004483b0 | `police_board_is_busted_cutscene_active` | 2 | reads `board+0x2c` (`!= 0`); a single byte read, does NOT walk squads |
@@ -298,10 +298,15 @@ squad is `ai_police_action`; the embedded item manager is `ai_animitem_manager`
 | PC VA | PC name | PS2 twin | grade |
 |---|---|---|---|
 | 0x004469e0 | `police_board_reset` | `ZacatekSmeny__18ai_police_nastenkaFv` ("start of shift") | CONFIRMED |
+| 0x00446b10 | `police_board_find_group_by_officer` | `CoVlastneRobimPlukovniku__18ai_police_nastenkaFP7C_actor` ⁴ | CONFIRMED |
+| 0x00446ba0 | `police_board_find_group_by_session_id` | `MamCisloDejAkci__18ai_police_nastenkaFUi` ⁴ | CONFIRMED |
 | 0x00446c00 | `police_board_create_and_engage` | `MamProVasAkciHosi__18ai_police_nastenka` | CONFIRMED |
 | 0x004474a0 | `police_board_end_pursuit` | `AkceDokoncenaPlukovniku__18ai_police_nastenka` | CONFIRMED |
 | 0x00447610 | `police_board_invalidate_actor` | `ZinvalidujAktora__18ai_police_nastenka` | CONFIRMED |
 | 0x004477b0 | `police_board_tick` | `Tick__18ai_police_nastenka` | CONFIRMED |
+| 0x00447a90 | `police_board_disband_by_target` | `MamHoZmrdaUzHoNechte__18ai_police_nastenkaFP7C_actorP7C_actor` ⁴ | CONFIRMED |
+| 0x00448230 | `police_board_has_recent_sighting` | `PanoveMateOciNaZmrdoviNeboCumitePoBabach__18ai_police_nastenkaFP7C_actor` ⁴ | CONFIRMED |
+| 0x00448350 | `police_board_broadcast_for_target` | `PanoveJaUzHoVarovalZmetka__18ai_police_nastenkaFP7C_actorP7C_actor` ⁴ | CONFIRMED |
 | 0x004483d0 | `police_board_is_actor_in_pursuit` | `SemTrefenaLocklaKurva__18ai_police_nastenka` ¹ | CONFIRMED |
 | 0x00448470 | `police_board_suspend_npcs` | `VseckyUbozakyStopni__18ai_police_nastenkaFP7C_actorP7C_actor` ³ | CONFIRMED |
 | 0x00448550 | `police_board_resume_npcs` | `VseckyUbozakyRozejdi__18ai_police_nastenkaFP7C_actorP7C_actor` ³ | CONFIRMED |
@@ -320,6 +325,13 @@ traffic switch, `salina_v_kine` ↔ `g_ambient_ai_suspended`, and the same bump 
 `NeserANedejchej` where the PC writes `+0xf40` directly. The two names are a developer joke pair,
 roughly "stop all the poor sods" and "send all the poor sods on their way"; the second body undoes
 the first and scatters nobody, so the PC name `_resume_npcs` states what it does.
+⁴ Statement for statement at each build's squad stride (PC `0x6c`, PS2 `0x80`), with the squad
+fields one dword apart (PC target `+0x60` and number `+0x30`, PS2 `+0x64` and `+0x34`) and the
+same callees (`HosiKoncime` = `police_action_disband`, `EventVsem` =
+`police_action_broadcast_event`, `GetLog` = `ai_logs_get_log_for_actor`). The sighting test looks
+the target up in each officer's own log (PC officer `+0xe88`, PS2 `+0x1060`); its window is
+2000 ms on the PC and 3000 ms on the PS2. The callers of the number lookup correspond too:
+`C_entity::AI` and `ai_modifier::Tick` on the PS2, `entity_ai` and `entity_action_tick` on the PC.
 
 **The board's offset inside `ai_manager` is identical on both builds:** PS2
 `Init__10ai_managerFv` opens `reserve__…(param_1 + 0x90, 100)`, and PC `police_board+0x00` is

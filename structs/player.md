@@ -1,6 +1,6 @@
 # `C_player` — the player actor
 
-**Created** 2026-07-12 14:05 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-12 14:05 +0200 · **Modified** 2026-10-05 21:42 +0200
 
 **PC prefix: `player_`.** Type `C_player`, derived from `C_human` (its ctor tail-calls
 `human_ctor`). It is the player-controlled human: on-foot/driving/in-car control, sniper mode,
@@ -12,8 +12,8 @@ control lock/fade, the car-damage bar, and the player SaveGame block.
 - **PC translation unit:** `C_player.cpp`, `[0x004c6b80, 0x004cdd70)` — 41 starts, all named.
 - **Lifecycle:** `player_ctor` (`0x004c6b90`), `player_dtor` (`0x004c6c40`),
   `player_scalar_deleting_dtor` (`0x004c6c20`).
-- **Coverage:** 44 PS2 methods, all accounted (§3): 33 CONFIRMED, 3 STRUCTURAL, 5 PS2-only,
-  1 inlined, 1 inlined-candidate, 1 not located.
+- **Coverage:** 44 PS2 methods, all accounted (§3): 33 CONFIRMED, 3 STRUCTURAL, 7 PS2-only,
+  1 inlined.
 
 All PS2 material lives in §7 and in §3's twin table.
 
@@ -47,10 +47,10 @@ typedef struct C_player {                   // extends C_human; PC offsets, C_pl
                                                 //     re-resolved by player_change_model, accepted only
                                                 //     if type==1 and FourCC(+0x1d4) is 'SNGM'/'SMMR'
     /* +0xab8 */ float   alpha;                 // [H] CURRENT ALPHA (fade level), 1.0 = opaque.
-                                                //     player_fade_reset sets 1.0f; player_add_alpha_object
-                                                //     re-applies it when < 1.0; player_change_model resets it.
-    /* +0xabc */ float   alpha_partner;         // [M] second float, also set to 1.0f by player_fade_reset
-                                                //     and by player_save_game_load. Role [U]
+                                                //     player_ai moves it toward +0xabc every tick;
+                                                //     player_add_alpha_object re-applies it when < 1.0
+    /* +0xabc */ float   alpha_target;          // [H] the fade target: 0.0 while the camera looks
+                                                //     from the player's eyes, otherwise 1.0
     /* +0xac0 */ struct {                       // [H] THE ALPHA-OBJECT LIST — MSVC std::vector,
         uint8_t alloc;                          //     4 words. `lea edx,[this+0xac0]` is the argument
         void  **begin;   /* +0xac4 */           //     player_add_alpha_object / _del_alpha_object hand
@@ -85,15 +85,15 @@ The PC↔PS2 mapping of this band is in §7a.
 | +0x680 | field_680 | M | `player_ctor` | - | = 3 |
 | +0xa9c | **drive_primary_bits** | H | `player_ai_drive`, `player_game_init` (`0xffff`), `player_save_game_load` | `player_ai_drive` | §5a |
 | +0xab0 | field_ab0 | M | `player_ctor` | - | = 200 |
-| +0xab4 | model_base_frame | H | `player_change_model` | `player_set_alpha` | Cached `"base"` sub-frame of the player model. Accepted only if the frame's type (+0x110) == 1 **and** its FourCC (+0x1d4) is `'SNGM'` (0x4d474e53) or `'SMMR'` (0x524d4d53) (§7b) |
-| +0xab8 | **alpha** | H | `player_fade_reset`, `player_change_model`, `player_save_game_load` | `player_add_alpha_object`, `player_fade_reset` | The **current fade level**, 1.0 = opaque. `player_fade_reset` writes 1.0f then calls `player_set_alpha(1.0f)`; `player_add_alpha_object` re-applies it to a newly registered object when `< 1.0` |
-| +0xabc | alpha_partner | M | `player_fade_reset`, `player_save_game_load` | - | Set to 1.0f beside `+0xab8` by both writers (§8) |
+| +0xab4 | model_base_frame | H | `player_change_model` | `player_set_alpha` | Cached `"base"` sub-frame of the player model. Accepted only if the frame's type (+0x110) == 1 **and** its FourCC (+0x1d4) is `'SNGM'` (0x4d474e53) or `'SMMR'` (0x524d4d53), the visual types `LS3DF.dll`'s type table names `I3D_VISUAL_SINGLEMESH` and `I3D_VISUAL_SINGLEMORPH` (§7b) |
+| +0xab8 | **alpha** | H | `player_ai`, `player_game_init`, `player_change_model`, `player_fade_reset`, `player_save_game_load` | `player_ai`, `player_add_alpha_object`, `player_save_game_save` | The **current fade level**, 1.0 = opaque. Every `player_ai` tick moves it toward `+0xabc` by `0.003 × frame ms` (0 to 1 in about 333 ms), clamps it to 0..1 and applies it with `player_set_alpha`; `player_fade_reset` writes 1.0f and calls `player_set_alpha(1.0f)`; `player_add_alpha_object` re-applies it to a newly registered object when `< 1.0` |
+| +0xabc | **alpha_target** | H | `player_ai`, `player_fade_reset`, `player_save_game_load` | `player_save_game_save` | The **fade target**: `player_ai` stores 0.0 while `camera_is_look_from_eyes` (the first-person view) holds and 1.0 otherwise, so the player model fades out in the eye view and back in outside it. `player_ai` steers `+0xab8` with the value it has just computed, so the field itself is read only by the save writer; the two other writers set 1.0f |
 | +0xac0 .. +0xacc | **alpha_list** | H | `player_add_alpha_object`, `player_del_alpha_object`, `player_change_model` | `player_set_alpha` | The **alpha-object list**: MSVC `std::vector` at `+0xac0` = `{alloc, begin +0xac4, end +0xac8, cap +0xacc}`. `lea edx,[this+0xac0]` is the argument both add/del methods hand their helper. **Elements are `I3D_object*`** — the PC decomp can only show a stride-4 pointer vector; the element type comes from the PS2 build (§7b) |
-| +0xad0 | **shot_accuracy_spread** | H | `player_add_shot_accuracy_penalty`, `player_ai` | `player_add_shot_accuracy_penalty`, `player_ai` | Accumulated per-shot **crosshair accuracy penalty**. Each shot ADDs `weapon_record+0x84`; `player_ai` decays it on foot. Pushed to the HUD as `spread*3.0+1.0` via `hud_set_player_accuracy` (hud+0x9234 = the scale of the bit-0x20 AIM CROSSHAIR). Clamp: >1.0 re-seeds to `rand*0.2+0.8`. Also mirrored to world `+0xd8` |
+| +0xad0 | **shot_accuracy_spread** | H | `player_add_shot_accuracy_penalty`, `player_ai` | `player_add_shot_accuracy_penalty`, `player_ai` | Accumulated per-shot **crosshair accuracy penalty**. Each shot ADDs `weapon_record+0x84`; `player_ai` decays it on foot. Pushed to the HUD as `spread*3.0+1.0` via `hud_set_player_accuracy` (hud+0x9234 = the scale of the bit-0x20 AIM CROSSHAIR). Clamp: >1.0 re-seeds to `rand*0.2+0.8`. Also mirrored to `C_game+0xd8`, which nothing reads (`basic/artifacts/player-interactions.md` §6) |
 | +0xad4 | shot_spread_window_ms | H | `player_add_shot_accuracy_penalty` | - | = 3000 ms, armed on every shot |
 | +0xad8 | action_button_scratch | M | `player_do_action_button_in_car` | `player_do_action_button_in_car` | Touched ×2 by the in-car action-button handler (§8) |
 | +0xadc | car_damage_window_ms | H | `player_show_car_damage_bar`, `player_invalidate_car_damage_bar` | - | = 3000 ms on show; = -1 on invalidate |
-| +0xae0 | **car_damage_target** | H | `player_show_car_damage_bar`, `player_invalidate_car_damage_bar` | `player_invalidate_car_damage_bar` | The `C_car` whose damage bar is on screen (HUD flag bit **0x10000** = `cardamagevisible`). Show requires `car+0x2031`; invalidate only fires if the passed car IS this one, and keeps the bar up when the player is in a car (`+0x98` kind==4) |
+| +0xae0 | **car_damage_target** | H | `player_show_car_damage_bar`, `player_invalidate_car_damage_bar` | `player_invalidate_car_damage_bar` | The `C_car` whose damage bar is on screen (HUD flag bit **0x10000** = `cardamagevisible`). Show requires the car's show-damage flag `car+0x2031`, which only the script command `showcardamage` sets (`structs/car.md` §1); invalidate only fires if the passed car IS this one, and keeps the bar up when the player is in a car (`+0x98` kind==4) |
 | +0xada | controls_locked | H | `player_lock_controls` | `player_collision`, `player_hit` | Last field of the save record; the guard both overrides test |
 | +0xaf0 | last_shown_weapon | H | `player_show_weapon_name` | `player_show_weapon_name` | Cache of the last weapon slot announced on the HUD console; compared against the equipped slot at `+0x4a0` so the message fires only on a change. **PC-only** |
 
@@ -106,8 +106,8 @@ health, then pushes `cur/max*100` to `hud_set_player_health_value`.
 ## 3. `C_player` method family — PC ↔ PS2 (all 44 methods)
 
 PC-first; PS2-only rows leave the PC columns `-`. Status: **CONFIRMED** (body-diffed) ·
-**STRUCTURAL** (same slot and role, bodies not diffable) · **PS2-ONLY** · **INLINED** ·
-**INLINED?** (inlining candidate, unproven) · **not located**. Sorted by PS2 VA.
+**STRUCTURAL** (same slot and role, bodies not diffable) · **PS2-ONLY** · **INLINED**. Sorted by
+PS2 VA.
 
 | PC VA | PC name | PS2 twin (mangled) | PS2 VA | Status | Role |
 |---|---|---|---|---|---|
@@ -124,7 +124,7 @@ PC-first; PS2-only rows leave the PC columns `-`. Status: **CONFIRMED** (body-di
 | - | - | `FireMagnetism__8C_playerFP8S_vectorP8S_vector` | 0x001ab3b0 | PS2-ONLY | Autoaim (§7). Uses `AngleTo__8S_vector` angle-to-target geometry; called ONLY from `AI_walk`/`AI_drive` |
 | - | - | `FireDriveFindTarget__8C_playerFP8S_vector` | 0x001aba00 | PS2-ONLY | Drive-by auto-target acquisition. Called only from `AI_drive` |
 | - | - | `FindNearestEnemyToTurn__8C_playerFb` | 0x001abdb0 | PS2-ONLY | Auto-turn-to-nearest-enemy. Called only from `AI_walk` |
-| - | - | `ZkurvenaPrebijeciFunkceAdvanced__8C_playerFv` | 0x001ac3c0 | INLINED? | Reload (dev-joke name). Called only from `AI`; on PC `player_ai` calls only the 3 control ticks, so it is inlined into one of them. Not separately located (§8) |
+| - | - | `ZkurvenaPrebijeciFunkceAdvanced__8C_playerFv` | 0x001ac3c0 | PS2-ONLY | Out-of-ammo weapon switch, not a reload: drops the empty gun and changes to the best remaining weapon. Called only from `AI`, when the magazine and the reserve are both empty (§7) |
 | 0x004c6ed0 | `player_ai_walk` | `AI_walk__8C_playerFUiP17G_ConsoleControls` | 0x001ac740 | CONFIRMED | ON-FOOT control tick. **Dispatch-locked**: `player_ai` selects it under `+0x98`==0/kind≠4 ↔ PS2 `+0x224`/`+0x50`. Body diverges on input reading (§7) |
 | 0x004c91f0 | `player_ai_drive` | `AI_drive__8C_playerFUiP17G_ConsoleControls` | 0x001af120 | CONFIRMED | IN-CAR DRIVER tick (seat `+0xac`==0). PS2 `AI_drive` calls `FireMagnetism`/`FireDriveFindTarget`; PC uses manual `human_do_aimed` + `collision_test_line_horizontal` |
 | 0x004ca570 | `player_ai_car_fire` | `AI_car_fire__8C_playerFUiP17G_ConsoleControls` | 0x001afb80 | CONFIRMED | IN-CAR PASSENGER-FIRE tick (the `else` of the driver-seat test). Third sub-tick; dispatch-locked |
@@ -141,7 +141,7 @@ PC-first; PS2-only rows leave the PC columns `-`. Status: **CONFIRMED** (body-di
 | 0x004cbcc0 | `player_update_controls` | `UpdateControls__8C_playerFv` | 0x001b3d00 | CONFIRMED | Per-frame driver steering feel: when driving (kind==4, seat `+0xac`==0) + a world gate, calls `vehicle_set_steering_linearity`. PC passes tunable `g_steering_linearity`, PS2 the literal `0.5f` |
 | 0x004cbd00 | `player_do_action_button_on_foot` | `Do_AB_OwnerNULL__8C_playerFv` | 0x001b3d60 | CONFIRMED | **AB = Action Button**; "OwnerNULL" = vehicle link `+0x98` is null ⇒ on foot. Dispatches the action menu (textdb ids `0x7d1..0x7e1` = strings 2001..2017). Decisive: `player_try_use_car`/`Can_UseCar` is called **×2 from this caller and nowhere else, on both builds**; shared ids `0x7d3`×3 / `0x7d9`×2 |
 | 0x004cc950 | `player_do_action_button_in_car` | `Do_AB_OwnerCar__8C_playerFv` | 0x001b4a40 | CONFIRMED | Sibling of the above, for a player whose `+0x98` link IS a kind-4 car. Shared menu ids `0x7d5`×2/`0x7d6`×2; `vehicle_set_engine_on` ↔ `SetEngineOn__9C_Vehicle`; +0xad8↔+0xc58. Size ratio 0.55 = factoring differs (PS2 inlines the menu/vector ops). Calls `Start__8C_pumper`, a live PC callee into `structs/pumper.md`'s class |
-| - | - | `NastavTypKrizkuPodleZbraneAtToTiSuliniOdSebePoznaji__8C_playerFv` | 0x001b5010 | not located | Crosshair-type-by-weapon selector (writes PS2 crosshair global `DAT_004f3224`). Not inlined into `player_indicator_set_aimed` (checked). See §8 |
+| - | - | `NastavTypKrizkuPodleZbraneAtToTiSuliniOdSebePoznaji__8C_playerFv` | 0x001b5010 | PS2-ONLY | Crosshair-type-by-weapon selector; it writes a global nothing reads (§7) |
 | 0x004ccc80 | `player_indicator_set_aimed` | `IndicatorSetAimed__8C_playerFv` | 0x001b50a0 | CONFIRMED | aim crosshair — sets/clears HUD bits `0x20`/`0x8000000` |
 | 0x004ccd20 | `player_add_shot_accuracy_penalty` | `ShootDeAimed__8C_playerFP15S_GameItemTable` | 0x001b51d0 | CONFIRMED | Statement-for-statement identical: 3000 ms window · weapon `+0x84` · world-mode ==5 ⇒ ×0.1 · 1.0 clamp · `rand*0.2+0.8` reseed · `x*3.0+1.0` to the indicator (PS2 `PlayerSetAccuracy__17G_IndicatorsClass`). Caller sets match exactly on both builds |
 | 0x004ccdd0 | `player_set_sniper_mode` | `SetSniperMode__8C_playerFb` | 0x001b52b0 | CONFIRMED | sniper zoom; identical FOV constant `0x3df5c28f` + weapon flag `0x4000`. Also called from C_human `Go_Front` |
@@ -168,19 +168,18 @@ in this TU is distorted.
 | C_player methods | 33 | mapped to a PC body | 32 |
 | vtable thunks | 3 | realised as a PC thunk | 3 |
 | file-local alpha helpers | 2 | shared no-op stub (`NetDirect`) | 1 |
-| free function (`player_set_navi_point`) | 1 | PS2-only (autoaim ×3, `GoToCar_Init`/`_Process`) | 5 |
+| free function (`player_set_navi_point`) | 1 | PS2-only (autoaim ×3, `GoToCar_Init`/`_Process`, the crosshair selector, the out-of-ammo switch) | 7 |
 | PC-only cheat helper (`player_set_hand_scale`) | 1 | inlined (`GoToCar_Cancel`) | 1 |
-| shared STL helper (`std_vector4_insert_n`, 192 callers) | 1 | inlined-candidate (the reload) | 1 |
-| | | not located (`Nastav…`) | 1 |
+| shared STL helper (`std_vector4_insert_n`, 192 callers) | 1 | | |
 
 ---
 
-## 4. `player_*` PC functions that are NOT C_player methods
+## 4. Two functions the player code leans on that are NOT C_player methods
 
 | PC VA | PC name | what it is |
 |---|---|---|
-| 0x005c8d50 | `player_set_wingman_indicator` | a HUD helper; no matching PS2 method name |
-| 0x00425390 | `act_mission_get_game` | a singleton accessor on a different object |
+| 0x005c8d50 | `human_set_wingman_indicator` | a `C_human` setter: the script commands `wingman_setindicator` / `wingman_delindicator` pin a wingman slot and portrait on any human of kind 2 or `0x1b` (`structs/human.md`, §7) |
+| 0x00425390 | `act_mission_get_game` | the `C_mission` accessor `return this+0x24`, the `C_game` singleton (§7) |
 
 ## 5. `C_player.cpp` — free function and file-scope statics
 
@@ -203,7 +202,7 @@ containing functions:
 |---|---|---|
 | `0x006560d0`..`0x006560e0` | **`player_ai_drive` only** — 5 floats, 2 refs each | the secondary-binding latches of §5a: `g_player_drive_steer_right_secondary_latch`, `_steer_left_`, `_clutch_`, `_brake_`, `_accel_secondary_latch` |
 | `0x006560e4` | `game_init`, `human_intern_use_car`, `human_put_in_vehicle_at_seat`, `human_update`, `player_ai`, `player_ai_drive`, + its setter `hud_set_car_damage_bar_enabled` | `g_hud_car_damage_bar_enabled`, an `extern` defined in this run: set by script `cardamagevisible`, cleared by `game_init` |
-| `0x006560e8` | **nothing** | `g_player_navi_frame`. Write-only (§7b) |
+| `0x006560e8` | **nothing**: the only reference to this address anywhere in the image is the store in `player_set_navi_point` | `g_player_navi_frame`. Write-only (§7b) |
 
 ### 5a. The driving-input latches
 
@@ -247,6 +246,10 @@ start every secondary axis is ignored until it moves.
 | 7 | **Control input.** The three control ticks take a `G_ConsoleControls*` on PS2 (gamepad); the PC reads input directly. | `AI_walk` / `AI_drive` / `AI_car_fire` signatures, §3 |
 | 8 | **Steering linearity.** `player_update_controls` passes the tunable `g_steering_linearity`; PS2 passes the literal `0.5f`. | §3 |
 | 9 | **Accuracy mirror.** PC's `player_add_shot_accuracy_penalty` mirrors the accumulated spread to world `+0xd8`; PS2's `ShootDeAimed` has no such statement. | §8 |
+| 10 | **No crosshair-type selector on the PC.** At all three PS2 call positions (`Movement__7C_humanFUi`, and twice in `IndicatorSetAimed`) the PC twins `human_movement` and `player_indicator_set_aimed` raise HUD bit `0x20` and call nothing. | The PS2 selector maps the weapon id to a crosshair type in the global `DAT_004f3224`, which the ELF stores 4 times and loads 0 times, so the PC loses nothing |
+| 11 | **No automatic out-of-ammo switch on the PC.** PS2 `AI` reloads when the magazine is empty and calls `ZkurvenaPrebijeciFunkceAdvanced` when the reserve is empty too; that drops the gun (`Do_WeaponDrop`) and selects the best remaining weapon (`SelectByID`, `Do_ChangeWeapon`). | On the PC `human_do_reload` is reached only from the reload input of the three control ticks, and `inventory_select_by_id` has 11 callers, none a player function; the player changes weapons only through `inventory_cycle_to_prev` / `_next` |
+| 12 | **The wingman-indicator setter is inlined on the PS2.** No PS2 method matches `human_set_wingman_indicator`; the PS2 `Process__9C_programFUi` arm for `WINGMAN_SETINDICATOR` (PS2 opcode `0x7b`) stores the same pair at `C_human +0x734` / `+0x738` behind the same kind 2 / `0x1b` guard. | Both bodies |
+| 13 | **`act_mission_get_game` has no PS2 method.** None of the 68 PS2 `C_mission` symbols reads `+0x20`; PS2 code reads `act_mission+0x20` inline wherever the PC calls the accessor. | The PS2 symbol table and bodies |
 
 A PS2 method count of 44 was never the PC target: several of those methods are console-input
 features the PC never had. Both feature differences follow from the controls differing between
@@ -261,6 +264,7 @@ body-diff split cleanly in two:
 |---|---|---|---|
 | +0xab4 | +0xc38 | **0x184** | `player_change_model` |
 | +0xab8 | +0xc3c | **0x184** | `player_change_model` |
+| +0xabc | +0xc40 | **0x184** | `player_ai` / `player_fade_reset` |
 | +0xac8 | +0xc48 | **0x180** ¹ | `player_change_model` |
 | +0xad0 | +0xc50 | **0x180** | `player_add_shot_accuracy_penalty` |
 | +0xad4 | +0xc54 | **0x180** | `player_add_shot_accuracy_penalty` |
@@ -297,16 +301,12 @@ has a C_player receiver. Corollary field map: PS2 `+0x224`↔PC `+0x98` (vehicle
 - `player_set_navi_point` is mangled `__FP9I3D_frame` on PS2 — no class tag — and is the first
   symbol of `C_player.cpp` on both builds. Callsite census 3↔3, roles matching one for one.
 - `g_player_navi_frame` is PS2 `navi_frame`, write-only on both builds.
+- The fade target is PS2 `+0xc40`: PS2 `AI__8C_playerFUi` sets it from
+  `LookFromEyes__8G_CameraFv` (0.0 in the eye view, else 1.0) and steps `+0xc3c` toward it, as the
+  PC does; the PS2 compares against the field itself.
 
 ## 8. Open items
 
 | item | state |
 |---|---|
-| `NastavTypKrizkuPodleZbraneAtToTiSuliniOdSebePoznaji` (140 B) | the crosshair-type-by-weapon selector. The PC gap between `player_do_action_button_in_car` and `player_indicator_set_aimed` is **empty**, so it is recorded *not located*, never "inlined"; it is also not inlined into `player_indicator_set_aimed` (checked). Lever: `player_indicator_set_aimed` (flag bit 0x20) + `hud_set_player_accuracy` (+0x9234) are the crosshair path — search their neighbourhood |
-| `ZkurvenaPrebijeciFunkceAdvanced` (reload, 888 B) | CANDIDATE-inlined into one of the three control ticks. Confirm which by scanning `player_ai_walk` / `_car_fire` for the reload state machine |
-| what reads `g_player_navi_frame` | nothing does, on either build (§5). The value is published and consumed by nobody |
-| `+0xabc` (`alpha_partner`) | set to 1.0f beside the alpha by two writers, read by nobody located; a target alpha or a fade rate would both fit |
 | `+0xad8` (`action_button_scratch`) | touched ×2 by `player_do_action_button_in_car`; role not decoded |
-| the `+0xd8` world mirror | PC's `player_add_shot_accuracy_penalty` writes it, PS2's `ShootDeAimed` does not. Whether `+0xd8` drives a separate screen/camera effect on the PC, or is read back by the same crosshair path, is undecided |
-| `car+0x2044` / `car+0x2031` | the gates on `player_try_use_car`'s police-report branch and on `player_show_car_damage_bar`; both unidentified |
-| `player_set_wingman_indicator` and `act_mission_get_game` (§4) | not body-diffed against any PS2 method |

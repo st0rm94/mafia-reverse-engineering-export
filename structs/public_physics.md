@@ -1,6 +1,6 @@
 # `C_public_physics` — the `create_physicalobject` prop
 
-**Created** 2026-08-15 10:06 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-08-15 10:06 +0200 · **Modified** 2026-10-05 21:51 +0200
 
 The general-purpose `C_PhThing` subclass: the one that turns an **existing scene frame** into a
 free-falling, rolling, colliding physics object. Its four siblings are each specialised to one kind
@@ -79,11 +79,24 @@ the decomp with `//` banners above the case labels.
 
 | case | command | what it does |
 |---|---|---|
-| `0xcc` | `CREATE_PHYSICALOBJECT ww, xx, yy, zz` | `ww` frame id · `xx` initial motion, negated into Y so **>0 = down**, `<0` = up · `yy` 0 = falls only when hit, 1 = falls at once (random-direction impulse scaled by the weight) · `zz` weight in kg, clamped against a floor and passed as the body mass |
+| `0xcc` | `CREATE_PHYSICALOBJECT ww, xx, yy, zz` | `ww` the frame the prop wraps (the actor's `+0x68`) · `xx` the initial velocity, stored as `(0, -xx, 0)` at `+0x1e0`, so **>0 = down**; with `xx` = 0 the prop starts asleep (act state 1) until something hits it · `yy` non-zero: an impulse `(0, 0.01 × mass, 0)` at a random world point in `[-1, 1)³`, which wakes the prop · `zz` the mass in kg, at least 1.0, at `+0x190`; it also sets the inverse inertia `+0x194..+0x19c` and the size of the `yy` impulse |
 | `0xcd` | `DESTROY_PHYSICALOBJECT xx` | scans the mission actor list for kind **`0x20`** with frame `xx` and retires it via `game_remove_temporary_actor` |
 
 The keyword table stores `CREATE_PHYSICALOBJECT = 0xcc` and `DESTROY_PHYSICALOBJECT = 0xcd`, and the
 stored opcode is the case label (`basic/artifacts/script-opcode-dispatch.md`).
+
+The create arm hands `physical_object_init_box` an `S_THING_BOX` built on its stack
+(`structs/physical_object.md` §1):
+
+| block offset | value from the arm | stored by `physical_object_init_box` at |
+|---|---|---|
+| `+0x00` | the mass, `max(zz, 1.0)` | `+0x190` |
+| `+0x04` .. `+0x0c` | the initial velocity `(0, -xx, 0)` | `+0x1e0` .. `+0x1e8` |
+| `+0x10` | the friction, `0.45` | `+0x1f8` |
+
+`physical_object_init_box` then sets act state 1 when the velocity's squared length is below
+`1e-5`, and derives the box centre (`+0x78` .. `+0x80`) and the inverse inertia from the frame's
+bounding box and the mass.
 
 ## 4. Method coverage — 14/14 PS2 methods accounted, 11/11 PC starts named
 
@@ -133,8 +146,16 @@ The element type is `C_public_physics*`, established by a census of the consumer
 own init/free pair, exactly **two** functions touch the vector — `public_physics_game_init` (the only
 producer) and `game_init` (clears it wholesale at scene start). Nothing else is ever put in.
 
-`public_physics_game_done` does **not** unregister, so a prop destroyed mid-scene leaves an entry in
-the list until `game_init` clears it (§8).
+**Nothing removes an entry.** Only four functions touch the vector: its static initialiser and
+`public_physics_list_free`, `public_physics_game_init` and `game_init`. A prop retired any other
+way — `destroy_physicalobject`, or `game_remove_temporary_actor` from any caller — is released by
+`game_remove_temporary_actor_now` while its pointer stays in the list. The stale pointer is used
+again once it reaches `list[0]` with more than 30 entries: `public_physics_game_init` then hands
+it to `game_invalidate_actor` and `game_remove_temporary_actor`, on freed memory. Four shipped
+missions use `destroy_physicalobject` (`MISE15-MESTO`, `MISE15-PRISTAV`, `MISE15-SALIERY`,
+`MISE17-VEZENI`); no mission's scripts contain more than eight `create_physicalobject` calls, so
+reaching the case needs many runtime props (umbrellas, dropped hand items) in the same scene after
+a removal.
 
 ## 6. PC vs PS2
 
@@ -174,7 +195,4 @@ what places it in the link order.
 
 | Item | State |
 |---|---|
-| the four `create_physicalobject` args at the field level | The case arm reads them out of the script node and hands them to `Init`/`init_box`; which instance fields they land in is not traced. The weight is passed to `physical_object_init_box` and never read back through a named field |
-| stale registry entries (§5) | `public_physics_game_done` does not unregister; whether that is a latent bug or is covered by `game_invalidate_actor` is **[U]** — no reader of a stale entry located |
-| `physical_object_init_box`'s parameter block | The create arm builds it on the stack (`1.0f`, `0.45f`, the weight, the impulse vector); its layout is not described |
 | the "interact badly with cars" caveat | Nothing in the code is traced to it; one in-game observation (drive into a `create_physicalobject` prop) would say what it looks like |

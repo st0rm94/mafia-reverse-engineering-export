@@ -1,6 +1,6 @@
 # `C_PhThing` — the physics-body base ("**Ph**ysical **Thing**")
 
-**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-10-01 10:31 +0200
+**Created** 2026-08-05 17:00 +0200 · **Modified** 2026-10-05 15:41 +0200
 
 The shared rigid-body base behind everything in the game that falls, rolls, tumbles and
 collides on its own: dropped car parts, crash debris, boxes, dropped weapons and scripted
@@ -36,9 +36,12 @@ tells a reader nothing, and the expansion is not a guess (§1).
 
 The two dispatcher cases are byte-confirmed from the game's own keyword table
 (`script-mapping/artifacts/opcode-table.md`) and written up in
-`script-mapping/artifacts/opcodes-verified.md`. Case `0xcc` must construct one of the five
-subclasses below, selected by one of its four arguments (`create_physicalobject ww, xx, yy, zz`
-per the Mafia Script Data Reference) (§8).
+`script-mapping/artifacts/opcodes-verified.md`. Case `0xcc` (`create_physicalobject ww, xx, yy, zz`
+in the Mafia Script Data Reference) always constructs a `C_public_physics` (`operator_new(0x3b0)`);
+none of the four arguments selects a class. It initialises the body through
+`physical_object_init_box` from an `S_THING_BOX` of mass `max(zz, 1.0)`, initial velocity
+`(0, -xx, 0)` and friction `0.45`, and when `yy` is non-zero applies a random impulse scaled by the
+mass.
 
 ## 2. The five subclasses — a closed set on both builds
 
@@ -155,15 +158,15 @@ Everything below is **PC**; the cross-build mapping is in §6.
 | `+0x1a0` | **inverse inertia, full world tensor** (16 floats) — precomposed by `physical_object_build_world_inertia_tensor` | H |
 | `+0x1e0` `+0x1e4` `+0x1e8` | **linear velocity** | H |
 | `+0x1ec` `+0x1f0` `+0x1f4` | **angular velocity** | H |
-| `+0x1f8` | copied from descriptor field `friction` (both shapes, `structs/box_new.md` §1a) (§8) | M |
+| `+0x1f8` | **descriptor friction** (both shapes, `structs/box_new.md` §1a): both contact solvers scale the tangential term by it, and `physical_object_move_wheel` applies `-friction x mass` | H |
 | `+0x1fc` | restitution, default **1.05** | H |
 | `+0x200` | friction, default **0.03** | H |
 | `+0x204` | derived wheel constant, `width × mass × 37.03704` | H |
 | `+0x208` `+0x20c` `+0x210` | wheel contact offset, `(0,−1,0) × mass × width` | H |
 | `+0x214` | wheel width | H |
-| `+0x21c` | copied from `S_THING_WHEEL +0x04` (§8) | M |
+| `+0x21c` | the wheel parameter, from `S_THING_WHEEL +0x04`: `physical_object_move_wheel` reads half of it, signed by the side of the contact, at four sites | H |
 | `+0x220` | wheel radius, from `S_THING_WHEEL +0x00` | H |
-| `+0x224` | copied from `S_THING_WHEEL +0x1c` (`damping`) (§8) | M |
+| `+0x224` | **damping**, from `S_THING_WHEEL +0x1c`: `physical_object_move_wheel` divides it by the radius `+0x220` and scales it by mass and width | H |
 | `+0x2ec` | at-rest lifetime accumulator, in seconds | H |
 | `+0x2f0` | at-rest lifetime limit (0.6 by default) | H |
 | `+0x2f4` | frame-clamp ratio `83.0 / Δt`, consumed by the network layer | H |
@@ -224,7 +227,7 @@ update / on_act_state_changed ─► broadcast_state_net_event_msg ─► post_s
 | `+0x370` `+0x374` `+0x378` | **smoothing correction velocity**, derived on receive |
 | `+0x37c` `+0x380` `+0x384` | last received / latched **angular** velocity |
 | `+0x388` … `+0x394` | last received / latched orientation quaternion |
-| `+0x3a0` | flag word — bit `0x8` suppress rotation blend, bit `0x40` collision event already posted this frame |
+| `+0x3a0` | flag word, decoded bit by bit in §5d |
 | `+0x3a4` | `timeGetTime()` at the last snapshot / message |
 | `+0x3a8` `+0x3ac` | elapsed / limit of the 3000 ms hand-back timer |
 
@@ -256,6 +259,20 @@ the payload rather than for either owner. Payload: the actor-state base
 velocity words, and a flag byte at `+0x38`. The receive half is
 `physical_object_apply_net_event_msg`, vtable slot 38. Full write-up:
 `structs/net_event_msg.md`.
+
+### 5d. The `+0x3a0` flag word
+
+The flag byte below is the payload byte `+0x38` of the type-`0x1b` message (§5c), which
+`physical_object_broadcast_state_net_event_msg` passes through. `physical_object_net_snapshot_state`
+zeroes the whole word.
+
+| bit | meaning | set by | cleared by | read by |
+|---|---|---|---|---|
+| `0x1` | state changed, send now | `physical_object_move_box` / `_move_wheel` when the latched position differs, `physical_object_init_wheel`, `physical_object_on_collision` (local body), `physical_object_hit` | `physical_object_update` | `physical_object_update`: once the hold-off `+0x39c` is zero it posts a state message with flag byte 3, then sets `+0x39c` to half the session update interval |
+| `0x8` | rotation blend suppressed | `physical_object_apply_net_event_msg`, on every received message | `physical_object_net_apply_remote_state`, after one step | `physical_object_net_apply_remote_state` |
+| `0x10` | the last message's flag byte was 0 | `physical_object_apply_net_event_msg` | the same, when the flag byte is non-zero | `physical_object_net_apply_remote_state`, which then runs an extra rotation step |
+| `0x20` | first state message pending | `physical_object_init_box` | `physical_object_update` | `physical_object_update`: posts a state message with flag byte 0 and zeroes the correction accumulator `+0x364` |
+| `0x40` | nothing new to report this frame | `physical_object_move_box` / `_move_wheel` when the latched position is unchanged; `physical_object_on_collision` after posting a remote body's collision event | `physical_object_update` at the end of every call, `physical_object_apply_net_event_msg` | `physical_object_on_collision` (at most one collision event per frame), `physical_object_update` (flag byte 3 instead of 0 when the periodic message falls due) |
 
 ## 6. PC vs PS2
 
@@ -390,7 +407,4 @@ role) · `structs/entity.md` (the kind enum) · `structs/actor.md` (the base of 
 
 | item | state |
 |---|---|
-| the `create_physicalobject` dispatcher case body | case `0xcc` is confirmed, but the case body has not been read; it would confirm the kind→class mapping from the script side |
-| `+0x3a0` bit meanings | bits `0x1`, `0x8`, `0x10`, `0x40` all have writers; only `0x40` (collision event posted) has a confirmed reader |
-| `+0x1f8` / `+0x21c` / `+0x224` | copied out of the descriptors (`+0x1f8` by both `physical_object_init_box` and `_init_wheel`, the other two by `_init_wheel` only; layouts in `structs/box_new.md` §1a); no consumer traced |
 | the `CollisionCount` twin | which of `_diag` / `_matrix` is the PS2 method's twin is undecided: the algorithm points at `_matrix`, the callsite count at `_diag`, the size ratio at neither (§6c) |

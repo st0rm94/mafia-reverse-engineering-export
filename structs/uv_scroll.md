@@ -1,10 +1,11 @@
 # `C_tshift` — the UV-scroll animator
 
-**Created** 2026-09-03 19:14 +0200 · **Modified** 2026-09-17 13:43 +0200
+**Created** 2026-09-03 19:14 +0200 · **Modified** 2026-10-11 15:07 +0200
 
-The small class that scrolls texture coordinates on named scene objects — conveyor belts,
-water, flowing signage. It lives in the `Mission.cpp` translation unit
-(`[0x005fe550, 0x00607f70]`). PC prefix **`uv_scroll_`**.
+The small class that scrolls texture coordinates on named scene objects — in the shipped game
+a projector's film reels, a UFO and water and shore surfaces (§3a). Its record builders live
+in the `Mission.cpp` translation unit (`[0x005fe550, 0x00607f70]`); its two tick functions sit
+at `0x0061df30` and `0x0061e050`, outside it. PC prefix **`uv_scroll_`**.
 
 Related: `structs/mission.md` §3 (the owning member) · `structs/i3d_frame.md` (the
 `i3d_frame_get_mesh_object_ptr` accessor at `frame+0x1e0`).
@@ -20,7 +21,7 @@ Related: `structs/mission.md` §3 (the owning member) · `structs/i3d_frame.md` 
 | destroyed by | `mission_uninit` (`folded_vector_free_at_0x04`) |
 | driven by | `mission_tick`, every frame, guarded on the pointer being non-null |
 | cleared by | `mission_close` (`uv_scroll_clear_channels`) |
-| filled by | `mission_open_bin`, under the `'OBJ_'` chunk tag |
+| filled by | `mission_open_bin`, from the `0xAE02` chunk of `scene2.bin` (§2a) |
 | accessor | `mission_get_uv_scroll` |
 
 ```c
@@ -50,6 +51,23 @@ typedef struct S_uv_scroll_channel {   /* 0x1c bytes */
 } S_uv_scroll_channel;
 ```
 
+### 2a. The scene-file record
+
+Under the root chunk `0x4c53` of `scene2.bin`, one `0xAE02` chunk holds one `0xAE03` child per
+channel (`structs/mission.md` §4a). Each child is the 6-byte chunk header followed by:
+
+| offset | size | field | stored at |
+|---|---|---|---|
+| `+0x06` | 2 | channel mask | `+0x18` |
+| `+0x08` | 4 | U rate, float | `+0x08` |
+| `+0x0c` | 4 | V rate, float | `+0x0c` |
+| `+0x10` | 4 | name length *n* | - |
+| `+0x14` | *n* | frame name, no terminator | resolved to `+0x04` |
+
+The chunk size is exactly `0x14 + n`: all eight shipped records (§3a) decode to it with nothing
+left over. The named frame must be a visual (frame type 1) tagged `'LMAP'` or `'OBJ_'` that carries
+a mesh object; a record naming any other frame is skipped.
+
 ## 3. 🔑 Why the name is `uv_scroll` and not `tshift`
 
 `tshift` is the developers' abbreviation and means nothing to a reader who has not seen the PS2
@@ -68,9 +86,30 @@ Two float pairs, integrated against real time, wrapped to unit period, written i
 `I3D_visual`'s two UV-offset slots. That is a texture-coordinate scroller and nothing else — so
 `tshift` decodes as **texture shift**, and the PC name says so in English.
 
-The channels are authored per scene object: `mission_open_bin` builds one under the `'OBJ_'`
-chunk tag, reading the two rates and the mask out of the file and resolving the target with
+The channels are authored per scene object: `mission_open_bin` builds one per `0xAE03` record
+(§2a), reading the two rates and the mask out of the file and resolving the target with
 `i3d_frame_get_mesh_object_ptr`.
+
+### 3a. What the two channels are, and which one ships
+
+Channel 1 (mask `0x1`, `+0x5c`/`+0x60`) shifts the mesh's base texture coordinates (§5).
+Every channel the shipped scenes author uses it. The `0xAE03` records of every shipped
+`scene2.bin` hold eight channels in three scenes:
+
+| scene | frame | mask | U rate | V rate |
+|---|---|---|---|---|
+| `00MENU` | `9promitac.Cylinder05` | `0x1` | 0.01 | 0 |
+| `00MENU` | `9promitac.Cylinder18` | `0x1` | -0.05 | 0 |
+| `EXTREME` | `UfoTalir.Cylinder02` | `0x1` | -0.4 | 1.0 |
+| `EXTREME` | `UfoTalir.Cylinder01` | `0x1` | 0.5 | 0.8 |
+| `MISE14-PARNIK` | `Cylinder01` | `0x1` | -0.05 | 0 |
+| `MISE14-PARNIK` | `pobrezi2.Object02` | `0x1` | 0.05 | 0 |
+| `MISE14-PARNIK` | `Box488` | `0x1` | 0 | -0.05 |
+| `MISE14-PARNIK` | `Object66` | `0x1` | 0.08 | 0 |
+
+`9promitac` is the main menu's film projector ("promitac" = projector). Channel 2 (mask `0x2`,
+`+0x64`/`+0x68`) is used by no shipped scene. The `LS3DF.dll` code that consumes `+0x64`/`+0x68`
+is not identified; this class only stores the offsets.
 
 ## 4. PC functions
 
@@ -120,7 +159,9 @@ implementations diverge completely:
 * the **PS2** locks the mesh's vertex buffer (`GetLOD__15I3D_mesh_objectCFi`,
   `LockVertices__14I3D_mesh_levelFUi`, `UnlockVertices__14I3D_mesh_levelFv`) and adds the delta to
   **every vertex's UV pair**, eight vertices per unrolled iteration, then notifies the visual
-  through vtable `+0xcc`. It honours **mask `0x1` only**.
+  through vtable `+0xcc`. It honours **mask `0x1` only**. The vertex it edits is `0x20`
+  bytes with a single UV pair at `+0x18` (position, normal, texture coordinate), which is what
+  identifies mask `0x1` as the base texture coordinates (§3a).
 
 So the PC has a second scroll channel (mask `0x2`) the PS2 does not, and the PS2 pays per-vertex
 for the first. **In game:** a PS2 surface using the second channel would not scroll at all.
@@ -132,6 +173,4 @@ The PS2 object is `0xc` bytes to the PC's `0x10`: the PC's leading allocator byt
 
 | item | state |
 |---|---|
-| the scene-file record the rates are read from | only the two floats and the mask that reach the channel are known, not the file layout around them |
-| what the two UV channels are for [M] | `visual+0x5c/+0x60` and `+0x64/+0x68` are two independent offset pairs; nothing read says whether they are two texture stages, a diffuse/lightmap pair, or something else. `structs/i3d_frame.md` documents neither. The second (mask `0x2`) is PC-only (§5) |
-| in-game check | any scene object with a `tshift` channel should scroll its texture continuously and seamlessly (the wrap is one period); conveyor belts in the docks missions and flowing water are the candidates |
+| in-game check | any scene object with a `tshift` channel should scroll its texture continuously and seamlessly (the wrap is one period); the shipped channels are the main-menu projector reels, the `EXTREME` UFO and four objects in `MISE14-PARNIK` (§3a) |

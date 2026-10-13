@@ -1,6 +1,6 @@
 # `C_actor` — the root actor base class
 
-**Created** 2026-07-12 09:41 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-12 09:41 +0200 · **Modified** 2026-10-12 21:02 +0200
 
 The root of the game's actor hierarchy: `C_actor` ← `C_human` ← { `C_entity`, `C_player` }, with
 `C_car` / `C_traffic_car` / `C_railway` / `C_wagon`, spike-strips and props deriving from it as well.
@@ -56,7 +56,8 @@ typedef struct C_actor {                    // partial; PC offsets
     /* +0x5e */ uint8_t   death_processed;  // [H] the once-only death latch (§1c).
     /* +0x5f */ uint8_t   in_camera_sector; // [H] recomputed every tick; 1 = same visibility cell
                                             //     as the camera (§1c).
-    /* +0x60 */ int32_t   field_60;         // [M] ctor = 0 (§8).
+    /* +0x60 */ void     *pending_track_event; // [H] the recorder event record queued for the
+                                            //     next key (§1b). actor_ctor = 0.
     /* +0x64 */ uint8_t   owns_frame_owner_block; // [H] 1 = actor_game_init allocated the frame's
                                             //     owner block and actor_game_done must free it.
     /* +0x65 */ uint8_t   save_excluded;    // [H] 1 = the savegame skips this actor (runtime
@@ -90,8 +91,8 @@ enum, but not of the vtable.
 
 The base is **data-free as far as the PC is concerned**: `actor_ctor` writes the derived vptr at
 `+0x00` and calls no base constructor, because there is none to call. It does own the fields the
-interface touches — `+0x04` mode flags, `+0x08` track, `+0x68` `I3D_frame*` (`structs/actor_track.md`
-§3).
+interface touches — `+0x04` mode flags, `+0x08` track, `+0x60` pending event record, `+0x68`
+`I3D_frame*` (`structs/actor_track.md` §3).
 
 **The whole subsystem is PC-only** (§6).
 
@@ -108,17 +109,17 @@ are mapped by ROLE, never by rebasing, in this class and in every class derived 
 | +0x0c | ref_count | H | `actor_ctor` (=1) | `actor_release` | 16-bit. `actor_release` pre-decrements and, at zero, invokes vtable slot 16 (`+0x40`) — the scalar deleting destructor — with the delete flag |
 | +0x10 | kind | H | `actor_ctor`, `human_ctor`, `entity_ctor`, `player_ctor` | `folded_get_dword_0x10` | 1 actor, 2 player, 3 human, 4 car, 0x13 `C_don_ocas` (the ambient-crowd stand-in actor), 0x14 `C_bridge`, 0x1b entity — `structs/entity.md` §1. This is the engine's stand-in for RTTI, the build carrying no RTTI at all, which is why the reader has 364 references. The reader symbol is ICF-folded and also serves `C_mission` |
 | +0x14 | class id | H | `actor_ctor` (=1), `human_ctor` (=2), `car_extended_ctor` (=3) | `actor_get_class_id` | the dword immediately after the kind: a branch tag with exactly three values — **1** every class that does not restamp it, **2** `C_human` (inherited by `C_entity` and `C_player`), **3** `C_car_ex`. The three ctor stores are every store at this offset in the binary's constructors. Its one reader tests `kind == 4 && +0x14 == 3` to select a truck |
-| +0x18 | net GUID | H | `actor_init` (`++C_game+8`), `actor_apply_net_guid_table`, `actor_save_game_load_guid` | `actor_apply_net_guid_table`, the event-message layer | `actor_init` draws it from a per-mission counter; top byte = owning peer slot (§5) |
+| +0x18 | net GUID | H | `actor_init` (`++C_mission+0x08`, `structs/mission.md` §3), `actor_apply_net_guid_table`, `actor_save_game_load_guid` | `actor_apply_net_guid_table`, the event-message layer | `actor_init` draws it from a per-mission counter; top byte = owning peer slot (§5) |
 | +0x1c | act_state | H | `actor_init` (=0), `actor_game_init` (=0), `actor_set_act_state`, `actor_rebirth` (=0), `actor_save_game_load` | `actor_rebirth`, the tag-3 savegame record | the three-value enum of §1d |
 | +0x20 | AI-driven selector | H | `actor_ctor` (=0), `actor_apply_net_guid_table` | `actor_tick` | `actor_tick` dispatches the Update slot when this byte is zero and the AI slot otherwise; the network layer sets it for every actor this peer does not own (§5) |
-| +0x24..+0x2c | cached_world_pos | H | `actor_set_cached_world_pos` | `actor_get_cached_world_pos` | the fast path against the frame recompute. The writer is an out-of-line inline member hosted by the `C_program` translation unit (`structs/program.md` §6); its three callsites all take the receiver out of the script VM's actor register file |
+| +0x24..+0x2c | cached_world_pos | H | `actor_game_init`, `car_update`, `actor_set_cached_world_pos` | `actor_get_cached_world_pos`, `actor_get_world_position` (when the actor has no frame), `garage_game_done` | the fast path against the frame recompute. `car_update` refreshes it on every tick of a locally simulated car (`+0x20 == 0`) from the body position `car+0x40c`, so a car's copy is current. `actor_set_cached_world_pos` is an out-of-line inline member hosted by the `C_program` translation unit (`structs/program.md` §6); its three callsites all take the receiver out of the script VM's actor register file |
 | +0x30..+0x38 | cached forward | H | `actor_game_init`, `actor_set_direction` | `actor_get_direction` | the frame's forward row, cached. The `actor_setdir` arm normalises a direction, stores it here, reads it straight back through `actor_get_direction` and hands it to the frame's world-forward virtual |
 | +0x3c / +0x48 | placement position / quaternion | H | `actor_internal_placement_reset` | `actor_reset_placement` | the placement round trip: `actor_reset_placement` pushes them into the frame's local matrix with `S_quat::Normalize` and the dirty masks; `actor_internal_placement_reset` reads them back |
 | +0x58 / +0x5c | saved frame parent / visibility byte | H | `actor_reset_placement` | `actor_reset_placement` | saved and read back by the same body (the placement round trip) |
 | +0x5d | alive flag | H | set (=1): the `C_actor` init, `human_activate`; cleared: seven functions; restored: `actor_save_game_load` | `actor_is_alive`, `entity_is_tickable`, `entity_script_tick`, `entity_suspend_ai_and_hide`, `actor_tick` | non-zero = alive ¹ |
 | +0x5e | death-processed latch | H | set (=1): `actor_tick`, `human_death`, `human_hit`, `car_explosion`; cleared (=0): `actor_game_init`, `human_activate`, `car_game_init`, `car_reset`; restored: `actor_save_game_load` | `actor_is_death_processed`, `police_manager_count_officers_alive_for_target` | the death has already been handled, so the teardown runs exactly once ² |
 | +0x5f | in-camera-sector byte | H | `actor_tick` | `actor_is_in_camera_sector`, `car_update`, `car_extended_update` | recomputed every tick (§1c) |
-| +0x60 | unread dword | M | `actor_ctor` (=0) | - | no reader among the actor-family methods (§8) |
+| +0x60 | pending track event | H | `actor_ctor` (=0), `human_track_queue_anim_event` (allocates the record once, fills it, stores the pointer) | `human_track_record_key` (encodes the record into the next key and clears its byte 0) | a `0x48`-byte record: byte 0 pending flag, `+0x04` value, `+0x08` target frame name, `+0x2c` position, `+0x38` quaternion; filled only while the track records (`+0x04` bit `0x2`). Measured by a census of `this+0x60` over the methods of every `C_actor`-derived class |
 | +0x64 | owns the frame's owner block | H | `actor_game_init` (=1) | `actor_game_done` | the allocate/free pair across GameInit and GameDone |
 | +0x65 | save_excluded | H | set (=1): `actor_game_init` (`kind == 1`), the `game_init` of every runtime class ³, `car_explosion`, the police-car pool and pursuit-car spawners, `game_load_differences`; cleared (=0): `detector_set_signal`, `detector_save_game_load`, `human_use_actor` | `entity_save_logs`, `entity_save_vis_logs`, `entity_save_sensors`, `entity_get_logs_size`, `pursuit_event_save_game_get_size`, `pursuit_event_save_game_save`, `loadsave_savegame_save` | 1 = the savegame skips this actor ³ |
 | +0x66 | scene_placed | H | `actor_ctor` (=0), `actor_mark_scene_placed` (=1) | `game_done` | 1 = a FILE-PLACED actor, not one the script, the traffic generator or the pedestrian crowd created ⁴ |
@@ -126,7 +127,7 @@ are mapped by ROLE, never by rebasing, in this class and in every class derived 
 | +0x6c | owns-its-frame flag | H | `actor_init` (=0), `actor_mark_created_at_runtime` (=1) | `actor_dtor` | `actor_dtor` releases the frame through its vtable slot 0 only when this byte is set and the frame is non-null. Set on a freshly duplicated actor whose slot-18 `Init` returned true, immediately before `game_add_temporary_actor`. The complement of `+0x66` |
 
 ¹ **`+0x5d`** — the seven clears are `human_force_death`, `human_hit`, `human_hit_in_car`,
-`human_movement`, `human_throw_from_car_truck`, `human_car_launched_into_air` and `actor_tick`; the
+`human_movement`, `human_throw_from_car_truck`, `human_die_in_exploding_car` and `actor_tick`; the
 `C_actor` init writes `+0x5e=0; +0x5d=1; +0x5f=0`. Two of the clears sit immediately after
 `*(this+0x644) = 0`, i.e. right after `cur_health` is zeroed. The 11 writers were found by a byte
 scan of `.text` for `C6 /0` and `88 /r` at displacement `0x5d`; a decomp text search for
@@ -343,8 +344,8 @@ cluster, check whether it is virtual-only before concluding it is inlined.
 These functions sit in the same VA cluster but are **not** `C_actor` methods:
 `actor_global_list_static_init` / `_ctor` / `_register_atexit_dtor` / `_dtor` and their posscoll
 counterparts (§2c), `actor_shot_ctor`, `airplane_ctor` and `airplane_scalar_deleting_dtor` (subclass
-ctors/dtors), and the STL/refcount helpers `std_vector8_uninit_fill_n`, `std_vector8_assign_range`
-and `refcount_release_at_0x4`.
+ctors/dtors), and the cache-item helpers `i3d_cache_items_uninit_fill_n`,
+`i3d_cache_items_copy_assign_range` and `i3d_cache_items_destroy_one` (`structs/i3d_cache.md` §4b).
 
 ### 4a. PC-only `C_actor` accessors
 
@@ -441,7 +442,7 @@ posting types `0x1c` and `0x1d`; their payload helpers are `hit_event_payload_fi
 | `+0x5d` | `+0x61` | `+0x04` | alive flag | `actor_tick`'s death latch |
 | `+0x5e` | `+0x62` | `+0x04` | death-processed latch | the same latch; also `ShowCarEnergy`'s early return |
 | `+0x5f` | `+0x63` | `+0x04` | in-camera-sector byte | the same body's three-clause predicate |
-| `+0x60` | `+0x64` | `+0x04` | unread dword | the ctors zero one dword at this position; no actor-family method reads it on either build |
+| `+0x60` | `+0x64` | `+0x04` | pending track event | the ctors zero one dword at this position; on the PC it is the recorder's queued event record, and no PS2 method reads PS2 `+0x64` |
 | `+0x64` | `+0x68` | `+0x04` | owns the frame's owner block | the `GameInit` / `GameDone` allocate-free loop |
 | `+0x65` | `+0x69` | `+0x04` | save_excluded | both `GameInit`s set it to `kind == 1`; PS2 `C_traffic_car::Krles` raises it on the car it creates, as PC `car_explosion` does; the PS2 readers are the same save routines (`SaveLogs__8C_entity`, `SaveSensors__8C_entity`, `SaveVisLogs__8C_entity`, `SaveGameSave__12C_sledovacka`, `SaveGameSave__15G_LoadSaveClass`) |
 | `+0x66` | `+0x6a` | `+0x04` | scene_placed | PS2 `C_mission::OpenBin` sets it and `C_game::Done` reads it, as PC `mission_open_bin` / `game_done` do |
@@ -482,6 +483,4 @@ posting types `0x1c` and `0x1d`; their payload helpers are `hit_event_payload_fi
 
 ## 8. Open items
 
-| item | state |
-|---|---|
-| `+0x60` | `actor_ctor` zeroes it and no actor-family method reads it. A census of the whole image cannot settle it, because `+0x60` is one of the most common displacements in the binary |
+Nothing is open.

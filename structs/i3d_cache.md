@@ -1,6 +1,6 @@
 # `C_I3D_cache<T>` — the three engine resource caches
 
-**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-10-04 17:00 +0200
+**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-10-11 20:49 +0200
 
 Three file-scope objects of one class template, constructed by the `Main.cpp` initializer block
 `[0x005f79a0, 0x005f8370]` — the **model**, **sound** and **animation-set** caches. Each is a
@@ -51,10 +51,8 @@ typedef struct {                     /* sizeof = 0x28 */
 
 `S_itm` is an **8-byte** record — `{T *object, C_string name}` — which is what the destructor's
 `(end - begin) >> 3` and its stride-8 teardown loop measure. The name is a `C_string`, a
-one-pointer handle to a refcounted block (`structs/string.md`): the shared stride-8 helpers
-`std_vector8_insert_one`, `array_copy_refcounted8`, `array_copy_backward_refcounted8`,
-`copy_elem_stride_8_with_string` and `refcounted8_scalar_deleting_dtor` copy the object pointer
-plainly and bump or release the block's refcount at `+0x00`. The directory vector is a plain
+one-pointer handle to a refcounted block (`structs/string.md`): the item-vector helpers of §4b
+copy the object pointer plainly and bump or release the block's refcount at `+0x00`. The directory vector is a plain
 `vector<char*>`; the anim cache's is seeded with the literal `"Anims"`.
 
 ### 2a. Field evidence
@@ -106,7 +104,10 @@ Read from the nine tables' pointer arrays in `Game.exe`'s `.rdata`.
 | 12 | `Duplicate` | `i3d_model_cache_duplicate` | `i3d_sound_cache_duplicate` | `stub_noop_args8_00575c00` |
 
 ¹ Resolves a path against the registered search directories, stripping the current-directory
-prefix. Zero `E8` callers.
+prefix. **Nothing dispatches it**: no `E8` or `E9` referrer reaches any of the three bodies, their
+only references are their mid and derived vtable slots, and every one of the 210 instructions that
+reference a cache object loads ECX for a call through another slot, so the object address never
+reaches memory where a later dispatch could pick it up. It is a virtual that the game never calls.
 
 **Five slots hold ONE symbol for all three instantiations** — 0, 4, 8, 9 and 10. Their
 bodies never mention `T`, so ICF folded the three instances onto one address; each of
@@ -183,15 +184,30 @@ All three install the next vtable down on the way out.
 All three derived destructors run: install own vtable → `Clear` → destroy the directory vector →
 destroy the item vector → install the base vtable. `Clear` is inlined at each of the three sites
 (the backwards walk over the item vector calling each object's virtual destructor, plus the
-`destroy_range_stride8` that follows); each site carries an inline banner in the decomp.
+`i3d_cache_items_destroy_range` that follows); each site carries an inline banner in the decomp.
 
-### 4b. The item-vector helpers in `Mission.cpp`
+### 4b. The item-vector helpers
 
-Both live in the `Mission.cpp` helper tail, and all their callsites' receivers are byte-proven
-to be the three cache objects' item vectors at `0x006f93cc` / `0x006f93f4` / `0x006f941c`.
+Every callsite of these helpers is cache code: the cache members, the cache `Open` inlined at its
+call sites and their unwind funclets, `engine_shutdown`, `mission_close` and `mission_uninit`.
+The receivers of the two
+`Mission.cpp` helpers and of `i3d_cache_items_erase_at` are byte-proven to be the three cache objects' item vectors at
+`0x006f93cc` / `0x006f93f4` / `0x006f941c`.
 
 | PC VA | PC name | role |
 |---|---|---|
+| `0x00449410` | `i3d_cache_items_uninit_copy_range` | copy-construct a range of items into raw storage. 3 callsites, all in `i3d_cache_items_insert_one` |
+| `0x00449930` | `i3d_cache_items_copy_construct_one` | copy-construct one item: zero the name slot, copy the object pointer, addref the name. 4 callsites, all in the helpers of this table |
+| `0x00449b60` | `i3d_cache_items_copy_assign_one` | the item's `operator=`. 10 callsites, each the inlined erase in a cache `Open`, `Create` or destructor |
+| `0x0044e880` | `i3d_cache_items_destroy_one` | the item destructor: release the name block. 7 callsites in the helpers of this table and `i3d_cache_clear`, and 60 unwind funclets of the functions that inline `Open`, each destroying that `Open`'s temporary item |
+| `0x0044e8c0` | `i3d_cache_items_destroy_range` | release the name of each item in a range. 37 callsites |
+| `0x0044e8f0` | `i3d_cache_items_uninit_fill_n` | copy-construct N copies of one item. 1 callsite, in `i3d_cache_items_insert_one` |
+| `0x0044e920` | `i3d_cache_items_copy_assign_range` | copy-assign a range, taking the source reference before releasing the destination's. 1 callsite, in `i3d_cache_items_insert_one` |
+| `0x0047fe60` | `i3d_cache_items_insert_one` | insert one item, growing by half the count when full. 60 callsites, each the add-item step of the inlined `Open` |
+| `0x0047ffe0` | `i3d_cache_items_copy_range` | copy-assign a range forward. 28 callsites, all cache code |
+| `0x00480040` | `i3d_cache_items_copy_backward_range` | copy-assign a range backward, safe for an overlapping shift. 1 callsite, in `i3d_cache_items_insert_one` |
+| `0x004800a0` | `i3d_cache_items_scalar_deleting_dtor` | destroy one item, then free it when flag bit 0 is set. 2 callsites, `i3d_cache_anim_create` and `i3d_cache_anim_open` |
+| `0x004d3330` | `i3d_cache_items_erase_at` | erase one item: shift the tail down, addref-ing what moves and releasing what it overwrites, then destroy the last slot through `i3d_cache_items_destroy_one`. 80 callsites, each the erase step of a cache `Open` inlined into its caller; every receiver is one of the three item vectors |
 | `0x00606690` | `i3d_cache_items_clear` | release each item's refcounted name, then reset the end pointer. 3 callsites, all in `mission_close` |
 | `0x00607670` | `i3d_cache_items_erase_range` | shift the stride-8 tail down over an erased range, addref-ing what moves and releasing what it overwrites. 3 callsites, all in `mission_uninit` |
 
@@ -277,8 +293,11 @@ at idx 3 and one merged destructor at idx 6), and the PC's has `_purecall` in ex
 the PS2's base table leaves NULL. Three independent tables agreeing makes this a measurement.
 
 * **`ClearUpper` has no PC function and none is expected.** Its work — evict every entry
-  above `size_limit` — is inlined into `Create`/`Open` on **both** builds; the PS2's
-  out-of-line copy has zero textual callers and is reached only through the vtable.
+  above `size_limit` — is inlined into `Create`/`Open` on **both** builds. The three PS2
+  copies are unreachable: the three cache objects are the only instances (constructed in
+  `__sinit_Main.cpp`), every use of their addresses is a direct method call, a dispatch through
+  slot `+0x14`, `+0x28` or `+0x38`, or the exit-destructor registration, none dispatches slot
+  `+0x1c`, and the addresses are never stored where a later dispatch could pick them up.
 * **Slot 11 is PC-only.** The PS2 has no current working directory and loads through
   `RW_data` archives at fixed paths, so the concept does not exist there.
 
@@ -336,7 +355,5 @@ back.
 
 ## 8. Open items
 
-* **What slot 11 is for.** Its behaviour is measured (§3a) but no consumer is traced — it has zero
-  `E8` callers on the PC and no PS2 counterpart, so nothing says who dispatches it or when.
 * **In game:** asking for 257 distinct `.i3d` models should evict, because the cap is 256 on the PC
   (1024 on the PS2) — a PC-only pressure point. Not tested.

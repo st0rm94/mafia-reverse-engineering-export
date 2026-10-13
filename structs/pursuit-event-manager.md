@@ -1,6 +1,6 @@
 # `pursuit_event_manager` — the chase driving system (`C_sledovacka`)
 
-**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-10-06 19:14 +0200
 
 PC prefix **`pursuit_event_`**. Class `C_sledovacka` (*sledovačka* = Czech "chase / tail").
 
@@ -9,15 +9,17 @@ police pursuits, AI combat chases, and scripted mission chases alike. Distinct f
 squad bookkeeping in `structs/police-board.md` / `structs/police-action.md`: those decide *who*
 chases; `C_sledovacka` executes the *driving*.
 
-Reconstructed from static analysis of the disassembly and the annotated decomp.
+Reconstructed from static analysis of the disassembly and the annotated decomp. None of it
+has been validated at run time; §6 gives the addresses for a Cheat Engine check.
 
 **Confidence tags:** **[H]** disasm/body-read + writer + reader; **[M]** body-read,
 semantics partly inferred; **[L]** weak/preliminary; **[U]** not observed.
 
 ## 1. Instance location and shape
 
-There is one live `C_sledovacka` instance, a **heap sub-object** embedded inside the game/
-world object:
+There is one live `C_sledovacka` instance, an embedded member of the `C_game` object
+(`structs/game.md`), **0x24 bytes**: the next member, `soundArena`, starts at
+`C_game+0x2b3c`. `pursuit_event_ctor` writes all of it.
 
 ```
 manager = [[0x0065115C] + 0x24] + 0x2B18
@@ -33,16 +35,35 @@ of the heap instance) whose byte at `+0x18` (**0x0064C6D8**) is the `EnableChang
 boost flag `g_pursuit_change_tables` — see §5.
 
 ```c
-// heap instance (partial)
-struct pursuit_event_manager {              // @ [[0x0065115C]+0x24]+0x2B18
+struct pursuit_event_manager {              // 0x24 bytes @ [[0x0065115C]+0x24]+0x2B18
+    /* +0x00 */ uint8_t    bridges_alloc;   // [H] allocator byte of the S_BRIDGE vector
+    /* +0x04 */ S_BRIDGE*  bridges_begin;   // [H] std::vector<S_BRIDGE>, stride 8
+    /* +0x08 */ S_BRIDGE*  bridges_end;     // [H]
+    /* +0x0C */ S_BRIDGE*  bridges_cap;     // [H]
+    /* +0x10 */ uint8_t    records_alloc;   // [H] allocator byte of the S_ELEMENT vector
     /* +0x14 */ S_ELEMENT* records_begin;   // [H] std::vector<S_ELEMENT>, stride 0x44
     /* +0x18 */ S_ELEMENT* records_end;     // [H]
     /* +0x1C */ S_ELEMENT* records_cap;     // [M] vector capacity end (std::vector idiom)
     /* +0x20 */ uint32_t   first_dispatch_ts; // [M] from g_act_mission+0x30 on the first
                                             //     dispatch (0 until then)
-    /* ...    */ // path / S_BRIDGE / tick / savegame state — see §11
+};
+
+struct S_BRIDGE {                           // 8 bytes; one per C_bridge actor (kind 0x14)
+    /* +0x00 */ C_actor*   bridge;          // [H] the bridge actor
+    /* +0x04 */ uint16_t   road_node;       // [H] the nearer end node of the road segment
+                                            //     closest to the bridge (roads_get_near_node)
 };
 ```
+
+`pursuit_event_init` fills the S_BRIDGE vector from every mission actor of kind `0x14`. The
+path buffers a chase drives along live in the `C_driver` (`structs/driver.md` §3).
+
+**Destruction.** `game_dtor` destroys the embedded manager with
+`lea ecx,[esi+0x2b18]; call folded_vector_pair_free_at_0x04_0x14`, and two unwind funclets of
+`game_ctor` reach the same body with `ecx = this + 0x2b18`. That body frees the S_ELEMENT vector
+and then the S_BRIDGE vector, and it is shared with the force-feedback manager's destructor
+(`structs/force_feedback.md`), whose two vectors sit at the same offsets. The manager has no
+destructor of its own.
 
 ## 2. `S_ELEMENT` — one chase record (0x44 bytes)
 
@@ -60,13 +81,18 @@ struct S_ELEMENT {                          // 0x44 bytes; element of manager+0x
     /* +0x1C */ uint32_t event_flags;       // [M] ((sub_event >> 8) & 0x201F) | 1
     /* +0x20 */ uint32_t action_status;     // [H] E_STATUS (init 0; getter default 1)
     /* +0x24 */ uint32_t mode;              // [H] chase TYPE, "VoleMode", set at build only (§8)
-    /* +0x28 */ uint32_t chase_tracking_confirmed; // [M] zeroed at build, never written; read
-                                            //     by is_chase_tracking behind a mode==1 gate
-    /* +0x2C */ // remaining fields (duration, pose) not enumerated ([U])
+    /* +0x28 */ uint32_t mode_timer_ms;     // [H] armed, stepped and reset by the tick (§3)
+    /* +0x2C */ uint32_t cadence_timer_ms;  // [H] re-evaluation cadence and stall timer
+    /* +0x30 */ uint32_t unused_30;         // [H] zero-filled at build; no instruction uses it
+    /* +0x34 */ C_car*   avoid_car;         // [H] the car the driver is steering around
+    /* +0x38 */ float    limit_a;           // [H] build-time threshold, meaning per mode
+    /* +0x3C */ float    limit_b;           // [H] build-time threshold, meaning per mode
+    /* +0x40 */ int32_t  horn_timer_ms;     // [H] horn on while > 0; -1 = no car ahead
 };
 ```
 
-**`driver` sub-record — a `C_driver` (0x29C bytes, at `+0x04`)** — dispatch-time writes:
+**`driver` sub-record — a `C_driver` (0x29C bytes, at `+0x04`; layout in `structs/driver.md`)** —
+dispatch-time writes:
 `+0x84 = speed_factor` (`g_police_speed_factor`), `+0x170 = 0`, `+0x1FC = target`,
 `+0x200 = target_vehicle`, `+0x208 = 1`, `+0x218 = 1000.0f`. The type is `C_driver`: the dispatch
 allocates `operator_new(0x29C)` and calls `driver_ctor`.
@@ -80,6 +106,7 @@ markers, `+0x215A = 0` on remove.
 
 | offset | field | conf | writer(s) | reader(s) | notes |
 |---|---|---|---|---|---|
+| mgr +0x00..+0x0C | S_BRIDGE vector (allocator, begin, end, cap) | H | `pursuit_event_ctor` (zero), `pursuit_event_init` (fill) | `pursuit_event_init` | stride 8 `{C_actor* bridge, u16 road node}` |
 | mgr +0x14/+0x18 | records_begin/end | H | `pursuit_event_dispatch_pursuit_vehicle` (insert), `pursuit_event_remove_vehicle` (erase-shift) | both, plus every `pursuit_event_record_*_by_vehicle` getter/setter | `std::vector<S_ELEMENT>`, stride 0x44 |
 | mgr +0x20 | first_dispatch_ts | M | `pursuit_event_dispatch_pursuit_vehicle` (`= g_act_mission+0x30` on first dispatch) | - | one-shot stamp |
 | rec +0x00 | vehicle | H | dispatch (`= param_2`) | dispatch (de-dup scan), remove (match key), all getters | chase car |
@@ -90,7 +117,13 @@ markers, `+0x215A = 0` on remove.
 | rec +0x1C | event_flags | M | dispatch | - | event-flag mask |
 | rec +0x20 | action_status (E_STATUS) | H | dispatch (0), `pursuit_event_record_set_action_status_by_vehicle`, tick | `pursuit_event_record_get_action_status_by_vehicle` (default 1); remove (`!= 3` gates siren reset) | - |
 | rec +0x24 | mode (VoleMode) | H | build only: Hunt→1/2, Escape→3, MoveTo→4 | `pursuit_event_record_get_mode_by_vehicle` (default 0); remove (`in {3,4}` ⇒ un-boost) | chase TYPE, values §8 |
-| rec +0x28 | chase_tracking_confirmed | M | never written (zeroed at build) | `pursuit_event_record_is_chase_tracking_by_vehicle` | gated active-hunt predicate |
+| rec +0x28 | mode_timer_ms | H | builders (0); `pursuit_event_tick` (armed to 1, frame time added, reset to 0) | `pursuit_event_tick` (against `+0x38`, 2000 ms and 15000 ms), `pursuit_event_record_is_chase_tracking_by_vehicle` | non-zero while the timer runs |
+| rec +0x2C | cadence_timer_ms | H | `pursuit_event_tick` (frame time added; reset after 200 ms or 500 ms) | `pursuit_event_tick` (10000 ms below speed 3.0 while turned more than 0.52 rad off the heading sets `action_status` 1 or 2), savegame | the re-evaluation period of the chase |
+| rec +0x30 | unused_30 | H | builders (zero fill) | - | copied with the record and nothing else |
+| rec +0x34 | avoid_car | H | `pursuit_event_tick_driver` (copied from driver `+0x1a0` while driver `+0x19c` bit `0x40000000` is set), `pursuit_event_drop_actor_references` (0) | `pursuit_event_tick_driver` (`car_get_navigation_corners`) | a `C_car` |
+| rec +0x38 | limit_a | H | `AddCarHunt` (argument × 1000, ms), `AddCarEscape` (argument squared, a squared distance) | `pursuit_event_tick` (against `+0x28` and against a squared distance), savegame | float |
+| rec +0x3C | limit_b | H | `AddCarEscape` (argument × 0.2777778, km/h to m/s); `pursuit_event_tick` (100000.0, 10000.0, -1.0) | `pursuit_event_tick` (against the car's speed and the driver's path cursor), savegame | float |
+| rec +0x40 | horn_timer_ms | H | `pursuit_event_tick` (frame time subtracted; -1 when no traffic car is close ahead; re-armed to 200..799 ms at random above 4 m/s) | `pursuit_event_tick` (horn on while > 0) | runs only while the siren is off |
 
 ## 4. Method family (`pursuit_event_*` / `C_sledovacka`)
 
@@ -117,14 +150,16 @@ markers, `+0x215A = 0` on remove.
 | `0x004F4760` | `pursuit_event_save_game_get_size` | `SaveGameGetSize__12C_sledovackaFv` | savegame (§9b) |
 | `0x004F4870` | `pursuit_event_save_game_save` | `SaveGameSave__12C_sledovackaFPPv` | savegame (§9b) |
 | `0x004F4DC0` | `pursuit_event_save_game_load` | `SaveGameLoad__12C_sledovackaFPPv` | savegame (§9b) |
+| `0x005AE6F0` | `folded_vector_pair_free_at_0x04_0x14` | - | the destructor role, in a body shared with the force-feedback manager (§1, §10) |
 
 Each row's twin grade is in the function registry, `ghidra/Game-ghidra.exe.functions.md`.
 
 ¹ Same dedup + `{2, 0x1b}` gate + `vehicle_set_engine_on` + `C_driver` sub-record as `AddCarHunt`;
 identical km/h→m/s `×0.2777778` (= /3.6), squared distance, bool→1000.0f.
-² Returns record `+0x28` only while mode == 1 with a live target vehicle and flag bit 2 clear. The
-`+0x28` field is never written, so it functions purely as "is this vehicle in an active actor-hunt
-with a live target vehicle". It is not the mode getter.
+² Returns the mode timer `+0x28` only while mode == 1 with a live target vehicle and flag bit 2
+clear, so it is non-zero while an active actor-hunt runs its timer. Its one caller,
+`police_action_tick_sighting_timers`, skips the squad's sighting refresh while it is non-zero. It
+is not the mode getter.
 
 `ai_fight_manager_join_party` (`0x0043E610`) and `ai_fight_manager_adjust_form_time`
 (`0x0043F950`) are **not** members: their receiver is the `ai_fight_manager` singleton
@@ -191,13 +226,13 @@ when the mode is not the desired value it corrects the chase — sets a car flag
 `pursuit_event_dispatch_pursuit_vehicle` with a fresh event id chosen from the squad's own
 state.
 
-## 9. Method coverage — 21 of 22 PS2 methods located
+## 9. Method coverage — 22 of 22 PS2 methods located
 
 The translation unit is `[0x004ec1b0, 0x004f60b0)` — **51 PC function starts**, bounded by the CRT
 static-init/atexit pairs `0x004ec180`/`0x004ec1a0` and `0x004f60b0`/`0x004f60d0` (a file-scope
 static's own init/atexit pair marks a TU boundary). None of them is a phantom start. The 21
-class members are listed in §4; the only PS2 method without a PC function is the destructor
-`__dt__12C_sledovackaFv` — the TU head holds only the ctor and `pursuit_event_set_change_tables`.
+class members with a PC function of their own are listed in §4; the destructor has none and
+is the shared body `folded_vector_pair_free_at_0x04_0x14` outside the TU (§1).
 
 ### 9a. The three PUBLIC entry points
 
@@ -255,7 +290,8 @@ included in this TU. They keep their OWN class prefix, not `pursuit_event_`:
 **Record layout.** PC `S_ELEMENT` is stride 0x44, PS2 is 0x50: the PS2 record carries an extra
 `+0x1c` position word, so every field from `event_flags` onward sits +4 higher on PS2 —
 `event_flags` PS2 `+0x20`, `action_status` PS2 `+0x24`, `mode` (VoleMode) PS2 `+0x28`,
-`chase_tracking_confirmed` PS2 `+0x2c`. The savegame blob follows: 0xb8 on PC, 0xbc on PS2. The
+`mode_timer_ms` PS2 `+0x2c`, `cadence_timer_ms` PS2 `+0x30`. PS2 `Tick` runs the mode timer
+with the same 2000 ms and 15000 ms thresholds as the PC. The savegame blob follows: 0xb8 on PC, 0xbc on PS2. The
 driver path node is 0x70 on PC and 0x90 on PS2.
 
 **`GetVoleMode` ↔ `+0x24`, `DevaaateeeZasNeznaCas` ↔ `+0x28`.** PS2 `+0x28` (VoleMode) == PC
@@ -283,19 +319,15 @@ matches):
 | `reserve__Q23gif36vector<S_ELEMENT,8>` | `std_vector44_insert_one`'s grow path |
 | `__ct__10S_car_nodeFRC10S_car_node` | `stl_copy_range_stride70` |
 
-**Not marked:** PS2 `RemoveCar` also calls `SetDynamicCollsOn__9C_Vehicle` and
-`SetClutch__9C_Vehicle`, and neither appears in `pursuit_event_remove_vehicle` (§11).
+**`RemoveCar`'s vehicle calls.** PS2 `RemoveCar` calls `SetDynamicCollsOn__9C_Vehicle(1, …)`
+and then `SetClutch__9C_Vehicle(1.0)`. The PC calls `vehicle_set_dynamic_colls_off(0)` at the
+same position (the PC parameter is the inverse of the PS2's `on`), and has no clutch call and no
+inline write to the clutch field `C_Vehicle+0x65c`: the PC leaves the clutch where the driver
+left it.
+
+**The destructor.** PS2 `__dt__12C_sledovackaFv` frees the `gif::vector<S_ELEMENT>` at `+0x0c` and
+then the `std::vector<S_BRIDGE>` at `+0x00`. The PC body `folded_vector_pair_free_at_0x04_0x14`
+frees the same two vectors in the same order, at `+0x14` and `+0x04`.
 
 **`AddCarEscape` lockstep:** PS2 `GetAIPos__5C_carFb` sits at the position where the PC calls
 `roads_find_path` (`C_roads::FindPath`) — a positional coincidence, not a twin.
-
-## 11. Open items
-
-| item | state |
-|---|---|
-| `__dt__12C_sledovackaFv` | no PC function located; the TU head holds only the ctor and `pursuit_event_set_change_tables` |
-| `RemoveCar`'s `SetDynamicCollsOn` / `SetClutch` | absent from `pursuit_event_remove_vehicle`; as consistent with a behaviour difference as with a fold |
-| manager fields beyond `+0x20` | path buffers, `S_BRIDGE` vector, tick cursors, save/load state not enumerated |
-| `S_ELEMENT +0x2C..+0x43` | duration, pose — not enumerated |
-| `C_driver` full layout | only the dispatch-time writes (§2) are recorded |
-| runtime validation | none of this file is validated at run time |

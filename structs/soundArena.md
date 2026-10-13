@@ -1,6 +1,6 @@
 # `soundArena` — the game-wide sound propagation ring
 
-**Created** 2026-07-16 20:47 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-16 20:47 +0200 · **Modified** 2026-10-11 10:46 +0200
 
 ⚠️ **Not to be confused with `C_sound_table`** (`structs/sound_table.md`), which sits in the same
 `tools.cpp` translation unit immediately above this one and shares the word "sound" and nothing else.
@@ -29,28 +29,30 @@ add ecx,0x2b3c`).
 
 ```c
 typedef struct soundArena {              // at C_game+0x2b3c
-    /* +0x000 */ uint32_t hdr[3];        // [U] not decoded (the ring starts at +0xc)
-    /* +0x00c */ sound slots[16];        // [H] THE LIVE-SOUND RING — 16 slots, stride 0x20.
-                                         //     Proven three ways: sound_arena_init zeroes exactly
-                                         //     0x80 dwords = 0x200 = 16 * 0x20 starting here;
-                                         //     sound_arena_emit_sound sweeps `iVar3 = 0x10` slots at
-                                         //     `puVar2 += 8` (= 0x20); sound_arena_invalidate_actor
-                                         //     walks the same 16.
-    /*   +0x00 */                        // [M] a live/base field — cleared on GC and on invalidate
-    /*   +0x04 */ uint32_t t;            // [H] emission timestamp — the GC compares it to the clock
-    /*   +0x10 */ C_actor *source;       // [H] the emitting actor — the key invalidate_actor matches on
-    /* +0x200 */ uint32_t pad;           // [U] cleared by sound_arena_init
+    /* +0x000 */ sound_slot slots[16];   // [H] THE LIVE-SOUND RING - 16 slots, stride 0x20.
+                                         //     sound_arena_init zeroes exactly 0x80 dwords = 0x200
+                                         //     bytes from the base; sound_arena_emit_sound and
+                                         //     sound_arena_invalidate_actor walk the same 16.
+    /* +0x200 */ uint32_t cursor;        // [H] the write cursor: a new sound takes slot
+                                         //     (cursor + 1) & 0xf
     /* +0x204 */ uint32_t next_gc_at;    // [H] throttle stamp: the next game-clock time at which
                                          //     sound_arena_emit_sound will run its GC sweep.
-} soundArena;                            // size >= 0x208
+} soundArena;                            // 0x208 bytes
+
+typedef struct sound_slot {              // 0x20 bytes
+    /* +0x00 */ float    pos[3];         // [H] where the sound was emitted
+    /* +0x0c */ uint32_t type;           // [H] 1 = a step, 2 = gunfire (§4); 0 = free slot
+    /* +0x10 */ uint32_t time;           // [H] emission time on the game clock
+    /* +0x14 */ float    intensity;      // [H] the intensity at the source
+    /* +0x18 */ float    range;          // [H] the distance at which the intensity reaches 0
+    /* +0x1c */ C_actor *source;         // [H] the emitting actor
+} sound_slot;
 ```
 
-**The per-slot record.** `+0x04` (timestamp) and `+0x10` (source actor) are byte-proven from the
-GC sweep and the invalidate walk. The rest of the 0x20 record carries position, loudness, range and
-type — inferred from the *consumer*, `sound_arena_update_entity_sound_contacts`, which builds a
-6-dword `{pos, base, range, source, intensity}` record from a slot; their order inside the slot is
-open (§6). The sibling `ai_sensors` sound-contact record is
-mis-rendered by Ghidra (`structs/ai_sensors.md` §5), so decompiler offsets are not transcribed here.
+**The per-slot record is read from the disassembly of all three slot walkers.**
+`sound_arena_emit_sound` writes all six fields, `sound_arena_update_entity_sound_contacts` reads
+all six, and `sound_arena_invalidate_actor` matches `+0x1c` and clears `+0x0c` and `+0x1c`; the GC
+sweep clears the same two on a slot older than 2000 ms.
 
 **The clock** is `C_game + 0x2b0c` — the same clock `ai_sensors_can_hear` and
 `ai_sensors_build_smell_contact_from_blob` read.
@@ -59,9 +61,14 @@ mis-rendered by Ghidra (`structs/ai_sensors.md` §5), so decompiler offsets are 
 
 | Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
 |---|---|---|---|---|---|
-| +0x00c | slots[16] | H | `sound_arena_init` (zeroes 0x200 B), `sound_arena_emit_sound` | `sound_arena_update_entity_sound_contacts`, `sound_arena_invalidate_actor` | 16 × 0x20; three independent derivations agree |
-| +0x00c +0x04 (slot) | t | H | `sound_arena_emit_sound` | `sound_arena_emit_sound` (GC) | expiry compared against the game clock, deadline **2000 ms** |
-| +0x00c +0x10 (slot) | source | H | `sound_arena_emit_sound` | `sound_arena_invalidate_actor` | the emitting `C_actor*`; zeroed when that actor dies |
+| +0x000 | slots[16] | H | `sound_arena_init` (zeroes 0x200 B), `sound_arena_emit_sound` | `sound_arena_update_entity_sound_contacts`, `sound_arena_invalidate_actor` | 16 × 0x20 |
+| slot +0x00 | pos | H | `sound_arena_emit_sound` | `sound_arena_update_entity_sound_contacts` | the origin of the distance attenuation |
+| slot +0x0c | type | H | `sound_arena_emit_sound`; cleared by the GC and by `sound_arena_invalidate_actor` | `sound_arena_update_entity_sound_contacts` (0 = skip), `sound_arena_emit_sound` (the find key) | 0 = free slot |
+| slot +0x10 | time | H | `sound_arena_emit_sound` | `sound_arena_emit_sound` (GC) | expiry compared against the game clock, deadline **2000 ms** |
+| slot +0x14 | intensity | H | `sound_arena_emit_sound` (its third argument) | `sound_arena_update_entity_sound_contacts` | the intensity at the source |
+| slot +0x18 | range | H | `sound_arena_emit_sound` (its second argument) | `sound_arena_update_entity_sound_contacts` | the attenuation divisor |
+| slot +0x1c | source | H | `sound_arena_emit_sound`; cleared by the GC and by `sound_arena_invalidate_actor` | `sound_arena_update_entity_sound_contacts` (skips the listener's own sounds), `sound_arena_emit_sound` and `sound_arena_invalidate_actor` (the key) | the emitting `C_actor*`; zeroed when that actor dies |
+| +0x200 | cursor | H | `sound_arena_init` (0), `sound_arena_emit_sound` | `sound_arena_emit_sound` | the write cursor, advanced mod 16 |
 | +0x204 | next_gc_at | H | `sound_arena_init` (0), `sound_arena_emit_sound` (clock + **2000**) | `sound_arena_emit_sound` | GC throttle — the sweep runs at most once per 2000 ms |
 
 ## 3. Method family — PC ↔ PS2 (4/4 CONFIRMED)
@@ -77,8 +84,10 @@ Every row body-diffed on both builds.
 
 ¹ Clears slots older than **2000 ms**, restamps `+0x204` to clock + **2000**. Twin evidence: the
 constant 2000 used twice in identical roles, 16 slots, 6 parameters on both builds.
-² `base − dist*base/range`; audible iff `intensity > 1.05 − entity_get_hearing_sensitivity()`, then
-`ai_sensors_new_sound_contact` or `ai_sensors_cancel_sound_contact`. Twin evidence: the constant 1.05,
+² `intensity − dist × intensity / range`; audible iff it exceeds
+`1.05 − entity_get_hearing_sensitivity()`, then clamped to 1.0 and handed to
+`ai_sensors_new_sound_contact` as the record `{time, type, pos, source, intensity}`
+(`structs/ai_sensors.md`); otherwise `ai_sensors_cancel_sound_contact(source, type)`. Twin evidence: the constant 1.05,
 the identical attenuation formula, and 19 calls from the entity AI tick on both builds.
 ³ `+0x204` is the GC stamp `sound_arena_emit_sound` reads, which pins this as the arena's init.
 ⁴ A dead actor's sounds cannot outlive it. Mirrors `entity_release_target` at the entity level.
@@ -89,12 +98,12 @@ the identical attenuation formula, and 19 calls from the entity AI tick on both 
   <something makes a noise>
         |
         v
-  sound_arena_emit_sound(pos, loudness, range, type, source)      [C_game+0x2b3c]
+  sound_arena_emit_sound(pos, range, intensity, type, source)     [C_game+0x2b3c]
         |   GC slots older than 2000 ms (throttled by +0x204), then find-or-add by (type, source)
         v
   entity_ai  --(x19, once per listening entity)-->  sound_arena_update_entity_sound_contacts(entity)
-        |   intensity = base - (dist*base)/range
-        |   audible iff intensity > 1.05 - entity_get_hearing_sensitivity()
+        |   heard = intensity - (dist*intensity)/range
+        |   audible iff heard > 1.05 - entity_get_hearing_sensitivity()
         |                                   ^-- the NPC's ai_character HEARING stat (+0xebc)
         +-- audible ---> ai_sensors_new_sound_contact      -> writes C_entity+0xc74 (type 2 = GUNFIRE)
         +-- inaudible -> ai_sensors_cancel_sound_contact   -> zeroes the contact's type
@@ -109,7 +118,7 @@ radius.** This chain is the writer of the `+0xc74` heard-event ring (`structs/en
 The emitter set is closed: a byte scan of `.text` for `E8`/`E9` branches to `0x0061d820` finds two
 `E8` calls and no tail jump, and a scan of `.rdata`/`.data` for the address as a pointer finds none.
 
-| callsite | caller | type | loudness | range | source |
+| callsite | caller | type | range | intensity | source |
 |---|---|---|---|---|---|
 | `0x0048d852` | `human_notify_callback` | 1 | step value × 10.0 | 0.5 | the walking human ¹ |
 | `0x005e479e` | `game_new_shoot` | 2 | 50.0 | 1.0 | the shooter |
@@ -117,6 +126,10 @@ The emitter set is closed: a byte scan of `.text` for `E8`/`E9` branches to `0x0
 ¹ Emitted right after `human_notify_callback` plays the surface-material sound
 (`g_surface_material_table`) for an animation notify, next to its `r_foot` frame path — consistent
 with footsteps.
+
+The argument order is read from the push sequence at both callsites and from the consumer, which
+divides by the slot's `+0x18` and scales by its `+0x14`: gunfire reaches 50 units at full
+intensity, a step `step value × 10` units at half.
 
 Type 2 = GUNFIRE agrees with `entity_has_heard_gunfire` and with the `ai_sensors_new_sound_contact`
 event dispatch (type 1 ⇒ entity event 6, type 2 ⇒ entity event 5). `game_new_shoot` also calls
@@ -127,14 +140,7 @@ event dispatch (type 1 ⇒ entity event 6, type 2 ⇒ entity event 5). `game_new
 - **PS2 location:** `*(act_mission + 0x20) + 0xe80`; the clock is `*(act_mission+0x20) + 0xe54`.
 - **PS2 class tag:** `10soundArena`, 4 methods, all mapped (§3).
 
-## 6. Open items
-
-| item | state |
-|---|---|
-| the per-slot record layout (§1) | only `+0x04` (timestamp) and `+0x10` (source) are pinned; settle the rest in the disassembly of one `sound_arena_emit_sound` write, not from decompiler output |
-| the loudness/range parameter order | the §4 emitter table follows the `(pos, loudness, range, type, source)` reading of the signature, which rests on the consumer's attenuation formula, not on the slot layout |
-
-## 7. Cross-references
+## 6. Cross-references
 
 - `structs/ai_sensors.md` §3 — the consumer side; the full producer→contact chain.
 - `structs/ai_character.md` — the HEARING stat that gates audibility.

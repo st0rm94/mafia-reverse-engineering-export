@@ -1,6 +1,6 @@
 # Police System — Mafia: The City of Lost Heaven
 
-**Created** 2026-08-02 11:41 +0200 · **Modified** 2026-10-01 08:56 +0200
+**Created** 2026-08-02 11:41 +0200 · **Modified** 2026-10-12 21:00 +0200
 
 The police / pursuit system as observed in gameplay, and the engine code behind it. The per-bit
 offence table is `police-system/artifacts/offences.md`; the struct layouts are
@@ -957,8 +957,8 @@ contrasting shape. The asymmetry is intentional: "remove a single keyed row" is 
 
 ### 16h. The `ai_action` task struct
 
-The `ai_action_manager`'s 3 task lists hold pointers to heap-allocated task objects with a
-polymorphic per-type inner buffer:
+The `ai_action_manager`'s 3 task lists hold pointers to heap-allocated task objects (`0x24` bytes)
+with a polymorphic per-type inner buffer:
 
 | Field | Type | Purpose |
 |---|---|---|
@@ -969,7 +969,6 @@ polymorphic per-type inner buffer:
 | `task + 0x14` | uint | `sizeof` the inner payload buffer |
 | `task + 0x18` | uint | flag word, OR'd by `ai_action_manager_signal_children` |
 | `task + 0x20` | `void*` | pointer to the per-type inner buffer, from `operator_new(<size at +0x14>)` |
-| `task + 0x30` | int | counter bumped by `ai_action_generate_UID`; no visible decrement helper |
 
 The full type inventory is the **35 `ai_action` factories** (`ai_action_new_*`) — the generic NPC AI
 action vocabulary consumed by `entity_action_tick`.
@@ -978,8 +977,9 @@ action) and type `0x28` `ai_action_new_police_call` (radio for backup). Full inv
 `structs/entity.md` §6b. The inner-buffer size per type is captured by each factory's `operator_new`
 argument.
 
-`ai_action_generate_UID` increments the dword at `this+0x30` and returns the post-increment value,
-which the constructor stores in the new task's `+0x04`. `ai_action_manager_has_idle_linked_to`
+`ai_action_generate_UID` post-increments the manager's UID counter `ai_action_manager+0x30`
+(`structs/ai_action_manager.md` §1) and returns it; the factory stores it in the new task's `+0x04`.
+The counter is never decremented: `ai_action_manager_clear_all` zeroes it on a hard reset. `ai_action_manager_has_idle_linked_to`
 matches that stored snapshot against `task[2]` / `task[3]`, the caller-supplied tags — so linkage
 back to the creator is carried by the **UID value**, not by a pointer.
 
@@ -1059,6 +1059,4 @@ From the body of `human_free_hand`, the handcuff-prop spawner used during an arr
 
 ## 18. Open items
 
-| item | state |
-|---|---|
-| the decrement half of the `ai_action` `+0x30` counter | no decrement helper is visible in the module, and the disposer does not read `+0x30` before deleting. Either the counter carries refcount-1 sentinel semantics, or the decrement lives in the per-type subscriber-detach helpers |
+Nothing is open.

@@ -1,13 +1,13 @@
 # `G_GarageClass` — the player's car garage and its three screens
 
-**Created** 2026-08-25 22:28 +0200 · **Modified** 2026-10-04 19:17 +0200
+**Created** 2026-08-25 22:28 +0200 · **Modified** 2026-10-11 21:38 +0200
 
 | | |
 |---|---|
 | PC prefix | `garage_` for the manager, one `gui_garage_*_` per screen class |
 | Manager (garage logic) | **`[0x0055d9e0, 0x0055ff70]`** |
 | Screens | in the `game_menus` TU, **`[0x0057b930, 0x0057c880]`** |
-| Related | `structs/game_menus.md` (the screen TU) · `structs/car_database.md` (car name and colour-name lookups every screen uses) · `structs/loadsave.md` (the garage's savegame block) |
+| Related | `basic/artifacts/garage/storing-cars-in-the-garage.md` (how a car gets stored: the garage area, the four banking paths, the PS2 difference) · `structs/game_menus.md` (the screen TU) · `structs/car_database.md` (car name and colour-name lookups every screen uses) · `structs/loadsave.md` (the garage's savegame block) |
 
 This document is the join between the manager and its screens. Docblocks in the decomp cite
 sections of this file as `SS<n>`; read that as `§<n>`.
@@ -42,10 +42,10 @@ loop (§3a). It is not read from a table.
 | `garage_game_done` | `0x0055e6e0` | per-scene teardown; **hosts the over-cap discard loop** (§3a) |
 | `garage_run_car_select_menu` | `0x0055f510` | the in-garage car manager; drives the design-`0x25` screen |
 | `garage_destroy_car` | `0x0055fa90` | destroy one parked car |
-| `garage_generate_cars` | `0x0055fc90` | sets the one-shot request byte `+0x1cd` ¹ |
-| `garage_release_cars` | `0x0055fca0` | sets the one-shot request byte `+0x1cc` ¹ |
+| `garage_request_add_last_stolen` | `0x0055fc90` | sets the one-shot request byte `+0x1cd` ¹ |
+| `garage_request_show_results` | `0x0055fca0` | sets the one-shot request byte `+0x1cc` ¹ |
 | `garage_show_results` | `0x0055fcb0` | drives the design-`0x27` post-mission report |
-| `garage_set_stolen_car` | `0x0055fea0` | mark a car as stolen |
+| `garage_set_last_entered_car` | `0x0055fea0` | remember the last car the player got into (`+0x1e8`) |
 | `garage_set_blocked_car` | `0x0055feb0` | mark a car as blocked |
 | `garage_enable_steal_for_letter` | `0x0055fec0` | per-letter steal permission |
 | `garage_can_steal_car_model` | `0x0055ff00` | steal permission query |
@@ -54,9 +54,10 @@ loop (§3a). It is not read from a table.
 
 ¹ Neither spawns nor despawns anything; see §2a.
 
-`garage_run_car_select_menu` also locates the garage AREA in the scene, by frame name
-`oblast_garaze_a` / `oblast_garaze_b` with a `watercity.`-prefixed fallback — the two frames whose
-bounding boxes give the parking volume.
+`garage_game_done` and `garage_run_car_select_menu` both locate the garage AREA in the scene, by
+frame name `oblast_garaze_a` / `oblast_garaze_b` with a `watercity.`-prefixed fallback: the area is
+the X/Z rectangle spanned by the two frames' world origins, height ignored
+(`basic/artifacts/garage/storing-cars-in-the-garage.md`).
 
 ### 2a. `+0x1cc` / `+0x1cd` — the end-of-mission car-banking request pair
 
@@ -65,21 +66,22 @@ store:
 
 | function | writes | reached from |
 |---|---|---|
-| `garage_generate_cars` | `G_GarageClass+0x1cd = 1` | script command `garage_addlaststolen`, dispatcher case `0xc8` |
-| `garage_release_cars` | `G_GarageClass+0x1cc = 1` | script command `garage_show`, dispatcher case `0xc9` |
+| `garage_request_add_last_stolen` | `G_GarageClass+0x1cd = 1` | script command `garage_addlaststolen`, dispatcher case `0xc8` |
+| `garage_request_show_results` | `G_GarageClass+0x1cc = 1` | script command `garage_show`, dispatcher case `0xc9` |
 
-Both are cleared by `garage_game_init`, and **`garage_game_done` tests `+0x1cc` OR `+0x1cd` in one
-condition**, so the two commands arm the same behaviour: bank the car the garage is tracking at
-`+0x1e8` into the garage list. That branch additionally requires the car NOT to be a police car
-(`car+0x1ff2` clear) and `car_is_usable` to hold, appends the packed model id, and calls
-`loadsave_race_cars_enable`. **Four model pack ids are excluded outright — `0x2b`, `0x39`, `0x3a`
-and `0x3d`** — so those cars can never be banked however the mission ends.
-
-The two names record an intent the bodies do not carry out (§4).
+Both are cleared at the end of `garage_game_done` and by `garage_game_init`, and
+**`garage_game_done` tests `+0x1cc` OR `+0x1cd` in one condition**, so the two commands arm the same
+behaviour: bank the last car the player got into (`+0x1e8`, `garage_set_last_entered_car`) wherever
+it stands. That path requires the car NOT to be a police model (`car+0x1ff2` clear) and
+`car_is_usable` to hold, refuses four car-database ids — **`0x2b` (`bugatti`) and `0x39`, `0x3a`,
+`0x3d` (the three Bolt trucks)** — appends the packed id and calls `loadsave_race_cars_enable`. The
+area scan that banks cars standing in the garage area refuses only the three trucks.
+`garage_show` (`+0x1cc`) additionally opens the results screen. The four banking paths are
+written up in `basic/artifacts/garage/storing-cars-in-the-garage.md`.
 
 Do not confuse these with the script commands `garage_generatecars` (case `0x5b`) and
-`garage_releasecars` (case `0x5c`), which are a dead pair — both are one call to a shared
-do-nothing stub and reach neither function above.
+`garage_releasecars` (case `0x5c`), which are a dead pair — both are one call to the shared
+do-nothing stub `stub_noop_cdecl_00574a40` and reach neither function above.
 
 ### 2b. The two car-group letter masks
 
@@ -171,9 +173,11 @@ out of line. The site carries a `// ===== PS2-INLINED HERE: … =====` banner in
 decomp. The loop also identifies the design-`0x26` screen as `GM_GarageFull`: the shared car-name
 composition would fit either discard screen, but only one of them is constructed inside this loop.
 
-`garage_generate_cars` and `garage_release_cars` follow the developers' own PS2 names
-(`GenerateCars__13G_GarageClass`, `ReleaseCars__13G_GarageClass`); those names record an intent
-the bodies do not carry out (§2a).
+**The request pair.** `garage_request_add_last_stolen` and `garage_request_show_results` are
+`AddLastStolen` and `ShowResults`: the PS2 bodies store 1 to `+0x7d` / `+0x7c`, both builds call
+them from the same two script arms, and both `GameDone` bodies test the pair in one condition and
+open the results screen on the second byte alone. The PS2 `GenerateCars` / `ReleaseCars` are empty
+8-byte bodies, and the PC arms that call them (§2a) reach only the shared empty stub.
 
 ### 4a. Twins
 
@@ -181,6 +185,8 @@ the bodies do not carry out (§2a).
 |---|---|---|---|---|
 | `garage_game_done` | `0x0055e6e0` | `GameDone__13G_GarageClassF…` | CONFIRMED | absorbs `HlidejPocetVect` |
 | `garage_run_car_select_menu` | `0x0055f510` | `CarManager__13G_GarageClassFv` | CONFIRMED | 1 → 1 |
+| `garage_request_add_last_stolen` | `0x0055fc90` | `AddLastStolen__13G_GarageClassFv` | CONFIRMED | 1 → 1 |
+| `garage_request_show_results` | `0x0055fca0` | `ShowResults__13G_GarageClassFv` | CONFIRMED | 1 → 1 |
 | `garage_show_results` | `0x0055fcb0` | `GarageShowResultsProc__13G_GarageClassFv` | CONFIRMED | 1 → 1 |
 | `loadsave_freeride_enable_car_group` | `0x0055ff70` | `FreerideEnableCar__15G_LoadSaveClassFUc` | CONFIRMED | 1 → 1 ³ |
 | `gui_garage_select_ctor` | `0x0057b930` | `OnCreate__15GM_GarageSelectFv` | CONFIRMED | 3 → 1 ¹ |

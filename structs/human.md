@@ -1,6 +1,6 @@
 # `C_human` — the concrete person body (animation / movement / weapons)
 
-**Created** 2026-07-12 10:30 +0200 · **Modified** 2026-10-04 19:30 +0200
+**Created** 2026-07-12 10:30 +0200 · **Modified** 2026-10-05 21:59 +0200
 
 The concrete human/person layer, derived from `C_actor`: locomotion, the animation and pose system,
 weapons / inventory / combat, hit and death reactions, car entry and exit, and the `C_human`
@@ -14,7 +14,7 @@ SaveGame block. `C_entity` (the scriptable-NPC AI layer) and `C_player` derive f
 | PS2 class | `C_human`, mangled tag `7C_human`, **146 methods**, 124 with a PC twin (§4) |
 
 **Coverage of the 146 PS2 methods**, counted off the §4 rows: **123 CONFIRMED · 1 STRUCTURAL ·
-7 INLINED · 2 PS2-ONLY · 2 PS2-ONLY (likely) · 4 base-stub · 7 not located.**
+10 INLINED · 8 PS2-ONLY · 4 base-stub.**
 The field layout and every CONFIRMED twin are body-diffed against the non-stripped PS2 ELF.
 
 **Confidence tags:** **[H]** body-read with a writer and a reader · **[M]** inferred · **[U]** not
@@ -81,11 +81,13 @@ typedef struct C_human {                    // extends C_actor; PC offsets, C_hu
     /* +0x1f0 */ void   *aimed_fire_action;    // [H] ptr to the aimed-fire action table (=&g_fire_action_aimed)
     /* +0x1f4 */ uint32_t aimed_fire_param;    // [M] zeroed when the aimed-fire block is armed
     /* +0x1fe */ uint8_t shotgun_reload_pending; // [H] the pump shotgun's shell-by-shell reload is running (§2)
-    /* +0x21c */ uint8_t f_21c;                // [U] cleared by human_do_play_anim
+    /* +0x218 */ uint32_t throw_charge_start_ms; // [H] mission clock when the throw wind-up began (§2)
+    /* +0x21c */ uint8_t throw_charging;       // [H] a grenade / Molotov throw is being wound up (§2)
     /* +0x22c */ uint8_t extended_anim_active; // [H] the 4.0f "extended" aim animation is up; human_do_aimed clears it (and calls
                                              //     anim_machine_del_extended_anim(4.0f)) when the human lowers the weapon
     /* +0x22d */ uint8_t sniper_mode_flag;     // [H] set/cleared by player_set_sniper_mode
-    /* +0x22e */ uint8_t f_22e;                // [U] cleared by human_do_play_anim
+    /* +0x22e */ uint8_t ground_unsettled;     // [H] the ground under the human may change: an idle
+                                             //     human re-runs the ground probe only while it is set (§2)
     /* +0x230 */ uint8_t weapon_model_dirty;   // [H] the visible weapon geometry needs rebuilding; human_do_aimed tests it and, if
                                              //     set, calls human_change_weapon_model
     /* +0x2dc */ C_ShotSkeleton shot_skeleton;  // [H] EMBEDDED, 0x130 B, spans +0x2dc..+0x40c — the per-limb
@@ -96,16 +98,19 @@ typedef struct C_human {                    // extends C_actor; PC offsets, C_hu
                                              //     `lea ecx,[reg+0x2dc]`. See structs/shot_skeleton.md
     /* +0x40c */ uint32_t movement_mode;        // [H] locomotion mode; Go_* set = 2
     /* +0x410 */ uint32_t action_type;         // [M] the in-progress action; player_lock_controls switches on it to tear it down
-    /* +0x418 */ float    f_418;               // [M] an ACCUMULATOR, not a flag: script command
-                                               //     human_forcefall (case 0xcb) ADDS 0.1 to it and
-                                               //     does nothing else, so it takes repeated
-                                               //     increments. human_intern_use_car resets it to
-                                               //     0.1f (literal 0x3dcccccd — the shared magic constant that CONFIRMED
-                                             //     that twin) on leaving a vehicle; human_do_play_anim clears it.
-                                             //     (§6)
+    /* +0x418 */ float    fall_speed;          // [H] the downward speed in m/s: each movement tick adds
+                                             //     dt * 9.81; above 2.0 the fall clip starts, the landing
+                                             //     grade and the fall damage scale with it, above 50.0
+                                             //     the human dies. A small seed starts a fall: script
+                                             //     command human_forcefall (case 0xcb) adds 0.1 and
+                                             //     human_intern_use_car sets 0.1f on leaving a vehicle (§2)
+    /* +0x41c */ uint8_t  fall_started_in_jump; // [H] the fall began in the jump mode (0xb): the hard-
+                                             //     landing limit rises from 8 to 18 and the damage
+                                             //     offset from 2 to 12 (§2)
     /* +0x420 */ float   velocity_ch[3];        // [H] per-axis gas/velocity channels = speed·orient·speed_scale (written by Go_*)
     /* +0x43c */ uint32_t motion_intent;       // [H] cleared by human_do_play_anim and by player_lock_controls
-    /* +0x44c */ int32_t  f_44c;               // [U] set to -1 in player_lock_controls' state-10 teardown
+    /* +0x44c */ int32_t  mode_timer_ms;       // [H] countdown of the timed movement modes 5, 7 and 10;
+                                             //     -1 = none (§2)
     /* +0x478 */ void    *target_vehicle;       // [H] the vehicle the human is going FOR (approaching / breaking
                                              //     into), as distinct from the one it is IN (+0x98/+0x9c).
                                              //     Established by `human_is_this_car_stealing`, which asks "is anyone
@@ -126,8 +131,10 @@ typedef struct C_human {                    // extends C_actor; PC offsets, C_hu
     /* +0x570 */ I3D_frame *weapon_attach_default;  // [H] attach frame for every other weapon_class
     /* +0x580 */ uint8_t weapon_position_dirty;  // [H] "the weapon model needs re-seating"; human_repair_weapon_position
                                              //     gates on it and clears it
-    /* +0x590 */ int32_t  anim_handle_a;       // [M] set to -1 at the top of human_do_play_anim
-    /* +0x594 */ int32_t  anim_handle_b;       // [M] set to -1 at the top of human_do_play_anim
+    /* +0x590 */ int32_t  idle_variation_timer_ms; // [H] armed to 5000 + rand while the idle clip plays;
+                                             //     when it runs out an idle variation clip starts (§2)
+    /* +0x594 */ int32_t  clip_hold_ms;        // [H] while >= 0 a slightly lower clip id cannot replace
+                                             //     the current clip (§2)
     /* +0x5fc */ uint32_t human_type;           // [H] the human's TYPE / faction, as a **SINGLE-BIT MASK**
                                              //     (bit 0 = type 0, bit 1 = type 1, ...; max 11 types). The index is
                                              //     recovered by COUNTING TRAILING ZEROS. A mask of 0 = "no
@@ -164,6 +171,9 @@ typedef struct C_human {                    // extends C_actor; PC offsets, C_hu
                                              //     main frame (+0x68), [1] = a named sub-frame when the model has one
     /* +0x690 */ int32_t  dyn_coll_count;       // [H] element count of BOTH arrays; human_create_dyn_colls sets it to 2
     /* +0x694 */ uint8_t  dyn_colls_active;     // [H] 1 while the objects are registered with the collision world
+    /* +0x6d8 */ int32_t  wingman_slot;         // [H] the HUD wingman slot (0..3) that shows this human's
+                                                //     health; -1 = none (§2)
+    /* +0x6dc */ uint32_t wingman_portrait;     // [H] the portrait id (0..7) shown in that slot
     /* +0x6ec */ int16_t  print_total;          // [H] bloody-footprint alpha denominator (§2)
     /* +0x6ee */ int16_t  prints_left;          // [H] armed to 10; one footprint per footstep event
     /* +0x6f0 */ uint8_t  print_texture;        // [H] decal texture index; set to 6 (2bfootprint.bmp)
@@ -203,16 +213,19 @@ typedef struct C_human {                    // extends C_actor; PC offsets, C_hu
 | +0x47c | shadow_frame_handle | M | `human_intern_use_car`, `human_intern_use_railway` | - | handle from `game_add_frame_for_shadow`. Re-added on LEAVING a vehicle — a seated actor casts no world shadow. |
 | +0x688 / +0x68c / +0x690 / +0x694 | **dyn_coll_objects / _frames / _count / _active** | H | `human_create_dyn_colls`, `human_erase_dyn_colls`, `human_activate_colls`, `human_deactivate_colls`, `human_do_crouched` | `human_update_dyn_coll` | the DYNAMIC-COLLISION block: the capsules that make the animated body hittable. Two parallel arrays (objects + the I3D_frames they track) of `count` elements, built with `count = 2`. `human_update_dyn_coll` re-syncs them to the animated frames each tick; `human_do_crouched` SHRINKS object[0] when crouching. |
 | +0x22d | sniper_mode_flag | H | `player_set_sniper_mode` | - | 1 while the sniper scope is up |
-| +0x21c / +0x22e / +0x418 | f_21c / f_22e / f_418 | U | `human_do_play_anim` | - | cleared together when a scripted full-body clip starts (§6) |
+| +0x218 / +0x21c | throw_charge_start_ms / throw_charging | H | `human_dispatch_weapon_action_at_target` (1 on the press of a class-4 weapon, 0 on the release), and ten more `human_*` methods that interrupt the action | `human_dispatch_weapon_action_at_target`, `player_ai_walk`, `human_save_game_save` | the throw wind-up of the grenade and the Molotov cocktail. The press stores the mission clock at `+0x218` and plays the throw clip; the release cancels below 401 ms, caps the hold at 2000 ms and throws with power = hold ms * 0.015 * Strength (`+0x640`) |
+| +0x22e | ground_unsettled | H | `human_movement_intern` (1 when the ground probe misses; on a hit 1 when the ground is a dynamic collision object, kind bit `0x40`, or carries flag `0x10000`, else 0; 0 while seated), `human_update` (1 when a played clip ends, except clips `0x68` / `0x69`), `human_do_play_anim` (0) | `human_movement`, `human_movement_intern` | while it is clear and `fall_speed` is 0, an idle human (movement_mode 1) skips the movement pass; while it is set the movement pass re-runs the ground probe every tick |
+| +0x418 / +0x41c | fall_speed / fall_started_in_jump | H | `human_movement_intern` (`+= dt * 9.81`; at least 3.0 when the ground is out of reach; 0 after landing; `+0x41c` when the fall begins), `human_movement` (0.05 seed; 60.0 for the player below y -30), `human_update` (0.01 seed), `human_intern_use_car` (0.1 seed), script command `human_forcefall` (+0.1), `human_do_play_anim` (0) | `human_movement`, `human_movement_intern`, `human_save_game_save` | the vertical fall. Above 2.0 the human enters movement_mode 3 with clip `0x66`. On landing: up to 5.5 a soft landing; up to 8 (18 when `+0x41c` is set) the landing clip `0x67` and a recovery timer in `+0x44c`; above that a fall hit of (speed - 2, or - 12) * 10 through the hit virtual, with force feedback at speed * 0.1. Above 50.0 in mode 1 or 3 the human dies |
 | +0x410 | action_type | M | `player_lock_controls` | `player_lock_controls` | the in-progress high-level action; the controls-lock teardown switches on it (cases 1-5) and then zeroes it |
 | +0x43c | motion_intent | H | `human_do_play_anim`, `player_lock_controls` | - | cleared whenever locomotion is interrupted |
-| +0x44c / +0x478 | f_44c / target_vehicle | U / H | `player_lock_controls` | `human_is_this_car_stealing` (`+0x478`) | the state-10 (vehicle/arrest) teardown writes `-1` to `+0x44c` and clears `+0x478`; `+0x478` itself is the vehicle the human is going FOR, per §1 |
+| +0x44c | mode_timer_ms | H | `player_try_use_car` (mode 10, the car break-in: `car_database_get_steal_time` clamped to 2000..30000, the total copied to `+0x474`), `human_movement_intern`, `human_dispatch_weapon_action_at_target`, `human_do_corner_view`, `human_do_corner_fire`, `human_do_dead_body_drop`, `human_hit` (mode 5: the clip time - 250 ms), `human_movement` (mode 7: 2000 + rand), `human_ai`, `player_lock_controls`, `player_ai` (-1) | `human_movement`, `player_try_use_car`, `player_ai`, `human_save_game_save` | `human_movement` subtracts dt in modes 5, 7 and 10 and leaves the mode when it runs out |
+| +0x478 | target_vehicle | H | `player_try_use_car`, `player_lock_controls` (cleared in the state-10 teardown) | `human_is_this_car_stealing` | the vehicle the human is going FOR, per §1 |
 | +0x564 / +0x568 | **weapon_model_frame / _2** | H | `human_repair_weapon_position` | `human_repair_weapon_position`, `human_intern_use_car`, `player_lock_controls` | the VISIBLE WEAPON's model frames, settled by `human_repair_weapon_position` (§2d): the function zeroes the frame's position (`+0x80..+0x88`) and rewrites its flag word (`+0xac`) with `& 0xfffffedf \| 0x40000000`. Both are released through vtable `+0x24` in `player_lock_controls`' teardown |
 | +0x56c / +0x570 | weapon_attach_long_gun / weapon_attach_default | H | - | `human_repair_weapon_position` | the two ATTACH frames the weapon model is re-parented between: `+0x56c` while `weapon_class` is 2 or 3 (the rifles, the Thompson and the shotguns), `+0x570` for any other class |
 | +0x580 | weapon_position_dirty | H | `human_do_reload`, `human_notify_callback`, `human_repair_weapon_position` (clears) | `human_repair_weapon_position` | "the weapon model needs re-seating" — the repair pass gates on it and clears it on entry. `human_do_reload` sets it to 1 (a reload displaces the weapon); `human_notify_callback` — the human I3D animation-event callback, a **free function** — sets it in its event-switch case `0x1f`. |
 | +0x1fe | **shotgun_reload_pending** | H | `human_shooting` and `human_do_reload` (set); `human_ai`, `human_hit`, `human_change_weapon_model`, `human_do_change_weapon`, `human_dispatch_weapon_action_at_target`, `player_ai_walk` (clear); `human_game_init`, `human_activate` (init) | `human_ai`, `human_notify_callback`, `human_repair_weapon_position`, `human_dispatch_weapon_action_at_target`, `player_ai` | the pump shotgun's shell-by-shell reload. Set when a shot empties the pump-action shotgun (`predmety.def` id 11) with a round in reserve, and when `human_do_reload` starts on it with a round to load. While set, `human_ai` reloads one more shell each time the action step reaches 3 and clears the flag (dropping the extended animation) once no round is left; `human_repair_weapon_position` and two animation events wait for it to clear |
 | +0x1f0 (globals) | the 3 fire-action tables | H | `player_set_sniper_mode` | `human_repair_weapon_position` | the three tables the pointer may hold: **`g_fire_action_ready`**, **`g_fire_action_aimed`**, **`g_fire_action_onoff`** (named from their PS2 twins, §2d) |
-| +0x590 / +0x594 | anim_handle_a / _b | M | `human_do_play_anim` | - | both set to `-1` at the top of a scripted clip start |
+| +0x590 / +0x594 | idle_variation_timer_ms / clip_hold_ms | H | `human_animation_evaluate_and_dispatch` (`+0x590` = 5000 + rand when the dispatched clip is the idle clip 1, else -1; `+0x594` = the clip's remaining time - 280 ms when the caller asks to hold the clip, else -1), `human_update` (both count down), `human_ai` (the reload event sets 5000 + rand and -1), `human_shooting`, `human_do_change_weapon`, `human_drop_out_items`, `human_do_play_anim`, `human_do_jump`, `human_do_climb` | `human_update`, `human_animation_evaluate_and_dispatch`, `human_save_game_save` | `+0x590`: while the human is alive and `+0x2d8` is 0, `human_update` counts it down; when it passes zero with the byte `+0x598` set, an idle variation plays (`cur_anim_id` = 2 + rand). `+0x594`: while it is >= 0, a requested clip id up to 3 below the current one is held at the current one |
 | +0x1e4 | **crouched** (stance flag) | H | `human_do_crouched` (sole writer) | `human_set_movement_intent_forward` (+ cohort), `human_do_corner_view`, `human_do_corner_fire`, `human_do_corner_fire_aimed` | the CROUCHED stance flag (§2d). What crouching does: (1) forces walk over run in the `Go_*` cohort; (2) when CLEAR **and** the equipped weapon's def record has `+0x50 == 4`, the anim setters pick the alternate clip (`base_id + 1`). It also SHRINKS `dyn_coll_objects[0]` — a crouching human is genuinely a smaller target. |
 | +0x1e8 | **weapon_class** | H | `human_change_weapon_model` (from the in-hand item's `predmety.def` record `+0x5c`), `human_game_init`, `human_activate` | `player_indicator_set_aimed`, `human_do_corner_fire`, `human_do_corner_fire_aimed`, `human_update`, `human_repair_weapon_position`, `human_notify_callback` | the in-hand item's weapon class (§2c). The aim crosshair shows only for classes `[1,4)`, the firearms; the corner-fire setters refuse `0` (bare hands) and `2` (a rifle); `human_update` maps the four melee classes onto a block clip (§2c); `human_repair_weapon_position` picks the long-gun attach frame for 2 and 3 |
 | +0x1ec | **shooting** latch | H | `human_dispatch_weapon_action_at_target` (set after it stores the shot target at `+0x200`), `human_notify_callback`; cleared by `human_hit`, `human_do_jump`, `human_change_weapon_model`, `human_do_change_weapon`, `human_put_in_vehicle_at_seat`, `human_drop_out_items`, `human_use_actor`, `human_do_box_pick_up`, `human_do_dead_body_pick_up`, `human_reset_actions`, `entity_action_tick`; saved and restored by `human_save_game_save` / `_load`, initialised by `human_game_init` / `human_activate` | `human_update`, `human_dispatch_weapon_action_at_target`, `player_ai`, `entity_action_tick`, `ai_blob_log_add_blob` | while set and `weapon_class` is 1-3 (a firearm), `human_update` calls `human_shooting` every frame; it also blocks the melee guard pose (§2c) and `player_ai`'s idle branch, and gives a scent blob its flag `0x04` (`structs/ai_blob_log.md`) |
@@ -225,6 +238,7 @@ typedef struct C_human {                    // extends C_actor; PC offsets, C_hu
 | +0x5fc | **human_type** | H | - | `human_is_hit_allowed_between_types` | the human's TYPE/faction as a **single-bit mask** (index = trailing-zero count; **max 11 types**). Mask 0 = no type ⇒ hits always allowed. It is the index into **`g_hit_permission_matrix`** (0x0064ba78) — an **11×11 byte matrix of who may hit whom**. |
 | +0x608..+0x614 | **prop_max[2..5]** — the four LIMB energies | H | `player_ctor` (4 x 40.0f), `human_load_stats_block_scaled`, `human_load_stats_block_plain` | `human_getproperty` / `human_setproperty` (dispatcher cases `0x66` / `0x65`) | **`EnergyHandL`, `EnergyHandR`, `EnergyLegL`, `EnergyLegR`**, from the developers' own property-name table (§2b). The four 40.0f seeds are per-limb health against the player's 200.0f torso Energy. |
 | +0x644 | cur_health | H | `game_cheat_check` (=100, the health cheat), `player_save_game_load`, `game_init` | `player_save_game_load` | **C_human field, NOT C_player.** Damage subtracts from it (§1, §2d). `player_save_game_load` clamps it to max_health, then pushes `cur/max*100` to `hud_set_player_health_value`. |
+| +0x6d8 / +0x6dc | wingman_slot / wingman_portrait | H | `human_set_wingman_indicator` (script `wingman_setindicator` / `wingman_delindicator`, on the human `act[xx]`), `human_game_init` / `human_activate` (slot -1), `human_save_game_load` | `human_hit`, `human_hit_in_car`, `human_die_in_exploding_car`, `human_save_game_save` / `_load`, `game_character_stack_pop`, `program_process_command` | while the slot is 0..3 every hit pushes the human's health percentage (`+0x644 / +0x604 × 100`) to that HUD slot and a death in an exploding car pushes 0; a save load re-applies the portrait, the slot bit and the value (`basic/artifacts/hud_elements.md` §7) |
 | +0x6ec / +0x6ee / +0x6f0 | print_total / prints_left / print_texture | H | `human_arm_bloody_footprints` (10 steps, texture 6), `human_notify_callback` (decrements `+0x6ee`), `human_game_init` / `human_activate` (clear `+0x6ee`), `human_save_game_load` | `human_notify_callback`, `human_save_game_save` | bloody footprints: when the foot ray crosses a blood decal's collision sphere, `collision_line_in_dynamics` calls `human_arm_bloody_footprints` (effects quality > 1 only); each footstep event then places one decal of texture `+0x6f0` with alpha `(+0x6ee + 2) / +0x6ec`, ten in all (`structs/blood.md` §5e) |
 | +0x6f8 / +0x700 | carried_object[2] | H | `human_do_box_pick_up` | `human_do_box_drop`, `human_set_movement_intent_forward` (+ cohort) | carried box. `human_do_box_pick_up` writes `+0x6f8`; `human_do_box_drop` and `human_do_box_cancel` clear it. |
 | +0xa58 | freeze_countdown_ms | H | `human_game_init`, `human_activate` (both -1), `human_update` (decrements) | `human_update`, `human_ai` | while positive, `human_update` only decrements it and returns, and `human_ai` exits early. A disassembly of every function finds no store that sets it positive (§2d) — so the freeze never engages, and `human_update`'s main path (which lays the scent trail, `structs/ai_blob_log.md`) always runs unless a recorded track drives the pose |
@@ -340,21 +354,23 @@ bases.
 | `+0x1f0` / `+0x1f4` | `+0x39c` / `+0x3a0` | the PS2 names the three tables the pointer may hold: `g_fire_action_ready` = `_fire_action_ready_`, `g_fire_action_aimed` = `_fire_action_aimed_`, `g_fire_action_onoff` = `_fire_action_onoff_` |
 | `+0x1fe` | `+0x3aa` | - |
 | `+0x200..+0x208` (shot target) | - | the PS2's own `+0x200` is the anim slot (first row); do not pair them |
-| `+0x21c` / `+0x22c` / `+0x22d` / `+0x22e` / `+0x230` | `+0x3bc` / `+0x3cc` / `+0x3cd` / `+0x3ce` / `+0x3d0` | - |
+| `+0x218` / `+0x21c` / `+0x22c` / `+0x22d` / `+0x22e` / `+0x230` | `+0x3b8` / `+0x3bc` / `+0x3cc` / `+0x3cd` / `+0x3ce` / `+0x3d0` | `Do_Shoot__7C_humanFbP8S_vector` keeps the throw start time and flag at `+0x3b8` / `+0x3bc`; `Movement__7C_humanFUi` tests `+0x3ce` in the same idle gate |
 | `+0x23c` / `+0x240` | `+0x3dc` / `+0x3e0` | the PS2 knock-down clip base is `0x1b` |
 | `+0x40c` | `+0x588` | - |
-| `+0x418` | `+0x594` | - |
+| `+0x418` | `+0x594` | `Movement__7C_humanFUi` / `MovementIntern__7C_humanFUi`: the same `dt * 9.81` integration, the same 0.05 seed and the same kill above 50.0 |
 | `+0x43c` | `+0x5a0` | - |
+| `+0x44c` | `+0x5a4` | `SetWaitAnim__7C_humanFv` stores the clip time - 250 there with mode 5; `Movement__7C_humanFUi` counts it down in mode 5 |
 | `+0x478` | `+0x5c4` | `human_is_this_car_stealing` ↔ `IsThisCarStealing__7C_human` |
 | `+0x47c` | `+0x5c8` | - |
 | `+0x480..+0x557` (G_Inventory) | `+0x5cc` | delta `0x14c`; four FIXED slot bands on the PC where the PS2 uses one vector |
 | `+0x564` / `+0x568` / `+0x56c` / `+0x570` | `+0x5f0` / `+0x5f4` / `+0x5f8` / `+0x5fc` | `human_repair_weapon_position` ↔ `RepairWeaponPosition__7C_human` |
 | `+0x580` | `+0x60c` | - |
-| `+0x590` / `+0x594` | `+0x61c` / `+0x620` | - |
+| `+0x590` / `+0x594` | `+0x61c` / `+0x620` | `FireReload__7C_humanFP15S_GameItemTable` stores rand + 5000 and -1 there, as its inlined PC copy does |
 | `+0x5fc` | `+0x660` | both builds recover the type index by counting trailing zeros |
 | `+0x604` (max_health) | `+0x668` | `__ct__7C_humanFv` initialises it to 100.0f |
 | `+0x644` (cur_health) | `+0x6a8` | `HitLanding`, `HitFall`, `Do_Castrate`, `Do_HardHead` and `_intern_ForceDeath` all subtract from it and test `< 0.01` |
 | `+0x688` / `+0x68c` / `+0x690` / `+0x694` | `+0x6ec` / `+0x6f0` / `+0x6f4` / `+0x6f8` | - |
+| `+0x6d8` / `+0x6dc` | `+0x734` / `+0x738` | both builds' `WINGMAN_SETINDICATOR` arm stores the pair there; `UpdateDynColl__7C_humanFv` reads `+0x734` to refresh the slot |
 | `+0x6f8` / `+0x700` | `+0x754` / `+0x75c` | - |
 | `+0x724..+0x757` (ai_loc) | `+0x780` | delta `0x5c` |
 | `+0x758..+0x99b` (ai_blob_log) | `+0x7c0` | delta `0x68` — it differs from `ai_loc`'s `0x5c`, so this band does not rebase by a constant |
@@ -385,9 +401,7 @@ cell means "none". Sorted by PS2 VA. Status vocabulary:
 | STRUCTURAL | symbol match only — the PS2 body is a stub, so a body match is impossible |
 | INLINED | the PS2 method has no PC function: MSVC spliced it into its caller |
 | PS2-ONLY | the method exists only in the PS2 port; no PC twin exists |
-| PS2-ONLY (likely) | the same conclusion, drawn from the callers and the name rather than proven |
 | base-stub | 8-byte overridden virtual with no distinct PC twin |
-| not located | no PC function identified yet (§4c holds the gap evidence) |
 
 | PC VA | PC name | PS2 twin (mangled) | PS2 VA | Status | Role |
 |---|---|---|---|---|---|
@@ -422,13 +436,13 @@ cell means "none". Sorted by PS2 VA. Status vocabulary:
 | 0x00496430 | `human_activate_colls` | `ActivateColls__7C_humanFi` | 0x0016f5c0 | CONFIRMED | (re)register; no-op while in a vehicle; mode 2 = mask-1 filtered |
 | 0x004964b0 | `human_update_dyn_coll` | `UpdateDynColl__7C_humanFv` | 0x0016f700 | CONFIRMED | per-tick capsule refresh from the animated frames; pinned from both sides as the tail call of `Extern_AI_Update` |
 | 0x00496710 | `human_hit` | `Hit__7C_humanF10E_hit_typeRC8S_vectorRC8S_vectorRC8S_vectorfP7C_actorUiP9I3D_frame` | 0x0016fa50 | CONFIRMED | main hit handler (0x5384) |
-| - | - | `HitLanding__7C_humanFv` | 0x00170f60 | INLINED ¹ | inlined into `human_hit`. Fingerprint [human_movement(1), scream(+0x5c), scream(+0x55)] — shared with HitStroke/HitFall, so not individually separable |
+| - | - | `HitLanding__7C_humanFv` | 0x00170f60 | INLINED ¹ | inlined into `human_hit`: the arm gated on its ninth argument (landing clip `0x67`, PS2 `0x45`) |
 | 0x00498760 | `human_hit_in_car` | `HitInCar__7C_humanF10E_hit_typeRC8S_vectorRC8S_vectorRC8S_vectorfP7C_actorUiP9I3D_frame` | 0x00171060 | CONFIRMED | damage path while INSIDE a vehicle. **The ONLY one of the 7 Hit* helpers that is a real function on PC** |
-| - | - | `HitAgony__7C_humanFRC8S_vector` | 0x00171340 | INLINED ¹ | inlined into `human_hit`. UNIQUELY pinned: scream(+0x5e) is used by no other Hit* helper. The site is marked in the decomp |
-| - | - | `HitStroke__7C_humanFRC8S_vectorUi` | 0x00171470 | INLINED ¹ | inlined into `human_hit`. Fingerprint identical to HitLanding/HitFall |
-| - | - | `HitGun__7C_humanFRC8S_vectorUib` | 0x00171670 | INLINED ¹ | inlined into `human_hit`, the `else` arm of the dispatch. The only helper that screams a CONSTANT (0x54) |
+| - | - | `HitAgony__7C_humanFRC8S_vector` | 0x00171340 | INLINED ¹ | inlined into `human_hit`: the second arm; scream `+0x5e` is used by no other `Hit*` helper |
+| - | - | `HitStroke__7C_humanFRC8S_vectorUi` | 0x00171470 | INLINED ¹ | inlined into `human_hit`: the fourth arm (π/4 and 3π/4 split, clips `0xcd` / `0xec..0xf0`, PS2 `0x9b` / `0xba..0xbe`) |
+| - | - | `HitGun__7C_humanFRC8S_vectorUib` | 0x00171670 | INLINED ¹ | inlined into `human_hit`: the final `else` arm and both in-vehicle arms; the only helper that screams a constant (`0x54`) |
 | - | - | `HitGunHPT__7C_humanFRC8S_vectorUib` | 0x00171af0 | INLINED ¹ | called only from inside HitGun, so it is inlined within HitGun's own inlined body |
-| - | - | `HitFall__7C_humanFRC8S_vectorUi` | 0x00171ea0 | INLINED ¹ | inlined into BOTH `human_hit` and `human_throw_from_car_truck`; in the latter it is pinned by the caller — PS2 ThrowFromCarTruck's last statement is `HitFall(...)` |
+| - | - | `HitFall__7C_humanFRC8S_vectorUi` | 0x00171ea0 | INLINED ¹ | inlined into `human_hit` (the third arm, gated on its fifth argument: π/4 and 3π/4 split, clips `0x6a..0x6c`, PS2 `0x48..0x4a`) and into `human_throw_from_car_truck`, whose PS2 twin ends in `HitFall(...)` |
 | 0x00498a00 | `human_collision` | `Collision__7C_humanFP7C_actorRC8S_vectorRC8S_vectorRC8S_vectorfP9I3D_frame` | 0x00172250 | CONFIRMED | - |
 | 0x004991c0 | `human_is_possible_coll` | `IsPossibleColl__7C_humanFP7C_actorR8S_vectorR8S_vectorfRfPP7C_actor` | 0x001728c0 | CONFIRMED | - |
 | 0x00499440 | `human_pose_interpolate` | `PoseInterpolate__7C_humanFUi` | 0x00172b60 | CONFIRMED | per-frame driver of the PROCEDURAL POSE layer (additive aim/lean over the playing clip). Exact sig `(this,uint)` + exact callee counts |
@@ -471,20 +485,20 @@ cell means "none". Sorted by PS2 VA. Status vocabulary:
 | 0x004a1770 | `human_eject_out_of_car` | `ZasrateVybliknutiZAuta_ve3rano__7C_humanFv` | 0x0017d570 | CONFIRMED | compute + apply the exit position (11× vec3_set_xyz, 4× collision_test_line_vertical_thunk). The placement half of `human_climb_out_of_car` |
 | 0x004a2400 | `human_do_climb_in_car_lr` | `Do_ClimbInCarLR__7C_humanFv` | 0x0017e570 | CONFIRMED | climb across the car interior L↔R. SetOwner×3 / ChangeWeaponModel×2 exact |
 | 0x004a26d0 | `human_use_actor` | `Use_Actor__7C_humanFP7C_actoriii` | 0x0017e920 | CONFIRMED | **the general 'interact with that actor' dispatcher** (door/car/lever/body). Exact 5-arg sig + PersonAnim×3 + PoseNullRotate×3 |
-| - | - | `IsKickToCocotus__7C_humanFv` | 0x0017fe50 | not located | 1168 B; §4c |
+| - | - | `IsKickToCocotus__7C_humanFv` | 0x0017fe50 | PS2-ONLY ⁸ | 1168 B: kick a dog or a downed human within 1.5 units; §4c |
 | 0x004a3ae0 | `human_dispatch_weapon_action_at_target` | `Do_Shoot__7C_humanFbP8S_vector` | 0x001802f0 | CONFIRMED | fire the equipped weapon at target (documented twin) |
 | 0x004a4490 | `human_do_throw_grenade` | `Do_ThrowGrenade__7C_humanFR8S_vector` | 0x00181150 | CONFIRMED | throw the equipped throwable; gates on weapon_slot == 5 or 0xf (the throwable ids in predmety.def) |
 | 0x004a4560 | `human_can_special_stroke` | `Can_SpecialStroke__7C_humanFb` | 0x00181290 | CONFIRMED | find a victim for a special melee takedown: kind ∈ {0x1b, 2}, alive, NOT crouched, movement_mode ∈ {1,2,9} |
 | 0x004a49d0 | `human_do_castrate` | `Do_Castrate__7C_humanFP7C_human` | 0x00181760 | CONFIRMED | groin-strike melee; PAIRED anim (attacker 0xf1 / victim 0xf2). Identical prologue to hard_head → separated by SIBLING-DELTA + user override |
 | 0x004a4aa0 | `human_do_hard_head` | `Do_HardHead__7C_humanFP7C_human` | 0x001818b0 | CONFIRMED | headbutt melee; PAIRED anim (attacker 0xf3 / victim 0xf4). Same trap, same resolution |
-| - | - | `SetWaitAnim__7C_humanFv` | 0x00181a00 | not located | 108 B; §4c |
-| - | - | `SetFreeBoxingAnim__7C_humanFUi` | 0x00181a70 | not located | 772 B; §4c |
+| - | - | `SetWaitAnim__7C_humanFv` | 0x00181a00 | INLINED ¹ | 108 B: the 250 ms wait block, inlined into `human_dispatch_weapon_action_at_target`; §4c |
+| - | - | `SetFreeBoxingAnim__7C_humanFUi` | 0x00181a70 | INLINED ¹ | 772 B: the free-boxing clip block, inlined into `human_dispatch_weapon_action_at_target`; §4c |
 | 0x004a4b70 | `human_shooting` | `Shooting__7C_humanFv` | 0x00181d80 | CONFIRMED | **the per-frame FIRING tick** (one of the largest methods). Calls `police_manager_register_gunfire_offence_for_target` — firing is what makes the cops notice you |
-| - | - | `FireReload__7C_humanFP15S_GameItemTable` | 0x00183120 | not located | 932 B; the one real inlining candidate — `Shooting` calls it and PC `human_shooting` is the right size to have absorbed it (§4c) |
+| - | - | `FireReload__7C_humanFP15S_GameItemTable` | 0x00183120 | INLINED ¹ | 932 B: inlined into the animation-event-1 arm of `human_ai`; §4c |
 | 0x004a60b0 | `human_do_reload` | `Do_Reload__7C_humanFv` | 0x001834d0 | CONFIRMED | reload the weapon; sets `weapon_position_dirty` (+0x580) |
 | 0x004a61d0 | `human_weapon_toggle_held` | `Do_Holster__7C_humanFv` | 0x001836b0 | CONFIRMED | re-select/holster held weapon (from `human_free_hand` diff) |
 | 0x004a6300 | `human_weapon_drop` | `Do_WeaponDrop__7C_humanFv` | 0x00183840 | CONFIRMED | discard weapon to ground (throw-away anim) |
-| - | - | `Do_WeaponDropAll__7C_humanFv` | 0x00183b90 | not located | 680 B; §4c |
+| - | - | `Do_WeaponDropAll__7C_humanFv` | 0x00183b90 | PS2-ONLY ⁸ | 680 B: drop every item of a dying non-player; §4c |
 | 0x004a63f0 | `human_do_play_anim` | `Do_PlayAnim__7C_humanFPCcbb` | 0x00183e40 | CONFIRMED | play a named animation clip |
 | 0x004a64b0 | `human_get_bound_points_2d` | `GetBoundPoints2D__7C_humanFRQ23std48vector<9S_vector2,Q23std21allocator<9S_vector2>>P9I3D_frame` | 0x00183f40 | CONFIRMED | - |
 | 0x004a6700 | `human_do_jump` | `Do_Jump__7C_humanFbb` | 0x00184090 | CONFIRMED | Start a jump, or hand off to `human_do_climb`. Three identical guards; `movement_mode = 0xb` (same constant both builds); vertical channel 6.0f; identical teardown tail. Ratio 1.15. Sets the `+0x1e6` side flag from which foot is down |
@@ -502,7 +516,7 @@ cell means "none". Sorted by PS2 VA. Status vocabulary:
 | 0x004a96b0 | `human_do_box_pick_up` | `Do_FuckingBox__7C_humanFP9I3D_frame` | 0x00187b70 | CONFIRMED | PICK UP the carry-box; it never drops (the drop is `human_do_box_drop`). Exact callee counts: Add/DelInvalidItem ×8/×8 |
 | 0x004a9bf0 | `human_do_box_cancel` | `Do_FuckingBoxCancel__7C_humanFv` | 0x00188130 | CONFIRMED | abort an in-progress box pick-up (mirror fingerprint of the pick-up) |
 | 0x004aa190 | `human_do_dead_body_pick_up` | `Do_DeadBody__7C_humanFP9I3D_frame` | 0x00188820 | CONFIRMED | PICK UP a dead body and carry it; called with 0 by `human_do_dead_body_drop` to release |
-| 0x004aab10 | `human_car_launched_into_air` | `EineMeineKleineAutoInLuft__7C_humanFP5C_car` | 0x00188c70 | CONFIRMED | react to the occupied car being LAUNCHED INTO THE AIR. Ratio 2.7, above the usual band — the weakest twin on the class (§6); the three stores before its virtual call — `cur_health` 0, `+0x5d` 0, the anim-machine lock 1 — are the same on both builds (PS2 `+0x6a8`, `+0x61`, `+0x37c`) |
+| 0x004aab10 | `human_die_in_exploding_car` | `EineMeineKleineAutoInLuft__7C_humanFP5C_car` | 0x00188c70 | CONFIRMED | a human seated in a car that `car_explosion` blows up dies in its seat: the charred model `ohorelec01.i3d` (a PC-only statement), the kill stores `cur_health` 0, `+0x5d` 0 and the anim-machine lock 1 (PS2 `+0x6a8`, `+0x61`, `+0x37c`), and a seated death clip by seat. Statement for statement; the size ratio 2.7 is the PS2's inlined animation-cache search |
 | 0x004aad00 | `human_can_aim` | `Can_Aimed__7C_humanFi` | 0x001891a0 | CONFIRMED | is there room in front to raise the weapon? ⁶ |
 | 0x004aaed0 | `human_do_corner_breath` | `Do_CornerBreath__7C_humanFQ27C_human13E_corner_view` | 0x001892d0 | CONFIRMED | **COVER SYSTEM.** idle breathing pose against cover; clips 0x4e–0x4f |
 | 0x004aaf10 | `human_do_corner_view` | `Do_CornerView__7C_humanFQ27C_human13E_corner_view` | 0x00189340 | CONFIRMED | **COVER.** lean out to look; variant 2 requires CROUCHED; clips 0x50–0x52 |
@@ -510,8 +524,8 @@ cell means "none". Sorted by PS2 VA. Status vocabulary:
 | 0x004ab0f0 | `human_do_corner_fire_aimed` | `Do_CornerFireAimed__7C_humanFQ27C_human13E_corner_view` | 0x001895a0 | CONFIRMED | **COVER.** lean out and fire AIMED; clips 0x58–0x59 |
 | 0x004ab1c0 | `human_force_ready_to_act` | `Force_CanWorking__7C_humanFv` | 0x001896d0 | CONFIRMED | force `movement_mode` (+0x40c) = **1** = the idle/READY mode. Consumer: **`entity_action_tick`** — makes the NPC available for a new task |
 | 0x004ab1d0 | `human_turn_in_place` | `Turn_Turn__7C_humanFv` | 0x001896e0 | CONFIRMED | **rotate on the spot**: request the turn clip, zero motion_intent + the +0x430 motion vector. Consumers: `entity_action_tick` ×6, script label `c21_postrotate_facing` |
-| - | - | `Turn_Left__7C_humanFv` | 0x00189710 | not located | 48 B; §4c |
-| - | - | `Turn_Right__7C_humanFv` | 0x00189740 | not located | 48 B; §4c |
+| - | - | `Turn_Left__7C_humanFv` | 0x00189710 | PS2-ONLY ⁸ | 48 B; §4c |
+| - | - | `Turn_Right__7C_humanFv` | 0x00189740 | PS2-ONLY ⁸ | 48 B; §4c |
 | 0x004ab200 | `human_activate` | `Activate__7C_humanFv` | 0x00189770 | CONFIRMED | lifecycle **activate**: frame on, `human_pose_validate`, register with the zone/AI-loc system |
 | 0x004ab8a0 | `human_deactivate` | `Deactivate__7C_humanFv` | 0x00189c50 | CONFIRMED | lifecycle **deactivate**: frame off, release 2 object registrations, free +0x5f8 |
 | 0x004ab9e0 | `human_new_scream` | `NewScream__7C_humanFUi` | 0x00189d90 | CONFIRMED | play a voice/scream line by id (guards + `%08lu.wav`). Its 4 calls inside human_hit ARE the inlined Hit* helpers' internals |
@@ -531,8 +545,8 @@ cell means "none". Sorted by PS2 VA. Status vocabulary:
 | 0x004ae710 | `human_fake_weapon_effect` | `FakeWeaponEffect__7C_humanFP9I3D_frameib` | 0x0018e060 | CONFIRMED | **WEAPONEFFECT.** non-simulated effect on a frame; id 9 only; attaches to the sub-frame `"zaver1"`, Czech for a gun's BOLT |
 | - | - | `HideLegs__7C_humanFP9I3D_modelb` | 0x0018e100 | base-stub | 8 B overridden virtual, no distinct PC twin |
 | 0x004ae770 | `human_is_hit_allowed_between_types` | `Can_Hit_FilterHumanType__7C_humanFP7C_humanP7C_human` | 0x0018e110 | CONFIRMED | **may type A hit type B?** 11×11 lookup in `g_hit_permission_matrix` indexed by each human's single-bit `human_type` (+0x5fc). Special rule: type 1 may hit type 0 only if the victim is the ANGRIEST actor |
-| - | - | `ChangeSceneInit__7C_humanFv` | 0x0018e230 | PS2-ONLY (likely) ² | no textual callers, so a virtual dispatched from the InterCity scene-change path; the name is the PS2 city-streaming mechanic |
-| - | - | `ChangeSceneDone__7C_humanFv` | 0x0018e2b0 | PS2-ONLY (likely) ² | same shape as `ChangeSceneInit`: virtual, no callers, InterCity-named |
+| - | - | `ChangeSceneInit__7C_humanFv` | 0x0018e230 | PS2-ONLY ² | the `C_actor` virtual after `SoundsChange` (PS2 slot 27); the PC table has no slot for it |
+| - | - | `ChangeSceneDone__7C_humanFv` | 0x0018e2b0 | PS2-ONLY ² | PS2 slot 28, the last `C_actor` virtual; the PC table has no slot for it |
 | - | - | `PlaySoundFromSndTable__7C_humanFi` | 0x0018e350 | INLINED ¹ | 180 B: pulls a preloaded sound out of `C_sound_table` and positions it 1.5 units up ⁷ |
 | - | - | `SchovejPero__7C_humanFv` | 0x0018e410 | PS2-ONLY ² | model **TEARDOWN** across a city-part load (`I3D_pose::Release` ×3, `StopAnims`, `EraseDynColls`, `LightnessDel`) |
 | - | - | `VystrcPero__7C_humanFv` | 0x0018e920 | PS2-ONLY ² | model **REBUILD** after a city-part load (string-builds the model name, `_intern_ChangeModel`, `InvalidateSelf`). It is also why a whole-binary CRT string fingerprint for it returns 0 PC candidates: there is nothing to find |
@@ -545,10 +559,12 @@ inside the helper bodies — yet PC `human_hit` calls `human_new_scream` 4× and
 *directly*; (2) PS2 `ThrowFromCarTruck` calls `HitFall`, yet PC `human_throw_from_car_truck` calls no
 unnamed function, just those same internals. Every unnamed callee of `human_hit` was fingerprint-tested
 and none touches `cur_health` or the scream helper. The inline sites are marked in the decomp under a
-banner inside `human_hit`. Limit of the analysis: `HitLanding` / `HitStroke` / `HitFall` share one
-scream/movement fingerprint, so a site showing [movement, +0x5c, +0x55] cannot be attributed to one of
-the three; only `HitAgony` is uniquely pinned. The five helpers together hold 10 scream calls while
-`human_hit` makes only 4, so not every dispatch arm was inlined in full (§6).
+banner inside `human_hit`. **Each arm is pinned** by position and by its clip ids: `human_hit` keeps the
+PS2 dispatch order (landing, agony, fall, stroke, else gun), and every arm's clip ids are the PS2 ids
+plus a constant band offset (`+0x22` for the landing and fall clips, `+0x32` for the stroke clips). The
+five helpers hold 10 scream calls and `human_hit` only 4 because MSVC merged the identical scream tails:
+the arms jump to three shared tails (`rand + 0x5c`, `rand + 0x55`, and a computed id). `SetWaitAnim`,
+`SetFreeBoxingAnim` and `FireReload` are inlined the same way; §4c lists their sites.
 
 ² **PS2-ONLY: a PS2 method count is an UPPER BOUND on the PC class, never a target.** Every caller of
 these four is the PS2 city-streaming subsystem (`InterCity_ChangeMission__9C_mission`,
@@ -556,7 +572,11 @@ these four is the PS2 city-streaming subsystem (`InterCity_ChangeMission__9C_mis
 with a load between them to fit 32 MB of RAM and the PC build does not: `InterCity` appears **127×** in
 the PS2 decomp and **0×** on PC. `SchovejPero` / `VystrcPero` are crude developer slang, roughly "put it
 away" / "stick it out"; the bodies are the model teardown/rebuild pair that streaming needs, and they
-are large (980 / 2568 B), so their absence from the PC build is not inlining.
+are large (980 / 2568 B), so their absence from the PC build is not inlining. For `ChangeSceneInit` /
+`ChangeSceneDone` the PC vtable settles it: the PC `C_human` table maps slot for slot onto the PS2 one
+through `SoundsChange` and then holds one more slot, the two-argument network-event virtual
+(`door_apply_net_event_msg`, `car_apply_net_event_msg` and `physical_object_apply_net_event_msg` fill it
+in their classes), with no slot for either method.
 
 ³ `human_change_dead_anim`: the gaits are Walk/Back/Left/Right/StrafL/StrafR, plus Nahozeni (heave
 up) / Shozeni (put down) / Stat. Gated on `+0x700` (the carried body) AND `+0x704`. The **PS2 body
@@ -588,12 +608,14 @@ and `FireReload`. Proof of the inlining: the distinctive frame-flag rewrite
 `human_start_weapon_effect` with no intervening sound call — the body was spliced in. Same proof
 pattern as the `Hit*` family.
 
+⁸ **PS2-ONLY, measured over the callers:** each of these four has no PC function, and no PC body carries
+an inlined copy at the PS2 call positions. §4c holds the measurement per method.
+
 ### 4a. Coverage, and how the mapping was built
 
-**146 PS2 methods:** **123 CONFIRMED · 1 STRUCTURAL · 7 INLINED · 2 PS2-ONLY · 2 PS2-ONLY (likely) ·
-4 base-stub · 7 not located**, counted off the rows above. The 7 not located are `IsKickToCocotus`,
-`SetWaitAnim`, `SetFreeBoxingAnim`, `FireReload`, `Do_WeaponDropAll`, `Turn_Left` and `Turn_Right`;
-§4c holds the gap evidence for each.
+**146 PS2 methods:** **123 CONFIRMED · 1 STRUCTURAL · 10 INLINED · 8 PS2-ONLY · 4 base-stub**,
+counted off the rows above; every PS2 method is accounted for. §4c measures the seven that have no PC
+function of their own outside the `Hit*` family and the city-streaming set.
 
 Both builds emit a class's methods in **source order**, so inside the class's code cluster the PS2 VA
 sequence and the PC VA sequence are the same sequence — `human_set_next_coll_owners` is the class's one
@@ -680,15 +702,15 @@ another class's `.cpp` links with that file. So besides C_human's own methods th
 
 ⇒ **The prefix follows the CLASS, never the TU.**
 
-#### The 7 not-located methods, with the gap evidence
+#### The seven methods with no PC function of their own
 
-| PS2 method | size | why it is not in the TU |
+| PS2 method | size | resolution |
 |---|---|---|
-| `Turn_Left` / `Turn_Right` | 48 B each | the PC gap between `human_turn_in_place` and `human_activate` is exactly 48 B and holds only `human_turn_in_place` ⇒ a COMDAT fold, or absent. They are **not** vtable slots: the 39-slot dump of the `C_human` vtable at `0x0063c468` holds no such entry |
-| `Do_WeaponDropAll` | 680 B | the gap is 240 B |
-| `SetWaitAnim` + `SetFreeBoxingAnim` | 108 + 772 B | the gap is 208 B |
-| `IsKickToCocotus` | 1168 B | the gap has zero starts, and `human_use_actor` is *smaller* than `Use_Actor`, so it did not absorb it (§6) |
-| `FireReload` | 932 B | the one real inlining candidate: `Shooting` calls it and PC `human_shooting` is the right size to have absorbed it (§6) |
+| `Turn_Left` / `Turn_Right` | 48 B each | PS2-ONLY: no caller and no data reference on the PS2, no slot in the 39-slot `C_human` vtable at `0x0063c468`, and their turn rate ±2.4 occurs nowhere in `Game.exe` as a float or a double |
+| `Do_WeaponDropAll` | 680 B | PS2-ONLY: its one PS2 caller is `Hit`, for a dying non-player; at that position `human_hit` calls `human_weapon_drop` for every human |
+| `SetWaitAnim` + `SetFreeBoxingAnim` | 108 + 772 B | INLINED into `human_dispatch_weapon_action_at_target`: the wait block (clip time - 250 ms into `+0x44c`, motion zeroed, mode 5) and the extended-clip block (end time into `+0x234`, `anim_machine_set_extended_anim(clip, 1.0, 4.0, 1)`) sit at every PS2 call position with no intervening call |
+| `IsKickToCocotus` | 1168 B | PS2-ONLY: its three calls guard the melee arms of `Do_Shoot` (kick a dog or a downed human within 1.5 units); the PC melee arms are otherwise statement-aligned and carry no such test |
+| `FireReload` | 932 B | INLINED into `human_ai`: its one PS2 caller is `AI` (animation event 1), and the PC event-1 arm carries the body statement for statement (`+0x1fc` set, in-car refusal, aim dropped, `+0x590` = rand + 5000, `+0x594` = -1, the standing or crouched reload clip, `anim_machine_set_extended_anim(clip, 1.0, 4.0, id != 8)`) |
 
 ### 4d. The embedded `C_ShotSkeleton` at `+0x2dc`
 
@@ -721,15 +743,3 @@ Full write-up, including the decoded joint names and capsule table:
 * PC names and VAs: `exe-re/ghidra/Game-ghidra.exe.functions.md`. PS2 mangled symbols and bodies:
   `exe-re/ghidra/SLUS_206.71.c`.
 
-## 6. Open items
-
-| item | state |
-|---|---|
-| `+0x21c` / `+0x22e` | cleared by `human_do_play_anim` together with `+0x418`; purpose not established |
-| `+0x418` | an accumulator: script command `human_forcefall` (case `0xcb`) adds 0.1 per call, `human_intern_use_car` resets it to 0.1f on leaving a vehicle, `human_do_play_anim` clears it. No consumer located |
-| `+0x44c` | set to `-1` only in `player_lock_controls`' state-10 teardown; purpose not established |
-| the 7 not-located PS2 methods | `Turn_Left` / `Turn_Right`, `SetWaitAnim`, `SetFreeBoxingAnim`, `FireReload`, `Do_WeaponDropAll`, `IsKickToCocotus`. Each gap is measured in §4c. Inlining is plausible for all of them and proven for none, so none is tagged INLINED. Proving `FireReload`'s inlining takes a distinctive constant of the PS2 body sitting inside `human_shooting` with no intervening call; `IsKickToCocotus` was not absorbed by `human_use_actor`, so the search for it lies outside the cluster |
-| `ChangeSceneInit` / `ChangeSceneDone` | PS2-ONLY (likely), from their callers and their name; settle it by comparing the PC `C_human` vtable length |
-| the inlined `Hit*` arms | the per-arm mapping inside `human_hit` is unresolved: three helpers share one fingerprint, and the five helpers hold 10 scream calls against `human_hit`'s 4 |
-| `human_car_launched_into_air` | ratio 2.7, above the usual band — the weakest CONFIRMED twin on the class; revisit it first if a better candidate appears |
-| `pedestrian_drop_umbrella`'s PS2 twin | not pinned; it shares `human_free_hand`'s `0x3b0` prop-spawn cohort, and the candidates are `Do_DeadBodyDrop` or a materialize-drop |

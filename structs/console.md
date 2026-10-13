@@ -1,6 +1,6 @@
 # `C_console` — the on-screen text console
 
-**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-10-01 10:30 +0200
+**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-10-11 19:32 +0200
 
 | | |
 |---|---|
@@ -246,10 +246,9 @@ The file-scope object at `0x006efde0` is an MSVC `std::vector` (allocator byte p
 begin/end/cap) whose four lifecycle functions are named and whose element type is
 **undetermined**.
 
-* A **displacement byte scan of the whole `.text`** for all four addresses returns **five
-  references image-wide, and every one is inside its own constructor or destructor**. A scan of
-  `.rdata`/`.data` for the addresses as pointers finds nothing, so it is not in a vtable or a
-  pointer table.
+* A **byte scan of the whole image** for all four addresses returns **eight references, four in
+  its constructor and four in its destructor**, and nothing else. No vtable, pointer table or
+  other function holds any of the addresses.
 * It belongs to this TU on two independent arguments: the gapless BSS run in §2, and its
   `.CRT$XCU` entry being the next one after the console TU's own.
 * `T` is a POD — the destructor frees the block with no per-element loop — but no insert

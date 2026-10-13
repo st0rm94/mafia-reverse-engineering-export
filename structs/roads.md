@@ -1,6 +1,6 @@
 # `C_roads` — the road graph
 
-**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-31 22:48 +0200 · **Modified** 2026-10-07 21:57 +0200
 
 PC prefix **`roads_`**. The singleton is `*(g_act_mission + 0x30)`.
 
@@ -41,12 +41,27 @@ writes its tables straight out.
 
 | record | stride | fields decoded |
 |---|---|---|
-| road node (`+0x18`) | `0x18` | `+0x00..+0x0b` = the world position (3 floats); `+0x10` and `+0x12` = two 16-bit **tagged ids** naming the endpoints of this node's stop-line edge, `-1` when it has none |
-| crossing (`+0x08`) | `0xec` | `+0x00..+0x0b` = the world position (3 floats); `+0x0c` = a non-zero byte flag `police_manager_tick` requires before it will treat the crossing as a red-light site; `+0x1c` = four road slots ¹ |
+| road node (`+0x18`) | `0x18` | `+0x00..+0x0b` = the world position (3 floats); `+0x0c` = the speed limit in m/s (13.3 in 42 145 of the 45 472 shipped nodes); `+0x10` and `+0x12` = two 16-bit **tagged ids** naming the endpoints of this node's stop-line edge, `-1` when it has none |
+| crossing (`+0x08`) | `0xec` | `+0x00..+0x0b` = the world position (3 floats); `+0x0c` = a non-zero byte flag `police_manager_tick` requires before it will treat the crossing as a red-light site; `+0x10` = the speed limit in m/s (13.3 in 7 097 of the 7 136 shipped crossings); `+0x14` = four 16-bit tagged ids, the first road node of each road slot, `-1` for an empty slot; `+0x1c` = four road slots ¹ |
 
-¹ Each road slot is `0x34` bytes: `+0x00` the neighbour tagged id, `+0x04` the road length
-`roads_recompile_distances` writes, and four lane bytes at stride 8 that
-`roads_disconnect_unused_road_links` tests. The rest of the slot is open (§6).
+¹ Each road slot is `0x34` bytes:
+
+| slot offset | field | consumers |
+|---|---|---|
+| `+0x00` | u16 tagged id of the neighbour crossing, `-1` for an unused slot | `roads_find_road_slot_to_crossing`, `traffic_car_lock_crossing` |
+| `+0x04` | f32 road length | written by `roads_recompile_distances` |
+| `+0x08` | f32 the road's angle, radians | `traffic_car_lock_crossing` compares the sum of two slots' angles with pi |
+| `+0x0c` | u8 crossing-claim flag | `traffic_car_activate_elements` copies it into the car's path node `+0x54`; `traffic_car_ai` claims the crossing (its `S_LOCKCROSS` list) only when it is set |
+| `+0x0e` | u16 car capacity, 100 in 98 % of the shipped slots | `traffic_car_prepare_next_direction` ranks a road whose cars + 1 exceed it by `(cars + 1) / capacity`; `traffic_car_activate_elements` compares the live count with it |
+| `+0x10` | u16 the number of traffic cars on the road | `traffic_car_activate_elements` adds 1; `traffic_car_deactivate_element` and `traffic_car_ai` subtract 1 |
+| `+0x14` | four lanes of 8 bytes: u8, u8, u8 kind, a pad byte, f32 width (3.0 .. 5.2) | the two leading u8 are per-lane reservation counters: `traffic_car_lock_crossing` adds, `traffic_car_clear_lane_blocking` subtracts |
+
+Lane kind 0 is no lane: `roads_disconnect_unused_road_links` drops a slot whose four kinds are
+all 0. Kind 2 is a lane traffic may drive into: `traffic_car_prepare_next_direction` skips a road
+with none and caps the lane choice at their count, and `traffic_car_lock_crossing` picks its
+target lanes among them. Kinds 1 and 3 also ship (per road the common patterns are 2-3, 2-0,
+1-2, 2-2-3 and 1-2-3), and no reader tells them apart from each other. The file stores the
+in-memory record, so the counters and counts carry whatever the editor held when it saved.
 
 **`S_pathfind` is `{u16 prev_id; float cost}`** and nothing else — 8 bytes. `roads_pathfind_entry_ctor`
 initialises `prev = 0xffff`, `cost = 1e+10`; the `1e+10` is the infinity substitute the Dijkstra
@@ -76,7 +91,7 @@ two MSVC static-init stubs `crt_static_init_guard_00617db0` and `crt_atexit_regi
 
 | PC VA | PC name | PS2 twin | PS2 VA | Status | Role |
 |---|---|---|---|---|---|
-| 0x005d1420 | `roads_get_node_or_crossing_pos` | - | - | CONFIRMED (PC-side) | world position of one tagged id |
+| 0x005d1420 | `roads_get_node_or_crossing_pos` | - | - | CONFIRMED (PC-side) | world position of one tagged id; the PS2 inlines it (§4) |
 | 0x00606590 | `roads_nodes_clear` | - | - | CONFIRMED (PC-side) | the node vector's clear; hosted by `Mission.cpp` (§2a) |
 | 0x00606700 | `roads_crossings_erase_range` | - | - | CONFIRMED (PC-side) | the crossing vector's erase-range; hosted by `Mission.cpp` (§2a) |
 | 0x00617de0 | `roads_ctor` | `__ct__7C_roadsFv` | 0x003a70f0 | CONFIRMED | zero the two vector triples, install the vtable |
@@ -182,10 +197,17 @@ gap.
   `Max<i>__FRCiRCi(0x4dc2bc, &remaining)` where the PC has a compare-and-select that is
   plain `max(0, remaining)`. Bannered in the decomp at the first site of
   `roads_load_data` and of `roads_merge_data`.
-* **Six tiny PS2 container helpers have no PC rank** (§5): `data__vector_deleter<S_road_node_1>`
-  and its crossing sibling, `__ct__11S_road_nodeFv`, `__ct__15S_road_crossingFv` and the two
-  `compressed_pair_imp` constructors. All six are 8–12 byte identity or offset returns, so there is
-  no PC statement to attach a banner to.
+* **Six tiny PS2 container helpers have no PC rank**: `data__vector_deleter<S_road_node_1>` and
+  its crossing sibling, `__ct__11S_road_nodeFv`, `__ct__15S_road_crossingFv` and the two
+  `compressed_pair_imp` constructors, all 8–12 byte identity or offset returns. The two element
+  constructors have no caller even on the PS2 (no `jal` reaches either address). The other four
+  are each called once, all from `LoadData__7C_roadsFP7C_chunk`: they are the Metrowerks vector
+  layer, which MSVC's vector does not have, and `roads_load_data` reads the table's begin
+  pointer inline at the matching statement.
+* **`roads_get_node_or_crossing_pos` has no PS2 function.** `TestOverRed__10C_shvestkyFv`, whose
+  PC counterpart is inlined into `police_manager_tick`, spells the tagged-id dispatch inline at
+  both positions where the PC calls this function, with the PS2 strides `0xe0` (crossing) and
+  `0x20` (node).
 * **The `road_web.cpp` translation unit is named by a PS2 file-static tag**,
   `Q27C_roads27S_pathfind$3865road_web_cpp`, and confirmed by the `__sinit_road_web.cpp`
   entry in the PS2 source-file manifest. The decomp spells the `$` as `_`, so a raw mangled name
@@ -205,8 +227,4 @@ gap.
 
 | item | state |
 |---|---|
-| the crossing record | `0xec` bytes; only the position, the `+0x0c` flag and part of the four road slots are decoded |
-| road-slot tail | ~0x20 bytes of each `0x34`-byte road slot are undecoded |
-| PS2 twin of `roads_get_node_or_crossing_pos` | none located. Searched: the 19-method `C_roads` class column, a `0x7fff` + `0xec` co-occurrence search of the PS2 decomp, and `Tick__10C_shvestkyFUi`. A header inline on PS2 is the likeliest explanation, not proven |
-| six PS2 container helpers without PC rank | almost certainly inlined; not proven |
 | in game: un-policed crossings | running a red light should only be recorded at a crossing whose `+0x0c` flag is set, so some intersections should be un-policed; which ones is untested |

@@ -1,10 +1,10 @@
 # `C_mission` — the mission singleton
 
-**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-10-01 08:56 +0200
+**Created** 2026-09-03 00:36 +0200 · **Modified** 2026-10-11 21:38 +0200
 
 The object every `g_act_mission` dereference in the decomp lands on. Its translation unit
-`Mission.cpp` = `[0x005fe4f0, 0x00608390)`; `[0x005fe550, 0x00607f70]` holds **84 function
-starts, all named**.
+`Mission.cpp` = `[0x005fe4f0, 0x006083c0)`; `[0x005fe550, 0x00607f70]` holds **84 function
+starts, all named**, and eight more, all named, close the unit (§4).
 
 **Coverage: 35 of the PS2's 68 `C_mission` methods are located**, plus all four free
 functions of the PS2 band. The 33 that are not are enumerated in §5d, and 26 of them belong
@@ -55,16 +55,18 @@ typedef struct {                        /* at C_mission + 0x90, sizeof = 0x1c */
 | `+0x9c` | `+0x0c` | `mission_settings_set_effects_quality` | - | 0 … 2 |
 | `+0xa0` | `+0x10` | `mission_settings_set_sounds_quality` | - | 0 … 2 |
 | `+0xa4` | `+0x14` | `mission_settings_set_shadow_quality` | `mission_settings_get_shadow_quality_idx` | idx 0 … 5 |
-| `+0xa8` | `+0x18` | `mission_settings_set_particles_quality` | - | 0 … 2 |
+| `+0xa8` | `+0x18` | `mission_settings_set_particles_quality` | `folded_get_dword_0x18` | 0 … 2 |
 
-`+0x98` has no accessor. `mission_open_bin` seeds it with `0x437a0000` (250.0f), and then scene
+The `+0xa8` getter is a folded accessor whose code also reads `C_actor`'s network GUID
+(`structs/net_event_msg.md` §3c). `+0x98` has no accessor. `mission_open_bin` seeds it with `0x437a0000` (250.0f), and then scene
 chunk `0x3011` replaces it with the scene's own view distance (§4a); `mission_update_settings` hands
 it to the scene's `+0x17c` object, the active camera, together with `0.05f`.
 
 Two of the six were decoded independently of the accessor family and agree exactly: `+0x9c`
 is the **weather detail** level (it scales the weather particle count by `/0x14`, `>>3`, or
 unscaled) and `+0xa8` is the **hydrant detail** level (broken hydrants spray only at level 2
-or above).
+or above). Both readings are confirmed in game: broken hydrants spray only at level 2, and at
+level 0 the weather shows a twentieth of its particles.
 
 The block is mirrored into `g_ls3d_setup + 0x27 … +0x3b` on the way out to the registry and
 restored from it on the way in; that mirror is documented in `structs/app_bootstrap.md`.
@@ -76,7 +78,7 @@ Recorded here only so the offsets are in one place; each is documented where it 
 | offset | what | where |
 |---|---|---|
 | `+0x00` / `+0x04` | **the scene identity pair**, copied from scene chunk `0xAFFF`; `race_net_load_sync`, `net_session_post_scene_done` and `net_deactivate_actors_of_peer` compare it with a peer's | §4a |
-| `+0x08` | cleared by `mission_open` before the teardown | §7 |
+| `+0x08` | **the actor net-GUID counter**: `mission_open` zeroes it before the teardown, and `actor_init` stamps each actor's `C_actor+0x18` with the pre-incremented value | `structs/actor.md` §5 |
 | `+0x0c` | **the "a mission is open" flag** — `mission_open` sets it, `mission_close` gates on it and clears it | §4 |
 | `+0x10` | the `I3D_scene` | `structs/i3d_frame.md`, `structs/program.md` |
 | `+0x18 … +0x20` | `vector<S_anim_model>`, stride 8 — `{I3D_model *, bool per_game}` | §3a |
@@ -91,7 +93,7 @@ Recorded here only so the offsets are in one place; each is documented where it 
 | `+0x68` | the mission-name buffer, `operator new[]`-owned | §4 |
 | `+0x6c` | **the particle manager** — NOT `C_game + 0x6c` | `structs/particle.md` §2 |
 | `+0x70` / `+0x74` | **the PENDING / CURRENT mission number** — the superglobal mission number | §3d |
-| `+0x78` / `+0x7c` | the sound-restore stage and its latch, consumed by `mission_tick` | §3d |
+| `+0x78` / `+0x7c` | the frame-skip countdown and the sound-restore latch | §3d |
 | `+0x84 … +0x8c` | **the pending fade-in list**, stride 8 — `{I3D_objects *, s16 elapsed, s16 duration}` | §3b |
 | `+0x90 … +0xa8` | the settings sub-object | §2 |
 | `+0xb0 … +0xb8` | **the frame/actor carry cache**, stride `0x10` | §3c |
@@ -141,7 +143,7 @@ The `+0xb0` record holds EITHER an actor (slot 0) or a bare model (slot 1), whic
 the two `take` functions discriminate on; the name in slot 2 is the model file's basename,
 split out of `I3D_frame + 0x154` with `strrchr('\\')`.
 
-### 3d. The mission number and the sound-restore stage
+### 3d. The mission number and the frame-skip countdown
 
 `+0x70` / `+0x74` are the **pending** and **current** mission number, and the pair is
 superglobal: `mission_set_next_mission_number` fills `+0x70`,
@@ -150,10 +152,23 @@ superglobal: `mission_set_next_mission_number` fills `+0x70`,
 `game_savegame_load_before` reads the same pair, which is the same field under a second
 reading, not a second field.
 
-`+0x78` is a monotonic STAGE, not a countdown: `recloadfull` (a cutscene started) raises it
-to 1 and `recunload` (it ended) raises it to 2, through `mission_set_sound_restore_stage` /
-`mission_get_sound_restore_stage`; `+0x7c` latches it and `mission_tick` consumes the pair.
-Both commands belong to `C_recorder`, which makes this a PC-only path.
+`+0x78` is a **frame countdown**. While it is above 0, `engine_game_loop` decrements it once per
+frame and skips that frame's present call (`g_engine` slot `+0x3c`). Its complete writer set:
+
+| writer | value | how |
+|---|---|---|
+| `mission_open` | 0 | stores it directly |
+| `game_init` | 10 | through `mission_set_frame_skip_count` |
+| `recorder_stop` | 4 | only when it is lower |
+| `recorder_end_sequence_and_restore_scene` | 2 | only when it is lower |
+| script command `recloadfull` | 1 | only when it is lower, through the accessor pair |
+| script command `recunload` | 2 | only when it is lower, through the accessor pair |
+| `engine_game_loop` | minus 1 per frame | while it is above 0 |
+
+`+0x7c` is the sound-restore latch. `mission_open` sets the sound manager's volume to 0 and sets
+the latch; `mission_tick` restores the saved volume and clears the latch on the first frame the
+countdown is below 1. So a scene load presents no frame for ten frames, and the sound returns when
+the countdown runs out.
 
 ## 4. PC functions
 
@@ -169,8 +184,8 @@ Both commands belong to `C_recorder`, which makes this a PC-only path.
 | `0x005c8660` | `mission_set_next_mission_number` | writes `+0x70` |
 | `0x005c8670` | `mission_get_mission_number` | reads `+0x74` |
 | `0x005c8680` | `mission_commit_next_mission_number` | `+0x70` → `+0x74` |
-| `0x005c8690` | `mission_set_sound_restore_stage` | writes `+0x78` |
-| `0x005c86a0` | `mission_get_sound_restore_stage` | reads `+0x78` |
+| `0x005c8690` | `mission_set_frame_skip_count` | writes `+0x78` |
+| `0x005c86a0` | `mission_get_frame_skip_count` | reads `+0x78` |
 | `0x00606390` | `mission_get_uv_scroll` | returns `+0x28` |
 | `0x005f8700` | `engine_new_mission` | the mission-change driver (free function, `Main.cpp`) |
 
@@ -239,11 +254,20 @@ Both commands belong to `C_recorder`, which makes this a PC-only path.
 `uv_scroll_*`, `roads_*`, `chunk_*`, `i3d_cache_items_*` and `string_*` helpers. Full
 list: `Game-ghidra.exe.functions.md`, the `Mission.cpp` section and its three siblings.
 
+**The end of the unit.** After `0x00607f70` come five more `frame_map_*` primitives,
+`string_ref_copy_construct` (`0x00608370`) and the closing CRT pair: `crt_static_init_guard`
+(`0x00608390`), the unit's copy of the end-of-unit guard that tests bit 0 of
+`g_crt_static_init_flags`, and the `crt_register_atexit_stub` it jumps to (`0x006083b0`). The
+MSVC initializer table lists `0x005fe4f0`, `0x005fe520` and `0x00608390` in a row, the unit's
+opening and closing entries. The `C_web_node` / `C_web_path` code (`structs/web_path.md`) follows
+from `0x006083c0` (`web_node_dtor`) and ends with its own guard copy at `0x0060b740`.
+
 `mission_open_bin` also drives **13 callsites** of `vec_index_addr_stride_0x8`
 (`0x006065d0`) against two stack-local vectors of `{I3D_frame *, int}` deferred frame-fixup
 pairs. That address is a generic `std::vector<8-byte>::operator[]` with 377 callsites
-image-wide; the script VM indexes `{opcode, args}` through the same address, so the sharing
-is an ICF fold of two different element types (`structs/program.md` §6).
+image-wide; the script VM indexes `{opcode, args}` through the same address. Whether one
+declared pair type or identical-COMDAT folding of two types is behind the sharing cannot be
+decided from either binary (`structs/program.md` §7).
 
 ### 4a. The `scene2.bin` chunk vocabulary
 
@@ -288,7 +312,7 @@ type-name function of `LS3DF.dll` (`structs/i3d_frame.md` §3a).
 | `0x4033` | 713 | empty | marks the frame to be switched off (record flag `0x10000`; `structs/cache_base_block.md` §4a); ignored on a SOUND frame |
 | `0x2012` | 72 585 | name | the model file of a MODEL frame, opened through `i3d_cache_model_open` with `.i3d` appended |
 | `0x4040` | 9 095 | the light block | on a LIGHT frame (below) |
-| `0x4050` | 2 378 | `0x18` bytes | on a DUMMY frame, stored by `i3d_frame_set_field_0x140_block`: the frame's bounding box, minimum then maximum corner (`structs/i3d_frame.md` §4) |
+| `0x4050` | 2 378 | `0x18` bytes | on a DUMMY frame, stored by `i3d_dummy_set_bound_box`: the frame's bounding box, minimum then maximum corner (`structs/i3d_frame.md` §4) |
 | `0x4060` | 5 254 | the sound block | on a SOUND frame (below) |
 | `0x4083` | 7 188 | `u32` n, n × 12-byte vertices, `u32` m, m × 6-byte triangles | on an OCCLUDER frame, passed to the frame's vtable `+0x50` |
 | `0x4090` | 31 671 | FourCC | on a VISUAL whose tag differs, a visual of that class is created through the driver's `+0x48` and takes over the frame's name, children and place; the shipped values are `'LMAP'` 31 175, `'LENS'` 495 and `'MRPH'` 1 |
@@ -441,9 +465,16 @@ Two PS2 **free** functions in the band are also PS2-only on the same argument:
 `MC_DeleteData` / `MC_LoadData` / `MC_Format`, immediately before the constructor, are the
 memory-card layer.
 
-The PC reads the records of the PS2 free functions `ReadVector3__FR7C_chunk`,
-`ReadQuatOld__FR7C_chunk` and `ReadBBoxOld__FR7C_chunkR8I3D_bbox` with inline
-`chunk_read(buf, N)` calls (§7).
+**`ReadVector3__FR7C_chunk`, `ReadQuatOld__FR7C_chunk` and `ReadBBoxOld__FR7C_chunkR8I3D_bbox`
+are inlined on the PC.** Their only caller is `OpenBin`, and each reads one value and closes the
+chunk. At the same frame-record chunk ids `mission_open_bin` does exactly that inline:
+`0x0020`, `0x0026`, `0x002c` and `0x002d` read 12 bytes, `0x0022` reads 16 and `0x4050` reads
+`0x18`, each followed by `chunk_leave`. The PS2's one further `ReadVector3` site reads sub-chunks
+`0x001d` / `0x001e` of chunk `0xB100` on an `'EMTR'` visual; the PC skips `0xB100` and no shipped
+scene contains it (§4a). The PS2 helpers exist for its own layout: its vectors are 16 bytes
+(`ReadVector3` widens 12 to 16), it keeps a quaternion's `w` last (`ReadQuatOld` turns the file's
+`(w, x, y, z)` into `(x, y, z, w)`, while the PC copies the 16 bytes as read), and its bounding box
+holds two 16-byte corners (`ReadBBoxOld` reads twice, the PC once).
 
 ### 5e. The frames-ref buffer is a CONTAINER difference
 
@@ -524,12 +555,7 @@ Two paths, chosen by whether `g_new_mission_entry` is empty:
 
 | item | state |
 |---|---|
-| `[0x00608390, …)` — the tail of the TU | not enumerated. The swept range stops at `0x00607f70`; the six functions between it and the next `.CRT$XCU` initializer are the `frame_map_*` primitives, all named, but nothing beyond `0x00608390` was looked at |
-| `C_mission + 0x08` | [M] — one writer and one reader inside `mission_open` / `mission_tick`, no decoded meaning |
-| the two UV channels of `C_tshift` | [M] — `structs/uv_scroll.md` §6 |
 | the 33 PS2 methods of §5d | an inventory by group, not a closed verdict on any single method |
 | `Garage_AddCar` / `Garage_DelCar` / `Freeride_ChangeCar` (§5d) | not searched against the PC `garage_*` family |
-| `ReadVector3` / `ReadQuatOld` / `ReadBBoxOld` (§5d) | plausible PC inlinings, not proven: no distinctive constant survives to prove the match |
-| `Tick__8C_tshiftFUi` | body not read, so `uv_scroll_tick`'s twin rests on callsite position alone and is not stamped |
 | in game | streamed-in city geometry should fade up over ~0.7 s rather than popping — `mission_fade_in_object`, §3b |
 | in game | a car placed by the scene `.bin` should survive a mission change while one spawned by script should not — the `C_actor + 0x66` `scene_placed` flag, §3c and `structs/actor.md` |

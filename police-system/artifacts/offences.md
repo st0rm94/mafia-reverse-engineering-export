@@ -1,6 +1,6 @@
 # Police Offences — storage, bit mapping, and on-screen text
 
-**Created** 2026-06-03 16:00 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-06-03 16:00 +0200 · **Modified** 2026-10-13 18:08 +0200
 
 This document covers: how an offence is recorded, how `get_pm_state` reads it, how the police
 come to *notice* it, and how the offence text reaches the HUD. It is built from static analysis
@@ -134,10 +134,11 @@ function(s) in the annotated source that write the `action_code` and the pending
 
 Notes:
 - **Recording vs noticing (§6).** Setting the bit needs no witness. But cops only **notice** it —
-  dispatch at you and print the line — when a cop is **in range** and, **below gun**, also **facing
-  you with clear line-of-sight** (§6). At **gun-tier** noticing is **omnidirectional** (no facing,
-  no LOS), which is why **shooting** still draws cops that cannot see you: it jumps straight to gun,
-  so any cop in range notices regardless of sight. The condition column lists the *escalation*
+  dispatch at you and print the line — when a cop is **in range**, its line-of-sight test passes
+  and, **below gun**, it is also **facing you** (§6). At **gun-tier** noticing is
+  **omnidirectional** (no facing test), which is why **shooting** draws cops from every direction:
+  it jumps straight to gun. Cops that cannot see you are drawn too (in-game confirmed); the
+  line-of-sight test still runs, and what it lets through is in §6. The condition column lists the *escalation*
   trigger; the §6 noticing gate applies on top for every dispatch-printed row.
 - **Immediate vs deferred.** "Immediate" registrars write the `action_code` + pending at the event.
   "Deferred" bits are only set by their registrar; `police_manager_tick` re-derives `action_code` +
@@ -150,7 +151,7 @@ Notes:
 |---|---|---|---|---|
 | 0 weapon equipped (on foot) | 0 "Weapon seen!" | handcuffs (2) | bit 0 set (gun/throwable drawn, equipped-weapon-id `+0x4a0` ∈ [5,15]) + pending 0; target on foot | `police_manager_tick` |
 | 0 weapon equipped (from car window)| 0 "Weapon seen!" | handcuffs (2) | bit 0 set (handgun drawn, equipped-weapon-id `+0x4a0` ∈ [6,9]) + pending 0; target aiming from a car window | `police_manager_tick` |
-| 1 shooting | 1 "Shots fired!" | gun (3) | weapon fired; pending < 3. Jumps straight to gun → omnidirectional, no LOS needed (§6) | `police_manager_register_gunfire_offence_for_target` |
+| 1 shooting | 1 "Shots fired!" | gun (3) | weapon fired; pending < 3. Jumps straight to gun → omnidirectional (§6) | `police_manager_register_gunfire_offence_for_target` |
 | 2 speeding (moderate) | 2 "Speeding!" | fine (1) | speeding bit + live target; speed ≤ arrest threshold (`police_manager+0x10`); pending 0 | `police_manager_tick` |
 | 2 speeding (heavy) | 2 "Speeding!" | handcuffs (2) | speeding bit + live target; speed > arrest threshold; pending < 2 | `police_manager_tick` |
 | 3 contact — destroyable prop (light) | 3 "Crash!" | fine (1) | struck a destroyable prop (DEFAULT branch); severity > 8.3 (≤ 19.4); pending 0 | `police_manager_register_collision_offence_for_target` |
@@ -270,8 +271,7 @@ walk keeps re-deriving `pending → gun (3)` from the still-set bit (the `+9 & 0
 `police_manager_try_dispatch_pursuit_for_target` reprints `action_code + 0x834` to **every fresh
 foot-cop / patrol-car dispatch wave** (§5), the "Assault on Police!" line is re-announced each time
 new cops are pulled in — e.g. when you break line-of-sight (icon fades) and then come within range
-of a previously-uninvolved patrol car: at gun the activation is omnidirectional (facing cone and LOS
-gates both off — §6), those cops activate, and the *same* assault line prints again. This is the
+of a previously-uninvolved patrol car: at gun the activation is omnidirectional (no facing cone — §6), those cops activate, and the *same* assault line prints again. This is the
 structural reason a previously-shown assault line reprints with no new offence committed.
 
 ---
@@ -503,17 +503,18 @@ gates:
 1. **Foot path — `pedestrian_manager_spawn_cop_from_pedestrian`** (VA `0x004b45f0`). Scans the
    ambient NPC zone array for dormant cop dummies (category `+0x15a ∈ {1,3}`; a normal foot cop is
    category 1, confirmed by live memory inspection) and promotes one into a real foot officer only
-   if it is **in range** and — **below gun** — both **within a ~90° facing cone** and with **clear
-   line-of-sight** (a raycast from the cop's eye (`cop_pos + 1.2`) toward the suspect against world
-   geometry, layer mask `0x100000`; blocked ⇒ that cop is skipped). **At gun both gates are bypassed
-   (omnidirectional — see below).**
+   if it is **in range**, — **below gun** — **within a ~90° facing cone**, and with **clear
+   line-of-sight** (a raycast from the cop's eye (`cop_pos + 1.2`) toward the suspect against static
+   world geometry only, skipping primitives flagged `0x100000` or `0x20`; not run for a cop within
+   1 m; blocked ⇒ that cop is skipped). **At gun only the facing gate is bypassed (see below).**
 2. **Vehicle path — `traffic_car_activate_or_spawn_pursuit_vehicles`** (VA `0x00504780`). Scans
    `g_traffic_car_registry` for a patrol-car candidate and reactivates a pooled car (or
    constructs one on a pool miss), crewed by 2 cops, only if it is **in range** (squared distance ≤
-   radius²) and — **below gun** — both **within the car's ~180° forward hemisphere** (dot test
-   `(suspect − car) · car_forward < 0 ⇒ skip`; car_forward at `+0xd28/+0xd2c/+0xd30`) and with
-   **clear line-of-sight** (segment query from the candidate to the suspect not blocked). **At gun
-   both gates are bypassed (omnidirectional — see below).**
+   radius²), — **below gun** — **within the car's ~180° forward hemisphere** (dot test
+   `(suspect − car) · car_forward < 0 ⇒ skip`; car_forward at `+0xd28/+0xd2c/+0xd30`), and with
+   **clear line-of-sight** (a static-geometry segment query from the car's centre of mass toward the
+   suspect, skipping primitives flagged `0x20`). **At gun only the facing gate is bypassed (see
+   below).**
 
 Cop **cars do NOT go through the foot path** (verified by live memory inspection) — approaching a
 cruising patrol car never hits the foot-activation marker (VA `0x004b4bbc`); car crews come from the
@@ -523,33 +524,42 @@ vehicle path.
 `record+0x3c`: **25 m fine / 45 m handcuffs / 65 m gun / 50 m default** (the dispatcher computes this
 once and forwards it to both paths).
 
-**The detection gates depend on police-state.** Below gun a cop/car notices you only if it is both
-*facing* you and has clear line-of-sight; at gun both gates drop and noticing is **omnidirectional**.
+**The facing gate depends on police-state.** Below gun a cop/car notices you only if it is both
+*facing* you and has clear line-of-sight; at gun the facing gate drops and noticing is
+**omnidirectional**, while the line-of-sight test runs at every tier.
 The **facing** gate is driven by the **below-gun flag** (`police_state < gun`, byte-confirmed):
 `police_manager_try_dispatch_pursuit_for_target` packs it into a local flag word and passes it to the foot
 path as `directional` and to the vehicle path as `param_4` (call site VA `0x005d0d7f`).
 
-- **Below gun (fine / handcuffs — e.g. speeding):** facing + LOS gates are **ON**. A cop/car notices a
+- **Below gun (fine / handcuffs — e.g. speeding):** the facing gate is **ON**. A cop/car notices a
   suspect only when *facing* it (foot ~90° cone; car ~180° forward hemisphere) **and** with clear,
   occlusion-free line-of-sight. This is why, when speeding, a cruising patrol car doesn't react until
   you **overtake it / cross into its front**.
-- **At gun (e.g. shooting, assault on an officer):** the gates are **OFF** → noticing is
-  **omnidirectional**: cops/cars within range notice you from **any direction (including from behind)
-  and through occlusion — no facing cone and no line-of-sight**. This is why approaching a patrol car
-  from the rear at gun gets you spotted, and why firing a gun draws even cops that cannot see you.
-  There is no separate "sound" or hearing detection; this is the whole mechanism.
+- **At gun (e.g. shooting, assault on an officer):** the facing gate is **OFF** → noticing is
+  **omnidirectional**: cops/cars within range notice you from **any direction, including from
+  behind**. This is why approaching a patrol car from the rear at gun gets you spotted. Firing a gun
+  also draws cops that cannot see you (in-game confirmed), although both line-of-sight tests still
+  run at gun: neither tests dynamic objects (cars, doors, characters), both skip static primitives
+  flagged `0x20`, and the foot test also skips those flagged `0x100000`, so an occluder of any of
+  those kinds never blocks a cop. No shipped level file sets `0x20`: the level loader
+  `collision_load_level` writes it, replacing the whole flag word, on a static triangle whose frame
+  does not resolve or whose shape is degenerate. `0x100000` is set in the files on 2,891 static
+  primitives across the 81 shipped scenes — chairs, armchairs, tables, sofas, fences and railings,
+  glass panes and shop windows, stairs, cranes and wall-collision boxes — so the foot test looks
+  through all of them. The two activation paths have no separate "sound" or hearing detection.
 
 The red line prints only if **≥1 cop/car passes its gates** — foot → ids 2100–2110 (`action_code +
 0x834`); car → the identical-text ids 2150–2160 (`action_code + 0x866`), see §5.1. So weapon-seen,
-crash, violence, traffic-sign, red-lights, etc. all require a cop **near you** and — **below gun** —
-also **facing you with clear line-of-sight**; at gun a nearby cop notices from any direction without
-sight. The sidewalk line shares this gate too; it is additionally blocked by a separate shipped bug (§8).
+crash, violence, traffic-sign, red-lights, etc. all require a cop **near you** whose line-of-sight
+test passes and — **below gun** — that is also **facing you**; at gun a nearby cop notices from any
+direction. The sidewalk line shares this gate too; it is additionally blocked by a separate shipped bug (§8).
 
 **Exceptions:**
 - **Shooting** is the **only** offence that jumps **straight to gun** the instant it is committed,
   and the police officer might be far away from the player.
-  Because gun-tier noticing is omnidirectional (above), any cop within the gun radius then notices
-  regardless of facing or sight, so the shooter can be far away and out of view. (Assault on a police
+  Because gun-tier noticing is omnidirectional (above), any cop within the gun radius whose
+  line-of-sight test passes then notices regardless of facing, so the shooter can be far away and,
+  as observed in game, out of view. (Assault on a police
   officer also reaches gun, but is inherently close-range: you must be next to the officer to commit
   it.)
 - **Speeding** prints through the normal dispatch like every other offence (`police_manager_tick`
@@ -606,14 +616,7 @@ alternate-mode selector (0 → normal strings 2100–2110 / 2150–2160; non-0 �
 
 ## 9. Open items
 
-1. **The code site that drops the LOS raycast at gun** is not fully traced (§6). The behaviour is
-   in-game confirmed and the below-gun flag is byte-confirmed. At gun both activation paths drop
-   only their facing gate and still run their occlusion raycast:
-   `pedestrian_manager_spawn_cop_from_pedestrian` skips it only for a cop within 1 m (layer mask
-   `0x100000`), and `traffic_car_activate_or_spawn_pursuit_vehicles` always runs its static-geometry
-   line test. The through-occlusion noticing therefore comes from what those two raycasts treat as
-   an obstacle, or from another site; which one is open.
-2. **Identity retention after an in-car assault on an officer.** Committing the offence while in a
+1. **Identity retention after an in-car assault on an officer.** Committing the offence while in a
    car and then leaving that car unseen (transparent gun state) leaves the identity known — no
    searching icon appears. Stealing another car after that does make the searching icon appear
    (identity pending). Two traced paths produce exactly this; both set the face-known flag of the

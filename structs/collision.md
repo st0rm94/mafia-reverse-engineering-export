@@ -1,6 +1,6 @@
 # `g_collision` — the global collision system (PC prefix `collision_*`)
 
-**Created** 2026-07-26 13:53 +0200 · **Modified** 2026-10-01 18:52 +0200
+**Created** 2026-07-26 13:53 +0200 · **Modified** 2026-10-12 11:21 +0200
 
 PS2 class `g_collision` (mangled `11g_collision`) is the game's global collision service: a **singleton**
 that owns the world collision tree (static geometry) plus a **uniform 2-D spatial grid of dynamic
@@ -148,12 +148,20 @@ arms; only the inner one handles `0x47` and only the outer one `0x48`.
 | `0x43` | none (skipped) | its own arm, built on the horizontal (x, z) components of the query direction | - |
 | `0x44` | shares the `0x42` arm | its own arm, which also takes the dot product of the query direction with the centre offset | - |
 | `0x46` | none (skipped) | like `0x40`, with the frame's uniform scale applied | - |
-| `0x47` | `bendable_plant_push_element` when the owner at `+0x44` is kind `0x1d`; **never reports a hit** | the same, additionally gated on singleton `+0x2c0` | `bendable_plant_game_init` |
+| `0x47` | `bendable_plant_push_element` when the owner at `+0x44` is kind `0x1d`; **never reports a hit** | the same, additionally gated on singleton `+0x2c0`, which only the first sphere of `collision_test_character_proxy` sets (§4) | `bendable_plant_game_init` |
 | `0x48` | when `+0x2c4` (`g_collision_next_query_actor`) is set, calls that actor's vtable `+0x90` (cbCollTester) with the object; **never reports a hit** | none (skipped) | `game_create_track_effect` (blood decals, `structs/blood.md` §5a) |
 
 The last column lists the functions that store the value as an immediate and then call
-`collision_dyn_insert` (a census of the 51 insert callsites). `-` = no inserter stores it as an
-immediate, and a census of every `mov dword [reg], imm` in `.text` finds none either (§6).
+`collision_dyn_insert` (a census of the 51 insert callsites). `-` = no PC code creates an object of
+that type, so the arm is unreachable on the PC: a census of every `mov [mem], imm` in `.text` finds
+`0x41`, `0x43`, `0x44` and `0x46` only in six functions that build no collision object (the human
+animation state at `+0x74`, network-message and script-decoder stack locals, a racing gate field
+and the crash reporter's map reader), while the same census returns every inserter listed for the
+other four types.
+Pedestrians register a type-`0x40` object too: `pedestrian_set_model` and
+`pedestrian_create_model` store the type into the object embedded in the pedestrian record, and
+`pedestrian_activate_free` and `pedestrian_set_anim` insert it (`structs/pedestrian.md` §2). The
+store and the insert sit in different functions, so the column does not list them.
 `0x47` and `0x48` are the types whose arms never set the hit
 result: the `structs/bendable_plant.md` clones react to a query and never block it, and a blood
 decal's sphere only tells the querying actor that it stepped into blood, which arms its bloody
@@ -439,6 +447,13 @@ Both writers use the identical shape — set the field to the actor,
 when that ray crosses a blood decal's collision sphere, the field names the actor whose vtable
 `+0x90` is called - an attribution of the query to the actor, which arms its bloody prints.
 
+**`+0x2c0` is the bendable-plant gate of the character proxy.** `collision_test_character_proxy`
+sets the byte to 1 before it sweeps the first of its three spheres and to 0 before the second and
+the third; the only reader is the `0x47` arm of `collision_sphere_in_dynamics` (§1d), and no other
+instruction or absolute address reaches it. The singleton lives in static storage and
+`collision_ctor` leaves the byte alone, so it is 0 outside that sweep: of all sphere queries, only
+the character proxy's first sphere pushes bendable plants.
+
 **Static grid (`+0x284`) inner layout**, proven by `collision_find_hits_for_frame` and
 `collision_classify_static_primitives`: dims at `grid+0x18`/`grid+0x1c`, cell array at `grid+0x2c`,
 entry count at `grid+0x38`, entry array at `grid+0x3c`, and a secondary allocation at `grid+0x2c` freed
@@ -461,6 +476,4 @@ trustworthy: a bound of `0x0058a000` clips `collision_sphere_vs_aabb` to 7872 B;
 
 | item | state |
 |---|---|
-| dynamic types `0x41` / `0x43` / `0x44` / `0x46` | both dispatchers handle them (§1d), but no `collision_dyn_insert` caller stores them as an immediate and no `mov dword [reg], imm` in `.text` writes them; their writers are not traced |
-| singleton `+0x2c0` | gates the sphere query's `0x47` arm; not in the constructor's zero list, and no writer is traced |
 | the owner bit-8 loops of `DynSetNextCollOwner` / `Mult` / `DynWipeOut` | the PC twins omit them (§3); whether they are inlined elsewhere on the PC or the flag is maintained on another path is not traced |

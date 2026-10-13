@@ -1,6 +1,6 @@
 # `C_using_object` — the usable-object registry behind the action menu
 
-**Created** 2026-09-04 00:21 +0200 · **Modified** 2026-10-01 18:52 +0200
+**Created** 2026-09-04 00:21 +0200 · **Modified** 2026-10-11 20:52 +0200
 
 PC prefix **`using_object_`**. The object is **embedded at `C_game + 0x29ec`**.
 
@@ -56,10 +56,11 @@ constructor. The type name is the PS2 template argument on `AddObject` / `DelObj
 | `+0x18` | `I3D_frame *` | H | invalidated, detached from its parent and released when bit `0x2` is set |
 | `+0x1c` | owning actor | H | read by `player_do_action_button_on_foot` after a pickup: non-zero → `game_remove_temporary_actor(owner)`, zero → `using_object_del_object`. A dropped item's in-place record stores the item actor, its heap record 0 (`structs/drop_in_weapon.md` §3a) |
 | `+0x20` | frame filter | H | `0` means "any"; otherwise the object is only offered when the caller's frame argument matches |
+| `+0x24` | savegame exclusion byte | H | tested only by the savegame filter (§2a) and written only with 0: by the record constructor, the savegame loader's inline initialiser and the class constructors of the registrars that embed a record (`door_ctor`, `pedestrian_ctor`, `entity_ctor`, `detector_ctor`). No instruction writes another value, so the filter's test always passes |
 | `+0x28..+0x37` | **`S_GameItem`**, 0x10 bytes | H | copied wholesale into the action-menu list by `using_object_find_near_objects` |
 | `+0x28` | **item id (`uint16`)** = `S_GameItem + 0x00` | H | ¹ |
 | `+0x2c` | **action code** = `S_GameItem + 0x04` | H | the value `using_object_is_invalid_item` is called with ² |
-| `+0x30` | `S_GameItem + 0x08` | M | pocket ammo on the `createweaponfromframe` path ¹ |
+| `+0x30` | `S_GameItem + 0x08` = reserve ammo | H | the pocket count on the `createweaponfromframe` path ¹; only weapon records set it ³ |
 | `+0x34` | self-pointer = `S_GameItem + 0x0c` | H | ¹; the action-menu copy carries it back to the record |
 
 ¹ **The record constructor path.** `using_object_record_ctor` zero-initialises a new record: it
@@ -82,6 +83,22 @@ Reference as *"xx = weapon ID"*), `int32 @+0x2c` = `argv[2]` (the magazine round
 * The `createweaponfromframe` path puts the magazine round count there instead (¹), and a dropped
   item its clip ammo (`structs/drop_in_weapon.md` §2).
 
+³ **`+0x30` is the inventory item's `reserve_ammo`** (`structs/inventory.md` §1a). A census of the
+writes at record `+0x30` of every registrar finds writers only for weapon records:
+`human_drop_out_items` and the `createweaponfromframe` arm, through the dropped weapon's embedded
+`S_GameItem`, and the savegame loader. Door, car, detector and body records leave it at the
+constructor's zero, and the action-menu hand-off reads it only through `inventory_insert_new_item`.
+
+**Where records come from.** The 28 functions that call `using_object_add_object` register two
+kinds of record. Most are members of their owner, filled in place before registration: `C_door`
+`+0x180`, the human's own record at `+0x1230` and its body's at `+0x9c4` (offered once it is dead),
+`C_detector` `+0xe0`, `C_drop_in_weapon` `+0x3c0`, the railway switch `+0x10c`, `C_game`
+`+0x2ea0` (the carried-box node); the record each box record points to at its `+0x04`; and
+records inside blocks their owner allocates: the car's seat block at `C_car+0x210c` (stride `0xa0` from `+0x14`, plus one at
+`+0xec`) and the railway's two entry arrays at `+0x270` / `+0x274`. Three paths allocate a
+`0x38`-byte record on the heap: the `createweaponfromframe` arm (¹),
+`drop_in_weapon_on_act_state_changed` and `using_object_save_game_load`.
+
 ### 1b. The reach test
 
 Both query methods use the identical gate:
@@ -101,10 +118,10 @@ offer it.
 | `0x0061bb30` | `using_object_add_object` | `AddObject__14C_using_objectFPQ214C_using_object14S_using_object` | `0x003ade00` | CONFIRMED | register a prop, ignoring duplicates |
 | `0x0061bce0` | `using_object_del_object` | `DelObject__14C_using_objectFPQ214C_using_object14S_using_object` | `0x003ae5a0` | CONFIRMED | unregister one, tearing down its frame; swap-and-pop |
 | `0x0061bdb0` | `using_object_clear_objects` | `ClearObjects__14C_using_objectFv` | `0x003ae700` | CONFIRMED | drop them all; called from `game_init` and `game_done` |
-| - | - | `Tick__14C_using_objectFUi` | `0x003ae840` | PS2-ONLY CANDIDATE | §4 |
+| - | - | `Tick__14C_using_objectFUi` | `0x003ae840` | PS2-ONLY | §4 |
 | `0x0061be50` | `using_object_is_any_object_near` | `IsAnyObjectNear__14C_using_objectFRC8S_vectorRC8S_vectorP9I3D_frame` | `0x003aeae0` | CONFIRMED | is anything in reach? |
 | `0x0061bf50` | `using_object_find_near_objects` | `FindNearObjects__14C_using_objectFRC8S_vectorRC8S_vectorRQ23gif22vector<10S_GameItem,8>P9I3D_frame` | `0x003aec50` | CONFIRMED | build the action-menu list, sorted nearest first |
-| - | - | `FindAutoPickObjects__14C_using_objectF…` | `0x003af100` | PS2-ONLY CANDIDATE | §4 |
+| - | - | `FindAutoPickObjects__14C_using_objectF…` | `0x003af100` | PS2-ONLY | §4 |
 | `0x0061c1b0` | `using_object_clear_invalid_items` | `ClearInvalidItems__14C_using_objectFv` | `0x003af450` | CONFIRMED | empty the suppressed list |
 | `0x0061c1e0` | `using_object_add_invalid_item` | `AddInvalidItem__14C_using_objectFUi` | `0x003af460` | CONFIRMED | suppress one action code |
 | `0x0061c390` | `using_object_del_invalid_item` | `DelInvalidItem__14C_using_objectFUi` | `0x003af4f0` | CONFIRMED | un-suppress one action code |
@@ -138,8 +155,8 @@ The PC savegame record writes ids at `[0..3]` and the quaternion at `[7..10]`.
   suppressed list. An item being carried hides its actions from the menu; cancel restores them.
 * **`game_init` / `game_done`** — call `using_object_clear_objects` immediately followed by
   `using_object_clear_invalid_items`.
-* **`using_object_add_object`** only registers a pointer someone else owns; the `flags & 1`
-  "delete me" bit says at least some of them are heap records.
+* **`using_object_add_object`** only registers a pointer someone else owns; where those records
+  come from is in §1a.
 
 ## 4. PC vs PS2
 
@@ -156,18 +173,24 @@ The PC savegame record writes ids at `[0..3]` and the quaternion at `[7..10]`.
 * **Consumers are twins:** PS2 `Do_AB_OwnerNULL__8C_player` is the only caller of
   `FindNearObjects`, `AI_walk__8C_player` of `IsAnyObjectNear`, and the PS2 game init / done make
   the identical adjacent `ClearObjects` + `ClearInvalidItems` pair.
-* **`Tick__14C_using_objectFUi` (664 B) — PS2-only candidate.** (a) Closed set: its **only** PS2
+* **`Tick__14C_using_objectFUi` (664 B) — PS2-only.** (a) Closed set: its **only** PS2
   caller is `Tick__6C_gameFUi`, and the PC `game_tick`'s subsystem dispatch list, which mirrors the
   PS2 call sequence, contains no such call and no unnamed call at that rank. (b) Structural: the
   tick needs two float phase accumulators at `+0x18`/`+0x1c`, and on the PC those two dwords are
   the invalid-item vector's `end` and `cap`. On PS2 it animates a pulsing glow
   (`sin(phase) * 0.2 + 0.8` written into an `I3D_frame`'s scale triple, 2π wrap) and a slow spin
-  on every registered object — a console pickup highlight the PC does not have.
-* **`FindAutoPickObjects__14C_using_objectF…` (844 B) — PS2-only candidate.** Its only PS2 caller
+  on every registered object — a console pickup highlight the PC does not have. (c) Constants: no
+  PC function references a `0.004` or `0.001` per-ms rate together with `6.2831855`; the five that
+  load `0.004` (`door_ctor`, `railway_switch_ctor`, `human_track_apply_pose_at_clock`,
+  `human_update`, `game_lightness_tick`) are all accounted for elsewhere.
+* **`FindAutoPickObjects__14C_using_objectF…` (844 B) — PS2-only.** Its only PS2 caller
   is `AI_walk__8C_player`; the PC twin `player_ai_walk` calls only
   `using_object_is_any_object_near`, and the PC emission rank between
   `using_object_find_near_objects` and `using_object_clear_invalid_items` is **zero bytes wide**.
-  Auto-pickup while walking is a plausible no-mouse console affordance.
+  Auto-pickup while walking is a plausible no-mouse console affordance. The reach test any
+  gatherer needs uses the constant `2.25`, which has exactly five references in the PC image: the
+  two query members of §2 (one caller each) and two `ai_path` functions, so there is no second
+  gatherer.
 * **`AddObject`'s PS2 body is ~1500 bytes longer** than the PC's, and the extra is an
   `I3D_model` cache load-and-evict: it tests `obj[6] & 4`, allocates driver object type 9,
   strips the `.i3D` suffix off the model name and pulls the model in on demand. That is the
@@ -182,6 +205,8 @@ The PC savegame record writes ids at `[0..3]` and the quaternion at `[7..10]`.
 * **Savegame:** the PS2 record layout has the ids and the quaternion the other way round, and the type constant is PS2 `+0x18 == 0xf` against PC `+0x14 == 3`. Expected: a savegame blob
   is per-build and never exchanged. The downward line test on a dropped weapon is present on both.
 * **The reach constant** (`|dy|² < 2.25`) is identical on both builds.
+* **Record `+0x24` is PS2 `+0x28`.** Both savegame filters test it, and on the PS2 too the only
+  write found sets it to 0 (`BoxPlacementAdd__6C_game`).
 
 ## 5. Related
 
@@ -192,10 +217,6 @@ action menu this feeds) · `structs/drop_in_weapon.md` · `structs/door.md` · `
 
 | item | state |
 |---|---|
-| `S_GameItem + 0x08` | carries the pocket count on the `createweaponfromframe` path and a dropped item's reserve ammo; meaning for other item kinds not decoded |
-| `S_using_object + 0x24` | tested only by the savegame filter; no other reader located |
-| `Tick` PS2-only status | would close with a byte scan of the PC image for the `0.004` / `0.001` per-ms rates paired with `6.2831855` |
-| `FindAutoPickObjects` PS2-only status | would close with a whole-binary hunt for a second `S_GameItem` gatherer |
 | in game: pickup highlight | a usable object should pulse and rotate on the PS2 and sit still on the PC — the visible consequence of the missing `Tick` |
 | in game: auto-pickup | the PS2 should auto-pick items while walking over them; the PC should require the action button |
 | in game: reach cylinder | standing on a balcony directly above a prop should NOT offer it (§1b) |

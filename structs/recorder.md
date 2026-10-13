@@ -1,6 +1,6 @@
 # `C_recorder` — the keyframe track recorder and `.tck` loader
 
-**Created** 2026-08-04 18:07 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-04 18:07 +0200 · **Modified** 2026-10-11 15:07 +0200
 
 | | |
 |---|---|
@@ -37,8 +37,9 @@ identifier in Ghidra's output: the callsite renders as `recorder_add_track(obj, 
 the receiver invisible, and `DAT_00656368` occurs **0** times in the annotated decomp. The address
 is recorded here instead.
 
-The object is polymorphic (`recorder_add_track` dispatches through `[this]`, slots 5 and 12),
-so a derived recorder variant may exist (§7).
+The object is polymorphic (`recorder_add_track` dispatches through `[this]`, slots 5 and 12), but
+no derived recorder exists: the vtable `0x0063d0e8` has exactly one reference in the whole file,
+the store in `recorder_ctor`, and `recorder_ctor`'s only referrer is the singleton's `jmp`.
 
 ---
 
@@ -55,6 +56,27 @@ C_recorder:LoadTCK() done ok    C_recorder:LoadTCK() done failed
 Shipping `.tck` files include `Ddeath.tck`, `DturnL.tck`, `DturnR.tck`, `Nuda01.tck`,
 `Nuda02.tck`, `turn1.tck`. The format is **version 4**; anything else is rejected.
 
+### 2a. The `.tck` layout
+
+`recorder_load_tck` reads the file front to back into its caller's record:
+
+| file offset | size | field | stored at |
+|---|---|---|---|
+| `+0x00` | 4 | version, must be 4 | - |
+| `+0x04` | 12 | a vec3 | `out+0x08` |
+| `+0x10` | 12 | a vec3 | `out+0x14` |
+| `+0x1c` | 4 | the duration, ms | `out+0x00` |
+| `+0x20` | 4 | the sample period, ms (20 in 244 files) | `out+0x04` |
+| `+0x24` | 4 | N, the first array's count | - |
+| `+0x28` | 12 × N | the first array, three floats per sample | the vector at `out+0x28` |
+| next | 4 | M, the second array's count | `out+0x40` = 1 when M is non-zero |
+| next | 12 × M | the second array | the vector at `out+0x38` |
+
+In every shipped version-4 file N = duration / period + 1, and M is 0 or N. Of the 293 shipped
+`.tck` files, 283 are version 4: 224 end exactly after the second array, and 59 carry further
+whole 12-byte records the loader never reads. The other 10 (five of version 2, five that open
+with a duration-like value) print `C_recorder:wrong version` and load nothing.
+
 ---
 
 ## 3. Method coverage
@@ -67,7 +89,7 @@ Ordered by vtable slot; all 53 slots are placed. Slot indices are relative to th
 |---:|---|---|
 | 0 | `recorder_set_mode` | 0 stop / 1 and 2 the record-playback pair / 4 idle |
 | 1 | `recorder_get_mode` | `+0xe4` |
-| 2 | `recorder_sync_clock_from_system` | set the source clock from a parameter + prune finished tracks (§3c) |
+| 2 | `recorder_set_clock` | set the clock to an absolute time + prune finished tracks (§3c) |
 | 3 | `recorder_get_source_clock_ms` | `+0x11c` |
 | 4 | `recorder_get_playback_clock_ms` | `+0x120` — what every `*_track_apply_*` compares against |
 | 5 | `recorder_new_track` | allocate a `0x5c`-byte track and name it by kind |
@@ -100,7 +122,7 @@ Ordered by vtable slot; all 53 slots are placed. Slot indices are relative to th
 | 40-42 | `recorder_binding_block_size` / `_write` / `_read` | the `.rep` binding section |
 | 43 / 44 | `recorder_bind_object_by_name` / `_unbind_` | - |
 | 45 | `recorder_open_speech_sound_for_text_id` | bridge into `structs/speech.md` |
-| 46 | `recorder_get_constant_5` | `return 5;` — dead (§7) |
+| 46 | `recorder_get_constant_5` | `return 5;` — never called: its only reference is this slot, and no recorder call dispatches `+0xb8` |
 | 47 | `recorder_set_overlay_texture` | the cutscene letterbox |
 | 48 | `recorder_rebind_speaker_channel` | bridge into `structs/speech.md` |
 | 49 | `recorder_tick_speech` | bridge into `structs/speech.md` |
@@ -159,9 +181,9 @@ available for the first three, which nothing calls directly.
 `std::vector` uses for its *begin* pointer. `recorder_rebuild_object_table` does `test eax,eax; jle`
 and `cmp ebp,eax; jl`, using the result as a signed loop bound.
 
-### 3c. `recorder_sync_clock_from_system` does not read the system clock
+### 3c. `recorder_set_clock` takes the time as a parameter
 
-`recorder_sync_clock_from_system` (`0x00540fc0`, vtable `0x0063d0e8` slot 2) opens with
+`recorder_set_clock` (`0x00540fc0`, vtable `0x0063d0e8` slot 2) opens with
 `folded_return_this()`, whose body is `mov eax, ecx; ret`. Its ECX at that callsite is
 `mov ecx, [esp+0x14]`, and the frame arithmetic settles what that is:
 
@@ -183,8 +205,11 @@ The sibling settles what the function is: `recorder_advance_clock` (`0x00543540`
 `+0x11c += *delta`; this one does `+0x11c = param`. Both then run the identical remap of `+0x11c`
 through the `+0x68` keyframe table into `+0x120`/`+0x124` and stop every track whose slot-3 test
 fails at that time. The pair differs only by **absolute versus delta**, and
-`recorder_get_source_clock_ms` returns exactly the `+0x11c` this writes. The function name does
-not reflect this (§7).
+`recorder_get_source_clock_ms` returns exactly the `+0x11c` this writes.
+
+Nothing dispatches the slot. The function has no direct callsite and its only reference is the
+vtable entry; the singleton's address occurs only as the 59 `mov ecx, 0x656368` immediates of
+§1, and each of them is followed by a direct call to another member.
 
 ### 3d. Binding-table teardown: `recorder_bindings_clear_all` tail-calls the arena release
 
@@ -212,7 +237,7 @@ Allocated by `recorder_new_track`.
 | `+0x18` | first key chunk | every stream walk starts here; `recorder_key_stream_clear` nulls it |
 | `+0x20` | track name | `act_%d` / `hum_%d` / … ; copied into the binding record |
 | `+0x44` | **key-size table**, 4 entries | `{8, size1, size2, size3}`; indexed by `key[1]` |
-| `+0x54` | unnamed | cleared on rewind (§7) |
+| `+0x54` | end-reached flag | `recorder_track_step_keys_to_clock` sets it once the playback clock reaches `lastKeyTime` (`+0x14`) and skips the key stepping while it is set; `recorder_track_rewind_cursors` clears it |
 | `+0x58` | owner back-pointer | written by `recorder_add_track` |
 
 ### 4a. Track naming, and what it proves
@@ -260,7 +285,10 @@ track field of the binding record (§4c).
 | `chunk+0x04` | soft limit = `chunk + 0xFF0` | `lea ecx,[eax + 0xff0]` ¹ |
 | `chunk+0x08` | first record | the cursor is seeded here on both the first-chunk and the chain paths |
 
-¹ So ~4 KB of the 6 KB allocation is usable and the ~2 KB tail is slack (§7).
+¹ The allocator chains as soon as `cursor + size(new key) >= chunk + 0xFF0`, and the overflow
+sentinel lands below that limit, so nothing ever writes `[chunk + 0xFF4, chunk + 0x1800)`: about
+2 KB of each chunk stays unused. Why the allocation is `0x1800` is not recoverable from the
+binary.
 
 **Why only two functions.** Allocation needs exactly bump + grow;
 `recorder_key_stream_new_chunk` has two call sites and both are inside its parent. The rest
@@ -332,11 +360,4 @@ removed — the reverse of the usual direction, where the PS2 build adds subsyst
 
 ## 7. Open items
 
-| Item | state |
-|---|---|
-| the derived recorder variant | the singleton is polymorphic (slots 5 and 12 dispatched) but only one implementation has been located |
-| `track+0x54` | cleared on rewind; no reader traced |
-| the `.tck` on-disk layout | `recorder_load_tck` reads a version dword, a 4-byte field and two 12-byte blocks before the key data; the rest is unmapped |
-| the chunk slack | why only `0xFF0` of the `0x1800`-byte chunk is used is unknown |
-| `recorder_get_constant_5` | what the returned 5 means is undecoded |
-| `recorder_sync_clock_from_system` | the name says "from system" but the body sets `+0x11c` from a parameter (§3c); the name is unchanged |
+Nothing is open.

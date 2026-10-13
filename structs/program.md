@@ -1,6 +1,6 @@
 # `C_program` — the per-entity mission-script VM
 
-**Created** 2026-08-02 19:48 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-02 19:48 +0200 · **Modified** 2026-10-11 21:39 +0200
 
 Static analysis of `Game-ghidra.exe.annotated.c`, cross-checked against the non-stripped PS2 ELF
 (`SLUS_206.71`). **This documents the PC build**; cross-build material is confined to §5.
@@ -145,7 +145,9 @@ packed `uint16`:
 | 15 | `0x8000` | `RETURN` invokes virtual `+0x24` with 1 before popping. `program_set_event` **refuses to raise an event while any frame carries this bit** — that is how re-entrancy is prevented. |
 
 ⚠️ **The 14-bit pc field caps a script at 16384 instructions.** Nothing checks it; a longer
-program would wrap a `gosub` return silently.
+program would wrap a `gosub` return silently. No shipped script comes near it: the longest are the
+`GameInitEnd` scripts of `MISE15-MESTO` and `MISE19-MESTO` at about 600 lines, and a script
+compiles to at most one instruction per line.
 
 `GOSUB` (case `0x2`) pushes `pc + 1` with no flags and then falls **through** into the `GOTO`
 body — the two commands share one implementation from the landing pad
@@ -459,8 +461,8 @@ switch jump table occupies `[0x005c76fe, 0x005c7d94)` in `.text`.
 has `program_process_command` among its callers — that is what makes block B one object file with
 block A.
 
-⚠️ The twin is graded on arity + cluster + elimination plus a head/tail read and the jump table,
-**not** a statement diff (§9).
+The twin is graded per command arm: the two dispatchers' arms are joined by command name and
+compared call by call (§5h).
 
 ---
 
@@ -507,16 +509,16 @@ PC-first, ordered by PC VA. Every CONFIRMED row was established by reading **bot
 | 0x005bb020 | `program_save_game_load` | `SaveGameLoad__9C_programFPPv` | 788 | CONFIRMED |
 | 0x005bb2a0 | `program_find_actor_later` | `FindActorLater__9C_programFiUi` | 108 | CONFIRMED |
 | 0x005bb2d0 | `program_process_command` | `Process__9C_programFUi` | 95704 | CONFIRMED ² |
-| - | - | `TryChangeProgramData__9C_programFv` | 524 | PS2-ONLY CANDIDATE ³ |
+| - | - | `TryChangeProgramData__9C_programFv` | 524 | PS2-ONLY ³ |
 | - | - | `DecompileCommand__9C_programFiPc` | 8 | PS2 STUB ⁴ |
 | - | - | `CallBack__9C_programFQ29C_program11E_cb_action` | 8 | PS2 STUB ⁵ |
 | - | - | `GetInterCityName__9C_programFPc` | 116 | TERMINAL ⁶ |
-| - | - | `PreloadAnims__9C_programFv` | 4304 | PS2-ONLY CANDIDATE ³ |
+| - | - | `PreloadAnims__9C_programFv` | 4304 | PS2-ONLY ³ |
 | - | - | `DebilitizeScripts__9C_programFv` | 376 | TERMINAL ⁶ |
 
 ¹ The 94× size ratio is explained in §5c.
-² Graded as described in §3.
-³ No PC function; a strong PS2-only candidate, not terminal (§5e).
+² Graded per command arm (§5h).
+³ No PC function, and no PC call at the PS2's one call position (§5e).
 ⁴ 8-byte PS2 base stub; the PC's only implementation is the `C_entity` override (§5e).
 ⁵ 8-byte PS2 stub at `0x0014c700`, outside the cluster (§5e).
 ⁶ PS2-port-only, terminal (§5e).
@@ -569,12 +571,12 @@ block markers PC `0x45`/`0x46` ↔ PS2 `0x47`/`0x48`; the event marker PC `0x48`
 |---|---|---|
 | `DebilitizeScripts` | **PS2-PORT-ONLY, terminal** | its *only* caller is `InterCity_ChangeMission__9C_mission`, itself PS2-only; the same block also calls `VystrcPero__7C_human` and `ChangeSceneVystrc__10C_shvestky`, both already PS2-only |
 | `GetInterCityName` | **PS2-PORT-ONLY, terminal** | `InterCity_*`: 127 mentions on PS2, 0 on PC |
-| `TryChangeProgramData` | strong PS2-only CANDIDATE, **not terminal** | no PC function at its forced rank; PC `LoadSourceCode` lacks PS2's tail call to it; it is driven by `DAT_004e2174`/`DAT_004e2178`, a `{mission path, program name, actor name, replacement source}` table with **zero writers anywhere in the PS2 image** — a compiled-in per-mission script override list. Its caller is a shared method, so the PS2-only reasoning stops short of terminal |
-| `PreloadAnims` | strong PS2-only CANDIDATE, **not terminal** | called only from `Init`; PC `Init` does not call it, and 4304 B cannot be spliced into a 278-byte body. It walks the compiled instruction stream for animation opcodes (`0x1001`…) and pre-loads every clip they name — a streaming adaptation. Sits in the PS2's SECOND `C_program` emission block (`0x001d2b50…`) between the two terminal entries above |
+| `TryChangeProgramData` | **PS2-only, terminal** | the image holds exactly one call to it (one `jal`, no pointer), the tail of PS2 `LoadSourceCode`. PC `program_load_source_code` makes the same calls in the same order — the two frees, the seek/read pairs and the two allocations — and ends exactly before that position. It applies `DAT_004e2174`/`DAT_004e2178`, a `{mission path, program name, actor name, replacement source}` table with **zero writers anywhere in the PS2 image** — a compiled-in per-mission script override list |
+| `PreloadAnims` | **PS2-only, terminal** | the image holds exactly one call to it (one `jal`, no pointer), the tail of PS2 `Init`. PC `program_init` makes the same calls in the same order — three frees, the allocation, the compile, the free — and ends exactly before that position; 4304 B could not have been spliced into its 278-byte body either. It walks the compiled instruction stream for animation opcodes (`0x1001`…) and pre-loads every clip they name — a streaming adaptation. Sits in the PS2's SECOND `C_program` emission block (`0x001d2b50…`) between the two other terminal entries |
 | `DecompileCommand` | 8-byte PS2 base stub | the PC's only implementation is the `C_entity` override `entity_script_format_command` (`0x00429ca0`) |
 | `CallBack` | 8-byte PS2 stub | at `0x0014c700`, outside the cluster (§9) |
 
-Both non-terminal rows carry an inline banner in the decomp at the exact statement where the PS2
+Both rows carry an inline banner in the decomp at the exact statement where the PS2
 makes the call — see `program_load_source_code` (`LAB_005af709`) and `program_init` (after the
 `operator_delete_wrapper(pcVar2)` that ends the compile step).
 
@@ -602,6 +604,37 @@ PS2-port-only.
   the receiver type in its mangled name (`...FPCcPP17I3D_animation_set...`). The PS2
   `MODEL_PLAYANIM` counterpart is a cache-slot refcount INCREMENT where the PC assigns 2.
 
+### 5h. The dispatcher, arm by arm
+
+`program_process_command` and `Process__9C_programFUi` are compared one command arm at a time. The
+arms are joined by command NAME through each build's own keyword table (391 records on the PC,
+411 in the PS2 ELF; the opcode numbers differ, the names do not), which pairs 366 arms. For every
+pair, each out-of-line call the PS2 arm makes to a method with a registered PC twin is looked up
+in the PC arm. `NextCommand` is left out: every PS2 arm calls it, while the PC advances the pc
+once after the switch.
+
+| outcome | arms |
+|---|---:|
+| every such call has its PC twin in the PC arm | 113 |
+| one to three calls differ | 12 |
+| the PS2 arm could not be cut out of its if-chain cleanly | 4 |
+| the PS2 arm calls no method with a registered PC twin | 237 |
+
+The 12: `WAIT`, `HUMAN_LOOKTOFRAME`, `CAMERA_LOCK`, `AUTOSAVEGAME`, `AUTOSAVEGAMEFULL`,
+`STREAM_CREATE`, `ACTOR_DELETE`, `ENEMY_BLOCK`, `CITYMUSIC_OFF`, `FREERIDE_SCORESET`,
+`HUMAN_RETURNTOTRAFF`, `INVENTORY_CLEAR`. `GARAGE_GENERATECARS` and `GARAGE_RELEASECARS` call the
+empty PS2 `GenerateCars` / `ReleaseCars`, which have no registered PC function: the PC arms call the
+shared empty `stub_noop_cdecl_00574a40` (`structs/garage.md` §2a). The four:
+`HUMAN_GETITEMINRHAND`, `LOADDIFFERENCES`, `MODEL_STOPANIM`, `MODEL_DESTROY`.
+
+### 5i. The element types behind `vec_index_addr_stride_0x8`
+
+Neither build records whether the script VM's and the mission loader's 8-byte vectors share one
+declared element type (§7). The PC has no RTTI and no symbols; the PS2 `C_mission::OpenBin` calls
+no helper of `vector<C_program::S_instruction>` (none of its vector helpers carries that
+instantiation's length code), and the frame list it does build holds the 16-byte
+`C_mission::S_frame_actor_buffer`, so it has no 8-byte frame pair to compare with.
+
 ---
 
 ## 6. Block B — the out-of-line inline tail `[0x005c7da0, 0x005c9720)`
@@ -624,20 +657,24 @@ sets.
 **Census of all 51**, by disassembling each callsite's ECX receiver, scanning `.rdata`/`.data` for
 each address as a pointer, and byte-searching `.text` for each body and for `E9` tail-jumps to it:
 no fold beyond `folded_get_ptr_0x90`, **0 datarefs** across all 51, 0 `E9` referrers, and 49 of 51
-bodies byte-unique. Only **17 rows resolve ECX to an immediate or a global load**; the other 34
-resolve to a bare `eax`/`esi`/`edi`/`ebx`/`ebp`, one back-trace short of a class, so their receiver
-is a lead. Before promoting a lead, re-take those three measurements and apply the falsification
-test *"does any other accessor of the claimed class ever take this receiver?"*.
+bodies byte-unique. **17 receivers are an immediate or a global load**; the other 34 are a register,
+and following each register one step further back resolves every one of them. Inside
+`program_process_command` the register is loaded from one of the VM's register files — `flt[]` at
+`C_program+0x48`, `frm[]` at `+0x50`, `act[]` at `+0x58` (`ebp` is the `C_program` throughout the
+dispatcher) — or is the return of `folded_get_dword_0x68` (an actor's frame),
+`folded_get_dword_0x10` on `g_act_mission` (the scene), `i3d_frame_get_parent_ptr`,
+`operator_new` or `mission_create_actor`; in `mission_open_bin` it is a frame from the frame map
+or the deferred frame list.
 
 | receiver | basis | functions |
 |---|---|---|
 | `hud_state` `0x00658330` (`G_IndicatorsClass`) | byte-proven | `hud_set_element_flags`, `hud_hide_element`, `hud_element_is_visible`, `hud_push_element_flags`, `hud_pop_element_flags`, `hud_set_police_wanted_bar` |
-| an `S_matrix` / `S_quat` living in the script `flt[]` register file | lead | `matrix4_zero`, `matrix4_invert_in_place`, `quat_add`, `quat_sub_w_add_xyz`, `quat_multiply_in`, `quat_scale_to`, `quat_dot` |
+| an `S_matrix` / `S_quat` living in the script `flt[]` register file | `lea [base + idx*4]` with `base = C_program+0x48`; `matrix4_invert_in_place` takes its matrix as a stack argument, a `flt[]` span or a stack-local matrix | `matrix4_zero`, `matrix4_invert_in_place`, `quat_add`, `quat_sub_w_add_xyz`, `quat_multiply_in`, `quat_scale_to`, `quat_dot` |
 | `g_racing` `0x006f958c` (`C_racing`) | byte-proven | `racing_get_racer_array_ptr`, `racing_get_racer_count` |
 | `g_cache_base_block` `0x006efd80` | byte-proven | `cache_base_block_is_loaded` |
-| an `I3D_frame` from the VM's frame register file | lead ¹ | `i3d_frame_get_type_ptr`, `i3d_frame_set_position_xyz_ptrs`, `i3d_frame_set_scale`, `folded_get_ptr_0x90` (its `I3D_frame::GetScale` role), `i3d_frame_get_rotation_ptr`, `i3d_frame_get_world_rotation_quat`, `i3d_frame_get_scaled_rot_matrix_ptr`, `i3d_frame_is_on`, `i3d_frame_get_name`, `i3d_frame_get_tag_ptr`, `i3d_frame_get_mesh_object_ptr`, `i3d_frame_get_lmap_entry_ptr`, `i3d_frame_get_model_name` |
-| the `I3D_scene` at `*(g_act_mission + 0x10)` | lead | `i3d_scene_get_active_camera_ptr`, `i3d_scene_set_frame_sector_pos` |
-| a `C_actor` from the VM's actor register file | lead | `actor_set_cached_world_pos` |
+| an `I3D_frame` from the VM's frame register file | `C_program+0x50`, `folded_get_dword_0x68`, `i3d_frame_get_parent_ptr`, the frame map of `mission_open_bin` ¹ | `i3d_frame_get_type_ptr`, `i3d_frame_set_position_xyz_ptrs`, `i3d_frame_set_scale`, `folded_get_ptr_0x90` (its `I3D_frame::GetScale` role), `i3d_frame_get_rotation_ptr`, `i3d_frame_get_world_rotation_quat`, `i3d_frame_get_scaled_rot_matrix_ptr`, `i3d_frame_is_on`, `i3d_frame_get_name`, `i3d_frame_get_tag_ptr`, `i3d_frame_get_mesh_object_ptr`, `i3d_frame_get_lmap_entry_ptr`, `i3d_frame_get_model_name` |
+| the `I3D_scene` at `*(g_act_mission + 0x10)` | the return of `folded_get_dword_0x10` on `g_act_mission` | `i3d_scene_get_active_camera_ptr`, `i3d_scene_set_frame_sector_pos` |
+| a `C_actor` from the VM's actor register file | `C_program+0x58` | `actor_set_cached_world_pos` |
 | `g_act_mission` `0x0065115c` (`C_mission`) | byte-proven | the seven `mission_*` accessors (§6a) |
 
 ¹ `folded_get_ptr_0x90` is the exception in that row: it is the band's one proven fold.
@@ -663,7 +700,7 @@ That is why these accessors carry FIELD names rather than offset names, among th
 `mission_get_actor_list` (`0x005c8640`), `mission_get_particle_manager` (`0x005c8650`),
 `mission_set_next_mission_number` / `mission_get_mission_number` /
 `mission_commit_next_mission_number` (`0x005c8660`/`0x005c8670`/`0x005c8680`),
-`mission_set_sound_restore_stage` / `mission_get_sound_restore_stage` (`0x005c8690`/`0x005c86a0`),
+`mission_set_frame_skip_count` / `mission_get_frame_skip_count` (`0x005c8690`/`0x005c86a0`),
 `using_object_record_ctor` (`0x005c86b0`, the constructor of an `operator_new(0x38)` object; it
 zeroes `+0x10` and `+0x18..+0x34`, deliberately skipping `+0x14`), `actor_get_class_id`
 (`0x005c86e0`), `actor_get_direction` (`0x005c8710`) and `actor_mark_created_at_runtime`
@@ -692,7 +729,7 @@ are documented in `structs/i3d_frame.md` §9 and `structs/i3d_cache.md` §7.
 
 The next `.CRT$XCU` initializer is at **`0x005c9720`**, so `[0x005c8740, 0x005c9720)` is the rest of
 this same object file — 74 more helper-tail definitions, all named, from
-`vehicle_controller_set_field_0x65` to `stl_max_int_ptr` — and **`0x005c9720` is where the next
+`actor_set_save_excluded` to `stl_max_int_ptr` — and **`0x005c9720` is where the next
 translation unit starts**. `basic/artifacts/script-opcode-dispatch.md` §9 maps every definition in
 `[0x005c7da0, 0x005c9740)` to the script command(s) whose arm reaches it.
 
@@ -728,11 +765,11 @@ The `mission_open_bin` arm is what settles the ownership question: its loop is
 a type-dependent virtual. That is a **deferred frame-fixup list** built on the stack during `.bin`
 load, holding `{I3D_frame *, index}` pairs, not a script node array.
 
-⇒ Different element types mangle differently, so COMDAT dedup-by-name cannot have merged them —
-identical-COMDAT folding did. ⚠️ The element types were read off their USE, not off a type
-declaration; if both were declared as one generic 8-byte pair type this would be dedup-by-name
-rather than folding. Either way one address serves the script VM and the mission loader, so the
-name describes the operation (`vec_index_addr_stride_0x8`) and not a subsystem. `folded_*` is
+⇒ One address serves the script VM and the mission loader. Whether that is identical-COMDAT
+folding of two element types or dedup-by-name of one declared 8-byte pair type cannot be decided:
+the element types are known only from their use, and neither binary records the declarations
+(§5i). Either way the name describes the operation (`vec_index_addr_stride_0x8`) and not a
+subsystem. `folded_*` is
 reserved for folds whose owners are CLASSES sharing a field offset; here there is no class owner at
 all. The stride-4 sibling is `vec_index_addr_stride_0x4` (`0x005a17b0`).
 
@@ -754,9 +791,4 @@ all. The stride-4 sibling is `vec_index_addr_stride_0x4` (`0x005a17b0`).
 
 | item | state |
 |---|---|
-| `program_process_command` ↔ `Process__9C_programFUi` | graded on arity, cluster, elimination, a head/tail read and the jump table; ~52 KB against 95 KB has never been statement-diffed (§3) |
-| `TryChangeProgramData`, `PreloadAnims` | strong PS2-only candidates; neither is terminal, because each is reached from a method both builds share (§5e) |
-| the 34 lead receivers in block B | one back-trace short of a class; each needs the receiver resolved before its owner can be claimed (§6) |
-| folding vs dedup-by-name for `vec_index_addr_stride_0x8` | the two element types were read off their use, not off a type declaration (§7) |
-| the 14-bit pc field | caps a script at 16384 instructions and nothing checks it; no shipped script is known to approach the limit (§1c) |
 | `CallBack__9C_programFQ29C_program11E_cb_action` | 8-byte PS2 stub outside the cluster (`0x0014c700`); no PC counterpart has been searched for (§5e) |

@@ -1,6 +1,6 @@
 # `C_Break_plain_glass` — the glass shatter engine
 
-**Created** 2026-09-04 13:25 +0200 · **Modified** 2026-10-04 19:19 +0200
+**Created** 2026-09-04 13:25 +0200 · **Modified** 2026-10-11 20:52 +0200
 
 PC prefix **`glass_shatter_`**. Its own translation unit, `[0x0061e0d0, 0x00622230)`
 (`VE_BreakageGlass.cpp`, §6).
@@ -86,7 +86,8 @@ typedef struct S_DICE_OBJ {
 /* +0x32 */ char          probed;          // [H] the ground-probe latch: set after a probe,
                                            //     cleared on a bounce so the next descent
                                            //     re-probes
-/* +0x33 */ char          pad33;           // [U] unread
+/* +0x33 */ char          pad33;           // [H] tail padding: no instruction addresses it;
+                                           //     the float members round the record to 0x34
 } S_DICE_OBJ;
 ```
 
@@ -242,19 +243,18 @@ containing the word.
 
 **Record sizes.** PS2 pads for VU alignment: `S_DICE` `0x10` against the PC's `0x18`
 (the PC's MSVC `std::vector` carries a padded allocator byte), `S_DICE_OBJ` `0x40` against
-`0x34`. `S_DICE_OBJ + 0x33` is unread on both builds.
+`0x34`.
 
 **Containers.** PS2 uses Metrowerks `gif::vector<T,8>`, which grows through `reserve`;
 MSVC grows inside `insert`. `reserve__Q23gif17vector<6S_DICE,8>Fi`,
 `…<10I3D_vertex,8>` and `…<11I3D_triface,8>` are therefore **structural correspondents** of
 the PC helpers in §3a, not twins, and none of them carries a PS2 twin.
 
-**One PS2 function MSVC inlined.** `__ct__10S_DICE_OBJFv` (8 B, `0x003b9360`) — the shard
-record's default constructor. `S_DICE_OBJ` is a POD, so the ctor collapses and what survives
-on the PC is a counted loop over a folded identity stub inside
-`glass_shatter_break_frame`; the decomp site carries an inline banner. Graded CANDIDATE-inlined:
-the direction is a toolchain difference and no image-wide census of MSVC's POD-ctor out-lining
-exists.
+**The shard's default constructor is out of line on both builds.** `__ct__10S_DICE_OBJFv`
+(8 B, `0x003b9360`) is `return this`. `glass_shatter_break_frame` default-constructs the new
+shard array with a counted loop that calls `identity_thunk` (`mov eax, ecx; ret`) once per shard,
+stepping `0x34` — the same empty body. That address also serves `identity_thunk`'s other
+receivers, so it is shared and carries no twin line; the decomp site carries an inline banner.
 
 **Init.** `glass_shatter_init` allocates the ring pool. The PS2 has no pool at all: its `Init`
 zeroes the pool pointer `+0x28`, the cursor `+0x2c` and the slot count `+0x30` and never reads its

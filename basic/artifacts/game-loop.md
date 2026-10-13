@@ -1,6 +1,6 @@
 # Game loop — from the CRT entry point to player interaction
 
-**Created** 2026-07-19 11:24 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-07-19 11:24 +0200 · **Modified** 2026-10-12 19:38 +0200
 
 Two nested loops run the whole game: `engine_main`, the outer menu / mission state machine, and
 `engine_game_loop`, the inner per-frame loop a mission runs inside. Every function named below has
@@ -16,7 +16,7 @@ crt_startup              entry, 0x00626f1a   CRT bootstrap
            ├─ CreateMutexA("Mafia Launcher Super Mutex Shit")   single-instance guard
            ├─ the TEV and CD checks, then the exception handlers
            ├─ reads HKLM\Software\Illusion Softworks\Mafia → "LS3D_setup" over the defaults;
-           │  a blob whose version tag is not 0x14 sends the user to setup.exe
+           │  without a valid blob (0x3f bytes, tag 0x14) it starts setup.exe and returns
            ├─ engine_init, then six persisted quality settings into C_mission+0x90
            └─ do { gui_menu_execute_modal(1) → switch(result) } while (no exit code)
                   case 0x12 → intro, then mise01
@@ -27,6 +27,11 @@ crt_startup              entry, 0x00626f1a   CRT bootstrap
 calling `engine_game_loop`, which returns only when the mission ends or the ESC menu quit is taken.
 On the way out `engine_main` copies the live settings back into `g_ls3d_setup`, writes the registry
 value and calls `engine_shutdown`.
+
+When the registry key, the `LS3D_setup` value, its `0x3f`-byte size or its `0x14` version tag is
+missing, `engine_main` starts `setup.exe` through `crt_spawnlp` with mode 1 and returns. Mode 1
+does not wait (`crt_dospawn` waits only for mode 0), so the game process ends while the setup
+program runs. In game, deleting the value and starting the game opens `setup.exe`.
 
 | menu result | what it starts |
 |---|---|
@@ -123,16 +128,17 @@ do {
 | `+0x94` | every frame | physics and collision |
 | `+0x98` | twice per frame | mission state (0 running, 1 ended normally, `0x39` / `0x1c` other terminal states) |
 | `+0xf0` | every frame | prepare render, arguments `0x10` and `0x53` |
-| `+0xb8` | when `state_recheck` ≠ 0 | active screen flags |
-| `+0xbc` | when `state_recheck` ≠ 0 | active screen object, index `flags & 0xf` |
+| `+0xb8` | when `state_recheck` ≠ 0 | a flags word; its low nibble is passed to `+0xbc` |
+| `+0xbc` | when `state_recheck` ≠ 0 | the typed character, passed to `game_cheat_check` |
 | `+0x30` | inside `engine_new_mission` | engine pre-reload step |
 | `+0x3c` | end of frame | end frame; skipped while `g_act_mission+0x78` > 0 |
 
 ### 3b. The cheat check
 
-When `state_recheck` is non-zero the loop reads the active screen flags (`+0xb8`) and the screen
-object at index `flags & 0xf` (`+0xbc`) and passes the object to `game_cheat_check`, which
-accumulates keypresses and fires the dev hotkeys. On a match it forces `mission_state = 0` — the
+When `state_recheck` is non-zero the loop reads a flags word (`+0xb8`) and, with its low nibble,
+the typed character (`+0xbc`), and passes the character to `game_cheat_check` on the `C_game`
+singleton (`*(g_act_mission + 0x24)` in ECX), which accumulates keypresses and fires the dev
+hotkeys. On a match it forces `mission_state = 0` — the
 mission keeps running — then takes both per-action value tables with
 `input_get_action_values(&t, 0)` and `input_get_action_values(&t, 1)` and zeroes
 `(g_input_bindings_end − g_input_bindings_begin) / 0xc` entries in each, so a cheat's keystrokes
@@ -145,8 +151,8 @@ cannot leave an action stuck on. Cheat vocabulary: `basic/artifacts/cheats.md`.
 | `delta_ms` | `undefined4` | elapsed milliseconds for this frame, preserved in EBX from the `+0x2c` begin-frame call |
 | `mission_state` | `char` | the first `g_engine+0x98` result — the mission running/ended state |
 | `state_recheck` | `char` | the second `g_engine+0x98` result, after the device pump and `input_update`; it gates the cheat check |
-| `screen_flags` | `uint` | flags word from `g_engine+0xb8`; the low nibble indexes the active screen |
-| `screen_obj` | `undefined4` | screen object from `g_engine+0xbc`, passed to `game_cheat_check` |
+| `key_flags` | `uint` | flags word from `g_engine+0xb8`; its low nibble is passed to `+0xbc` |
+| `typed_char` | `undefined4` | the typed character from `g_engine+0xbc`, passed to `game_cheat_check` |
 | `tmp` | `int` | scratch — device count, vtable base, menu result, display state |
 | `layer0_ptr` / `layer1_ptr` | `int` | the input manager's two per-action value tables, the sampled one and the one-shot one, from `input_get_action_values`; `structs/input.md` |
 | `esc_menu_obj` | `void *` | the `0x48`-byte ESC/pause menu allocation; the compiler reuses the slot as an SEH scope marker (value `0x3f`) |
@@ -167,7 +173,7 @@ menu opens: `game_pause_all_sounds()` → `operator_new(0x48)` + `gui_game_menu_
 
 | menu choice | action |
 |---|---|
-| `0x22` | `game_update_controls()` |
+| `0x22` | the Controls screen's close code (`gui_options_controls_close` returns `0x22` when the screen has no parent at `+0x44`): `game_update_controls()`, which, while `C_game+0x40` is set, calls `player_update_controls` for every kind-2 actor of the mission; that re-applies `g_steering_linearity` to the car the player drives from seat 0 |
 | `0x21` | quit: with no sequence running, return from `engine_game_loop`; with one running, `recorder_stop()` + `recorder_end_sequence_and_restore_scene()`, then return |
 | `0x13` | `loadsave_savegame_load()` |
 | anything else | fall through into the rest of the frame |
@@ -188,10 +194,14 @@ sequence is running.
 | `1` | return from `engine_game_loop` immediately |
 | `3` | zero `g_act_mission+0x70` and `+0x74`, call `loadsave_savegame_load()`, continue |
 
-`g_act_mission+0x78` is the frame-skip counter. `recorder_stop` raises it to `4` and
-`recorder_end_sequence_and_restore_scene` to `2`, each only when the counter is currently lower.
-While it is above 0 the `g_engine+0x3c` end-frame call is skipped and the counter is decremented
-instead, which gives rendering a few frames to settle after a state change.
+`g_act_mission+0x78` is the frame-skip counter. While it is above 0 the `g_engine+0x3c`
+end-frame call is skipped and the counter is decremented instead, which gives rendering a few
+frames to settle after a state change. Its complete writer set: `mission_open` stores 0,
+`game_init` stores 10 through `mission_set_frame_skip_count`, and four writers raise it only when
+it is lower — `recorder_stop` to 4, `recorder_end_sequence_and_restore_scene` to 2, and the script
+commands `recloadfull` and `recunload` to 1 and 2 through the accessor pair. `mission_open` also
+mutes the sound manager and sets the latch `g_act_mission+0x7c`; `mission_tick` restores the
+volume on the first frame the counter is below 1 (`structs/mission.md` §3d).
 
 ## 6. Globals the loop touches
 
@@ -211,8 +221,22 @@ block against the mission scene's `+0x17c` reference frame. `structs/cache_base_
 
 **Engine code does not grant player control.** The loop runs identically every frame whether or not
 Tommy is controllable: `+0x2c` reads input every frame and `input_update` resolves the bindings
-regardless. Whether the result reaches Tommy is decided by the mission's script, which executes
-inside the `+0xcc` world update. The script's command set and its dispatcher are documented in
+regardless. Whether the result reaches Tommy is decided by one byte, the control lock
+`C_player+0xada`, which `player_ai` (four reads), `player_collision` and `player_hit` test.
+`player_lock_controls` writes it, and locking also aborts the action in progress.
+
+| writer | effect at a mission start |
+|---|---|
+| `player_game_init` | clears the byte: every mission starts unlocked |
+| `engine_new_mission` | on the player carried over by `newmission`: `player_lock_controls(1)` then `player_lock_controls(0)`, which aborts his action and leaves him unlocked |
+| script command `PLAYER_LOCKCONTROLS` (opcode `0x5e`) | `player_lock_controls(arg != 0)`, then `human_do_breath` |
+| `ai_groups_tick` | releases a timed lock once the deadline set by `ai_groups_extend_control_lock` passes |
+
+The other callers of `player_lock_controls` are `entity_action_tick` (three sites),
+`pumper_choose_next_action`, `pumper_start_refuel`, `pumper_save_game_load` and
+`racing_end_race`; `player_save_game_load` restores the byte. A mission that opens with a
+scripted sequence locks and releases the player itself: mission `MISE01` does both in its
+`autosave` script, which runs inside the `+0xcc` world update. The script's command set and its dispatcher are documented in
 `basic/artifacts/script-opcode-dispatch.md` and `script-mapping/artifacts/opcode-table.md`.
 
 ## 8. Per-frame actor update and player interaction
@@ -263,10 +287,13 @@ is driven by `pedestrian_tick` (`0x004b7520`):
   camera frame at `*(g_act_mission+0x10) + 0x17c`. Ten callers, five of them inside
   `pedestrian_tick`.
 - **Recognition greeting.** `pedestrian_greet_player` (`0x004be0d0`) runs behind the same ~1.5 s
-  countdown. It fires when the pedestrian shares the player's model id, the player is not under
-  pursuit and has no officers assigned, and the player is on foot; it sets the greeted flag `+0x1fd`,
-  plays a greeting line (voices.def rows 168-173) and head-tracks the player through the frame
-  vtable `+0x38` on the `neck` bone.
+  countdown. It needs the pedestrian's voice enabled (`+0x1fc`) and wander mode (`+0x19e == 0`),
+  the player in the same parent frame, in a police-board pursuit
+  (`police_board_is_actor_in_pursuit`) and on foot, and it returns early when the police manager
+  is enabled and officers are assigned to the player. It then sets the greeted flag `+0x1fd`;
+  within 5 units and facing the player it also plays a greeting line (voices.def rows 168-173)
+  and head-tracks the player through the frame vtable `+0x38` on the `neck` bone. In shipped play
+  the greeting is never heard (`basic/artifacts/npc-player-interactions.md` §4).
 - **Interaction reply.** `pedestrian_on_player_talk` (`0x004be050`) is the interaction-button
   counterpart, reached from the player-command dispatcher case `0x7de`. Its friendly branch is
   unlocked by `+0x1fd`; without it only the brush-off branch fires.
@@ -281,6 +308,23 @@ the health float at `+0x15c` — skipping the subtraction for hit type 5 unless 
 the player is driving. Below `0.5` it stamps `-1.0` = dead, detaches the pedestrian from its
 waypath and runs the death reaction. A car killing a pedestrian is what drives
 `police_manager_increase_run_over_count_for_target`.
+
+**Where the type comes from.** `+0x158` / `+0x159` / `+0x15a` are decoded from the user string of
+the model's `back1` frame, a six-character tag such as `ABA095`: after `crt_strupr`, characters
+0, 1 and 2 minus `'A'` are the three bytes (`+0x15a` is the type), and `atoi` of characters 3-5
+times 0.01 is the model scale `+0x154`. In the shipped models the third letter is `A` (0) or `C`
+(2) for civilians, `B` (1) for `pol01`-`pol03`, `D` (3) for `pol11`-`pol13` and `E` (4) only for
+`FREEgang01` / `FREEgang02`. `pedestrian_set_model`, reached through
+`pedestrian_manager_add_free_person*`, zeroes the three bytes before the length test.
+`pedestrian_create_model` does not; it builds every record of the pool that
+`pedestrian_manager_game_init` allocates with `operator_new` and constructs with
+`pedestrian_ctor`, which writes none of them, so a tag that fails the test leaves the three bytes
+as the memory held. `civil05.4ds` is the one shipped pool model whose tag fails it: `ACA097`
+followed by two CRLF pairs, 10 characters. A `civil05` pedestrian therefore inherits gender,
+variant and type from whatever occupied that memory before, which is how it can carry type 4 and
+spawn armed mafiosi. An in-game test confirmed the mechanism: with every male civilian tag padded
+the same way, male civilians appeared with female animations, as armed patrol cops and as armed
+mafiosi. The only other writer of `+0x15a`, `police_manager_free_temp_enemy`, stores 1.
 
 | source | route | what reaches `pedestrian_hit` |
 |---|---|---|
@@ -368,10 +412,4 @@ turns into police offences.
 
 ## 13. Open items
 
-| item | state |
-|---|---|
-| what releases player control at mission start | the loop reads input every frame and the script decides; which script construct flips it has not been located in the dispatcher |
-| other writers of `g_act_mission+0x78` | besides the two recorder paths, `.text` holds writes of `1` and `2` to the counter from functions not enumerated here |
-| `game_update_controls` on ESC menu choice `0x22` | called, but its body has not been read |
-| is `pedestrian_greet_player`'s gate satisfiable in shipped play | the greeting is not observed in game; the gate's terms are measured but the reachability question belongs to `basic/artifacts/npc-player-interactions.md` |
-| how a civilian model acquires pedestrian type `4` | `civil05` has been seen spawning armed mafiosi, which needs `+0x15a == 4` at `pedestrian_hit`; nothing measured here shows how a civilian record gets that value. The `back1` frame-name tag that `pedestrian_create_model` parses — a 7-character name, uppercased, `atoi` of the characters from index 3 — sets the model scale at `+0x154`, not the type |
+Nothing is open.

@@ -1,7 +1,7 @@
 # Mafia: The City of Lost Heaven (PC, 2002) — reverse-engineering export
 
 <!-- version -->
-**Export version:** `2026.10.13`
+**Export version:** `2026.10.13.1`
 <!-- /version -->
 
 Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`

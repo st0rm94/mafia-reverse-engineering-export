@@ -1,6 +1,6 @@
 # Lap gates and the mission 6 lap glitch
 
-**Created** 2026-10-05 17:08 +0200 · **Modified** 2026-10-05 22:07 +0200
+**Created** 2026-10-05 17:08 +0200 · **Modified** 2026-10-13 19:54 +0200
 
 How the PC build of Mafia counts racing laps, why the mission 6 race ("Fair Play", circuit 0,
 scene `MISE06-AUTODROM`) can be finished by driving circles on the grass next to checkpoint 9,
@@ -8,7 +8,7 @@ and how the PS2 build compares (§8).
 
 All coordinates are **world X / world Z** (the ground plane; Y is height and the lap code ignores
 it). The figures are generated from the shipped `missions/MISE06-AUTODROM/check.bin` and an exact
-re-implementation of the PC gate test (§10).
+re-implementation of the PC gate test (§9).
 
 ![The 27 lap gates and their infinite lines](img/01-overview-gates.png)
 
@@ -380,24 +380,11 @@ step: in 240 runs of the §5 setup paths at 4-12 m/s with the PS2 logic, the ste
 11 → 10 and no run gained a lap.
 
 The PS2 logic in these measurements was re-implemented from the PS2 bodies of `TestGate`,
-`InternTestGate`, `TestAllGates`, `DoGates` and `Tick`, the same way as the PC logic (§10).
+`InternTestGate`, `TestAllGates`, `DoGates` and `Tick`, the same way as the PC logic (§9).
 
 ---
 
-## 9. Community claims assessed
-
-| Claim | Assessment |
-|---|---|
-| "There are checkpoints that display the segment time and hidden checkpoints that make sure you drive the right direction" | Correct count: 3 printing, 24 hidden. All 27 are the same kind of lap gate; the print is a flag. The time shown is the time since the current lap started |
-| "If you pass a hidden checkpoint in the same direction 2 times in a row, the next hidden checkpoint becomes a finish line that can be crossed many times" | Symptom right, cause different: gate 10 is passed for real, the wrong-way move is then misread as passing gate 11 (§5), and getting lost gives the finish gate |
-| "The finish line on the hill is really the finish line, because checkpoints are lines through two points, not segments" | Correct (§3a) |
-| "Teleporting there lets you do the circles without the initialization circle" | Consistent: a teleport makes the racer lost, and the hill gives gate 0 (§5) |
-| "It also works if you drive there without going through the first turn" | Consistent: the finish gate stays current; the first loop counts nothing because of the start-crossing flag, later loops count (§5) |
-| "Driving further away from the invisible wall rolls back the initialization" | Partly: crossing back closer to the start than z ≈ 287 subtracts the lap, and going right of `x ≈ 423.5` loses the racer onto another gate (§6) |
-
----
-
-## 10. Method
+## 9. Method
 
 * The gates were rebuilt by replaying the gate walk over the shipped `check.bin` (node records of
   0x1e bytes, then each node's 8-byte connections). Connection targets are **array indices**: the
@@ -411,11 +398,11 @@ The PS2 logic in these measurements was re-implemented from the PS2 bodies of `T
 
 ---
 
-## 11. Cheat Engine test plan
+## 10. Cheat Engine test plan
 
 `Game.exe` has a fixed image base `0x00400000`, so the static address below is stable.
 
-### 11a. The pointer chain
+### 10a. The pointer chain
 
 ```
 [0x006F958C]            g_racing  (static pointer to C_racing; non-zero only in the mission 6 race)
@@ -426,7 +413,7 @@ The PS2 logic in these measurements was re-implemented from the PS2 bodies of `T
 
 Player fields are `[006F958C] + 0x40 + <C_opponent offset>`; the table gives the summed offsets.
 
-### 11b. Field watch table (Add Address Manually)
+### 10b. Field watch table (Add Address Manually)
 
 | Watch | CE address | Type | Meaning |
 |---|---|---|---|
@@ -452,7 +439,7 @@ Notes:
   gate number changes to get the position the game tested.
 - The gate number only ever changes in the same frame in which the accumulator returns to 0.
 
-### 11c. Tests
+### 10c. Tests
 
 | # | Procedure | Expected result |
 |---|---|---|
@@ -468,7 +455,7 @@ Notes:
 
 ---
 
-## 12. Related documents
+## 11. Related documents
 
 * `exe-re/structs/racing.md` — `C_racing`, `C_circuit`, `C_opponent` and the gate record.
 * `exe-re/basic/artifacts/racing.md` — the racing subsystem and how mission 6 reaches it.
@@ -479,10 +466,10 @@ Notes:
 
 ---
 
-## 13. Open items
+## 12. Open items
 
 | Item | State |
 |---|---|
-| In-game confirmation of the coordinates | the wedge apex (279.4, 263.0), the loop boundary z ≈ 287 and the 1000 ms cadence are measured from data and code, not yet observed (§11c) |
+| In-game confirmation of the coordinates | the wedge apex (279.4, 263.0), the loop boundary z ≈ 287 and the 1000 ms cadence are measured from data and code, not yet observed (§10c) |
 | The probe point's position on the car | `C_car+0x1fc0` is the local offset set up in `car_init` from the bounding box; where it sits on the car (front, centre) is not measured |
 | Gates of the other circuits | only circuit 0 was rebuilt; whether other circuits have finish strips crossing reachable ground is not measured |

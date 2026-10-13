@@ -3,7 +3,13 @@
 One section per export version (date tag). Counts are measured on the annotated decompilation
 `ghidra/Game-ghidra.exe.annotated.c` against Ghidra's default auto-analysis of `Game.exe` 1.0.
 
-## 2026.10.13 — review batches 19-33, physics and collision findings, Ghidra names synced
+## 2026.10.13.1 — lap-glitch document trimmed
+
+- `basic/artifacts/racing/lap-gates-and-lap-glitch.md`: the "Community claims assessed" section
+  removed; the sections after it renumbered (Method §9, Cheat Engine test plan §10, Related
+  documents §11, Open items §12) and the references to them updated.
+
+## 2026.10.13 — open-item review with more name corrections, physics and collision findings, Ghidra names synced
 
 - 296 more tracked open questions closed.
 - Function renames (47; each docblock and registry row rewritten):

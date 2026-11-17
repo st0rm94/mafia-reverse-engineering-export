@@ -1,6 +1,6 @@
 # Lap gates and the mission 6 lap glitch
 
-**Created** 2026-10-05 17:08 +0200 · **Modified** 2026-10-13 19:54 +0200
+**Created** 2026-10-05 17:08 +0200 · **Modified** 2026-11-01 17:14 +0100
 
 How the PC build of Mafia counts racing laps, why the mission 6 race ("Fair Play", circuit 0,
 scene `MISE06-AUTODROM`) can be finished by driving circles on the grass next to checkpoint 9,
@@ -56,7 +56,7 @@ race-camera nodes (26 of them) collected into the circuit's camera list. One gat
 track node and the gates are closed into a ring (`next` / `previous` pointers).
 
 A gate **prints the checkpoint time** when the first connection of its outer marker carries flag
-bit `0x80` (the connection's ONE-WAY bit, `structs/web_path.md` §2). Only gates **9, 14 and 20**
+bit `0x80` (the connection's ONE-WAY bit, `structs/web_path.md` §1a). Only gates **9, 14 and 20**
 have it; the other 24 gates are invisible.
 
 ### 2b. The gate record (`C_racing_gate`, 0x2c bytes, PC offsets)

@@ -3,6 +3,63 @@
 One section per export version (date tag). Counts are measured on the annotated decompilation
 `ghidra/Game-ghidra.exe.annotated.c` against Ghidra's default auto-analysis of `Game.exe` 1.0.
 
+## 2026.11.17 — struct docs on one standard, field-by-field recovery, 21 renames, Ghidra names synced
+
+- Struct docs (`structs/`, now 115: 112 updated, 1 new, 2 renamed):
+  - every doc follows one skeleton: a header card (PC prefixes, kind, vtable, base class, instance
+    size, constructor, translation unit, PS2 class), §1 the typedefs with one line per field and an
+    [H] / [M] / [U] confidence tag, §2 one evidence row per field (writers, readers, notes), §3 the
+    method family in four groups (construction and destruction, accessors, behaviour, free
+    helpers), then PC vs PS2, Related and Open items last;
+  - the entity-kind enumeration moved out of `entity.md` into the new `structs/entity_kind.md`;
+  - two docs renamed after their PC class prefix: `pursuit-event-manager.md` → `pursuit_event.md`,
+    `soundArena.md` → `sound_arena.md`;
+  - a field-recovery pass read every method body of every documented class: typedef field lines
+    3,909 → 4,581; [H] 3,554 → 4,308, [M] 284 → 117, [U] 68 → 153; records with undecoded bytes
+    28 → 8. A field with no recovered meaning is named by its measured state: `unread_<off>`
+    (stored, never read), `unused_<off>` (never accessed), `pad_<off>` (alignment gap), `unk_<off>`
+    (read, meaning not decoded). New typedefs include the save-game records (`S_savegame_info`,
+    `S_savegame_scene`, `S_savegame_actor_head`), the recorder's camera, target, fade, script and
+    frame-event keys, the HUD subtitle and intro lines, the `ios` stream base and the `C_game`
+    car-mounted twin gun block, which neither build ever creates.
+- Function renames (21; each docblock and registry row rewritten):
+  - misnomers: `box_solve_impulse_vs_world` → `box_solve_impulse_vs_car`,
+    `box_build_inverse_inertia_tensor` → `box_intersect_segment_side_faces`,
+    `hud_set_theft_indicator_value` → `hud_set_timed_action_bar_value`,
+    `entity_rebind_neck_bone_handle` → `entity_rebind_neck_frame`, `police_board_set_tracked_npc` →
+    `police_board_set_taxi_passenger`, `police_manager_get_num_of_offences` →
+    `police_manager_get_capture_count`, `game_vehicle_track_tick` → `game_car_gun_tick`,
+    `car_post_hit_net_event_msg` → `car_post_tyre_burst_net_event_msg`, `event_msg_car_hit_ctor` →
+    `event_msg_tyre_burst_ctor`, `vehicle_set_clutch_gate` → `vehicle_set_automatic_gearbox`,
+    `vehicle_get_forward_ptr` → `vehicle_get_right_axis_ptr`, `game_clear_frame_from_fire` →
+    `game_clear_frame_from_bullet_holes`, `recorder_names_free_row_array` /
+    `recorder_names_free_buffers` → `recorder_tck_record_free_vectors` /
+    `recorder_anim_object_free_vectors`, `ai_wayfind_set_checkpoint_container` /
+    `ai_wayfind_clear_checkpoint_container` → `ai_wayfind_set_blocked_cons` /
+    `ai_wayfind_clear_blocked_cons`;
+  - the `car_database` static-init trio in the house form: `car_database_static_ctor_call`,
+    `car_database_static_atexit_register`, `car_database_static_dtor_call` →
+    `car_database_static_ctor`, `car_database_register_atexit_dtor`, `car_database_static_dtor`;
+  - two bodies shared by several classes marked as folded: `wagon_init` → `folded_actor_init_bool`,
+    `track_apply_rigid_pose_at_clock` → `folded_track_apply_rigid_pose_at_clock`.
+- Data names (2): `g_ai_wayfind_checkpoint_container` → `g_ai_wayfind_blocked_cons`,
+  `g_event_msg_vt_car_hit` → `g_event_msg_vt_tyre_burst` (the type `0x2c` message carries the index
+  of the wheel a shot burst).
+- PS2 twins: 2,602 → 2,629 functions mapped; among the new ones seven functions mapped to
+  `ai_police_nastenka` methods (six `police_board_*` and `thunk_ai_animitem_manager_clear`).
+- Annotated decompilation: the docblocks of the renamed functions rewritten; the `findactor` script
+  command's case docblock describes its three-stage search; docblocks added to the jump thunks
+  `thunk_stream_close` and `thunk_gui_widget_rect_tex_file_dtor`;
+  `collision_test_line_horizontal` cites its own Ghidra id `FUN_005838a0` (`thunk_FUN_005838a0`
+  is its thunk's); `safedisc_jmp_oep` also names its default thunk id.
+- Documentation outside `structs/`: 19 docs updated for the renames and the new field names
+  (`basic/artifacts` 10, `police-system/artifacts` 5, `def-files-docs` 2, `script-mapping/artifacts`
+  2).
+- Ghidra database `ghidra/Game.exe.gzf`: every rename above imported (21 functions, 2 data labels).
+- README: the `structs/` count (115) and file list follow the new and renamed docs; the function
+  names row states the measured provenance (5,010 of the 5,010 functions Ghidra left as `FUN_`
+  keep that id) instead of "each docblock keeps `Renamed from FUN_xxxxxxxx`".
+
 ## 2026.10.13.1 — lap-glitch document trimmed
 
 - `basic/artifacts/racing/lap-gates-and-lap-glitch.md`: the "Community claims assessed" section

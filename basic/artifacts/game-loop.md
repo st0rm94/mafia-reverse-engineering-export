@@ -1,6 +1,6 @@
 # Game loop — from the CRT entry point to player interaction
 
-**Created** 2026-07-19 11:24 +0200 · **Modified** 2026-10-12 19:38 +0200
+**Created** 2026-07-19 11:24 +0200 · **Modified** 2026-11-01 19:11 +0100
 
 Two nested loops run the whole game: `engine_main`, the outer menu / mission state machine, and
 `engine_game_loop`, the inner per-frame loop a mission runs inside. Every function named below has
@@ -16,7 +16,7 @@ crt_startup              entry, 0x00626f1a   CRT bootstrap
            ├─ CreateMutexA("Mafia Launcher Super Mutex Shit")   single-instance guard
            ├─ the TEV and CD checks, then the exception handlers
            ├─ reads HKLM\Software\Illusion Softworks\Mafia → "LS3D_setup" over the defaults;
-           │  without a valid blob (0x3f bytes, tag 0x14) it starts setup.exe and returns
+           │  without a 0x3f-byte value it starts setup.exe and returns
            ├─ engine_init, then six persisted quality settings into C_mission+0x90
            └─ do { gui_menu_execute_modal(1) → switch(result) } while (no exit code)
                   case 0x12 → intro, then mise01
@@ -28,10 +28,11 @@ calling `engine_game_loop`, which returns only when the mission ends or the ESC 
 On the way out `engine_main` copies the live settings back into `g_ls3d_setup`, writes the registry
 value and calls `engine_shutdown`.
 
-When the registry key, the `LS3D_setup` value, its `0x3f`-byte size or its `0x14` version tag is
-missing, `engine_main` starts `setup.exe` through `crt_spawnlp` with mode 1 and returns. Mode 1
+When the registry key, the `LS3D_setup` value or its `0x3f`-byte size is missing, `engine_main` starts `setup.exe` through `crt_spawnlp` with mode 1 and returns. Mode 1
 does not wait (`crt_dospawn` waits only for mode 0), so the game process ends while the setup
-program runs. In game, deleting the value and starting the game opens `setup.exe`.
+program runs. In game, deleting the value and starting the game opens `setup.exe`. The `0x14` test
+at `0x005f9aa5` reads the global, not the value, so a value's tag is not tested
+(`structs/app_bootstrap.md` §9).
 
 | menu result | what it starts |
 |---|---|
@@ -201,7 +202,7 @@ frames to settle after a state change. Its complete writer set: `mission_open` s
 it is lower — `recorder_stop` to 4, `recorder_end_sequence_and_restore_scene` to 2, and the script
 commands `recloadfull` and `recunload` to 1 and 2 through the accessor pair. `mission_open` also
 mutes the sound manager and sets the latch `g_act_mission+0x7c`; `mission_tick` restores the
-volume on the first frame the counter is below 1 (`structs/mission.md` §3d).
+volume on the first frame the counter is below 1 (`structs/mission.md` §5d).
 
 ## 6. Globals the loop touches
 

@@ -1,6 +1,6 @@
 # police_board_tick / police_action_tick — the pursuit-squad tick
 
-**Created** 2026-07-10 22:15 +0200 · **Modified** 2026-10-06 20:32 +0200
+**Created** 2026-07-10 22:15 +0200 · **Modified** 2026-11-08 22:21 +0100
 
 Companion to `police-system/artifacts/police-manager.md` (the player-side `police_manager` engine);
 this doc covers the **squad-side** per-frame engine: how the tick propagates method to method, and
@@ -24,13 +24,13 @@ This is the squad side.
    and adds `dt_ms` to the sighting accumulator `squad+0x44` while the target is perceivable.
    In the fast path of the in-car tiers 0/2/4 (`squad+0x34 == 0`) the refresh also requires
    `pursuit_event_record_is_chase_tracking_by_vehicle(squad+0x5c)` to return 0; that call
-   returns the mode timer of the squad car's hunt record (`structs/pursuit-event-manager.md` §3),
+   returns the mode timer of the squad car's hunt record (`structs/pursuit_event.md` §4a),
    which runs while the car hunts. It is the function's only call of that getter: the
    line-of-sight branches, taken when `+0x34` is set, refresh both fields without it.
 2. **The tier switch (tiers 0..7)** — distance-gated officer event dispatch, the fine → handcuffs
    escalation (§2), chase (re)dispatch via the `pursuit_event_*` family, and self-disband
    (`police_board_end_pursuit`). The behaviour of every tier (in car / on foot, officer events,
-   disband rules) is tabled in `structs/police-action.md` §3; a second switch on the same field
+   disband rules) is tabled in `structs/police-action.md` §4; a second switch on the same field
    stages the on-foot arrest in tiers 0/2/4.
 
 Base chain: `game tick → police_board_tick → police_action_tick → {sighting_timers, state FSM}`.

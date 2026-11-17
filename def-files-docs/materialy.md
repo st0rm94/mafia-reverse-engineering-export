@@ -1,6 +1,6 @@
 # `tables\materials.def` — surface / material table
 
-**Created** 2026-06-04 11:16 +0200 · **Modified** 2026-10-11 18:25 +0200
+**Created** 2026-06-04 11:16 +0200 · **Modified** 2026-11-01 10:31 +0100
 
 The collision **surface-material table**. Each numeric id names one record. Ids are used as a
 **byte** throughout the engine: a collision contact stores the hit geometry's material id, which
@@ -35,7 +35,7 @@ reference. The original is in Czech; the table below is translated to English.
 * Record `+0x3c` is the **bullet-mark decal index** and `+0x40` the **hit-particle id**:
   `game_tick_shoot` places decal `+0x3c` at a bullet impact (when it lies in 0..9) and passes
   `+0x40` to `particle_manager_create_particle` (when it is not negative). `-1` means none. The
-  shipped file's decal indices (`structs/blood.md` §5d for the textures):
+  shipped file's decal indices (`structs/blood.md` §7d for the textures):
 
   | decal | texture | material ids |
   |---|---|---|
@@ -54,7 +54,7 @@ reference. The original is in Czech; the table below is translated to English.
 `car_load_materials` copies the block at `+0x108` .. `+0x12c` of every record, clamped, into one
 `S_VEH_MATERIAL` (`0x30` bytes) per material id and hands the list to `vehicle_set_materials`, which
 keeps it at `g_vehicle_materials_begin` and fills the 256-byte reverse index
-`g_vehicle_material_index_by_id` (material id to list position; `structs/vehicle.md` §6a). Every
+`g_vehicle_material_index_by_id` (material id to list position; `structs/vehicle.md` §8a). Every
 vehicle consumer reads a field through that index.
 
 | material record | `S_VEH_MATERIAL` | clamp | default ¹ | meaning | consumer |
@@ -152,8 +152,8 @@ death. Id 44 is the wet-road handling material and is distinct from id 31. `car_
 
 `police-system/artifacts/offences.md` — the sidewalk offence (material id 3) ·
 `structs/crash_obj.md` — a consumer that resolves surface material ids through this table ·
-`structs/blood.md` §5 — the decal pool the bullet marks go into ·
-`structs/vehicle.md` §6a — the `S_VEH_MATERIAL` list and its index ·
+`structs/blood.md` §7 — the decal pool the bullet marks go into ·
+`structs/vehicle.md` §8a — the `S_VEH_MATERIAL` list and its index ·
 `def-files-docs/vehicles-bin.md` — the CARINIT own-friction pair that overrides `+0x108` / `+0x10c`.
 
 ## 4. Open items

@@ -1,6 +1,6 @@
 # Player context interactions & the action menu
 
-**Created** 2026-06-20 16:26 +0200 · **Modified** 2026-10-05 21:40 +0200
+**Created** 2026-06-20 16:26 +0200 · **Modified** 2026-11-16 21:19 +0100
 
 How the "use/interact" button works: how the game decides *which* actions are available where the
 player is standing, how it shows the choose-action menu when there is more than one, and how the
@@ -145,7 +145,7 @@ Separate from interactions but also driven from `player_ai`: `actor+0xad0` is a 
 | raise | `player_add_shot_accuracy_penalty` (`0x004ccd20`); both call sites are inside the weapon-fire tick `human_shooting` (`0x004a4b70`), right after `police_manager_register_gunfire_offence_for_target` + `inventory_get_in_hand_item_def`, gated `actor == player` ¹ |
 | decay | `player_ai` decays it toward 0 each frame on foot (the same block inline) |
 | display | both push `intensity*3 + 1` to `hud_set_player_accuracy`, which sizes the HUD element gated by `hud_state+0x90a4` bit `0x20` (renderer reads `+0x9234 * 4 * +0x90c0`) |
-| mirror | the raw intensity is also written to `C_game+0xd8` (`*(g_act_mission+0x24) + 0xd8`) by both writers; nothing reads it: of the 353 instructions in `.text` with displacement `0xd8`, the only two whose base is the `C_game` are these two stores |
+| mirror | the raw intensity is also written to `C_game+0xd8` (`*(g_act_mission+0x24) + 0xd8`) by both writers. It is the camera's `aim_spread` (`G_Camera` at `C_game+0x4c`, its `+0x8c`, `structs/camera.md` §2): `camera_tick` scales the sniper-scope sway by it in mode 5, and `camera_apply_desired_pos` offsets the look target by it in its swing branch. Both read it as camera `+0x8c`, which is why, of the 353 instructions in `.text` with displacement `0xd8`, the only two whose base is the `C_game` are these two stores |
 
 ¹ The kick is per weapon (`weapon_record+0x84`), clamped to 1.0, ×0.1 in world mode 5, and arms a
 3000 ms window at `actor+0xad4`.

@@ -1,6 +1,6 @@
 # Racing mode — the PC feature that was cut at the last minute
 
-**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-10-12 19:38 +0200
+**Created** 2026-08-16 07:38 +0200 · **Modified** 2026-11-01 23:53 +0100
 
 Class layouts: `structs/racing.md`, `structs/racecam.md`, `structs/race_session.md`,
 `structs/racing_menus.md`.
@@ -35,7 +35,7 @@ The PC release has no Racing item on its main menu, and the received story is th
 | `tables/circuits.def` — 11 circuits (§5a) | the track preview maps (`circuit%d.bmp`) |
 | `tables/championship.def` — 7 rounds (§5b) | the `Racing` menu item — absent from `menu.def` **and** deleted by the exe (§3) |
 | every racing `textdb` string (`Racing`, `Racing:`, `DNF`, `ROUND n`, the class names, the lap/position/best-time labels) | - |
-| the race HUD widgets (`hud_set_race_*`, 7 CONFIRMED twins in `structs/hud.md` §4) | - |
+| the race HUD widgets (`hud_set_race_*`, 7 CONFIRMED twins in `structs/hud.md` §3) | - |
 | `racestart.bmp` / `racewrong.bmp` (loaded by `hud_create`), `records\recordrace.rep`, `difrace.chg` | - |
 | **`FormuleVolant.I3D`** — the open-wheel steering-wheel driver rig, selected by `game_add_driver_man`'s trailing bool against the ordinary `AutoRidicVolant.I3D`. Racing-only content, in the retail exe's string table | - |
 | the script commands `RACING_CHANGE_MODEL`, `RACING_AUTOINVISIBLE`, `RACING_MISSION6_START`, `RACING_MISSION6_INIT` — the last two used by mission 6 (§8) | - |
@@ -116,7 +116,7 @@ So the mod:
    screen's own child vector, and `gui_main_menu_ctor` is building the main menu, so both
    redirected calls are no-ops there. It does mean the racing mod leaves the Racing menu's
    Multiplayer entry **untouched and clickable**, which is the shortest route to the
-   multiplayer front end in a modded install (`structs/multiplayer.md` §1).
+   multiplayer front end in a modded install (`structs/multiplayer.md` §4).
 2. ships a `menu.def` that is 36 bytes larger — **exactly one extra `meti` record**, id
    `0xf1b9b`, text id `0x6a` = "Racing", inserted into the main-menu window.
 
@@ -226,9 +226,9 @@ the pair, because it needs each car's class bitmask (`+0x88` of the entry).
 | `C_racecam` (entity kind `0x1c`) | `[0x004d33d0, 0x004d35c0)` — 9 starts, all named |
 | the six racing classes + the free comparators | `[0x0060b770, 0x00617a60)` — 131 starts, all named (`structs/racing.md`) |
 | the racing segment subsystem | `[0x005c9750, 0x005ca150)` — 8 starts, all named: `racing_optimal_segment_ctor`, `racing_record_segment_points`, `racing_create_segments`, `racing_save_segments`, `racing_load_segments`, `racing_clear_segments`, `racing_get_segment_bank_for_car`, `racing_finish_segment_and_advance` |
-| the racing MENU screens | `[0x00566280, 0x0056adc0)` = the `g_m_race.cpp` translation unit — 14 `GM_Menu` subclasses, designs `0x16`..`0x23`, 40 starts, all named (`structs/racing_menus.md`). The root menu is `gui_race_root_ctor` (vtable `0x0063d434`, design `0x16`) with the tick `gui_race_root_tick`, driven by `race_menu_run`; its item `0xf1ccd` is where `net_multiplayer_run` is wired |
+| the racing MENU screens | `[0x00566250, 0x0056adc0)` = the `g_m_race.cpp` translation unit — 14 `GM_Menu` subclasses, designs `0x16`..`0x23`, 40 starts after the CRT pair, all named (`structs/racing_menus.md`). The root menu is `gui_race_root_ctor` (vtable `0x0063d434`, design `0x16`) with the tick `gui_race_root_tick`, driven by `race_menu_run`; its item `0xf1ccd` is where `net_multiplayer_run` is wired |
 | the race replay / difficulty profile | `race_winners_replay_begin` (`0x005947e0`) — owns `difrace.chg` and `records\recordrace.rep` |
-| the race HUD widgets | `structs/hud.md` §4 — 7 CONFIRMED twins |
+| the race HUD widgets | `structs/hud.md` §3 — 7 CONFIRMED twins |
 | multiplayer racing | 12 `C_racing` functions plus a session object with a human-player list and an AI-opponent list, and seven kinds of event message (`structs/net_session.md`) |
 
 The PC emits `C_racecam.cpp` right after `C_pumper.cpp` and then jumps to the rail family, and
@@ -247,8 +247,9 @@ non-polymorphic, so no vtable-sequence method can see them.
   `+0x90` against PS2 `+0x8c` / `+0xb4`.
 * **`carcyclopedia.def`** is 200 B per car on PC, 204 on PS2; the car list is 0xa4 on PC
   against 0xa8 on PS2, and the player/driver-model table is 0x24 on both.
-* **Two PS2 racing-menu classes have no PC counterpart:** `GM_DamageDifficulty` (the PC
-  toggles damage inline) and `GM_GameMenuRacing`.
+* **One PS2 racing-menu class has no PC counterpart:** `GM_DamageDifficulty` (the PC toggles
+  damage inline). `GM_GameMenuRacing` is `gui_racing_game_menu_ctor`, in the unit of
+  `structs/game_menus.md`, opened by `race_game_loop` and `race_game_loop_net`.
 * The PS2 main menu exposes a Racing mode — championships, single races, best times, a track
   roster; the PC build removes the item in both the data and the code (§3).
 * **`circuits.def`** has the same 0x88-byte record on both builds.
@@ -264,8 +265,8 @@ Mission 6's `GameInitStart` script (MISE06-AUTODROM) runs `racing_mission6_init 
 `race_mission6_init` constructs `g_racing` when it is NULL, selects circuit 0 (Racing Circuit
 Long, the `mise06-autodrom` scene), writes `g_racing+0x28 = 2` and `g_racing+0x2c = 3`, stores the
 lap count and the player's car model, generates the opponents and enables damage; `racing_mission6_start` then runs the race from
-`game_tick` (`structs/race_session.md` §4). The mission's `scene2.bin` carries 26 `C_racecam`
-actors, and they register with the camera because `g_racing` is set (`structs/camera.md` §3b).
+`game_tick` (`structs/race_session.md` §6). The mission's `scene2.bin` carries 26 `C_racecam`
+actors, and they register with the camera because `g_racing` is set (`structs/camera.md` §4b).
 **Confirmed in game:** after the race finishes, the player watches the other racers from those
 trackside cameras. Each camera record also carries three designer floats (70.0, 70.0, 1.0) that
 no code reads on either build (`structs/racecam.md` §2a); the camera choice uses only the frame

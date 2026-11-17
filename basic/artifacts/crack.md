@@ -1,6 +1,6 @@
 # The Mafia PC executables — SafeDisc, the two cracks, and what is authentic
 
-**Created** 2026-08-20 12:18 +0200 · **Modified** 2026-10-12 19:38 +0200
+**Created** 2026-08-20 12:18 +0200 · **Modified** 2026-11-01 22:25 +0100
 
 Read this before any byte-level claim about `Game.exe`, before any "the original binary does X"
 statement, and before diffing the PC exes against each other.
@@ -132,10 +132,11 @@ To make a standalone no-CD executable from the retail file, both groups had to:
 SafeDisc keeps its own saved copy of them at `0x006ff009`
 (`g_safedisc_saved_data_directories`), and the bytes read
 `a8 4f 24 00 c8 00 00 00 00 b0 23 00 54 02 00 00` = Import RVA `0x00244fa8` size `0xc8`,
-IAT RVA `0x0023b000` size `0x254` — byte for byte what §3b derives from the header diff. The
-stub function `safedisc_restore_import_directory` writes them back at run time; the cracker
-simply persisted the post-restore state. Two artifacts, two methods, one answer
-(`structs/safedisc_stub.md` §9).
+IAT RVA `0x0023b000` size `0x254` — byte for byte what §3b derives from the header diff. Two
+artifacts, two methods, one answer (`structs/safedisc_stub.md` §9). The stub function
+`safedisc_restore_import_directory` writes them at run time into a heap copy of the PE headers,
+which `safedisc_run` hands to the export of the extracted DLL and then frees
+(`structs/safedisc_stub.md` §4); what that export does with the copy is open (§12).
 
 **Consequence worth remembering:** our `.data` is a *snapshot* taken at the OEP, not the linked
 initial image. Nothing of the CRT has run yet at `crt_startup`, so the two are expected to agree,
@@ -474,7 +475,7 @@ retail and both cracked builds, so all of this shipped from Illusion Softworks.
 search.** `Game.exe` imports **no dialog API at all** — no `DialogBoxParamA`, no
 `CreateDialogParamA`, no `DialogBoxIndirectParamA`, no `EndDialog`. From `user32.dll` it imports
 exactly two resource functions, `LoadStringA` (`0x0063b218`) and `LoadIconA` (`0x0063b21c`), which
-are the two `structs/app_bootstrap.md` §3 documents. The Illusion DLLs cannot supply the gap either:
+are the two `structs/app_bootstrap.md` §6 documents. The Illusion DLLs cannot supply the gap either:
 `LS3DF.dll` imports `LoadMenuA` but no dialog creator, and `IJoy.dll` / `INet.dll` import none.
 Nothing in the shipped product can instantiate either dialog, and nothing loads `MENU/#103`:
 `LS3DF.dll`'s single `LoadMenuA` call loads menu `0x7b` from the module named `LS3D.DLL`.
@@ -493,3 +494,4 @@ would have mailed diagnostics home.
 | the 0x30-byte gap before `Where is the weed?` and its odd start `0x501` (§5b) | measured, not attributed; a 20-byte write of `\0Where is the weed?\0` at `0x500` would produce exactly this layout |
 | `Where is the weed?` in other Mafia builds (§6) | not examined: the 1.1 patch executable, a demo, other territory releases. A retail-provenance file carrying the string would be new evidence |
 | the two bytes the `Game-norng.exe` patch overwrites before `rand_float` (§7d) | no function start is recorded there and the build is in community use; whether they are dead is not verified |
+| the extracted DLL's use of the header copy (§4) | `safedisc_run` passes the edited copy to the export `Ox12121212` of `~df394b.tmp`. Whether the export writes it to the loaded image was not read; the file decrypts offline (`structs/safedisc_stub.md` §6) |

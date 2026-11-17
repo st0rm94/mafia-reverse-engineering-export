@@ -1,6 +1,6 @@
 # The Illusion DLLs — what is NOT in `Game.exe`
 
-**Created** 2026-08-14 09:10 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-08-14 09:10 +0200 · **Modified** 2026-11-01 19:11 +0100
 
 This documents the PC build. PS2 material is confined to §6.
 
@@ -35,7 +35,7 @@ The ten `ijoy.dll` / `inet.dll` / `rw_data.dll` import thunks at `[0x006248a8, 0
 the 29 `ls3df.dll` thunks at `[0x006242e0, 0x006243ac)` keep their import spellings
 (`S_vector::` / `S_matrix::` / `I3D_frame::` for the latter): the bodies are in the DLLs, so no
 behaviour-derived name can be body-diffed, and the import string is the only authority for what
-each entry point does (`structs/crt_runtime_tail.md` §3 and §7).
+each entry point does (`structs/crt_runtime_tail.md` §8 and §10).
 
 ---
 
@@ -121,7 +121,7 @@ the PC decomp. `Open(const char*, u32)` at vtable `+0x50`, `SetTo(I3D_frame*)` a
   they return are the `g_renderer` / `g_i3d_driver` family at `0x006f9520`, `g_engine`
   (`0x006f9528`, the `IGraph` interface) and the sound driver. Those are DLL objects too: `Game.exe`
   holds none of their method bodies, but the shipped `LS3DF.dll` does, so a vtable slot can be
-  identified from the DLL's own body — `structs/app_bootstrap.md` §3a does so for five `IGraph`
+  identified from the DLL's own body — `structs/app_bootstrap.md` §6a does so for five `IGraph`
   slots.
 
 ---
@@ -130,7 +130,7 @@ the PC decomp. `Open(const char*, u32)` at vtable `+0x50`, `SetTo(I3D_frame*)` a
 
 **`inet.dll`** — one import, `_CreateINetBase@4`. Same factory shape. The whole networking
 transport is outside `Game.exe`, while the *per-class replication bodies* are in the exe
-(`structs/bottle.md` §3a).
+(`structs/bottle.md` §9a).
 
 **`rw_data.dll`** — the `.dta` archive layer, 8 imports:
 `_dtaCreate@4` · `_dtaOpen@8` · `_dtaOpenWrite@8` · `_dtaClose@4` · `_dtaRead@12` ·

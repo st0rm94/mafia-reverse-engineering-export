@@ -1,6 +1,6 @@
 # Storing cars in the garage
 
-**Created** 2026-10-05 22:01 +0200 · **Modified** 2026-10-05 22:01 +0200
+**Created** 2026-10-05 22:01 +0200 · **Modified** 2026-10-31 10:53 +0100
 
 How the PC build of Mafia decides which cars go into the player's garage when a mission ends,
 where the "garage area" comes from, how big it is and which cars it refuses. The other build is
@@ -33,7 +33,7 @@ A mission directory holds two scene files, and `mission_open` loads them in this
 | file | what it is | how the game reads it |
 |---|---|---|
 | `scene.4ds` | the mission's 3D scene: geometry and the frame hierarchy | `mission_open` opens `missions\<mission>\scene.i3d` through the scene object, which loads the `.4ds` on disk |
-| `scene2.bin` | the placement layer: frames with positions, the models they load, lights, sounds, object definitions, scripts (`structs/mission.md` §4a) | `mission_open_bin`; each frame record looks its frame up by name, edits it when it exists and creates it when it does not |
+| `scene2.bin` | the placement layer: frames with positions, the models they load, lights, sounds, object definitions, scripts (`structs/mission.md` §6a) | `mission_open_bin`; each frame record looks its frame up by name, edits it when it exists and creates it when it does not |
 
 A model that a `scene2.bin` record loads onto a frame brings its own frames with it, named with that
 frame's name as a prefix. Every city mission places the frame `watercity` with the model
@@ -167,7 +167,7 @@ the radar and the scene — and its slot keeps only the packed id.
   area even when no screen says so.
 * **The discard screen.** Only when the mission is ending under script control — `C_game+0x3665`, set
   by both `change_mission` and `endofmission` — and more than 16 cars survive, the "The garage is
-  full" screen opens until the count fits (`structs/garage.md` §3a).
+  full" screen opens until the count fits (`structs/garage.md` §5a).
 * **The results screen.** "New cars have been added to the garage" / "Cars destroyed during the
   mission" (`garage_show_results`) needs the same script-controlled end **and** `garage+0x1cc`, which
   only the script command `garage_show` sets. Fifteen missions run it, among them `MISE05-MESTO`

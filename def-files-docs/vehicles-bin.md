@@ -1,6 +1,6 @@
 # `tables\vehicles.bin` — per-car physics / CARINIT data (exhaustive field map)
 
-**Created** 2026-07-09 21:46 +0200 · **Modified** 2026-10-12 20:59 +0200
+**Created** 2026-07-09 21:46 +0200 · **Modified** 2026-11-08 22:21 +0100
 
 The master **car parameter file**: one record per car model, each holding one or more **CARINIT
 levels** (tuning stat blocks). A car with **two** levels is *boostable* — level 0 is the normal
@@ -35,7 +35,7 @@ u32 block_size = 0x1121 (4385)
 u8  carinit[0x1121]
 ```
 The block is the car's packed save record (`STCars`, `0x111d` bytes, packed without alignment)
-followed by 4 bytes no reader touches. `car_load_model_level_tables` reads it and
+followed by 4 bytes whose reader is not established (§9). `car_load_model_level_tables` reads it and
 `car_unpack_save_record` expands it into an `S_CARINIT` (`0x1124` bytes, aligned, some arrays
 transposed); `car_pack_save_record` is the inverse, and the mission save stream stores the same
 record. Every offset below is an offset into the packed block. The layout tiles all 103 shipped level
@@ -47,7 +47,7 @@ blocks with no overlap, and every 16-byte name slot holds a NUL-terminated filen
 | Axle records | `0x120`-`0x5C5` | 10 records of `0x77` bytes, one per axle (§4b) |
 | Scalar block | `0x5C6`-`0x7C7` | packed scalars (§4c) |
 | Sound records | `0x7C9`-`0x111C` | filename slots and engine-sound records (§4d) |
-| Unread | `0x7C8`, `0x111D`-`0x1120` | 0, and `00 00 00 18`, in every block |
+| Unread | `0x7C8`, `0x111D`-`0x1120` | 0, and `00 00 00 18`, in every block; the last dword of the unpacked `S_CARINIT` (`+0x1120`..`+0x1123`) is the four exterior crash mute bytes (`C_Vehicle+0xc98`..`+0xc9b`), and whether it is loaded from this range is not measured (§9) |
 
 Every field of the `blackha` (Falconer) block is enumerated below. In each table **boost** =
 `**YES**` when the four bytes differ between level 0 and level 1, `-` when they are identical.
@@ -209,7 +209,7 @@ consumer reads through one of its array loops. A range row lists its fields' val
 | `+0x5EB` | i32 | `+0x2a4` | 20 | 20 |
 | `+0x5EF` | u8 | `+0x2a8` | 0 | 0 |
 | `+0x5F0` | u8 | `+0x2a9` | 0 | 0 |
-| `+0x5F1` | u8 | - | 0 | 0 |
+| `+0x5F1` | u8 | `+0x138`: 2 when set, else 0 | 0 | 0 |
 | `+0x5F2` | f32 | `+0x18` | 1 | 1 |
 | `+0x5F6` | u8 | `+0x119` | 1 | 1 |
 | `+0x5F7` | i32 | `+0x4dc` | 12 | 12 |
@@ -217,19 +217,19 @@ consumer reads through one of its array loops. A range row lists its fields' val
 | `+0x5FF` | f32 | `+0x4e8` | 0.8 | 0.8 |
 | `+0x603` | f32 | `+0x4ec` | 2.4 | 2.4 |
 | `+0x607` | f32 | `+0x344` | 0 | 0 |
-| `+0x60B` .. `+0x60F` | f32 ×2 | - | 3 -4 | 3 -4 |
+| `+0x60B` .. `+0x60F` | f32 ×2 | `+0x348`, `+0x34c` | 3 -4 | 3 -4 |
 | `+0x613` | f32 | `+0x350` | 2 | 2 |
-| `+0x617` | u8 | - | 0 | 0 |
-| `+0x618` .. `+0x628` | f32 ×5 | - | 0.7 0.1 0.7 0.1 0.03 | 0.7 0.1 0.7 0.1 0.03 |
+| `+0x617` | u8 | `+0x1bd` | 0 | 0 |
+| `+0x618` .. `+0x628` | f32 ×5 | every wheel's `+0x1a8`, `+0x1a4`, `+0x1b0`, `+0x1ac`, `+0x1b4`, in that order | 0.7 0.1 0.7 0.1 0.03 | 0.7 0.1 0.7 0.1 0.03 |
 | `+0x62C` | f32 | `+0x240` km/h | 120 | 120 |
-| `+0x630` .. `+0x634` | f32 ×2 | - | 25 100 | 25 100 |
+| `+0x630` .. `+0x634` | f32 ×2 | `+0x244` km/h, `+0x238` | 25 100 | 25 100 |
 | `+0x638` | f32 | `+0x23c` | 45 | 45 |
 | `+0x63C` | f32 | `+0x22c` | 0.4 | 0.4 |
 | `+0x640` | f32 | `+0x248` | 60 | 60 |
 | `+0x644` | f32 | `+0x24c` | 30 | 30 |
 | `+0x648` | f32 | `+0x250` km/h | 35 | 35 |
 | `+0x64C` | i32 | `+0x254` | 13 | 13 |
-| `+0x650` | i32 | - | 14 | 14 |
+| `+0x650` | i32 | `+0x258` | 14 | 14 |
 | `+0x654` | f32 | `+0x278` km/h | 120 | 120 |
 | `+0x658` | f32 | `+0x27c` km/h | 25 | 25 |
 | `+0x65C` | f32 | `+0x270` | 100 | 100 |
@@ -261,8 +261,9 @@ consumer reads through one of its array loops. A range row lists its fields' val
 * `+0x5F6` is the roof flag (`C_Vehicle+0x119`, = `C_car+0x189`). It is clear on the 27 open bodies
   (roadsters, phaetons, speedsters, tourers, pickups, hot rods, race cars) and set on the other 62;
   `car_on_collision_apply_damage` applies its hit-from-above occupant damage only to cars without it.
-* `+0x617` set (`FThot`, `toyota`, `xedos`) switches off the surface bumps of
-  `def-files-docs/materialy.md` §1a for the car (`C_Vehicle+0x1bd`).
+* `+0x617` set (`FThot`, `toyota`, `xedos`) replaces the surface bumps of
+  `def-files-docs/materialy.md` §1a with the wheels' own bump ranges (`C_Vehicle+0x1bd`; wheel
+  `+0x1a4`..`+0x1b4`, the five floats `+0x618`..`+0x628`).
 * `+0x67C`-`+0x688` go to the `C_car`, not to the `C_Vehicle`; the first two are scaled by
   `C_car+0x6e0` and converted from km/h on load.
 
@@ -345,6 +346,12 @@ The `blackha` filenames (a slot whose first byte is NUL is empty even when text 
 | `+0x1069`-`+0x10E8` | `crashA1` / `crashA2`, `crashK1` / `crashK2`, `crashB1` / `crashB2`, `crashC1` / `crashC2` (`.wav`), params 1.5 / 2.5 / 9 / 35 | - |
 | `+0x10FD` / `+0x110D` | `door04op.wav` / `door04cl.wav` | - |
 
+The ten exterior filename slots at `+0xFC9` feed, in order, the exterior handles
+`C_Vehicle+0x9fc`..`+0xa1c` and the glass-break name: horn, siren, handbrake, the two gear
+sounds, skid, brake loop, wheel thump, tyre burst, glass (`structs/vehicle.md` §8e). The brake loop
+(`brzdy_loop.wav`) is opened and never started. The slot-to-field order follows from the packing
+and is not measured slot by slot (§9).
+
 ## 5. The boost (level 0 → level 1)
 
 Boost raises **engine power, grip, throttle response and gear behaviour**, and leaves the fields
@@ -394,7 +401,7 @@ variants or shipped DLLs, and the engine reads `vehicles.bin` at the offsets of 
 ## 8. Cross-references
 
 - `police-system/artifacts/boosting.md` — how the pursuit system activates level 1.
-- `structs/pursuit-event-manager.md` — the `C_sledovacka` chase system.
+- `structs/pursuit_event.md` — the `C_sledovacka` chase system.
 - `structs/car.md` and `structs/vehicle.md` — the runtime classes the block is loaded into.
 - `def-files-docs/materialy.md` §1a — the surface values the own-friction pair and the bump switch
   override.
@@ -409,3 +416,5 @@ variants or shipped DLLs, and the engine reads `vehicles.bin` at the offsets of 
 |---|---|
 | the axle-record fields `+0x14`-`+0x58` (the two parameter sets), `+0x5C` and the angles `+0x6B`-`+0x73` | runtime wheel fields and conversions are decoded (§4b); what each one means physically is not established |
 | the scalar-block fields with `-` in §4c | read through the consumer's array loops; not traced field by field |
+| the last 4 bytes of the block, `0x111D`-`0x1120` | the unpacked record's last dword holds the exterior crash mute bytes (§3); whether this range is what fills it is not measured |
+| the sound-record filename slots | their order against the `C_Vehicle` handles is inferred from the packing (§4d), not measured slot by slot |

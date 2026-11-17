@@ -188,7 +188,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 178 | 0x00425440 | vehicle_get_speed |  |
 | 179 | 0x00425450 | vehicle_get_velocity_ptr |  |
 | 180 | 0x00425460 | vehicle_get_seat_count |  |
-| 181 | 0x00425490 | vehicle_get_forward_ptr |  |
+| 181 | 0x00425490 | vehicle_get_right_axis_ptr |  |
 | 182 | 0x004254a0 | car_get_fuel_tank_world_pos |  |
 | 183 | 0x004254e0 | traffic_car_get_registry_header_addr |  |
 | 184 | 0x004254f0 | ambient_ai_set_suspended |  |
@@ -207,8 +207,8 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 197 | 0x004256b0 | ai_path_is_abandoned |  |
 | 198 | 0x004256c0 | ai_path_has_blocked_con |  |
 | 199 | 0x004256d0 | ai_path_get_state |  |
-| 200 | 0x004256e0 | ai_wayfind_set_checkpoint_container |  |
-| 201 | 0x004256f0 | ai_wayfind_clear_checkpoint_container |  |
+| 200 | 0x004256e0 | ai_wayfind_set_blocked_cons |  |
+| 201 | 0x004256f0 | ai_wayfind_clear_blocked_cons |  |
 | 202 | 0x00425700 | door_get_state |  |
 | 203 | 0x00425710 | human_get_actor_speed | C_human::GetActorSpeed |
 | 204 | 0x00425730 | actor_get_vehicle |  |
@@ -322,7 +322,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 312 | 0x00432f60 | entity_do_shoot_timed | C_entity::Do_Shoot_Timed |
 | 313 | 0x00433030 | entity_weapon_timing_setup | C_entity::WeaponTimingSetup |
 | 314 | 0x00433170 | entity_release_target | C_entity::InvalidateActor |
-| 315 | 0x00433290 | entity_rebind_neck_bone_handle | C_entity::InvalidateSelf |
+| 315 | 0x00433290 | entity_rebind_neck_frame | C_entity::InvalidateSelf |
 | 316 | 0x004332d0 | entity_can_safe_shoot | C_entity::CanSafeShoot |
 | 317 | 0x00433910 | entity_trace_human_scent | C_entity::TraceHuman |
 | 318 | 0x004339e0 | entity_add_using_object | C_entity::AddUsingObject |
@@ -521,11 +521,11 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 511 | 0x004474a0 | police_board_end_pursuit | ai_police_nastenka::AkceDokoncenaPlukovniku |
 | 512 | 0x00447610 | police_board_invalidate_actor | ai_police_nastenka::ZinvalidujAktora |
 | 513 | 0x004477b0 | police_board_tick | ai_police_nastenka::Tick |
-| 514 | 0x00447820 | police_board_arrest_settle_is_zero |  |
+| 514 | 0x00447820 | police_board_arrest_settle_is_zero | ai_police_nastenka::PlukovnikuMasVChladkuPlajeraFrafera |
 | 515 | 0x00447830 | police_board_raise_gun_escalation | ai_police_nastenka::PlukovnikuRadsiHoSejmemNebudemSeSrat |
 | 516 | 0x00447950 | police_board_raise_handcuffs_escalation | ai_police_nastenka::PlukovnikuRadsiHoZatknemNebudemSeSrat |
 | 517 | 0x00447a90 | police_board_disband_by_target | ai_police_nastenka::MamHoZmrdaUzHoNechte |
-| 518 | 0x00447b00 | police_board_clamp_arrest_settle_12s |  |
+| 518 | 0x00447b00 | police_board_clamp_arrest_settle_12s | ai_police_nastenka::PlukovnikuMamZmrdaPlayera |
 | 519 | 0x00447b10 | police_board_promote_handcuffs_escalation | ai_police_nastenka::PanoveZmenaZatkneteHoZmrda |
 | 520 | 0x00447bb0 | police_board_promote_gun_escalation | ai_police_nastenka::PanoveZmenaZabijteHoZmrda |
 | 521 | 0x00447c40 | police_board_update_sighting | ai_police_nastenka::PanoveKokotPremistujePrdel |
@@ -534,16 +534,16 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 524 | 0x00448230 | police_board_has_recent_sighting | ai_police_nastenka::PanoveMateOciNaZmrdoviNeboCumitePoBabach |
 | 525 | 0x00448300 | police_board_has_group_for_target | ai_police_nastenka::PanoveJdeteNekdoPoZmrdovi |
 | 526 | 0x00448350 | police_board_broadcast_for_target | ai_police_nastenka::PanoveJaUzHoVarovalZmetka |
-| 527 | 0x004483b0 | police_board_is_busted_cutscene_active |  |
-| 528 | 0x004483c0 | police_board_set_busted_cutscene_active |  |
+| 527 | 0x004483b0 | police_board_is_busted_cutscene_active | ai_police_nastenka::PanoveHrajeteSiNaPoldy |
+| 528 | 0x004483c0 | police_board_set_busted_cutscene_active | ai_police_nastenka::MakamSefe |
 | 529 | 0x004483d0 | police_board_is_actor_in_pursuit | ai_police_nastenka::SemTrefenaLocklaKurva |
 | 530 | 0x00448470 | police_board_suspend_npcs | ai_police_nastenka::VseckyUbozakyStopni |
 | 531 | 0x00448550 | police_board_resume_npcs | ai_police_nastenka::VseckyUbozakyRozejdi |
-| 532 | 0x00448620 | police_board_has_active_group_for_target |  |
-| 533 | 0x00448680 | police_board_set_tracked_npc |  |
+| 532 | 0x00448620 | police_board_has_active_group_for_target | ai_police_nastenka::HosiPrkynkujete |
+| 533 | 0x00448680 | police_board_set_taxi_passenger | ai_police_nastenka::TuMasZakaznika |
 | 534 | 0x00448690 | police_board_end_all_pursuits | ai_police_nastenka::KonecSmeny |
 | 535 | 0x004486f0 | police_board_release_all_group_vehicles | ai_police_nastenka::ZastavMotorizovaneJednotky |
-| 536 | 0x004487f0 | thunk_ai_animitem_manager_clear |  |
+| 536 | 0x004487f0 | thunk_ai_animitem_manager_clear | ai_police_nastenka::SrackyPryc |
 | 537 | 0x00448800 | ai_animitem_manager_clear | ai_animitem_manager::Clear |
 | 538 | 0x00448900 | ai_animitem_manager_init | ai_animitem_manager::Init |
 | 539 | 0x00448940 | i3d_cache_model_open | C_I3D_cache<9I3D_model>::Open |
@@ -578,7 +578,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 568 | 0x00449e00 | check_seg_clusters_add_segment | check_seg_clusters::AddSegment |
 | 569 | 0x0044a0f0 | check_seg_cluster_ctor | check_seg_cluster::{ctor} |
 | 570 | 0x0044a110 | check_seg_cluster_dtor | check_seg_cluster::{dtor} |
-| 571 | 0x0044a120 | folded_vector_ctor_at_0x04_0044a120 | check_seg::{ctor} |
+| 571 | 0x0044a120 | folded_vector_ctor_at_0x04_0044a120 |  |
 | 572 | 0x0044a140 | check_seg_clusters_init | check_seg_clusters::Init |
 | 573 | 0x0044a200 | check_seg_clusters_clear | check_seg_clusters::Clear |
 | 574 | 0x0044a330 | check_seg_clusters_load | check_seg_clusters::Load |
@@ -674,8 +674,8 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 664 | 0x004516e0 | airplane_ai_tick | C_airplane::AI |
 | 665 | 0x00451990 | airplane_update | C_airplane::Update |
 | 666 | 0x00452000 | quat_multiply |  |
-| 667 | 0x004520e0 | airplane_start_ground_run |  |
-| 668 | 0x004522c0 | airplane_begin_takeoff |  |
+| 667 | 0x004520e0 | airplane_start_ground_run | C_airplane::Start |
+| 668 | 0x004522c0 | airplane_begin_takeoff | C_airplane::Start2 |
 | 669 | 0x004522e0 | airplane_apply_propeller_visibility | C_airplane::InitVrtule |
 | 670 | 0x00452350 | airplane_hit | C_airplane::Hit |
 | 671 | 0x004525d0 | airplane_update_engine_particles | C_airplane::UpdateParticles |
@@ -683,7 +683,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 673 | 0x00452e70 | airplane_get_engine_local_offsets |  |
 | 674 | 0x00453090 | airplane_create_sounds | C_airplane::InitSounds |
 | 675 | 0x00453150 | airplane_destroy_sounds | C_airplane::ReleaseSounds |
-| 676 | 0x00453190 | airplane_is_destroyed |  |
+| 676 | 0x00453190 | airplane_is_destroyed | C_airplane::IsDestroyed |
 | 677 | 0x004531c0 | airplane_save_game_get_size | C_airplane::SaveGameGetSize |
 | 678 | 0x004531d0 | airplane_save_game_save | C_airplane::SaveGameSave |
 | 679 | 0x00453300 | airplane_save_game_load | C_airplane::SaveGameLoad |
@@ -723,7 +723,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 713 | 0x00456530 | box_add_impulse_at_point |  |
 | 714 | 0x00456630 | box_get_contact_state_at_point |  |
 | 715 | 0x00456720 | box_solve_impulse_vs_box |  |
-| 716 | 0x00456b00 | box_solve_impulse_vs_world |  |
+| 716 | 0x00456b00 | box_solve_impulse_vs_car |  |
 | 717 | 0x00456e60 | box_apply_impulse_pair_at_point |  |
 | 718 | 0x00456fb0 | box_on_collision |  |
 | 719 | 0x00457350 | box_hit |  |
@@ -740,7 +740,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 730 | 0x00458c40 | stub_noop_cdecl_00458c40 |  |
 | 731 | 0x00458c50 | thunk_stub_noop_cdecl_00458c60 |  |
 | 732 | 0x00458c60 | stub_noop_cdecl_00458c60 |  |
-| 733 | 0x00458c70 | box_build_inverse_inertia_tensor |  |
+| 733 | 0x00458c70 | box_intersect_segment_side_faces |  |
 | 734 | 0x004592f0 | obb_vs_obb_separating_axis_test |  |
 | 735 | 0x00459820 | box_generate_contacts_vs_box |  |
 | 736 | 0x00459cf0 | vec3_equals |  |
@@ -777,7 +777,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 767 | 0x0045f1a0 | box_new_dtor | C_box_new::{dtor} |
 | 768 | 0x0045f1b0 | box_new_init | C_box_new::Init |
 | 769 | 0x0045f2c0 | box_new_game_init | C_box_new::GameInit |
-| 770 | 0x0045f390 | thunk_physical_object_game_done |  |
+| 770 | 0x0045f390 | thunk_physical_object_game_done | C_box_new::GameDone |
 | 771 | 0x0045f3a0 | box_new_load_data | C_box_new::LoadData |
 | 772 | 0x0045f720 | box_new_save_data | C_box_new::SaveData |
 | 773 | 0x0045f890 | box_new_duplicate_from | C_box_new::DuplicateFrom |
@@ -927,7 +927,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 917 | 0x004758e0 | car_extended_game_done | C_car_ex::GameDone |
 | 918 | 0x00475bc0 | car_extended_load_data_chunk | C_car_ex::LoadData |
 | 919 | 0x00475be0 | car_extended_save_data_chunk | C_car_ex::SaveData |
-| 920 | 0x00475c00 | thunk_car_copy_carinit_from_actor |  |
+| 920 | 0x00475c00 | thunk_car_copy_carinit_from_actor | C_car_ex::DuplicateFrom |
 | 921 | 0x00475c10 | car_extended_add_carried_person | C_car_ex::DCAddPerson |
 | 922 | 0x00475dd0 | car_extended_remove_carried_person | C_car_ex::DCDelPerson |
 | 923 | 0x00475e40 | car_extended_update | C_car_ex::Update |
@@ -969,7 +969,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 959 | 0x00478730 | crash_obj_scalar_deleting_dtor |  |
 | 960 | 0x00478750 | crash_obj_dtor | C_crash_obj::{dtor} |
 | 961 | 0x00478760 | crash_obj_ai | C_crash_obj::AI |
-| 962 | 0x00478c10 | thunk_actor_save_game_get_size |  |
+| 962 | 0x00478c10 | thunk_actor_save_game_get_size | C_crash_obj::SaveGameGetSize |
 | 963 | 0x00478c20 | crash_obj_save_game_save | C_crash_obj::SaveGameSave |
 | 964 | 0x00478c40 | crash_obj_save_game_load | C_crash_obj::SaveGameLoad |
 | 965 | 0x00478c60 | crash_obj_init | C_crash_obj::Init |
@@ -1138,7 +1138,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1128 | 0x0048aa40 | dropout_init_box | C_DropOut::InitBox |
 | 1129 | 0x0048aa60 | dropout_on_collision | C_DropOut::Collision |
 | 1130 | 0x0048aaa0 | dropout_hit | C_DropOut::Hit |
-| 1131 | 0x0048aaf0 | track_apply_rigid_pose_at_clock |  |
+| 1131 | 0x0048aaf0 | folded_track_apply_rigid_pose_at_clock |  |
 | 1132 | 0x0048ada0 | dropout_track_create |  |
 | 1133 | 0x0048adc0 | dropout_track_record_key |  |
 | 1134 | 0x0048af00 | crt_static_init_guard_0048af00 |  |
@@ -1146,7 +1146,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1136 | 0x0048af30 | grenade_ctor | C_grenade::{ctor} |
 | 1137 | 0x0048af60 | grenade_scalar_deleting_dtor |  |
 | 1138 | 0x0048af80 | grenade_dtor | C_grenade::{dtor} |
-| 1139 | 0x0048af90 | bottle_subclass_init_require_frame |  |
+| 1139 | 0x0048af90 | bottle_subclass_init_require_frame | C_grenade::Init |
 | 1140 | 0x0048afb0 | grenade_ai_tick | C_grenade::AI |
 | 1141 | 0x0048b310 | grenade_game_init | C_grenade::GameInit |
 | 1142 | 0x0048b340 | grenade_game_done | C_grenade::GameDone |
@@ -1761,7 +1761,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1751 | 0x004f57e0 | driver_path_node_at |  |
 | 1752 | 0x004f5800 | std_vector70_insert_one |  |
 | 1753 | 0x004f5a30 | vehicle_get_engine_on |  |
-| 1754 | 0x004f5a40 | vehicle_set_clutch_gate |  |
+| 1754 | 0x004f5a40 | vehicle_set_automatic_gearbox |  |
 | 1755 | 0x004f5a50 | vehicle_set_horn |  |
 | 1756 | 0x004f5a60 | vehicle_get_siren |  |
 | 1757 | 0x004f5a70 | vehicle_is_throttle_applied |  |
@@ -1787,7 +1787,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1777 | 0x004f6130 | smoke_trail_dtor | C_smoke_trail::{dtor} |
 | 1778 | 0x004f6140 | smoke_trail_ai_tick | C_smoke_trail::AI |
 | 1779 | 0x004f61b0 | smoke_trail_update | C_smoke_trail::Update |
-| 1780 | 0x004f61d0 | thunk_bottle_net_apply_remote_state |  |
+| 1780 | 0x004f61d0 | thunk_bottle_net_apply_remote_state | C_smoke_trail::NetDirect |
 | 1781 | 0x004f61e0 | smoke_trail_game_init | C_smoke_trail::GameInit |
 | 1782 | 0x004f6240 | smoke_trail_game_done | C_smoke_trail::GameDone |
 | 1783 | 0x004f6270 | crt_static_init_guard_004f6270 |  |
@@ -1825,7 +1825,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1815 | 0x004f6900 | traffic_car_duplicate_from | C_traffic_car::DuplicateFrom |
 | 1816 | 0x004f69c0 | traffic_car_save_data | C_traffic_car::SaveData |
 | 1817 | 0x004f6af0 | traffic_car_load_data | C_traffic_car::LoadData |
-| 1818 | 0x004f6ef0 | traffic_car_collision |  |
+| 1818 | 0x004f6ef0 | traffic_car_collision | C_traffic_car::Collision |
 | 1819 | 0x004f6f00 | traffic_car_deactivate_element | C_traffic_car::DeactivateElem |
 | 1820 | 0x004f76c0 | thunk_stub_noop_cdecl_00574a40 |  |
 | 1821 | 0x004f76d0 | traffic_car_activate_elements | C_traffic_car::ActivateElems |
@@ -1846,7 +1846,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1836 | 0x005042c0 | traffic_car_release_stolen_car | C_traffic_car::Corovacka |
 | 1837 | 0x00504380 | traffic_car_get_parking_cars | C_traffic_car::GetParkingCars |
 | 1838 | 0x00504390 | traffic_car_seat_pedestrian_as_driver | C_traffic_car::ChodDoRici |
-| 1839 | 0x00504780 | traffic_car_activate_or_spawn_pursuit_vehicles |  |
+| 1839 | 0x00504780 | traffic_car_activate_or_spawn_pursuit_vehicles | C_traffic_car::HulaaaaaMuf |
 | 1840 | 0x005052a0 | traffic_car_on_collision_try_register_assault_on_police_car | C_traffic_car::CoDelasTyCuraku |
 | 1841 | 0x00505310 | traffic_car_on_collision_try_register_assault_on_gang_car | C_traffic_car::CoDelasTyCuraku1 |
 | 1842 | 0x005053a0 | traffic_car_release_cop_car_slot | C_traffic_car::ChlupatejVystrik |
@@ -1859,8 +1859,8 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 1849 | 0x00506b60 | traffic_car_find_car_heading_at_point | C_traffic_car::ChcesMeSejmout |
 | 1850 | 0x00506bb0 | traffic_car_deactivate_adopted_elements | C_traffic_car::TakATedSiVasKupim_Vsecky |
 | 1851 | 0x00506c00 | traffic_car_kill_occupant_on_hit | C_traffic_car::DostalJsemRanuKachlou |
-| 1852 | 0x00506cf0 | traffic_car_adopt_car_with_new_driver |  |
-| 1853 | 0x00507cc0 | traffic_car_destroy_crew_for_car |  |
+| 1852 | 0x00506cf0 | traffic_car_adopt_car_with_new_driver | C_traffic_car::NoTakMiTedaDajTuPleckuJaJuOdvezu |
+| 1853 | 0x00507cc0 | traffic_car_destroy_crew_for_car | C_traffic_car::VypraskeeeKaaaru |
 | 1854 | 0x00507f80 | traffic_car_save_game_get_size | C_traffic_car::SaveGameGetSize |
 | 1855 | 0x00507f90 | traffic_car_save_game_save | C_traffic_car::SaveGameSave |
 | 1856 | 0x00507fc0 | traffic_car_save_game_load | C_traffic_car::SaveGameLoad |
@@ -2098,7 +2098,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2088 | 0x0053c2b0 | wagon_ctor | C_wagon::{ctor} |
 | 2089 | 0x0053c360 | wagon_scalar_deleting_dtor |  |
 | 2090 | 0x0053c380 | wagon_dtor | C_wagon::{dtor} |
-| 2091 | 0x0053c400 | wagon_init | C_wagon::Init |
+| 2091 | 0x0053c400 | folded_actor_init_bool | C_door::Init |
 | 2092 | 0x0053c420 | wagon_save_game_get_size | C_wagon::SaveGameGetSize |
 | 2093 | 0x0053c470 | wagon_save_game_save | C_wagon::SaveGameSave |
 | 2094 | 0x0053c630 | wagon_save_game_load | C_wagon::SaveGameLoad |
@@ -2175,10 +2175,10 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2165 | 0x00544210 | recorder_load_tck |  |
 | 2166 | 0x00544590 | chunk_close | C_chunk::Close |
 | 2167 | 0x00544680 | recorder_load_anim_for_object |  |
-| 2168 | 0x005447d0 | recorder_names_free_row_array |  |
+| 2168 | 0x005447d0 | recorder_tck_record_free_vectors |  |
 | 2169 | 0x00544800 | recorder_rebuild_object_table |  |
 | 2170 | 0x005449f0 | recorder_release_object_table |  |
-| 2171 | 0x00544a60 | recorder_names_free_buffers |  |
+| 2171 | 0x00544a60 | recorder_anim_object_free_vectors |  |
 | 2172 | 0x00544a90 | recorder_get_or_create_name_id_direct |  |
 | 2173 | 0x00544ad0 | recorder_get_name_value |  |
 | 2174 | 0x00544ae0 | recorder_set_name_value |  |
@@ -2317,7 +2317,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2307 | 0x0054bf10 | hud_console_print | G_IndicatorsClass::ConsoleAddTextByID |
 | 2308 | 0x0054bf40 | hud_push_blood_splat |  |
 | 2309 | 0x0054c150 | hud_compass_set_destination_frame | G_IndicatorsClass::CompassSetDestination |
-| 2310 | 0x0054c160 | hud_set_theft_indicator_value | G_IndicatorsClass::ThiefIndicatorSetValue |
+| 2310 | 0x0054c160 | hud_set_timed_action_bar_value | G_IndicatorsClass::ThiefIndicatorSetValue |
 | 2311 | 0x0054c170 | hud_set_airplane_damage_fill | G_IndicatorsClass::RefullingIndicatorSetValue |
 | 2312 | 0x0054c180 | hud_widescreen_build_bars | G_IndicatorsClass::WideScreenSetRatio |
 | 2313 | 0x0054c420 | hud_widescreen_fade_bars |  |
@@ -2364,9 +2364,9 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2354 | 0x00556f30 | loadsave_static_atexit_register |  |
 | 2355 | 0x00556f40 | loadsave_static_dtor_call |  |
 | 2356 | 0x00556f50 | car_database_static_init |  |
-| 2357 | 0x00556f60 | car_database_static_ctor_call |  |
-| 2358 | 0x00556f70 | car_database_static_atexit_register |  |
-| 2359 | 0x00556f80 | car_database_static_dtor_call |  |
+| 2357 | 0x00556f60 | car_database_static_ctor |  |
+| 2358 | 0x00556f70 | car_database_register_atexit_dtor |  |
+| 2359 | 0x00556f80 | car_database_static_dtor |  |
 | 2360 | 0x00556f90 | loadsave_init | G_LoadSaveClass::Init |
 | 2361 | 0x005570c0 | loadsave_close | G_LoadSaveClass::Close |
 | 2362 | 0x00557100 | loadsave_profile_change | G_LoadSaveClass::ProfileChange |
@@ -2574,7 +2574,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2564 | 0x00566220 | copy_range_stride_0x8 |  |
 | 2565 | 0x00566250 | crt_static_init_guard_00566250 |  |
 | 2566 | 0x00566270 | crt_atexit_register_00566270 |  |
-| 2567 | 0x00566280 | gui_race_root_ctor | GM_Menu::{ctor} |
+| 2567 | 0x00566280 | gui_race_root_ctor | GM_Racing::OnBeforeCreate |
 | 2568 | 0x00566310 | gui_race_root_tick | GM_Racing::OnClick |
 | 2569 | 0x00566490 | gui_race_root_open_single_race | GM_Racing::OpenMenuForSingleRace |
 | 2570 | 0x00566560 | gui_race_root_open_championship | GM_Racing::OpenMenuForChampionship |
@@ -2992,10 +2992,10 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 2982 | 0x00590a00 | collision_teardown | g_collision::GameDone |
 | 2983 | 0x00590a10 | collision_test_line_vertical_thunk | g_collision::TestLineV |
 | 2984 | 0x00590a20 | collision_test_line_vertical_inner_dyn_thunk | g_collision::TestLineVInnerDyn |
-| 2985 | 0x00590a30 | thunk_collision_test_line_horizontal |  |
+| 2985 | 0x00590a30 | thunk_collision_test_line_horizontal | g_collision::TestLineH |
 | 2986 | 0x00590a40 | collision_test_sphere_swept_thunk | g_collision::TestSphereB |
 | 2987 | 0x00590a60 | collision_test_sphere_slide |  |
-| 2988 | 0x00590ab0 | thunk_collision_test_moving_box |  |
+| 2988 | 0x00590ab0 | thunk_collision_test_moving_box | g_collision::TestDBox |
 | 2989 | 0x00590ac0 | collision_test_character_proxy | g_collision::TestPanak2 |
 | 2990 | 0x00591530 | collision_test_character_proxy_in_vehicle | g_collision::TestPanak2InVehicle |
 | 2991 | 0x00591f20 | crt_static_init_line_batch |  |
@@ -3197,7 +3197,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3187 | 0x0059c3a0 | car_post_state_net_event_msg |  |
 | 3188 | 0x0059c690 | car_apply_net_event_msg |  |
 | 3189 | 0x0059d2f0 | car_post_break_glass_net_event_msg |  |
-| 3190 | 0x0059d3a0 | car_post_hit_net_event_msg |  |
+| 3190 | 0x0059d3a0 | car_post_tyre_burst_net_event_msg |  |
 | 3191 | 0x0059d410 | car_post_part_dropout_net_event_msg |  |
 | 3192 | 0x0059d4d0 | car_post_dirty_net_event_msgs |  |
 | 3193 | 0x0059d640 | car_post_collision_damage_net_event_msg |  |
@@ -3231,7 +3231,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3221 | 0x005a1940 | event_msg_dword_pair_reversed_ctor |  |
 | 3222 | 0x005a1970 | event_msg_car_collision_damage_payload_init |  |
 | 3223 | 0x005a1980 | event_msg_car_collision_damage_ctor |  |
-| 3224 | 0x005a19b0 | event_msg_car_hit_ctor |  |
+| 3224 | 0x005a19b0 | event_msg_tyre_burst_ctor |  |
 | 3225 | 0x005a19e0 | event_msg_car_part_dropout_ctor |  |
 | 3226 | 0x005a1a10 | event_msg_car_explosion_ctor |  |
 | 3227 | 0x005a1a40 | event_msg_hit_ctor |  |
@@ -3426,7 +3426,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3416 | 0x005ae660 | force_feedback_effect_periodic_upload_params |  |
 | 3417 | 0x005ae690 | force_feedback_effect_condition_upload_params |  |
 | 3418 | 0x005ae6b0 | force_feedback_manager_ctor |  |
-| 3419 | 0x005ae6f0 | folded_vector_pair_free_at_0x04_0x14 |  |
+| 3419 | 0x005ae6f0 | folded_vector_pair_free_at_0x04_0x14 | C_sledovacka::{dtor} |
 | 3420 | 0x005ae720 | force_feedback_manager_reset_handle_counter |  |
 | 3421 | 0x005ae730 | force_feedback_manager_game_init |  |
 | 3422 | 0x005ae7c0 | force_feedback_manager_game_done |  |
@@ -3670,7 +3670,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3660 | 0x005ce5a0 | police_manager_get_firetime_for_target | C_shvestky::GetFireTime |
 | 3661 | 0x005ce5e0 | police_manager_count_officers_for_target | C_shvestky::PocetNasranych |
 | 3662 | 0x005ce630 | police_manager_count_officers_alive_for_target | C_shvestky::PocetNasranychZivych |
-| 3663 | 0x005ce6a0 | police_manager_get_num_of_offences | C_shvestky::PocetPrestupku |
+| 3663 | 0x005ce6a0 | police_manager_get_capture_count | C_shvestky::PocetPrestupku |
 | 3664 | 0x005ce6e0 | police_manager_target_identity_pending | C_shvestky::NeviDoKterePiceVlezl |
 | 3665 | 0x005ce730 | police_manager_is_wanted_substate_active_for_target | C_shvestky::ChceHoOpichatKazdyPoldaNaOkresku |
 | 3666 | 0x005ce770 | police_manager_deploy_vehicle_from_pool | C_shvestky::CreateCar |
@@ -3826,7 +3826,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3816 | 0x005e0780 | game_done_intern | C_game::DoneIntern |
 | 3817 | 0x005e0ad0 | game_change_act_state | C_game::ChangeActState |
 | 3818 | 0x005e0c20 | game_tick | C_game::Tick |
-| 3819 | 0x005e27e0 | game_vehicle_track_tick | C_game::DoubleKiss |
+| 3819 | 0x005e27e0 | game_car_gun_tick | C_game::DoubleKiss |
 | 3820 | 0x005e3220 | game_add_temporary_actor | C_game::AddTemporaryActor |
 | 3821 | 0x005e3400 | game_remove_temporary_actor | C_game::RemoveTemporaryActor |
 | 3822 | 0x005e35d0 | game_add_temporary_actor_intern | C_game::InternTempActAdd |
@@ -3867,7 +3867,7 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 3857 | 0x005e9e10 | game_set_film_music | C_game::SetFilmMusic |
 | 3858 | 0x005e9fd0 | game_get_film_music | C_game::GetFilmMusic |
 | 3859 | 0x005ea010 | game_clear_film_music |  |
-| 3860 | 0x005ea070 | game_clear_frame_from_fire | C_game::ClearFrameFromFireHole |
+| 3860 | 0x005ea070 | game_clear_frame_from_bullet_holes | C_game::ClearFrameFromFireHole |
 | 3861 | 0x005ea0c0 | game_load_differences |  |
 | 3862 | 0x005eb480 | std_vector_deleter_ensure_alloc |  |
 | 3863 | 0x005eb4a0 | std_vector_deleter_assign_alloc |  |
@@ -4162,9 +4162,9 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 4152 | 0x005ffae0 | mission_global_program_run | C_mission::GlobalProgramRun |
 | 4153 | 0x005ffb40 | mission_close | C_mission::Close |
 | 4154 | 0x005ffd40 | mission_tick | C_mission::Tick |
-| 4155 | 0x005ffeb0 | scene_load_report_progress |  |
+| 4155 | 0x005ffeb0 | scene_load_report_progress | ShowProgress |
 | 4156 | 0x005fff30 | mission_open | C_mission::Open |
-| 4157 | 0x00600540 | scene_load_progress_callback |  |
+| 4157 | 0x00600540 | scene_load_progress_callback | __SceneErrFnc |
 | 4158 | 0x00600560 | scene_fill_sector_bits | C_mission::S_hlp$4890Mission_cpp::cbSectorBitFill |
 | 4159 | 0x006005a0 | mission_open_bin | C_mission::OpenBin |
 | 4160 | 0x006047a0 | uv_scroll_channel_init |  |
@@ -4201,12 +4201,12 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 4191 | 0x006063a0 | vec_dword_push_back_by_ref |  |
 | 4192 | 0x00606550 | vec_count_stride_0x10 |  |
 | 4193 | 0x00606570 | vec_count_stride_0xc |  |
-| 4194 | 0x00606590 | roads_nodes_clear |  |
+| 4194 | 0x00606590 | roads_nodes_clear | std::__vector_deleter<13S_road_node_1,Q23std26allocator<13S_road_node_1>>::clear |
 | 4195 | 0x006065c0 | actor_mark_scene_placed |  |
 | 4196 | 0x006065d0 | vec_index_addr_stride_0x8 |  |
 | 4197 | 0x006065e0 | frame_map_at_or_insert |  |
 | 4198 | 0x00606690 | i3d_cache_items_clear |  |
-| 4199 | 0x00606700 | roads_crossings_erase_range |  |
+| 4199 | 0x00606700 | roads_crossings_erase_range | std::__vector_imp<17S_road_crossing_1,Q23std30allocator<17S_road_crossing_1>,0>::erase |
 | 4200 | 0x00606750 | game_ctor |  |
 | 4201 | 0x00606e20 | game_dtor |  |
 | 4202 | 0x00607400 | uv_scroll_clear_channels |  |
@@ -4492,8 +4492,8 @@ Every function definition in `Game-ghidra.exe.annotated.c`, recovered from the d
 | 4482 | 0x0061df00 | crt_static_init_guard_0061df00 |  |
 | 4483 | 0x0061df20 | crt_atexit_register_0061df20 |  |
 | 4484 | 0x0061df30 | uv_scroll_channel_tick | S_tshift_elem::Tick |
-| 4485 | 0x0061e010 | folded_vector_ctor_at_0x04 |  |
-| 4486 | 0x0061e030 | folded_vector_free_at_0x04 |  |
+| 4485 | 0x0061e010 | folded_vector_ctor_at_0x04 | C_tshift::{ctor} |
+| 4486 | 0x0061e030 | folded_vector_free_at_0x04 | C_tshift::{dtor} |
 | 4487 | 0x0061e050 | uv_scroll_tick | C_tshift::Tick |
 | 4488 | 0x0061e0d0 | crt_static_init_guard_0061e0d0 |  |
 | 4489 | 0x0061e0f0 | crt_atexit_register_0061e0f0 |  |

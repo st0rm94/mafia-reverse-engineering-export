@@ -1924,7 +1924,7 @@ undefined g_ai_wayfind_cb_goal_dist_sq;
 undefined g_ai_wayfind_cb_radius_sq;
 int g_ai_wayfind_cb_target_next_node;
 int g_ai_wayfind_cb_target_node;
-undefined g_ai_wayfind_checkpoint_container;
+undefined g_ai_wayfind_blocked_cons;
 float g_aiming_sensitivity_x;
 float g_aiming_sensitivity_y;
 undefined *g_airplane_vt;
@@ -2268,7 +2268,7 @@ undefined *g_event_msg_vt_car_collision_damage;
 undefined *g_event_msg_vt_car_damage;
 pointer g_event_msg_vt_car_explosion;
 undefined *g_event_msg_vt_car_glass_break;
-undefined *g_event_msg_vt_car_hit;
+undefined *g_event_msg_vt_tyre_burst;
 pointer g_event_msg_vt_car_part_dropout;
 undefined *g_event_msg_vt_car_state;
 pointer g_event_msg_vt_chat;
@@ -3012,7 +3012,7 @@ void __thiscall ai_character_log_new_contact(undefined4 *param_1,undefined4 para
 
 /*
  * ai_logs_init(this, owner) -> void
- * What it does: initialises the `ai_logs` sub-object (C_entity+0xe88, structs/entity.md §6c).
+ * What it does: initialises the `ai_logs` sub-object (C_entity+0xe88, structs/entity.md §7).
  *   Stores the owning C_entity at +0x30, empties its log std::vector by setting end = begin
  *   (+0x28 = +0x24 — the vector documented at entity+0xeac = ai_logs+0x24), and zeroes the first
  *   0x20 bytes.
@@ -3306,7 +3306,7 @@ LAB_00401424:
  * proven cross-build pairs (group PC +0xf4c <-> PS2 +0x1134; kind PC +0x10 <-> PS2 +0x50), and the
  * create path is the same NewContact-then-vector-insert pair. The matrices differ: PS2 gives a
  * group-1 target class 0 for every owner, has its own rows for owners 1 and 2, and creates no log
- * for a target that is neither the player nor a C_entity (structs/ai_logs.md §5).
+ * for a target that is neither the player nor a C_entity (structs/ai_logs.md §6).
  *
  * Callers: 2 callsites in `entity_dispatch_event`.
  * Evidence: VA 0x00401440. Renamed from `FUN_00401440`.
@@ -4680,7 +4680,7 @@ uint ai_check_builder_test_space_8dir(float *param_1,float param_2,float *param_
  *   `ai_check_builder_test_space_8dir` and `ai_check_builder_get_dir8_index`.
  *   🔴 DELIBERATELY NOT given the `ai_check_builder_*` prefix: it is a pure vector rotation,
  *   so it is named for what it IS, not for where it is used. The class membership is
- *   recorded here instead. See exe-re/structs/ai_check.md §2.
+ *   recorded here instead. See exe-re/structs/ai_check.md §5.
  */
 void vec3_rotate_by_angle_in_place(S_matrix *param_1,float param_2)
 
@@ -5371,7 +5371,7 @@ int __fastcall ai_wayfind_cb_corner_edge_cost(uint param_1,uint param_2,byte par
  *   of FindPathCompFunc / `web_path_find_path_to_goal_fn` by FindWayRUNAWAY_V1 /
  *   `ai_wayfind_plan_flee_route`. Signature `int(*)(ushort)` matches. Ratio 1.45.
  * 🔑 It is the CONSUMER of `g_ai_wayfind_cb_radius_sq` and the WRITER of
- *   `g_ai_wayfind_cb_out_*`, exactly as structs/ai_wayfind.md §1a derives from the
+ *   `g_ai_wayfind_cb_out_*`, exactly as structs/ai_wayfind.md §4a derives from the
  *   callback-publication model.
  * Its caller takes it by address only (`&ai_wayfind_cb_flee_goal_beyond_radius`); it is a
  *   recognised function and needs no function-start recovery.
@@ -5533,7 +5533,7 @@ undefined4 ai_wayfind_cb_forward_goal_by_mode(void)
  * PS2 twin: `fxForward2FuncV1__FUsUsUc` (0x003577d0)  [CONFIRMED]
  *   Consumer-pinned on both builds, shared by V2 and V3. PC's signature is
  *   `float __fastcall(uint, uint, byte)` - the cost-callback type exactly.
- *   🔑 It reads `g_ai_wayfind_cb_end_*`, which structs/ai_wayfind.md §1a says is published
+ *   🔑 It reads `g_ai_wayfind_cb_end_*`, which structs/ai_wayfind.md §4a says is published
  *   by the directed V2/V3 strategies ONLY - an independent confirmation of that model, and
  *   it promotes `g_ai_wayfind_cb_goal_dist_sq` from [M] to [H] by reading its consumer.
  *   ⚠️ Ratio 1632/637 = 2.56, well outside the band. PS2's 4-float S_vector and its inlined
@@ -13021,7 +13021,7 @@ LAB_0040d41d:
  *   `ai_wayfind_test_corner_hide_side` x1 - itself a CONFIRMED anchor - plus the same
  *   segment-cluster scan. Three stack args <-> three declared params.
  * ⚠️ This is an **ai_wayfind** method living inside the ai_path VA gap: the two classes
- *   interleave in ONE PS2 translation unit (structs/ai_wayfind.md §4), so it is not a
+ *   interleave in ONE PS2 translation unit (structs/ai_wayfind.md §6), so it is not a
  *   foreign function shifting ranks.
  * Evidence: VA 0x0040d4e0. Renamed from `FUN_0040d4e0`.
  */
@@ -14995,7 +14995,8 @@ void __thiscall ai_sensors_update_visual_contact(int param_1,int param_2,int par
  *   Same shape: find slot; dispatch entity **event 4**; clear the slot state (`slot+8 = 0`);
  *   recompute the extrema with **mode 1**; then gate on the removed actor's KIND being
  *   `0x1b` (C_entity) or `2` (C_player) — read via **PC +0x10 / PS2 +0x50**, the already-proven
- *   kind-field pair (structs/entity.md §1). That shared constant pair is the decisive evidence.
+ *   kind-field pair (structs/entity_kind.md §1). That shared constant pair is the decisive
+ *   evidence.
  *   ⚠️ SIGNATURE DIFFERENCE: PS2 takes a 3rd `bool` parameter that the PC signature lacks; PS2
  *   guards the kind check with `param_3 == 0`. Recorded honestly — not yet explained.
  */
@@ -15130,7 +15131,7 @@ void __thiscall ai_sensors_recompute_visual_extrema(int param_1,int param_2,int 
  * ai_sensors_new_sound_contact(this, contact) -> void
  * What it does: registers a heard sound on this ai_sensors — **this is the WRITER of the
  *   heard-event ring at C_entity+0xc74** (= ai_sensors+0xc0, stride 0x20; see
- *   exe-re/structs/entity.md §5 and exe-re/structs/ai_sensors.md §3).
+ *   exe-re/structs/entity.md §2 and exe-re/structs/ai_sensors.md §5).
  *   Find-or-update: looks the (actor, type) pair up via ai_sensors_find_sound_contact; if a
  *   slot already exists it delegates to ai_sensors_update_sound_contact and returns.
  *   Otherwise it notifies the owning entity — **type 1 dispatches entity event 6, type 2
@@ -15427,7 +15428,7 @@ void __thiscall ai_sensors_recompute_sound_extrema(int param_1,int param_2,int p
  *   `src[3] = 0`; and the same tail `UpdateSMELL(0, slot_count)`.
  *   The PC address arithmetic `(idx + 0x10) * 0x1c` folds the array base into the index and
  *   so PINS the PC smell base at **0x1c0**; slot_count sits at **+0x2c4** = the visual
- *   slot_count + 8 (per-sense parallel arrays, ai_sensors.md §4b).
+ *   slot_count + 8 (per-sense parallel arrays, ai_sensors.md §2d).
  *   PS2 emits `memcpy(dst, src, 0x1c)`; PC has an inlined 7-dword copy loop — MSVC compiles
  *   the CRT routines as intrinsics.
  */
@@ -15600,7 +15601,7 @@ void __thiscall ai_sensors_cancel_smell_contact(int param_1,undefined4 param_2)
  *         it at `idx`, and re-sweep for a new max only if `idx` WAS the max
  *     2 = a contact was UPDATED (ai_sensors_update_smell_contact) — re-sweep both
  *   The smell scalars are exactly the visual ones + 8 (per-sense parallel arrays; see
- *   exe-re/structs/ai_sensors.md §4b).
+ *   exe-re/structs/ai_sensors.md §2d).
  * Parameters: param_1 (this, ECX): the ai_sensors (C_entity+0xbb4);
  *             param_2 (mode): 0 = after add, 1 = after cancel, 2 = after update;
  *             param_3 (idx): the slot that changed.
@@ -15697,7 +15698,7 @@ void __thiscall ai_sensors_recompute_smell_extrema(int param_1,int param_2,int p
  *   0x1c, and the same trailing extrema clears. The three-cursors-in-one-loop shape is
  *   distinctive and identical on both builds.
  *   NOTE: the loop runs 8x on BOTH builds, so both ALLOCATE 8 visual slots — it is the
- *   SCAN bound that differs (PS2 sweeps only 6; see ai_sensors.md §4a).
+ *   SCAN bound that differs (PS2 sweeps only 6; see ai_sensors.md §7).
  * Evidence: VA 0x00410050. Renamed from `FUN_00410050`.
  */
 void __thiscall ai_sensors_init(int param_1,undefined4 param_2)
@@ -16028,7 +16029,7 @@ uint __thiscall ai_sensors_can_smell(int param_1,undefined4 param_2,int param_3)
 /*
  * ai_sensors_get_smelled_target_info(this, target, out_pos, out_dir, out_time, out_flags) -> uint
  * What it does: where is `target`, as far as this entity's nose knows? Bit 0x4000 of the OWNER
- *   entity's flag word (`*(this+0x2a0)+0xf08`, structs/entity.md §4) picks the path:
+ *   entity's flag word (`*(this+0x2a0)+0xf08`, structs/entity.md §1) picks the path:
  *   - bit set (live): position and normalised forward vector straight from the target's frame
  *     (`target+0x68`, matrix +0x40..+0x48 and +0x30..+0x38, refreshed with UpdateWMatrixProc);
  *     time = the mission clock; flags = 0. Returns 1.
@@ -16259,7 +16260,7 @@ void ai_sensors_build_smell_contact_from_blob(int param_1)
 
 /*
  * ai_vis_logs_init(this, owner) -> void
- * What it does: initialises the `ai_vis_logs` sub-object (C_entity+0xb04, structs/entity.md §6c).
+ * What it does: initialises the `ai_vis_logs` sub-object (C_entity+0xb04, structs/entity.md §7).
  *   Stores the owning C_entity at +0xac, then seeds **8 log slots** (stride 0x14) each to
  *   `{0, 666.0f, 0, 5, 0}`, and finally sets +0xa8 to **0x29a (= 666)** and clears +0xa0/+0xa4.
  *   666 is the project-wide "none / unset" sentinel — here it appears in BOTH forms in one
@@ -16480,7 +16481,7 @@ void __thiscall ai_vis_logs_del_entity(int param_1,int param_2,char param_3)
  *   `UpdateAttention__8C_entity` (a C_entity method).
  * ⚠️ PC/PS2 ARCHITECTURE DIFFERENCE: PC ticks each entity's vis_logs inline from entity_ai;
  *   PS2's `AI__8C_entity` never calls this — a central `ai_sight_manager` round-robins one
- *   entity per frame (`Next`/`NextCorpses`). See structs/entity.md §6c.
+ *   entity per frame (`Next`/`NextCorpses`). See structs/entity.md §7.
  */
 void __fastcall ai_vis_logs_tick(float param_1)
 
@@ -17085,7 +17086,7 @@ void entity_duplicate_from(int param_1)
  * What it does: C_entity's `GameInit` — the real per-entity construction step. Calls the C_human
  *   parent (`human_game_init`), then initialises the entity's AI SUB-OBJECTS in order:
  *   the C_program script VM, `ai_vis_logs_init` (+0xb04), `ai_sensors_init` (+0xbb4),
- *   `ai_character_init` (+0xebc) and `ai_logs_init` (+0xe88) — see structs/entity.md §6c —
+ *   `ai_character_init` (+0xebc) and `ai_logs_init` (+0xe88) — see structs/entity.md §7 —
  *   normalises the spawn rotation (`Normalize`/`SetRot3`), clears the action manager, seeds two
  *   random values, refreshes the world matrix and dispatches an entity event.
  * Parameters: param_1 (this, ECX): the C_entity.
@@ -17096,7 +17097,7 @@ void entity_duplicate_from(int param_1)
  *   `rand_range` x2 <-> `rnd__Fi` x2. Also matching: the four sub-object Inits, `Normalize`,
  *   `SetRot3`, `UpdateWMatrixProc`, `human_pose_null_rotate`, `entity_dispatch_event`.
  *   ⚠️ PS2 ADDITIONALLY calls `Add__16ai_sight_manager` x2 — PC has NO equivalent. That is direct
- *   evidence for the PS2-port-only status of `ai_sight_manager` (structs/entity.md §6c): on PS2 an
+ *   evidence for the PS2-port-only status of `ai_sight_manager` (structs/entity.md §7): on PS2 an
  *   entity REGISTERS itself with the central round-robin sight manager at GameInit; on PC each
  *   entity ticks its own vis_logs inline and no such registration exists.
  * Evidence: VA 0x00411800. Renamed from `FUN_00411800`.
@@ -17656,7 +17657,7 @@ void entity_collision(void)
  *   Parent `human_hit` <-> `Hit__7C_human`; `car_get_owner` <-> `GetOwner__5C_carFi`; and the same
  *   attacker-kind gate reading **PC `+0x10` / PS2 `+0x50`** — the already-proven kind-field pair —
  *   with the same constants **4** (C_car), **2** (C_player) and **0x1b** (C_entity), in the same
- *   nesting order (structs/entity.md §1).
+ *   nesting order (structs/entity_kind.md §1).
  * Evidence: VA 0x00412200. Renamed from `FUN_00412200`.
  */
 undefined4 __thiscall
@@ -17741,7 +17742,7 @@ entity_hit(float param_1,undefined4 param_2,undefined4 param_3,undefined4 param_
  *
  *   Ghidra finds NO function starts between 0x00412410 and 0x004145f0; that VA span holds
  *   more than this function (e.g. `entity_ai` at 0x00412480, which owns the 18 calls to
- *   `entity_actions_tick`). See structs/human.md §5. The identification rests on the call
+ *   `entity_actions_tick`). The identification rests on the call
  *   graph, the guard and the argument shape.
  *   Renamed from `FUN_00412410`.
  * PS2 twin: cbHitInfo__8C_entityF10E_hit_typefP7C_actor  [CONFIRMED]
@@ -18951,7 +18952,7 @@ switchD_0041272a_caseD_1:
  * C_entity (cop, gangster or pedestrian) and the objects it ticks are `ai_action`s — the PS2
  * signature says so literally: `actionTick__8C_entityFP9ai_actionUiUiPUi`. It calls the
  * `ai_action_manager_*` family throughout; the `ai_action_new_*` factories build these actions
- * (see structs/entity.md §7).
+ * (see structs/entity.md §9).
  *
  * Signature:
  *   param_1 — the C_entity `this` (this-pointer; __thiscall, ECX-hidden in
@@ -19469,7 +19470,7 @@ uint __thiscall entity_action_tick(int param_1,undefined4 *param_2,int param_3,i
           ai_path_scalar_deleting_dtor(1);       // Destruct + free the nav_path_follower instance (1 = "with delete").
         }
         *(undefined4 *)(iVar18 + 0x1c) = 0;                 // Null out the follower pointer.
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);          // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);          // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
       }
       // --- Sub-block B: state == 4 → same teardown path but no +0x3c probe ---
       if ((*(int *)(iVar18 + 0x1c) != 0) && (cVar5 = ai_path_is_abandoned(), cVar5 != '\0')) {
@@ -19479,7 +19480,7 @@ uint __thiscall entity_action_tick(int param_1,undefined4 *param_2,int param_3,i
           ai_path_scalar_deleting_dtor(1);       // Same destruct + free.
         }
         *(undefined4 *)(iVar18 + 0x1c) = 0;                 // Same null-out.
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);          // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);          // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
       }
       // --- Sub-block C: build a NEW path plan; mode selector at inner+0x0c (= iVar18+0xc) ---
       iVar20 = *(int *)(iVar18 + 0xc);                      // iVar20 = planner mode (0 = pos→pos, 1 = pos→nearest-zone-entity, 2 = directional-with-radius).
@@ -19491,7 +19492,7 @@ uint __thiscall entity_action_tick(int param_1,undefined4 *param_2,int param_3,i
         local_ca0 = pfVar17[1];                             // Snapshot actor world-pos.y
         local_c9c = pfVar17[2];                             // Snapshot actor world-pos.z
         ai_wayfind_plan_shortest_route(&local_ca4,iVar18,*(undefined4 *)(iVar18 + 0x10),local_c70);   // Plan from actor-pos to inner+0x10's target, with re-plan flag in local_c70.
-        ai_wayfind_clear_checkpoint_container();                        // the planner releases the blocked_con list
+        ai_wayfind_clear_blocked_cons();                        // the planner releases the blocked_con list
 c00_install_nav_follower:
         uVar21 = ai_wayfind_build_optimal_path();                 // Allocate a fresh nav_path_follower.
         *(undefined4 *)(iVar18 + 0x1c) = uVar21;            // Store it at inner+0x1c.
@@ -19746,7 +19747,7 @@ c01_commit_zone_probe_flag:
           ai_path_scalar_deleting_dtor(1);         // Destruct+free the nav_path_follower instance.
         }
         piVar14[4] = 0;                                       // Null out follower pointer.
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);            // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);            // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
       }
       // --- Sub-block B: state==4 ⇒ same teardown without the +0x3c probe or path-source reset ---
       if ((piVar14[4] != 0) && (cVar5 = ai_path_is_abandoned(), cVar5 != '\0')) {
@@ -19785,7 +19786,7 @@ c01_commit_zone_probe_flag:
       }
       // --- Sub-block D: out of range ⇒ build a fresh pos→pos plan and one tick the follower ---
       ai_wayfind_plan_shortest_route(&local_ca4,&local_c80,piVar14[3],local_c70);   // Plan actor → subscriber, arg = inner+0xc, signal in local_c70.
-      ai_wayfind_clear_checkpoint_container();                            // the planner releases the blocked_con list
+      ai_wayfind_clear_blocked_cons();                            // the planner releases the blocked_con list
       iVar18 = ai_wayfind_build_optimal_path();                     // Allocate fresh follower.
       piVar14[4] = iVar18;                                    // Store at inner+0x10.
       if (iVar18 == 0) goto c08_schedule_retry_2500ms;                     // Allocation failed ⇒ jump to OOM/abort exit.
@@ -19926,7 +19927,7 @@ c01_broadcast_satisfied_check:
     goto switchD_004181ff_caseD_2;                            // Fall through to the common return-2 exit = chain-cancel BOTH list_c+list_b lists.
   default:
     goto switchD_0041467d_caseD_2;
-  // ----- case 0x03: AIM THE BODY POSE AT AN ACTOR'S HEAD (structs/entity.md §6b) -----
+  // ----- case 0x03: AIM THE BODY POSE AT AN ACTOR'S HEAD (structs/entity.md §6) -----
   // No factory builds this type. The payload pointer at action+0x20 holds the actor at +0x00.
   // Once more than 500 ms have passed since the action started (task[4]), take that actor's
   // frame world position + (0, 1.5, 0), the head height, and aim the pose at it:
@@ -20277,7 +20278,7 @@ c06_no_target_record_default:
         else if (0.0 <= local_c4c) { local_c4c = 1.0; } else { local_c4c = -1.0; }
       }
       // --- Read cop's stored aim-reference at +0xcc4, then dot-product against the normalized aim-vector ---
-      pfVar17 = (float *)vehicle_get_forward_ptr();
+      pfVar17 = (float *)vehicle_get_right_axis_ptr();
       local_c34 = *pfVar17;
       local_c30 = pfVar17[1];
       local_c2c = pfVar17[2];
@@ -20587,7 +20588,7 @@ c06_clearbit0_ret3:
             ai_path_scalar_deleting_dtor(1);
           }
           puVar19[5] = 0;
-          ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+          ai_wayfind_set_blocked_cons(param_1 + 0x1198);
         }
         // Sub-block B: state==4 teardown.
         if ((puVar19[5] != 0) && (cVar5 = ai_path_is_abandoned(), cVar5 != '\0')) {
@@ -20625,7 +20626,7 @@ c08_seat_attach_result_check:
         }
         // Sub-block D: plan a path and tick follower (with bit-0/bit-2 arming side effects).
         ai_wayfind_plan_shortest_route(&local_ca4,&local_c80,puVar19[2],local_c70);
-        ai_wayfind_clear_checkpoint_container();
+        ai_wayfind_clear_blocked_cons();
         iVar18 = ai_wayfind_build_optimal_path();
         puVar19[5] = iVar18;
         if (iVar18 != 0) {
@@ -21079,7 +21080,7 @@ switchD_00416ece_caseD_3:
         puVar19[3] = 0;                                       // Reset sub-mode after anim.
 c0a_plan_directional_arm_follower:
         // --- Plan a directional-with-radius path and arm follower ---
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);            // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);            // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
         cVar5 = ai_wayfind_plan_flee_route(&local_c80,&local_ca4,puVar19[1],puVar19[2],1);
         if (cVar5 != '\0') {
           uVar21 = ai_wayfind_build_optimal_path();
@@ -21129,7 +21130,7 @@ c0a_schedule_type12_retry_10s:
           ai_path_scalar_deleting_dtor(1);
         }
         puVar19[7] = 0;
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
         cVar5 = ai_wayfind_plan_flee_route(&local_c80,&local_ca4,puVar19[1],puVar19[2],1);
         if (cVar5 == '\0') {
           // Replan failed ⇒ schedule 10s retry.
@@ -21158,11 +21159,11 @@ c0a_schedule_type12_retry_10s:
               }
               iVar18 = iVar18 + -1;
             } while (-1 < iVar18);
-            ai_wayfind_clear_checkpoint_container();
+            ai_wayfind_clear_blocked_cons();
             goto c0a_common_exit_chaincancel;
           }
         }
-        ai_wayfind_clear_checkpoint_container();
+        ai_wayfind_clear_blocked_cons();
       }
     }
     else {
@@ -21496,7 +21497,7 @@ c0c_exit_cleanup_clear_pursuit:
             ai_path_scalar_deleting_dtor(1);
           }
           puVar19[8] = 0;                                         // Drop dead follower.
-          ai_wayfind_set_checkpoint_container(param_1 + 0x1198);              // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+          ai_wayfind_set_blocked_cons(param_1 + 0x1198);              // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
           iVar18 = folded_get_dword_0x10();                         // Inspect linked vehicle script arg.
           if ((iVar18 == 0x1b) || (iVar18 = folded_get_dword_0x10(), iVar18 == 2)) {
             // Type 0x1b or 2 ⇒ entity-aware planning (snap to entity's nav-node).
@@ -21511,7 +21512,7 @@ c0c_exit_cleanup_clear_pursuit:
             act_mission_get_game();
             iVar18 = game_get_frame_time_ms();
             param_2[4] = iVar18 + 2000;                           // Short retry window.
-            ai_wayfind_clear_checkpoint_container();                          // the planner releases the blocked_con list
+            ai_wayfind_clear_blocked_cons();                          // the planner releases the blocked_con list
           }
           else {
             // Plan OK ⇒ spawn fresh follower, prime first segment, set 5s deadline, cache target.
@@ -21524,7 +21525,7 @@ c0c_exit_cleanup_clear_pursuit:
             puVar19[1] = local_c80;                               // Cache target vec3 (inner+0x04..+0x0c) for later "did target move?" check.
             puVar19[2] = local_c7c;
             puVar19[3] = local_c78;
-            ai_wayfind_clear_checkpoint_container();
+            ai_wayfind_clear_blocked_cons();
           }
           goto tail_follower_chaincancel;                                      // Shared chain-cancel tail.
         }
@@ -21933,14 +21934,14 @@ c14_state4_retry_replan:
         local_ca4 = *pfVar17;
         local_ca0 = pfVar17[1];
         local_c9c = pfVar17[2];
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);                // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);                // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
         uVar21 = puVar19[6];
         puVar10 = &local_b90;
 c14_firstplan_alloc_follower:
         ai_wayfind_plan_shortest_route(&local_ca4,puVar10,uVar21,1);    // First-plan (last arg 1).
         uVar21 = ai_wayfind_build_optimal_path();
         puVar19[9] = uVar21;
-        ai_wayfind_clear_checkpoint_container();                              // the planner releases the blocked_con list
+        ai_wayfind_clear_blocked_cons();                              // the planner releases the blocked_con list
         act_mission_get_game();
         uVar21 = game_get_frame_time_ms();
         param_2[4] = uVar21;                                      // Reset deadline.
@@ -24747,7 +24748,7 @@ c1e_primary_fresh_intent:
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0x14] + 0x30);          // publish the route's blocked_con (ai_path+0x30) to the avoid list at +0x119c
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);                                       // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);                                       // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
       }
       if (pfVar17[0x14] != 0.0) {                                                        // tear down any existing follower
         ai_path_destroy();
@@ -25344,7 +25345,7 @@ c1e_enter_state3_replan:
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0x14] + 0x30);
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
       }
       if (pfVar17[0x14] != 0.0) {
         ai_path_destroy();
@@ -25593,7 +25594,7 @@ c1e_enter_state1_from_recover:
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0x14] + 0x30);
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
       }
       if (pfVar17[0x14] != 0.0) {
         ai_path_destroy();
@@ -25760,7 +25761,7 @@ c1e_spawn_search_state4:
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0x14] + 0x30);
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
       }
       if (pfVar17[0x14] != 0.0) {
         ai_path_destroy();
@@ -25862,7 +25863,7 @@ c1e_set_targetflag_state1:
       // -------- SNIFF EVENT (only if the ai_group id at +0x11ac resolves) --------
       if ((*(int *)(param_1 + 0x11ac) != 0) &&
          (iVar18 = ai_groups_get_group(*(int *)(param_1 + 0x11ac)), iVar18 != 0)) {
-        ai_group_send_sniff_event(param_1,*pfVar13);                              // event 0xb: a group scent lead on the target (ai_group.md §3)
+        ai_group_send_sniff_event(param_1,*pfVar13);                              // event 0xb: a group scent lead on the target (ai_group.md §5)
       }
 c1e_lost_track_audio_ret3:
       ai_talkman_say(8,12000,5000,2000,0,0x32,0);                                 // talk group 8: every 12 s +-2.5 s, first after 2 s, 50 % per fire
@@ -26592,7 +26593,7 @@ c1e_fallthrough_state10:
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0x17] + 0x30);       // publish the route's blocked_con (ai_path+0x30) to the avoid list at +0x119c
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);                                    // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);                                    // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
       }
       if (pfVar17[0x17] != 0.0) {                                                     // teardown stale follower before fresh plan
         ai_path_destroy();
@@ -27142,7 +27143,7 @@ c21_enter_substate3_replan:
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0x17] + 0x30);
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
       }
       if (pfVar17[0x17] != 0.0) {                                                      // teardown stale follower
         ai_path_destroy();
@@ -27273,7 +27274,7 @@ c21_enter_substate3_replan:
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0x17] + 0x30);
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
       }
       if (pfVar17[0x17] != 0.0) {                                                     // teardown stale follower
         ai_path_destroy();
@@ -27817,7 +27818,7 @@ c21_postrotate_facing:                                                          
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0xc] + 0x30);   // remember as obstacle
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
       }
       if (pfVar17[0xc] != 0.0) {                          // tear down prior follower
         ai_path_destroy();
@@ -27982,7 +27983,7 @@ c21_postrotate_facing:                                                          
         if (cVar5 != '\0') {
           entity_add_blocked_con((int)pfVar17[0xc] + 0x30);
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
       }
       if (pfVar17[0xc] != 0.0) {
         ai_path_destroy();
@@ -28291,7 +28292,7 @@ c21_postrotate_facing:                                                          
                 local_ca4 = *pfVar17;                                                // local_ca4..c9c = actor world-pos
                 local_ca0 = pfVar17[1];
                 local_c9c = pfVar17[2];
-                ai_wayfind_set_checkpoint_container(param_1 + 0x1198);                          // bind the entity's own checkpoint container at entity+0x1198
+                ai_wayfind_set_blocked_cons(param_1 + 0x1198);                          // bind the entity's own blocked-connection list at entity+0x1198
                 uVar21 = puVar19[5];                                                // nav layer-mask
                 puVar10 = &local_be0;                                               // attach-pos as goal
                 goto c14_firstplan_alloc_follower;                                                  // shared planner-init tail
@@ -28963,7 +28964,7 @@ c23_anim_commit_tail:                                             // SHARED COMM
         if (cVar5 != '\0') {
           entity_add_blocked_con(*(int *)(iVar18 + 0x18) + 0x30);   // record obstacle for next plan
         }
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
       }
       if (*(int *)(iVar18 + 0x18) != 0) {                 // tear down prior follower
         ai_path_destroy();
@@ -29263,7 +29264,7 @@ tail_clear_tracked_target_then_done:                                            
       if (cVar5 != '\0') {                                // the failed path reports a blocked connection?
         entity_add_blocked_con(*(int *)(iVar18 + 0x18) + 0x30);   // remember as obstacle to avoid in next plan
       }
-      ai_wayfind_set_checkpoint_container(param_1 + 0x1198);          // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
+      ai_wayfind_set_blocked_cons(param_1 + 0x1198);          // planner's blocked_con list (+0x5c) = this entity's list (+0x1198)
     }
     if (*(int *)(iVar18 + 0x18) != 0) {                   // tear down prior follower (it failed)
       ai_path_destroy();
@@ -29481,11 +29482,11 @@ c28_replan_primary:
         local_ca4 = *pfVar17;                              // local_ca4..c9c = current actor pos (start)
         local_ca0 = pfVar17[1];
         local_c9c = pfVar17[2];
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);         // bind the entity's own checkpoint container at entity+0x1198
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);         // bind the entity's own blocked-connection list at entity+0x1198
         ai_wayfind_plan_shortest_route(&local_ca4,piVar14 + 6,piVar14[4],1);  // plan: actor → PRIMARY, layer-mask = piVar14[4]
         iVar18 = ai_wayfind_build_optimal_path();                // spawn follower
         piVar14[5] = iVar18;
-        ai_wayfind_clear_checkpoint_container();
+        ai_wayfind_clear_blocked_cons();
         if (piVar14[5] != 0) {
 c28_planner_success_ret3:                                              // (shared planner-init success tail)
           ai_path_advance_to_next_normal_waypoint(&local_ca4,0);
@@ -29594,11 +29595,11 @@ c28_replan_secondary:
         local_ca4 = *pfVar17;
         local_ca0 = pfVar17[1];
         local_c9c = pfVar17[2];
-        ai_wayfind_set_checkpoint_container(param_1 + 0x1198);
+        ai_wayfind_set_blocked_cons(param_1 + 0x1198);
         ai_wayfind_plan_shortest_route(&local_ca4,piVar16,piVar14[4],1);   // plan: actor → SECONDARY
         iVar18 = ai_wayfind_build_optimal_path();
         piVar14[5] = iVar18;
-        ai_wayfind_clear_checkpoint_container();
+        ai_wayfind_clear_blocked_cons();
         if (piVar14[5] != 0) {
           ai_path_advance_to_next_normal_waypoint(&local_ca4,0);
           ExceptionList = local_c;
@@ -31169,7 +31170,7 @@ undefined1 __fastcall actor_is_alive(int param_1)
  * What it does: returns the float at `this + 0x618`, widened to `float10`.
  *   The receiver is the **C_Vehicle** physics/drivetrain sub-object embedded at `car+0x70`
  *   (structs/vehicle.md), so the field is `C_Vehicle+0x618` = `car+0x688` — the scalar speed
- *   already documented in structs/car.md §1a and used by the police speed gate and most driver
+ *   already documented in structs/car.md §4a and used by the police speed gate and most driver
  *   helpers. Consumers here compare it against 0.5 (is the target's car moving at all?) and 2.0
  *   (`ai_fight_followship_must_car_hunt`'s "we need a vehicle to catch this" threshold).
  * Parameters: param_1 (this, ECX): the C_Vehicle (= `car + 0x70`).
@@ -31197,7 +31198,7 @@ float10 __fastcall vehicle_get_speed(int param_1)
  *   embedded at `car+0x70`, so the field is `car+0x1f7c` — the velocity vec3 that
  *   `car_recompute_velocity` derives from the position delta each frame and that
  *   `car_get_actor_speed` (= `GetActorSpeed__5C_carFR8S_vector`) copies out. Consumers read the
- *   returned pointer as three floats; one dots it against `vehicle_get_forward_ptr`'s vector to
+ *   returned pointer as three floats; one dots it against `vehicle_get_right_axis_ptr`'s vector to
  *   get a signed forward speed.
  * Parameters: param_1 (this, ECX): the C_Vehicle (= `car + 0x70`).
  * Returns: int — `C_Vehicle + 0x1f0c` (= `car + 0x1f7c`).
@@ -31250,26 +31251,23 @@ int __fastcall vehicle_get_seat_count(int param_1)
 }
 
 /*
- * vehicle_get_forward_ptr — address of the vehicle's world-space forward vector
- *
- * What it does: returns `this + 0xcc4` (the address, not the value). The receiver is the
- *   **C_Vehicle** at `car+0x70`, so the field is the vec3 `car+0xd34/+0xd38/+0xd3c`.
- *   Two consumers establish that it is the FORWARD axis:
- *     · a full three-term dot against the velocity vec3 —
- *       `vel.x*(car+0xd34) + vel.y*(car+0xd38) + vel.z*(car+0xd3c) < 0.0` — i.e. "is the car
- *       moving backwards?";
- *     · the seat-swap check in `entity_action_tick`, which copies the triple, NEGATES it when
- *       `car_get_seat_property` reports the seat faces the other way, dots it with the normalised
- *       aim vector and treats `dot < -0.25` as "the target is behind this seat".
+ * vehicle_get_right_axis_ptr - address of the vehicle's world-space right axis.
+ * What it does: returns `this + 0xcc4` (the address, not the value), the vec3 `car + 0xd34`.
+ *  `vehicle_reset_from_frame` seeds it (1, 0, 0) beside the forward axis `+0xcb8` (0, 0, 1) and
+ *  the up axis `+0xcd0` (0, 1, 0) and multiplies all three by the body matrix.
  * Parameters: param_1 (this, ECX): the C_Vehicle (= `car + 0x70`).
- * Returns: int — `C_Vehicle + 0xcc4` (= `car + 0xd34`).
- * PS2 twin: — (inline accessor, inlined on PS2).
- * Evidence: VA 0x00425490. Receiver byte-proven
- *   `lea edi,[ebp + 0x70]` at the `entity_action_tick` callsite. Note the vector is NOT a row of
- *   the body matrix (that is at `car+0xdd4`, well above it) — it is a separately cached basis
- *   vector. Renamed from `FUN_00425490`.
+ * Returns: int - `C_Vehicle + 0xcc4` (= `car + 0xd34`).
+ * PS2 twin: - (inline accessor, inlined on PS2).
+ * Evidence: VA 0x00425490. Both callers use it for left / right: `entity_action_tick` copies it,
+ *  negates it when `car_get_seat_property` reports the other side, and on a dot below -0.25
+ *  with the aim vector moves the officer to the adjacent seat; `pursuit_event_tick` offsets a
+ *  horizontal line test 5 units along it. `car_update` and `pursuit_event_tick_driver` read the
+ *  same vec3 inline as the sign of a sideways dot. Receiver byte-proven
+ *  `lea edi,[ebp + 0x70]` at the `entity_action_tick` callsite. Renamed from `FUN_00425490`.
+ * Class layout: `exe-re/structs/vehicle.md` §1
  */
-int __fastcall vehicle_get_forward_ptr(int param_1)
+
+int __fastcall vehicle_get_right_axis_ptr(int param_1)
 
 {
   return param_1 + 0xcc4;
@@ -31468,8 +31466,7 @@ int __fastcall game_get_active_actor_list(int param_1)
  *
  * What it does: returns `*(this + 0xe4)`. The receiver is the **C_game** game-world singleton
  *   (`*(g_act_mission + 0x24)`, g_act_mission = 0x0065115c), and `C_game+0xe4` is the player
- *   actor — the field structs/game.md §1 already refers to as "player +0xe4" in the
- *   `game_vehicle_track_tick` and `game_is_valid_taxi_passenger` rows. This is the canonical
+ *   actor — the field `player` of structs/game.md §2. This is the canonical
  *   "who is the player" read used throughout the script VM and the AI dispatch; writers update
  *   the slot directly (no companion setter helper observed).
  *   It is also the source of the `*(world+0xe4) == this` "am I the player?" downcast gate that
@@ -31517,7 +31514,8 @@ undefined4 __fastcall game_get_frame_time_ms(int param_1)
  * Renamed from `FUN_00425550` (original Ghidra id). VA 0x00425550.
  * CONFIRMED: receiver is the C_game
  * singleton, not an actor (both callsites load ECX via act_mission_get_game). C_game+0x2b3c is the
- * mission sound ring (soundArena) - byte-proven in structs/soundArena.md (PS2 *(act_mission+0x20)+0xe80).
+ * mission sound ring (soundArena) - byte-proven in structs/sound_arena.md
+ * (PS2 *(act_mission+0x20)+0xe80).
  * Trivial __fastcall address-of accessor.
  * PS2 parallel: no named twin (inline accessor, inlined on PS2).
  * @param param_1  the C_game singleton (ECX).
@@ -31536,7 +31534,7 @@ int __fastcall game_get_sound_arena(int param_1)
  * receiver is C_game, not an actor. `param_1` is the C_game singleton; the police_manager is embedded
  * at C_game+0x2DA0 (single instance, size 0xB0), so this returns `param_1 + 0x2da0`. Confirmed by the
  * ECX receiver fingerprint at the police_manager_* callsites (called with eax from
- * act_mission_get_game, i.e. `this` = C_game). See structs/police_manager.md §1.
+ * act_mission_get_game, i.e. `this` = C_game). See structs/police_manager.md §4.
  *
  * PS2 parallel (no named twin — police_manager is embedded, so no separate accessor): the PS2 twin
  * struct is C_shvestky at `*(act_mission+0x20)+0x11E0`. No standalone PS2 symbol.
@@ -31674,7 +31672,7 @@ void thunk_dir8_table_normalized_006551a8_static_init(void)
  * at 0x00425590 whose address sits in the CRT `_initterm` table in `.data`, **20 bytes from
  * the entry pointing at `dir8_table_normalized_static_init`'s thunk**. Two adjacent
  * entries in the same init array. Renamed from `FUN_004255a0`.
- * Layout and the full table inventory: exe-re/structs/ai_check.md §3
+ * Layout and the full table inventory: exe-re/structs/ai_check.md §6
  */
 void dir8_table_normalized_006551a8_static_init(void)
 
@@ -31817,24 +31815,22 @@ undefined4 __fastcall ai_path_get_state(int param_1)
 }
 
 /*
- * ai_wayfind_set_checkpoint_container - store a value into the nav goal-test scratch block at +0x5c.
- * Renamed from `FUN_004256e0` (original Ghidra id). VA 0x004256e0.
- * CONFIRMED: the receiver is
- * NOT an actor - all 22 callsites load ECX = 0x655224 (g_ai_wayfind_cb_start), the nav goal-test scratch-global
- * block (ref_pos/src_pos vec3s). The pushed pointer (e.g. cop_NPC+0x1198) is the VALUE stored,
- * not `this`. Writes *(0x655224 + 0x5c) = param_2.
- * PS2 parallel: no named twin (inline scratch write, inlined on PS2).
- * @param param_1  the scratch block base (ECX = 0x655224).
- * @param param_2  value stored at scratch+0x5c.
- * @return         void.
+ * ai_wayfind_set_blocked_cons - installs the caller's blocked-connection list on the planner.
  *
- * ECX = 0x00655224 at all 29 references: 0x00655224 is the **ai_wayfind** route-planner
- *   singleton and `+0x5c` is its CHECKPOINT CONTAINER (`structs/ai_wayfind.md` §1).
- * Usage shape, from `entity_action_tick` case 0: set(entity+0x1198) ->
- *   `ai_wayfind_plan_shortest_route` -> `ai_wayfind_clear_checkpoint_container` — the
- *   caller installs its own blocked-connection list for the duration of one plan.
+ * What it does: One store, `this+0x5c` = param_2. The list stays installed until
+ *   `ai_wayfind_clear_blocked_cons`; `ai_wayfind_resolve_start_node` and the route strategies sweep
+ *   it around each search. Usage from `entity_action_tick` case 0: set(entity+0x1198), then
+ *   `ai_wayfind_plan_shortest_route`, then clear.
+ * Parameters: param_1 (ECX): the `ai_wayfind` singleton, 0x00655224 at all 22 callsites.
+ *   param_2 (vector of `blocked_con` *): the list, `entity+0x1198`.
+ * Returns: void: nothing.
+ * PS2 twin: - (inlined on the PS2).
+ * Evidence: VA 0x004256e0. 22 callers, all in `entity_action_tick`. Stride 0x10 is the element of
+ *   the PS2 type `gif::vector<blocked_con,2>`. Renamed from `FUN_004256e0`.
+ * Class layout: `exe-re/structs/ai_wayfind.md`
  */
-void __thiscall ai_wayfind_set_checkpoint_container(int param_1,undefined4 param_2)
+
+void __thiscall ai_wayfind_set_blocked_cons(int param_1,undefined4 param_2)
 
 {
   *(undefined4 *)(param_1 + 0x5c) = param_2;
@@ -31842,21 +31838,18 @@ void __thiscall ai_wayfind_set_checkpoint_container(int param_1,undefined4 param
 }
 
 /*
- * ai_wayfind_clear_checkpoint_container - zero the nav goal-test scratch block at +0x5c.
- * Renamed from `FUN_004256f0` (original Ghidra id). VA 0x004256f0.
- * CONFIRMED: receiver is
- * the nav goal-test scratch block (ECX = 0x655224 = g_ai_wayfind_cb_start), not an actor. Pair with
- * ai_wayfind_set_checkpoint_container. Writes *(0x655224 + 0x5c) = 0.
- * PS2 parallel: no named twin (inline scratch write, inlined on PS2).
- * @param param_1  the scratch block base (ECX = 0x655224).
- * @return         void.
+ * ai_wayfind_clear_blocked_cons - removes the installed blocked-connection list from the planner.
  *
- * See
- *   `ai_wayfind_set_checkpoint_container` — same singleton (0x00655224 = ai_wayfind),
- *   same field (`+0x5c` = the checkpoint container), and this is the release half of
- *   the install/plan/release triple. 14 references file-wide.
+ * What it does: One store, `this+0x5c` = 0. The release half of the install / plan / release triple
+ *   of `ai_wayfind_set_blocked_cons`.
+ * Parameters: param_1 (ECX): the `ai_wayfind` singleton, 0x00655224 at all 10 callsites.
+ * Returns: void: nothing.
+ * PS2 twin: - (inlined on the PS2).
+ * Evidence: VA 0x004256f0. 10 callers, all in `entity_action_tick`. Renamed from `FUN_004256f0`.
+ * Class layout: `exe-re/structs/ai_wayfind.md`
  */
-void __fastcall ai_wayfind_clear_checkpoint_container(int param_1)
+
+void __fastcall ai_wayfind_clear_blocked_cons(int param_1)
 
 {
   *(undefined4 *)(param_1 + 0x5c) = 0;
@@ -31867,7 +31860,7 @@ void __fastcall ai_wayfind_clear_checkpoint_container(int param_1)
  * door_get_state — the door's four-state open/closed value
  *
  * What it does: returns `*(int *)(this + 0x70)`, the `C_door::E_state` the door is in.
- *   Four values, not two (`structs/door.md` §4a, read off `door_ai`): 0 resting fully OPEN,
+ *   Four values, not two (`structs/door.md` §7a, read off `door_ai`): 0 resting fully OPEN,
  *   1 resting fully CLOSED, 2 opening, 3 closing. `door_set_state` writes only the two
  *   in-motion values; `door_ai` settles them back to 0 and 1 and then early-returns, so a
  *   door at rest costs nothing per frame. Every consumer branches on that: the two
@@ -31890,7 +31883,7 @@ void __fastcall ai_wayfind_clear_checkpoint_container(int param_1)
  *   census returns one. The `+0x70` OFFSET is genuinely shared with `C_human`, whose
  *   `+0x70` is its current animation id — but dispatcher case 0x181 HUMAN_GETACTANIMID
  *   reads that INLINE, never through this address. See `structs/human.md` for the C_human
- *   side and `structs/door.md` §4a for this one.
+ *   side and `structs/door.md` §7a for this one.
  *   Renamed from `FUN_00425700`.
  */
 undefined4 __fastcall door_get_state(int param_1)
@@ -32673,14 +32666,14 @@ int __fastcall entity_get_ai_logs(int param_1)
  *
  * What it does: returns `this + 0xf64`. `C_entity+0xf64` is the **`ai_fight_modes` SUB-OBJECT
  *   BASE** — the 6-slot combat-mode scorer (stride 0x34), documented in
- *   structs/ai_fight_modes.md and byte-proven in structs/entity.md §2. This is the fifth member
+ *   structs/ai_fight_modes.md and byte-proven in structs/entity.md §1. This is the fifth member
  *   of the C_entity AI sub-object getter set, alongside `entity_get_ai_vis_logs` (+0xb04),
  *   `entity_get_ai_sensors` (+0xbb4), `entity_get_ai_logs` (+0xe88) and
  *   `entity_get_human_type_group` (+0xf4c), which sit at consecutive VAs.
  * Parameters: param_1 (this, ECX): the C_entity.
  * Returns: int — `entity + 0xf64`, the `ai_fight_modes` base.
  * PS2 twin: — (no standalone symbol; inlined on PS2, where the sub-object sits at `+0x114c`).
- * Evidence: VA 0x00425ba0. `structs/entity.md` §2 records two independent ECX-receiver
+ * Evidence: VA 0x00425ba0. `structs/entity.md` §1 records two independent ECX-receiver
  *   witnesses for `+0xf64` as the object base —
  *   `lea ecx,[esi+0xf64]` at four `ai_fight_modes_set_enemy`/`_reset` callsites (⇒ embedded, not
  *   a pointer), and `mov ecx,[edi+0x30]` + `add ecx,0xf64` inside `ai_logs_event`, reaching the
@@ -36459,7 +36452,7 @@ void __thiscall entity_script_format_command(int param_1,uint param_2,undefined4
  * entity_process_command(this, cmd_index) — executes ONE command from a
  *   C_entity's mission-script command program. Indexes the stride-8
  *   {opcode, arg_ptr} array at this+0x10/+0x14 by cmd_index and switch()es on
- *   the opcode (0x1000..0x103f, the 64 entity commands of structs/entity.md §4d),
+ *   the opcode (0x1000..0x103f, the 64 entity commands of structs/entity.md §5),
  *   driving the entity's high-level AI: creating
  *   and installing ai_action tasks (ai_action_new_*,
  *   ai_action_manager_new_job), navigation, script flow
@@ -38613,10 +38606,10 @@ LAB_0042e297:
         operator_delete_wrapper(iVar4);
       }
     }
-    g_ai_wayfind_checkpoint_container = param_1 + 0x1198;
+    g_ai_wayfind_blocked_cons = param_1 + 0x1198;
     *(undefined4 *)(param_1 + 0x11b0) = 0;
     ai_wayfind_plan_shortest_route(&local_30,param_1 + 0xef0,0x13,1);
-    g_ai_wayfind_checkpoint_container = 0;
+    g_ai_wayfind_blocked_cons = 0;
     goto LAB_0042e3e1;
   case 4:
     pIVar1 = *(I3D_frame **)(param_1 + 0x68);
@@ -38762,16 +38755,15 @@ void __thiscall entity_get_head_pos(int param_1,undefined4 *param_2)
 
 /*
  * entity_script_switch(entity) -> void
- * What it does: drives the per-entity "faded / transparent" visibility
- *   substate on any C_entity — a cop, a gangster or a pedestrian.
- *   Gated on +0xf40==0. Compares the live distance/visibility value at
- *   +0xafc against the threshold at +0xf58 and toggles the faded flag at
- *   +0xf44 between 0 and 1; on entering the faded state it masks +0xf08
+ * What it does: hands any C_entity (a cop, a gangster or a pedestrian)
+ *   between script control and AI control by its AI priority.
+ *   Gated on +0xf40==0. Compares `ai_priority` at +0xafc (structs/entity.md §1)
+ *   against the threshold at +0xf58 and toggles the switch flag at
+ *   +0xf44 between 0 and 1; on setting the flag it masks +0xf08
  *   down to its 0x1c000 bits and calls program_leave_compact_block(0); on
  *   leaving it, if the script-control bit 0x200 of +0xf08 is set it raises
- *   bit 0x400, which lets a pending action command finish (structs/entity.md §4b).
- *   This is C_entity's `ScriptSwitch` — it hands the entity between script control and AI
- *   control based on how faded (i.e. how invisible to the player) it currently is.
+ *   bit 0x400, which lets a pending action command finish (structs/entity.md §2b).
+ *   This is C_entity's `ScriptSwitch`.
  * Parameters: entity (this) = the C_entity that is sensing.
  * Returns: void.
  * Evidence: VA 0x0042e5c0. Renamed from `FUN_0042e5c0` (original Ghidra id).
@@ -38781,10 +38773,10 @@ void __thiscall entity_get_head_pos(int param_1,undefined4 *param_2)
  *   IDENTICAL nesting, and the flag logic is byte-identical: `if (flags & 0x200) flags |= 0x400`.
  *   Every field sits at the 0x1e8 ai-state band delta:
  *     ai_state gate  PC +0xf40 <-> PS2 +0x1128      (an already-proven pair)
- *     faded flag     PC +0xf44 <-> PS2 +0x112c
+ *     switch flag    PC +0xf44 <-> PS2 +0x112c
  *     threshold      PC +0xf58 <-> PS2 +0x1140
  *     flag word      PC +0xf08 <-> PS2 +0x10f0
- * 🔑 This body-diff establishes the `+0xf08 <-> +0x10f0` mapping (structs/entity.md §4b),
+ * 🔑 This body-diff establishes the `+0xf08 <-> +0x10f0` mapping (structs/entity.md §2b),
  *   and the 0x1e8 delta matches the whole surrounding band. `entity_script_callback` writes the
  *   same word, which it reaches as `program+0x46c` from the C_program subobject.
  */
@@ -38814,7 +38806,7 @@ void __fastcall entity_script_switch(int entity)
 /*
  * entity_force_ai(entity, new_state, new_substate, f48_param, f5c_param) -> void
  * What it does: forces a C_entity NPC (cop/gangster/ped) into a new high-level
- *   AI state. Gated on the faded value `+0xafc < 0.75`. Handles a state-0→nonzero
+ *   AI state. Gated on `ai_priority`, `+0xafc < 0.75`. Handles a state-0→nonzero
  *   transition (drop carried object via `human_do_box_drop`),
  *   the `+0xf08 & 0x40000` / state-4 lock, the handcuff path (`+0xf4c==1 && new==4`
  *   → `human_free_hand`) + audio cue 0xea62, and a group-event push
@@ -38827,7 +38819,7 @@ void __fastcall entity_script_switch(int entity)
  * Evidence: VA 0x0042e650 (start verified by disasm `fld [ecx+0xafc]; fcomp 0.75`). A
  *   C_entity state-change, valid for any NPC of that class.
  * PS2 twin: `ForceAI__8C_entityFUiUiUif` — CONFIRMED (fingerprint:
- *   faded-gate 0.75; state-0 box-drop; 0x40000/state-4 gate; handcuff path + audio
+ *   priority gate 0.75; state-0 box-drop; 0x40000/state-4 gate; handcuff path + audio
  *   0xea62; group-event push; identical final writes; 4-arg arity). Callee twins
  *   surfaced here: `human_do_box_drop`↔`Do_FuckingBoxDrop__7C_human`,
  *   `human_free_hand`↔`FreeHand__7C_human`, `ai_logs_get_log_for_actor`
@@ -38920,8 +38912,8 @@ LAB_0042e78f:
  *     Its one consumer, `entity_force_script`, uses it to decide whether forcing the entity back onto
  *     its script is even meaningful.
  *
- *     Side effect: clears `entity+0xafc` (the "faded" / loss-of-
- *     sight timer — a C_entity perception field) to 0 on the
+ *     Side effect: clears `entity+0xafc` (`ai_priority`,
+ *     = program+0x60) to 0 on the
  *     "no list / list-empty / index-out-of-range" early exit.
  *     It operates on the C_entity scripted-AI instruction VM.
  *
@@ -39239,7 +39231,7 @@ uint __thiscall entity_force_script(int entity,char force_if_idle)
  *   flag word `C_entity+0xf08`, which this override reaches as `program+0x46c`:
  *     cb_action == 0 -> SET   bit 0x200 (the script drives the entity; raised by program_set_event)
  *     cb_action == 1 -> CLEAR bits 0xE00 (0x200 and the action hand-over bits 0x400 / 0x800)
- *   Any other value is ignored. Every bit of the word: structs/entity.md §4b.
+ *   Any other value is ignored. Every bit of the word: structs/entity.md §2b.
  *
  * Parameters:
  *   param_1 (ECX `this`) = the entity's C_program subobject at `C_entity+0xa9c`: this function
@@ -39430,7 +39422,7 @@ LAB_0042e9eb:                                        // recursion re-entry point
     }
     iVar6 = ai_groups_get_group(*(int *)(entity + 0x11ac));   // resolve the ai_group from its id
     if (iVar6 != 0) {
-      ai_group_push_event(entity,target_entity,0x42480000);   // queue a kind-1 group event, damage 50.0f (ai_group.md §1e)
+      ai_group_push_event(entity,target_entity,0x42480000);   // queue a kind-1 group event, damage 50.0f (ai_group.md §1d)
     }
     uVar1 = *(uint *)(entity + 0xf4c);              // entity type group (+0xf4c)
     if (uVar1 == 1) {                                // type group 1: talk group 0xb once, after 1.5-2 s, 50 %
@@ -39833,7 +39825,7 @@ void __thiscall ai_action_manager_clear_all(int param_1,char param_2)
  *
  *   A UID GENERATOR, not a refcount: nothing ever decrements the counter and no
  *   object is freed when it reaches zero; the post-increment value is stored as the
- *   new action's `uid` at action+0x04 (typed as `uid` in structs/entity.md §6c) and is what
+ *   new action's `uid` at action+0x04 (typed as `uid` in structs/entity.md §7) and is what
  *   every parent/child link in the three lists compares against.
  *
  *   Ghidra-discrepancy note (resolved via Game.exe byte-level disasm):
@@ -40254,7 +40246,7 @@ switchD_0042f082_caseD_2:
  *   Evidence: the PC and PS2 case sets are IDENTICAL, 15 for 15 -
  *   {0,1,8,0xa,0x10,0x11,0x14,0x18,0x1e,0x21,0x22,0x23,0x26,0x27,0x28}.
  *   The per-type INNER offsets differ between builds; that is the documented MIPS-vs-x86
- *   inner-payload packing difference (structs/entity.md §6c), so the type set is the
+ *   inner-payload packing difference (structs/entity.md §7), so the type set is the
  *   build-invariant here, not the offsets.
  */
 void ai_action_invalidate_path_for_actor(undefined4 *param_1,int param_2)
@@ -43643,7 +43635,7 @@ undefined4 * ai_action_new_strafe_beware(undefined4 *param_1,undefined4 param_2,
  *   `ai_action_manager::AddJob` - it appends an `ai_action*` to the JOBS list at
  *   +0x04/+0x08/+0x0c. Body-diff: PS2 calls `insert(data + count*4, 1, &action)` on the
  *   jobs vector; PC is the inlined MSVC `std::vector::push_back` of the same list.
- *   Rank 1 of the forced 18<->18 tail-cluster order-align (see structs/ai_action_manager.md §3b).
+ *   Rank 1 of the forced 18<->18 tail-cluster order-align (see structs/ai_action_manager.md §3c).
  */
 void __thiscall ai_action_manager_add_job(int param_1,undefined4 param_2)
 
@@ -46712,38 +46704,35 @@ void __thiscall entity_release_target(int param_1,int param_2)
 }
 
 /*
- * entity_rebind_neck_bone_handle(entity) -> void
- * What it does: re-resolves the NECK bone's I3D_frame after the entity's 3D model has been
- *   swapped, and caches the handle at entity+0x11cc. Calls the entity's I3D_frame
- *   (entity+0x68) "find-child-frame-by-name" method (vtable+0x38) with the bone name
- *   "Neck" (`s_Neck_00646520`); if that misses (returns 0) it retries with the lowercase
- *   variant "neck" (`s_neck`). If both miss, +0x11cc lands at 0 - i.e. the cache ends up
- *   INVALIDATED, which is the other half of what the name means. The cached neck frame is
- *   later read as a sight/look origin (its world position via UpdateWMatrixProc), gated on
- *   the alive byte +0x5d.
+ * entity_rebind_neck_frame(entity) -> void
+ * What it does: looks up the model's neck frame after the entity's 3D model has been
+ *   swapped and stores it at entity+0x11cc (neck_frame, structs/entity.md). Calls the
+ *   entity's I3D_frame (entity+0x68) find-child-frame-by-name method (vtable +0x38) with
+ *   "Neck" (`s_Neck_00646520`) and 0xffff as its last argument; when that returns 0 it
+ *   retries with "neck" (`s_neck`). The stored value is an I3D_frame pointer, 0 when
+ *   neither name is found. entity_ai builds the head direction and position from it each
+ *   frame, and entity_action_tick cases 0xb, 0xc and 0x24 take its world position and
+ *   forward.
  * Parameters: param_1 (this, ECX) = the C_entity.
- * Returns: void (caches the frame handle at +0x11cc, or 0 if the model has no neck bone).
+ * Returns: void.
  * PS2 twin: `InvalidateSelf__8C_entityFv`  [CONFIRMED]
- *   Byte-equivalent bodies: the same two string literals in the same order (PS2 0x4b1238 =
- *   "Neck", 0x4b1340 = "neck", read out of the ELF - Ghidra renders them as bare addresses,
- *   which is why a decomp string grep found nothing), the same 0xffff sentinel, the same
- *   retry-on-zero shape. Field pairs sit at ALREADY-PROVEN band deltas: frame +0x68 <-> +0x70
- *   is C_human's 0x64, and cache +0x11cc <-> +0x13b0 is 0x1e4, the same C_entity band delta as
- *   ai_action_manager (+0x1164 <-> +0x1348).
+ *   Both bodies read whole: the same frame vtable lookup (PC +0x38, PS2 +0x50) of "Neck",
+ *   then "neck", with 0xffff as the last argument on both builds, the same retry-on-zero
+ *   shape, the result stored at PC +0x11cc / PS2 +0x13b0. Frame +0x68 <-> +0x70 is
+ *   C_human's 0x64 band delta, and +0x11cc <-> +0x13b0 is 0x1e4, the C_entity band delta
+ *   of ai_action_manager (+0x1164 <-> +0x1348).
  * Evidence: VA 0x00433290.
- *   CLASS: it is a C_entity method, not a C_actor one. Its ONLY caller is
- *   `human_change_model`, behind `if (*(this+0x10) == 0x1b)` - kind 0x1b is C_entity - and
- *   the PS2 twin `_intern_ChangeModel__7C_human` guards the identical statement position with
- *   `if (*(this+0x50) == 0x1b) InvalidateSelf__8C_entityFv(...)`. Same slot, same guard, same
- *   kind constant on both builds.
- *   VERB: it is never called at construction, only after a model swap. PS2's `InvalidateSelf`
- *   names the CAUSE rather than the behaviour; `rebind` covers both: the stale binding is
- *   dropped and a new one is established against the replacement model.
- *   NB +0x11cc sits just before the C_entity weapon-AI band (+0x11d0..+0x11ec).
+ *   CLASS: a C_entity method. Its only caller is `human_change_model`, behind
+ *   `if (*(this+0x10) == 0x1b)` - kind 0x1b is C_entity - and the PS2 twin
+ *   `_intern_ChangeModel__7C_human` guards the identical statement position with
+ *   `if (*(this+0x50) == 0x1b) InvalidateSelf__8C_entityFv(...)`.
+ *   VERB: it runs only after a model swap; `rebind` says the frame is looked up again
+ *   against the replacement model.
  *   Renamed from `FUN_00433290`.
  * Layout: exe-re/structs/entity.md.
  */
-void __fastcall entity_rebind_neck_bone_handle(int param_1)
+
+void __fastcall entity_rebind_neck_frame(int param_1)
 
 {
   int iVar1;
@@ -49038,7 +49027,7 @@ undefined4 __thiscall entity_load_state(int param_1,void *param_2)
  *   The chain is anchored STRUCTURALLY: `entity_save_game_get_size` sums the sub-sizes and so
  *   names its own members, and `entity_get_state_size` / `entity_save_state` /
  *   `entity_load_state` land on exactly the predicted ranks.
- *   Its switch cases are the ai_action type ids of structs/entity.md §6b —
+ *   Its switch cases are the ai_action type ids of structs/entity.md §6 —
  *   an independent cross-check of that table.
  *
  * Evidence: renamed from `FUN_00435e00`.
@@ -51040,7 +51029,7 @@ undefined4 entity_get_target(void)
  *   names its own members, and `entity_get_state_size` / `entity_save_state` /
  *   `entity_load_state` land on exactly the predicted ranks.
  *   Exact arity (`this` + one uint); ratio x1.4. Companion of the type-0x2a
- *   `ai_action_new_strafe_beware` action (structs/entity.md §6b).
+ *   `ai_action_new_strafe_beware` action (structs/entity.md §6).
  *
  * Evidence: renamed from `FUN_00439050`.
  */
@@ -52106,7 +52095,8 @@ void __thiscall ai_fight_modes_force_mode(int param_1,undefined4 param_2,undefin
  * whose flags have neither 0x08 (requested this frame) nor 0x02 (one-shot) is demoted to
  * one-shot with `flags |= 0x22`. Then, if the slot is armed (0x01) and its next-due stamp +0x18
  * has passed, it stamps +0x14, draws a line from the slot's group (+0x04) in
- * `g_ai_talk_line_groups`, re-rolls once if the draw repeats the previous line (+0x08), and plays
+ * `g_ai_talk_line_groups`, replaces a draw equal to the previous line (+0x08) with
+ * `(line + 1) % line_count` (no `first_line` added back), and plays
  * it through `human_new_scream` - only while the talkman is enabled (`*this != 0`) and a
  * rand(101) draw is below the slot's percentage +0x1c. A one-shot slot is then disarmed; a
  * repeating one is rescheduled at now + delay (+0x0c) + rand(jitter) - jitter/2 (+0x10).
@@ -52117,7 +52107,7 @@ void __thiscall ai_fight_modes_force_mode(int param_1,undefined4 param_2,undefin
  * the proven singleton pair, same re-arm mask `| 0x22`, same due-and-enabled gate, same talk-table
  * lookups (PC `g_ai_talk_line_groups[i].first_line` / `.line_count` are the +4 and +8 columns
  * of the same 0xc-stride table
- * PS2 calls `ai_talk_table`), same repeat re-roll via modulo, `human_new_scream` <->
+ * PS2 calls `ai_talk_table`), same repeat rule via modulo, `human_new_scream` <->
  * `NewScream__7C_human`, and the same rand(101)-vs-percentage gate. PC folds the PS2 pair of tests
  * `(x & 8) == 0 && (x & 2) == 0` into the single equivalent `(x & 0xa) == 0`.
  * Evidence: VA 0x00439ce0. 4 slots, stride 0x24. Renamed from `FUN_00439ce0`.
@@ -52374,7 +52364,7 @@ void __fastcall ai_talkman_begin_frame(int param_1)
  * NULL-guarded `fstp dword [eax]` at the probe's tail), so +0x54 holds the threshold and the
  * +0x58 sentinel is never overwritten. The 8 clearances stay inside the probe. The probe's
  * return value, stored at +0x50, is the permit mask of directions whose clearance is at least
- * that threshold. See exe-re/structs/ai_space_coverage.md §1a and exe-re/structs/ai_check.md §1a.
+ * that threshold. See exe-re/structs/ai_space_coverage.md §2a and exe-re/structs/ai_check.md §4a.
  *
  * Body: this+0x50 = ai_check_builder_test_space_8dir(anchor_pos, 10.0f, this+0x54); copy the
  * anchor to +0x40..+0x48; stamp +0x4c from the mission clock; write 0x29a to +0x58; then the
@@ -52502,7 +52492,7 @@ void __thiscall ai_space_coverage_tick(int param_1,float *param_2,undefined4 par
  * 8-direction table — byte-for-byte the same 24 floats as `g_dir8_table_normalized` at
  * `0x006550d8`, with its own static initialiser (`dir8_table_normalized_006551a8_static_init`). MSVC emitted the table once per
  * translation unit; PS2 has a single `Dir8TableN` that both this method and `TestSpace8RExt`
- * read. See `structs/ai_check.md` §3a.
+ * read. See `structs/ai_check.md` §6a.
  *
  * Parameters: param_1 (this, ECX): the `ai_space_coverage`. param_2 (undefined4 *): out — the
  * chosen direction as a vec3.
@@ -52600,11 +52590,11 @@ void __thiscall ai_space_coverage_prefer_dir(int param_1,undefined4 param_2,floa
  *   array; PC `*(g_act_mission+0x24)` -> `+0xf0`/`+0xf4` begin/end (the same mission object the
  *   soundArena hangs off at +0x2b3c).
  *   Both gate each actor on **kind == 0x1b** read through the ALREADY-PROVEN kind-field pair
- *   (PC `+0x10` <-> PS2 `+0x50`, structs/entity.md §1).
+ *   (PC `+0x10` <-> PS2 `+0x50`, structs/entity_kind.md §1).
  *   Both then run a `GetJob(manager, TYPE)` chain and compare the returned action's payload
  *   (`*(job+0x20) + N`) against `this`. **Shared action type ids 0x1e (NormalFight) and 0x1d
  *   (CrouchFight)**; PC additionally tests 0x1c (CornerFight), 0x21 (PoliceAction) and 6 (Fire)
- *   — see structs/entity.md §6b for the id table.
+ *   — see structs/entity.md §6 for the id table.
  */
 undefined4 __fastcall entity_is_in_danger(int param_1)
 
@@ -52788,7 +52778,7 @@ void __thiscall entity_tick_ghosts(int param_1,uint param_2)
  * gate on flag 0x20 and the same `UpdateWMatrixProc` callee, same trailing dirty
  * flag = 1. Record stride PC 0x1c <-> PS2 0x20. 688 B against PS2's Add 456 B plus
  * the 292 B `reserve` MSVC inlined = 0.92. Renamed from `FUN_0043a430`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §2, §1a.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §3, §1a.
  */
 void __thiscall
 ai_ghost_add_or_refresh(int param_1,int param_2,int param_3,undefined4 param_4,undefined4 param_5)
@@ -52906,7 +52896,7 @@ ai_ghost_add_or_refresh(int param_1,int param_2,int param_3,undefined4 param_4,u
  * `Add`. 80/156 B = 0.51, in line with the other three small members of this class
  * (0.51-0.59) - MIPS prologue/epilogue and delay slots inflate small functions
  * systematically. Renamed from `FUN_0043a6e0`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §2.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §3.
  */
 void ai_ghost_add_human_colliders(int param_1,undefined4 param_2,undefined4 param_3)
 
@@ -52945,7 +52935,7 @@ void ai_ghost_add_human_colliders(int param_1,undefined4 param_2,undefined4 para
  * agrees on both builds (Init first). PC clears in place where PS2 frees the
  * buffer via `__dl__FPv` and zeroes all three pointers - an allocator-strategy
  * difference, not a behavioural one. 64/108 B = 0.59. Renamed from `FUN_0043a730`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §2.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §3.
  */
 void __fastcall ai_ghost_clear_all(int param_1)
 
@@ -52979,7 +52969,7 @@ void __fastcall ai_ghost_clear_all(int param_1)
  *   PC clears in place where PS2 frees the buffer through `__dl__FPv` and zeroes all three
  *   pointers: an allocator-strategy difference, not a behavioural one. 64/116 B = 0.55.
  * Evidence: VA 0x0043a770. Renamed from `FUN_0043a770`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §2.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §3.
  */
 void __fastcall ai_ghost_clear_all_and_mark_changed(int param_1)
 
@@ -52997,7 +52987,8 @@ void __fastcall ai_ghost_clear_all_and_mark_changed(int param_1)
  *   `param_2`, shifts the remaining records down by one 0x1c-byte slot (a 7-dword copy) and
  *   shrinks the end pointer by 0x1c. Removes ALL matches, not just the first — the list may
  *   shrink by any number of entries, including all of them. Called when an actor dies or leaves
- *   the world so no entity keeps remembering an object that no longer exists.
+ *   the world so no entity keeps remembering an object that no longer exists. It does not set
+ *   `changed_flag` (`+0x10`), so the ignore list keeps the erased colliders until the next rebuild.
  * Parameters: param_1 (this, ECX): the `ai_ghost` sub-object at `C_entity+0x1268`.
  *   param_2 (C_actor *): the departing actor; every record owned by it is erased.
  * Returns: void.
@@ -53012,7 +53003,7 @@ void __fastcall ai_ghost_clear_all_and_mark_changed(int param_1)
  *   PC base at `C_entity+0x1268`.
  * Evidence: VA 0x0043a7b0. Renamed from `FUN_0043a7b0`. A method of `ai_ghost`, not a
  *   class-agnostic generic std::vector erase.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §2.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_ghost.md §3.
  */
 void __thiscall ai_ghost_invalidate_actor(int param_1,int param_2)
 
@@ -53745,12 +53736,12 @@ uint * __fastcall uint_ptr_min(uint *param_1,uint *param_2)
  *   param_3 (undefined4 *): `dest` - destination buffer, must hold the whole range.
  * Returns: void.
  * Evidence: VA 0x0043afb0. The element size is read straight off the loop: 0x15 dwords = 0x54 bytes,
- * which is the `ai_character_log` stride documented in `structs/ai_logs.md` §1a.
+ * which is the `ai_character_log` stride documented in `structs/ai_logs.md` §1b.
  * It has exactly ONE caller, and that caller passes `C_entity+0xeac` - the same
  * address `ai_logs.md` records as the log vector's begin pointer. Two independently
  * documented facts agree, which is what lifts this above a mechanical
  * `stl_copy_range_stride_0x54`. NO PS2 TWIN possible - GCC inlines the copy. Renamed from `FUN_0043afb0`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_logs.md §1a.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_logs.md §1b.
  */
 void __fastcall ai_character_log_copy_range(undefined4 *param_1,undefined4 *param_2,undefined4 *param_3)
 
@@ -53880,7 +53871,7 @@ void crt_atexit_register_0043b020(void)
  * `@3056@` GCC adjustor thunks. A stub-evidence screen shows it
  * 16-aligned, `cc` padding before, one dataref, zero direct callers - a real
  * vtable stub. Renamed from `FUN_0043b030`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/program.md §2.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/program.md §1, §3.
  */
 void program_base_thunk_entity_scalar_deleting_dtor(void)
 
@@ -53909,7 +53900,7 @@ void program_base_thunk_entity_scalar_deleting_dtor(void)
  * `@3056@` GCC adjustor thunks. A stub-evidence screen shows it
  * 16-aligned, `cc` padding before, one dataref, zero direct callers - a real
  * vtable stub. Renamed from `FUN_0043b040`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/program.md §2.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/program.md §1, §3.
  */
 void program_base_thunk_entity_save_game_get_size(void)
 
@@ -53938,7 +53929,7 @@ void program_base_thunk_entity_save_game_get_size(void)
  * `@3056@` GCC adjustor thunks. A stub-evidence screen shows it
  * 16-aligned, `cc` padding before, one dataref, zero direct callers - a real
  * vtable stub. Renamed from `FUN_0043b050`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/program.md §2.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/program.md §1, §3.
  */
 void program_base_thunk_entity_save_game_save(void)
 
@@ -53967,7 +53958,7 @@ void program_base_thunk_entity_save_game_save(void)
  * `@3056@` GCC adjustor thunks. A stub-evidence screen shows it
  * 16-aligned, `cc` padding before, one dataref, zero direct callers - a real
  * vtable stub. Renamed from `FUN_0043b060`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/program.md §2.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/program.md §1, §3.
  */
 void program_base_thunk_entity_save_game_load(void)
 
@@ -54235,7 +54226,7 @@ void __thiscall ai_group_send_sniff_event(int param_1,undefined4 param_2,int par
  *     Renamed from `FUN_0043b360`.
  * PS2 twin: UnderAttack__8ai_groupFP8C_entityP7C_actorf  [CONFIRMED] — the mangled parameter
  *     list `P8C_entity P7C_actor f` is what types the three arguments.
- * Class layout: exe-re/structs/ai_group.md §1e
+ * Class layout: exe-re/structs/ai_group.md §1d
  */
 void __thiscall ai_group_push_event(int param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4)
 
@@ -54565,7 +54556,7 @@ float10 __thiscall ai_group_get_car_factor(int param_1,int param_2)
 }
 
 /*
- * ai_group_get_closest_usable_car(this, pos, out_pos, out_flag) -> int —
+ * ai_group_get_closest_usable_car(this, pos, unused_a, unused_b) -> int —
  *     Find the nearest eligible vehicle within 50 m (2500.0 sq) of `pos`.
  *     Scans the pursuit member vector at `this+0x44`/`+0x48` first, then the
  *     world actor/vehicle lists at `*(g_act_mission+0x24)+0xf0` and `+0x100`,
@@ -54573,10 +54564,10 @@ float10 __thiscall ai_group_get_car_factor(int param_1,int param_2)
  *     (vehicle), state `+0x2150 < 0x29a`, damage scalar `+0x688` under
  *     threshold, and `car_is_usable(3)`.
  *
- * Calling convention: `__thiscall` — `this` in ECX. (Ghidra's inferred
- *   2-param signature understates the call: callers also pass out_pos /
- *   out_flag pointers.)
- * Params: pos = query position vec3; out_pos / out_flag = result out-params.
+ * Calling convention: `__thiscall` — `this` in ECX; pops three stack arguments (`ret 0xc`).
+ * Params: pos = query position vec3. The caller also passes two pointers, and the machine code
+ *   never uses them: the second argument's slot serves as a scratch float, the third is untouched.
+ *   So `ai_fight_manager_tick`'s flag stays 0 (structs/ai_fight_manager.md §4a).
  * Returns: the nearest eligible vehicle pointer, or 0.
  * Renamed from `FUN_0043b770`.
  * PS2 twin: GetCarClosestAndUsable__8ai_groupFP8S_vectorP8S_vectorPUi  [CONFIRMED]
@@ -55506,7 +55497,7 @@ undefined4 __thiscall ai_groups_load(int param_1,undefined4 param_2)
  * Parameters: param_1 (this, ECX): the `ai_groups` singleton. param_2 (C_actor *): the actor to purge.
  * Returns: void.
  * PS2 twin: `InvalidateActor__9ai_groupsFP7C_actor`  [CONFIRMED]
- * Evidence: VA 0x0043ca60. CONFIRMED - three containers scrubbed in the same order with the same geometry (stride 8 keyed on element +0x00; stride 4; stride 0x14 matched on element +0x0c OR +0x10), the same remember-the-emptied-group-then-splice sequence, and the same final pass over the registry's tracked vector. 🔑 CONTAINER LEVER: PS2's `erase__Q23std68__vector_imp<>FP14ai_group_event` names the third container's element type `ai_group_event` (0x14 bytes, two actor fields) - which the PC decomp could never supply. Structural twin of `ai_fight_manager_invalidate_actor`, exactly as ai_group.md §4 hunt 1 predicted. Renamed from `FUN_0043ca60`.
+ * Evidence: VA 0x0043ca60. CONFIRMED - three containers scrubbed in the same order with the same geometry (stride 8 keyed on element +0x00; stride 4; stride 0x14 matched on element +0x0c OR +0x10), the same remember-the-emptied-group-then-splice sequence, and the same final pass over the registry's tracked vector. 🔑 CONTAINER LEVER: PS2's `erase__Q23std68__vector_imp<>FP14ai_group_event` names the third container's element type `ai_group_event` (0x14 bytes, two actor fields) - which the PC decomp could never supply. Structural twin of `ai_fight_manager_invalidate_actor`, exactly as ai_group.md §8 hunt 1 predicted. Renamed from `FUN_0043ca60`.
  * Layout and the full PC<->PS2 method table: exe-re/structs/ai_group.md
  */
 void __thiscall ai_groups_invalidate_actor(int param_1,int param_2)
@@ -56061,7 +56052,7 @@ void __thiscall ai_follow_manager_add_follower_with_destination(int param_1,int 
  *   __12C_sledovacka.
  * Evidence: VA 0x0043d200. Renamed from `FUN_0043d200`. The pursuit_event_* family is the
  *   generic vehicle-task dispatcher C_sledovacka; nothing here is police.
- * Layout and the state machine: exe-re/structs/ai_follow_manager.md §3
+ * Layout and the state machine: exe-re/structs/ai_follow_manager.md §4
  */
 void __fastcall ai_follow_manager_update(int param_1)
 
@@ -56842,7 +56833,7 @@ void __thiscall ai_follow_manager_invalidate_actor(int param_1,int param_2)
  *   `RemoveCar__12C_sledovacka` <-> `pursuit_event_remove_vehicle`; event 2 delegates to
  *   `DelFollower__17ai_follow_manager` <-> `ai_follow_manager_del_follower`.
  * Evidence: VA 0x0043df40. Renamed from `FUN_0043df40` (original Ghidra id).
- * Layout and the state machine: exe-re/structs/ai_follow_manager.md §3
+ * Layout and the state machine: exe-re/structs/ai_follow_manager.md §4
  */
 void __thiscall ai_follow_manager_event(int param_1,int param_2,int param_3)
 
@@ -56961,7 +56952,7 @@ void __thiscall ai_follow_manager_event(int param_1,int param_2,int param_3)
  * `return 0` in the image onto one address. The mapping is a property of that ONE
  * callsite, not of this symbol — asserting it on the symbol would be false for every
  * other caller that shares the fold.
- * See exe-re/structs/ai_follow_manager.md §2 (the STRUCTURAL row).
+ * See exe-re/structs/ai_follow_manager.md §3 (the STRUCTURAL row).
  */
 undefined1 stub_retfalse_args4_0043e0a0(void)
 
@@ -57273,26 +57264,26 @@ undefined4 __thiscall ai_follow_manager_load(int param_1,int param_2)
  * ai_fight_manager_join_party — enrols an entity in a fight party, creating the party if needed
  *
  * What it does: scans the manager's stride-0x48 `ai_fight_followship` vector at `this+0x04`/
- *   `+0x08` for a party whose commander (`party+0x40`) is `param_3`, whose representative
+ *   `+0x08` for a party whose target (`party+0x40`) is `param_3`, whose commander
  *   entity (`party+0x3c`) carries the same group key at `+0xf4c` as `param_2`, and whose kind
  *   (`party+0x30`) is not 1. On a match it first walks that party's inner stride-0x14
  *   `ai_fight_member` sublist and returns immediately if `param_2` is already a member;
  *   otherwise it appends a member record, calls `ai_fight_followship_set_commander` to
  *   (re-)elect the leader, and extends the party's formation deadline `party+0x2c` by 1000 ms.
  *   If no party matches, it builds a fresh 0x48-byte record on the stack — zeroing it, seeding
- *   the formation deadline to the mission clock + 500 ms, storing `param_3` as commander and a
+ *   the formation deadline to the mission clock + 500 ms, storing `param_3` as target and a
  *   flag derived from `param_2+0x11ac` — calls `set_commander` on it, and inserts it into the
  *   manager's party vector.
  * Parameters: param_1 (this, ECX): the `ai_fight_manager` singleton (0x00655318).
  *   param_2 (C_entity *): the entity joining the fight.
- *   param_3 (C_actor *): the commander whose party is being joined or created.
+ *   param_3 (C_actor *): the target (entity+0x1280) of the party being joined or created.
  * Returns: void.
  * PS2 twin: `JoinParty__16ai_fight_managerFP8C_entityP7C_actor`  [CONFIRMED]
  *   Body-diffed on both builds. Party stride PC **0x48** <-> PS2 **0x60** is proven TWICE inside
  *   this one body — by the walk divisor and, independently, by the zero-fill (PC clears 0x12
  *   dwords = 0x48 B where PS2 issues `memset(..., 0x60)`). Shared magics **1000** (deadline bump)
  *   and **500** (new-party expiry offset); the same field pairs as the rest of the class
- *   (commander `+0x40`/`+0x44`, kind `+0x30`/`+0x34`, deadline `+0x2c`/`+0x30`); `ai_fight_member`
+ *   (target `+0x40`/`+0x44`, kind `+0x30`/`+0x34`, deadline `+0x2c`/`+0x30`); `ai_fight_member`
  *   is 0x14 bytes on BOTH builds. PC inlines the vector insert that PS2 calls out to
  *   `insert__…<ai_fight_member>`. 608/888 B = 0.68.
  * Evidence: VA 0x0043e610. Renamed from `FUN_0043e610`.
@@ -57300,7 +57291,7 @@ undefined4 __thiscall ai_follow_manager_load(int param_1,int param_2)
  *   capstone census in which **6 callsites load the `ai_fight_manager` singleton 0x00655318 into
  *   ECX before calling this function** — a receiver that rules out `C_sledovacka`
  *   (`pursuit_event_*`) outright.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_fight_manager.md §2a.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_fight_manager.md §3c.
  */
 void __thiscall ai_fight_manager_join_party(int param_1,int param_2,int param_3)
 
@@ -57403,10 +57394,10 @@ LAB_0043e840:
 /*
  * ai_fight_manager_leave_party — removes an entity from its fight party, disbanding or re-electing as needed
  *
- * What it does: Two search arms selected by whether a commander was supplied:
+ * What it does: Two search arms selected by whether a target was supplied:
  *   param_3 == 0 - scan EVERY party for a record holding `param_2`;
- *   param_3 != 0 - scan only parties whose commander (`party+0x40`) is `param_3`
- *     AND whose representative entity (`party+0x3c`) carries the same group key
+ *   param_3 != 0 - scan only parties whose target (`party+0x40`) is `param_3`
+ *     AND whose commander (`party+0x3c`) carries the same group key
  *     at `+0xf4c` as `param_2`.
  * On a hit it erases the entity's `ai_fight_member` record (stride 0x14) from the
  * party's member vector, then dispatches three ways:
@@ -57418,7 +57409,7 @@ LAB_0043e840:
  *     to elect a replacement leader.
  * Parameters: param_1 (this, ECX): the `ai_fight_manager` singleton (0x00655318).
  *   param_2 (C_entity *): the member leaving. param_3 (C_actor *): the party
- *   commander to restrict the search to, or 0 to search every party.
+ *   target to restrict the search to, or 0 to search every party.
  * Returns: int *: an internal iterator/pointer artefact of the shared return path; no
  *   caller consumes it. Treat as void.
  * PS2 twin: `LeaveParty__16ai_fight_managerFP8C_entityP7C_actor`  [CONFIRMED]
@@ -57428,7 +57419,7 @@ LAB_0043e840:
  * calls `erase__…<ai_fight_member>` / `__as__19ai_fight_followship`; party stride
  * PC 0x48 <-> PS2 0x60, member stride 0x14 on both. 848/788 B = 1.08. Receiver
  * INDEPENDENTLY byte-proven: 8 callsites load the singleton 0x00655318 into ECX. Renamed from `FUN_0043e870`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_fight_manager.md §2a.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_fight_manager.md §3c.
  */
 int * __thiscall ai_fight_manager_leave_party(int param_1,int *param_2,int *param_3)
 
@@ -57584,7 +57575,7 @@ code_r0x0043ea82:
  * ai_fight_followship_set_commander — elect the party's commander
  *
  * What it does: chooses which member of one `ai_fight_followship` (a fight party) leads it and
- * stores that choice in the party's commander field at `party+0x40`. Called whenever the current
+ * stores that choice in the party's commander field at `party+0x3c`. Called whenever the current
  * commander stops being valid — most visibly from `ai_fight_manager_invalidate_actor`, which
  * calls it after erasing a dead or departed actor from a party that still has members left.
  * Parameters: param_1 (this, ECX): the `ai_fight_followship` party.
@@ -57769,7 +57760,7 @@ LAB_0043ed50:
  *   Body-diffed both builds. Opens with the free-seat count and bails on 0; walks the
  *   party's stride-0x14 member vector collecting boardable members into an 8-slot local
  *   index array (same array size, same leader-first flag on both builds); then creates the
- *   party with `ai_fight_manager_new_car_party(car, commander)` exactly where PS2 calls
+ *   party with `ai_fight_manager_new_car_party(car, target)` exactly where PS2 calls
  *   `NewCarParty`. Members qualify on the same three tests: no vehicle or already in THIS
  *   car, a state field != 2, and a matching group/team id.
  *   🔑 This one diff also CONSUMER-PINNED both of its callees - see their docblocks.
@@ -57897,12 +57888,12 @@ LAB_0043ef34:
 }
 
 /*
- * ai_fight_manager_new_car_party(car, leader) -> party* — allocates a new ai_fight
- *     car-party (operator_new(0x48)), zero-inits it, stores `car` (low byte at +0x00)
- *     + the leader actor (+0x44) + the world frame counter (+0x2b0c via g_act_mission),
+ * ai_fight_manager_new_car_party(car, target) -> party* — allocates a new ai_fight
+ *     car-party (operator_new(0x48)), zero-inits it, stores the target (+0x40), the car (+0x44)
+ *     + the world frame counter (+0x2b0c via g_act_mission) at +0x2c, kind 1 at +0x30,
  *     and sets the car's state field +0x2150 = 0x29a (the pursuit-suppressed
  *     sentinel) so the car is excluded from future closest-usable-car searches.
- * Params: param_1 = the car being taken; param_2 = leader actor (record+0x40).
+ * Params: param_1 = the car being taken; param_2 = the target (record+0x40).
  * Returns: undefined4* — the new car-party object, or 0 on allocation failure.
  * Evidence: VA 0x0043f090; the +0x2150=0x29a write mirrors the PS2 twin's
  *   +0x23ac=0x29a (taken-car suppression handshake).
@@ -57913,14 +57904,14 @@ LAB_0043ef34:
  *   party-record strides this class documents, which alone makes the mapping falsifiable.
  *   Then the same field writes in the same order: the mission clock into the form deadline
  *   (PC `+0x2c` <-> PS2 `+0x30`), **1** into the kind field (`+0x30` <-> `+0x34`)
- *   confirming 1 = CAR party, the commander (`+0x40` <-> `+0x44`), the car (`+0x44` <->
+ *   confirming 1 = CAR party, the target (`+0x40` <-> `+0x44`), the car (`+0x44` <->
  *   `+0x48`), and finally the `0x29a` none/unset sentinel into the CAR itself
  *   (PC `car+0x2150` <-> PS2 `car+0x23ac`).
  *   ⚠️ The form deadline is initialised to the CURRENT clock, not clock+N;
  *   `ai_fight_manager_adjust_form_time` is what pushes it out, by 10000 ms at a time.
  *   ⚠️ Ghidra renders the PC signature with 2 params where PS2 has 3 — the receiver is
  *   unused in the body and was optimised away, so PC param_1 = the car and param_2 = the
- *   commanding actor.
+ *   target actor.
  *   🔑 CONSUMER-PINNED by `ai_fight_followship_take_car`, which calls this at the same
  *   position on both builds. It independently re-proves the whole +4 PS2 field delta.
  */
@@ -58205,7 +58196,7 @@ int __fastcall ai_fight_followship_compute_position(int param_1)
 /*
  * ai_fight_followship_must_car_hunt — does this party need a VEHICLE to reach its target?
  *
- * What it does: gated on the party commander's target being a player or an NPC entity
+ * What it does: gated on the party's target (`party+0x40`) being a player or an NPC entity
  * (`kind == 2 || kind == 0x1b`). It then branches on what the target is currently inside
  * (`entity+0x98`):
  *   - **on foot** (no vehicle): returns 1 when the target is more than **10000.0** squared units
@@ -58327,7 +58318,7 @@ LAB_0043f71c:
  * PS2 twin: `DisbandCarParty__16ai_fight_managerFP19ai_fight_followshipb`  [CONFIRMED]
  *   CONSUMER-PINNED, not order-aligned: `ai_fight_manager_invalidate_actor` calls this at
  *   all three points where its confirmed PS2 twin `Invalidate__16ai_fight_manager` calls
- *   `DisbandCarParty` - the commander arm, the car arm, and the party-became-empty arm.
+ *   `DisbandCarParty` - the target arm, the car arm, and the party-became-empty arm.
  *   The `b` in the mangled signature is the do_notify flag this function already
  *   documents, and PS2 passes 0 at all three of those callsites, matching PC.
  */
@@ -58427,11 +58418,11 @@ void __thiscall ai_fight_manager_disband_followship(int param_1,int param_2,char
 }
 
 /*
- * ai_fight_manager_adjust_form_time — push out the formation deadline of every party led by an
- *     actor
+ * ai_fight_manager_adjust_form_time — push out the formation deadline of every party with a given
+ *     target
  *
  * What it does: walks the manager's stride-0x48 `ai_fight_followship` vector (+0x04/+0x08) and,
- * for every party whose commander field at `party+0x40` is the given actor AND whose state field
+ * for every party whose target field at `party+0x40` is the given actor AND whose state field
  * at `party+0x30` is 0, adds **10000** ms to the deadline at `party+0x2c`. Both conditions must
  * hold; parties in a non-zero state are left alone.
  * Despite the PS2 verb "Adjust" the operation is MONOTONIC — the constant is added, never
@@ -58440,12 +58431,12 @@ void __thiscall ai_fight_manager_disband_followship(int param_1,int param_2,char
  * `ComputePosition` / `SetCommander` methods, but that reading is INFERRED [M] — the field itself
  * is only ever compared against the mission clock. The developer's token is kept rather than
  * expanded into a meaning the body does not prove.
- * Parameters: param_1 (this, ECX): the `ai_fight_manager`. param_2 (C_actor *): the commanding
+ * Parameters: param_1 (this, ECX): the `ai_fight_manager`. param_2 (C_actor *): the target
  * actor whose parties are extended.
  * Returns: void.
  * PS2 twin: `AdjustFormTime__16ai_fight_managerFP7C_actor`  [CONFIRMED]
  * Evidence: VA 0x0043f950. Shared magic **10000**; identical two-condition guard; and the three
- * touched fields sit at a consistent flat +4 PS2 delta (commander PC +0x40 <-> PS2 +0x44, state
+ * touched fields sit at a consistent flat +4 PS2 delta (target PC +0x40 <-> PS2 +0x44, state
  * +0x30 <-> +0x34, deadline +0x2c <-> +0x30) — the same delta the independently-confirmed
  * `ai_fight_manager_get_party` and `ai_fight_manager_invalidate_actor` show on the same record.
  * Record stride PC 0x48 <-> PS2 0x60. Ratio 96/128 = 0.75.
@@ -58481,11 +58472,11 @@ void __thiscall ai_fight_manager_adjust_form_time(int param_1,int param_2)
  * entity field at element `+0x00` matches, and on a hit writes the member INDEX to
  * the out-param and returns the party record.
  * Two search modes, selected by param_3: 0 searches every party; otherwise only
- * parties whose commander field (`party+0x40`) equals param_3.
+ * parties whose target field (`party+0x40`) equals param_3.
  * Parameters: param_1 (this, ECX): the `ai_fight_manager`. param_2 (C_entity *): the member to find. param_3 (C_actor *): 0 = search all parties, else restrict to the parties commanded by this actor. param_4 (uint *): out - the member's index within its party.
  * Returns: int *: the matching `ai_fight_followship` record, or NULL when the entity is in no party.
  * PS2 twin: `GetParty__16ai_fight_managerFP8C_entityP7C_actorPUi`  [CONFIRMED]
- * Evidence: VA 0x0043f9b0. CONFIRMED - identical dual-branch search (all-parties vs commander-filtered), identical inner stride-0x14 member scan keyed on element +0x00, identical index-via-out-param / record-via-return contract, and the same commander field the sibling `ai_fight_manager_adjust_form_time` tests (PC +0x40 <-> PS2 +0x44). Arity 4<->4 matching `FP8C_entityP7C_actorPUi`. Ratio 272/272 = **1.00**, exact. Renamed from `FUN_0043f9b0`.
+ * Evidence: VA 0x0043f9b0. CONFIRMED - identical dual-branch search (all-parties vs target-filtered), identical inner stride-0x14 member scan keyed on element +0x00, identical index-via-out-param / record-via-return contract, and the same target field the sibling `ai_fight_manager_adjust_form_time` tests (PC +0x40 <-> PS2 +0x44). Arity 4<->4 matching `FP8C_entityP7C_actorPUi`. Ratio 272/272 = **1.00**, exact. Renamed from `FUN_0043f9b0`.
  * Layout and the full PC<->PS2 method table: exe-re/structs/ai_fight_manager.md
  */
 int * __thiscall ai_fight_manager_get_party(int param_1,int param_2,int param_3,uint *param_4)
@@ -58628,7 +58619,7 @@ void __fastcall ai_fight_manager_destroy(int param_1)
  *     Per-frame tick of the ai_fight_manager over its fight FOLLOWSHIP records
  *     (vector at manager+0x04/+0x08, stride 0x48). For each group, on a ~2 s heartbeat
  *     (record+0x2c timer vs the world frame clock at *(g_act_mission+0x24)+0x2b0c):
- *       - state +0x30 == 0: if the leader is on foot near a usable car, find the
+ *       - kind +0x30 == 0: if the target is in a moving car over 20 units away, find the
  *         nearest car (`ai_group_get_closest_usable_car`) and commandeer it
  *         (`ai_fight_followship_take_car`), inserting a new on-wheels group record;
  *       - state +0x30 == 1: run the active vehicle-pursuit member state machine —
@@ -59340,7 +59331,7 @@ switchD_0043fe57_caseD_a:
  * ai_fight_manager_invalidate_actor — scrub one actor out of every fight party it appears in
  *
  * What it does: Reverse-walks the stride-0x48 party vector and dispatches three ways per record:
- *   - the actor IS the party COMMANDER (`party+0x40`): if the party is a car party
+ *   - the actor IS the party TARGET (`party+0x40`): if the party is a car party
  *     (`party+0x30 == 1`) remove its car from the pursuit-event manager
  *     (`pursuit_event_remove_vehicle`) and disband it; otherwise splice the record
  *     out of the party vector.
@@ -61942,7 +61933,7 @@ void ai_manager_static_dtor(void)
  *     this+0x04  = check_seg_clusters  (0x0065521c)  POD, no funclet
  *     this+0x00  = ai_check_builder    (0x00655218)  no state, nothing to destroy
  *     this+0x110 = one member of two vectors (+0x110, +0x120), destroyed inline through
- *                  the member cursor [ebp-0x10] (structs/ai_manager.md §3b)
+ *                  the member cursor [ebp-0x10] (structs/ai_manager.md §6b)
  *
  * Parameters:
  *   param_1 (int): the ai_manager root object (ECX `this`), always 0x00655218.
@@ -62047,7 +62038,7 @@ void __fastcall ai_manager_dtor(int param_1)
  *   (root+0xc)+0x50 = root+0x5c, exactly the buffer this function nulls.
  *   +0x110 and +0x120 are the two vectors of ONE 0x20-byte member: ai_manager_dtor tears
  *   them down through one member cursor, and nothing else in .text touches them
- *   (structs/ai_manager.md §3b).
+ *   (structs/ai_manager.md §6b).
  *
  * Parameters:
  *   param_1 (int): the ai_manager root object (ECX `this`), always 0x00655218.
@@ -62373,7 +62364,7 @@ void __fastcall ai_follow_manager_dtor(int param_1)
  *   `vector<19ai_fight_followship>` and `vector<15ai_fight_member>`.
  *   The class is ONE vector: PS2 spacing root+0x10c -> +0x118 is 0xc, exactly one
  *   gif::vector, so the vectors at root+0x110 / +0x120 are the next member
- *   (structs/ai_manager.md §3b), not this class - which is why this destructor covers only one.
+ *   (structs/ai_manager.md §6b), not this class - which is why this destructor covers only one.
  *   Renamed from `FUN_00443a90`.
  */
 void __fastcall ai_fight_manager_dtor(int param_1)
@@ -62613,7 +62604,7 @@ void crt_atexit_register_00443bd0(void)
  *     (recovered from the disassembly; the squad carries no back-pointer), and the visible
  *     argument is this squad, which the board splices out of its stride-0x6c array.
  *
- *   WITH-CAR PATH (+0x5c != 0): clear the car's chase-order-active byte +0x51d, drop the car's
+ *   WITH-CAR PATH (+0x5c != 0): switch the car's siren off (+0x51d), drop the car's
  *     frame from the possible-collision table, ARM the model-level boost
  *     (`pursuit_event_set_change_tables` with ECX = 1; police-system/artifacts/boosting.md 6 - it
  *     is armed
@@ -62662,7 +62653,7 @@ void __thiscall police_action_disband(int param_1,int param_2,char param_3)
     return;
   }
   // ===== WITH-CAR PATH: the squad still owns a chase car (+0x5c) =====
-  *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;  // clear the car's chase-order-active byte
+  *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;  // siren off (vehicle.md §1)
   actor_del_frame_for_possible_coll();                    // ECX = the car's frame; drop its entry
   pursuit_event_set_change_tables();                   // ARM the chase-car model-level boost: g_pursuit_change_tables = 1 (boosting.md)
   pursuit_event_remove_vehicle(*(undefined4 *)(param_1 + 0x5c));  // cancel chase vehicle's nav/AI order
@@ -62915,7 +62906,7 @@ void __thiscall police_action_tick(int param_1,float param_2)
       stl_copy_dwords_fastcall(*(int *)(param_1 + 4) + iVar7);           // shift the vector tail down over the removed slot
       stub_noop_args8_00575c00(*(int *)(param_1 + 8) + -4,*(int *)(param_1 + 8));  // EMPTY `ret 8` - does nothing
       *(int *)(param_1 + 8) = *(int *)(param_1 + 8) + -4;  // pop_back: shrink officers_end by one slot
-      // if the removed officer was the one assigned to this target (+0xa74 == target_npc)
+      // if the removed officer's last attacker is this squad's target (+0xa74 == target_npc)
       // AND it was on foot (its +0x98 vehicle == 0) -> escalate the suspect to the GUN tier (states 0/1)
       if ((*(int *)(iVar5 + 0xa74) == *(int *)(param_1 + 0x60)) && (*(int *)(iVar5 + 0x98) == 0)) {
         police_board_raise_gun_escalation(*(int *)(param_1 + 0x60));
@@ -62928,7 +62919,7 @@ void __thiscall police_action_tick(int param_1,float param_2)
           actor_del_frame_for_possible_coll();                  // drop the vehicle from the swept-sphere obstacle table
           pursuit_event_set_change_tables();                 // ARM the chase-car model-level boost: g_pursuit_change_tables = 1 (boosting.md)
           pursuit_event_remove_vehicle(*(undefined4 *)(param_1 + 0x5c));  // cancel its current order
-          *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;  // clear the car's chase-order-active byte +0x51d
+          *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;  // siren off (vehicle.md §1)
         }
         police_board_end_pursuit(param_1);                    // splice this squad out of the police_board array
         return;
@@ -63009,7 +63000,7 @@ void __thiscall police_action_tick(int param_1,float param_2)
     // if the watchdog exceeded 10s -> give up on this vehicle order and try to advance the FSM state
     if (10000 < *(uint *)(param_1 + 0x4c)) {
       pursuit_event_remove_vehicle(*(undefined4 *)(param_1 + 0x5c));
-      *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;   // clear the car's chase-order-active byte +0x51d
+      *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;   // siren off (vehicle.md §1)
       if (*(float *)(*(int *)(param_1 + 0x5c) + 0x688) < 0.5) {  // vehicle basically stopped (speed < 0.5)?
         police_action_broadcast_event(0,0xf,0);            // -> broadcast event 0xf (exit-vehicle / converge)
       }
@@ -63087,7 +63078,7 @@ reissue_vehicle_order:
             local_44 = 0x200;
             uVar14 = 0x17;                                  // event 0x200
           }
-          *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 1;  // set the car's chase-order-active byte +0x51d
+          *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 1;  // siren on (vehicle.md §1)
           pursuit_event_set_change_tables();            // ECX = 1: arm the boost (boosting.md 6)
           pursuit_event_remove_vehicle(*(undefined4 *)(param_1 + 0x5c));  // clear any prior order
           local_18 = 0.0;                                   // zero target-offset vector (chase the target directly, no aim point)
@@ -63974,7 +63965,7 @@ case5_foot_search_next:
           actor_add_frame_for_possible_coll(0x41200000);           // ECX = the car's frame; register it with radius 10.0f in the possible-coll table
           pursuit_event_set_change_tables();            // ECX = 1: arm the boost (boosting.md 6)
           pursuit_event_remove_vehicle(*(undefined4 *)(param_1 + 0x5c));
-          *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;     // clear the chase-order-active byte +0x51d
+          *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 0;     // siren off (vehicle.md §1)
           police_action_broadcast_event(0,0xf,0);          // broadcast "exit the vehicle / converge" (0xf)
           *(undefined4 *)(param_1 + 0x34) = 1;             // on_foot_phase_flag (+0x34) = 1: enter the on-foot arrest phase
           *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x2036) = 1;    // car +0x2036 = must-steal: the lock must be forced (structs/car.md §1)
@@ -64136,7 +64127,7 @@ next_arrest_order_officer:
             iVar5 = 0x200;                                 // event 0x200, 30-unit param
           }
         }
-        *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 1;   // set the car's chase-order-active byte +0x51d
+        *(undefined1 *)(*(int *)(param_1 + 0x5c) + 0x51d) = 1;   // siren on (vehicle.md §1)
         pursuit_event_set_change_tables();              // ECX = 1: arm the boost (boosting.md 6)
         pursuit_event_remove_vehicle(*(undefined4 *)(param_1 + 0x5c));
         local_c = 0.0;
@@ -64287,7 +64278,7 @@ void __thiscall police_action_tick_sighting_timers(int param_1,int param_2)
       // Is the chase-event system actively hunting with this car? The record must have
     // mode (+0x24) == 1, flag +0x1c bit2 clear and +0x8 != 0, and it then returns record+0x28,
     // the mode timer pursuit_event_tick runs. While that timer is non-zero the refresh below
-    // is skipped. See structs/pursuit-event-manager.md.
+    // is skipped. See structs/pursuit_event.md.
     iVar5 = pursuit_event_record_is_chase_tracking_by_vehicle(*(undefined4 *)(param_1 + 0x5c));
       if ((bVar3) && (iVar5 == 0)) {                        // perceivable AND chase vehicle has no active engaged record
         *(undefined4 *)(param_1 + 0x40) =                   // refresh last-seen timestamp (+0x40)
@@ -65311,7 +65302,7 @@ LAB_00446e74:
       local_1c = 0;
       // fire the LOUD gun siren on the chase vehicle (flags 0x400, sound id 0x3c)
       pursuit_event_dispatch_pursuit_vehicle(*(undefined4 *)(pcVar3 + 0x5c),param_2,0x400,0x3c,&local_24,g_police_speed_factor);
-      *(undefined1 *)(*(int *)(pcVar3 + 0x5c) + 0x51d) = 1;   // vehicle+0x51d = 1 (chase flag)
+      *(undefined1 *)(*(int *)(pcVar3 + 0x5c) + 0x51d) = 1;   // siren on (vehicle.md §1)
     }
     police_action_vector_insert_at(*(undefined4 *)(param_1 + 0x18),1,pcVar3);   // REGISTER group into manager vector (copy by value)
     vector_dispose_at_0x04();                        // dispose the temp's roster vector
@@ -66048,6 +66039,8 @@ void __thiscall police_board_tick(int param_1,uint param_2)
  *   the capture-cutscene FLAG at `manager+0x2c`, which fires for BOTH fine and
  *   arrest, is the separate `busted_cutscene` byte.
  * Evidence: renamed from `FUN_00447820` (original Ghidra id).
+ * PS2 twin: `PlukovnikuMasVChladkuPlajeraFrafera__18ai_police_nastenkaFv` (0x00370420)
+ *   [CONFIRMED] - the same `+0x1c == 0` test at the board's +0x08 rebase (PC +0x24).
  */
 undefined4 __fastcall police_board_arrest_settle_is_zero(int param_1)
 
@@ -66411,6 +66404,8 @@ void __thiscall police_board_disband_by_target(int param_1,int param_2,undefined
  *   same counter in dt_ms units). +0x24 is a post-bust settling gate, not a
  *   wanted-substate decay timer, and is clamped/armed only on the ARREST path.
  * Evidence: renamed from `FUN_00447b00` (original Ghidra id).
+ * PS2 twin: `PlukovnikuMamZmrdaPlayera__18ai_police_nastenkaFv` (0x003707a0)
+ *   [CONFIRMED] - the same 12000 clamp of PS2 +0x1c (PC +0x24).
  */
 void __fastcall police_board_clamp_arrest_settle_12s(int param_1)
 
@@ -67302,6 +67297,8 @@ void __thiscall police_board_broadcast_for_target(int param_1,int param_2,undefi
  *   read. Writer/timing from `entity_action_tick` case 0x21
  *   (disband-then-set(1); set(0) on anim-complete), both arrest and fine.
  * Evidence: renamed from `FUN_004483b0` (original Ghidra id).
+ * PS2 twin: `PanoveHrajeteSiNaPoldy__18ai_police_nastenkaFv` (0x00371280)
+ *   [CONFIRMED] - `*(char *)(+0x24) != 0` at the +0x08 rebase (PC +0x2c).
  */
 bool __fastcall police_board_is_busted_cutscene_active(int param_1)
 
@@ -67339,6 +67336,8 @@ bool __fastcall police_board_is_busted_cutscene_active(int param_1)
  *   write. Callsite pairing in `entity_action_tick` case 0x21:
  *   disband → set(1) on capture start, set(0) on anim-complete.
  * Evidence: renamed from `FUN_004483c0` (original Ghidra id).
+ * PS2 twin: `MakamSefe__18ai_police_nastenkaFb` (0x00371290)  [CONFIRMED] - one byte
+ *   store of the bool argument to PS2 +0x24 (PC +0x2c).
  */
 void __thiscall police_board_set_busted_cutscene_active(int param_1,undefined1 param_2)
 
@@ -67355,7 +67354,7 @@ void __thiscall police_board_set_busted_cutscene_active(int param_1,undefined1 p
  * What it does:
  *   Early-outs with 0 unless `actor+0x10` (entity-type tag) is either
  *   0x1b (a C_entity NPC) or 2 (THE PLAYER — kind 2 is the player, not a
- *   "cop variant"; see structs/entity.md §1). Then walks the board's
+ *   "cop variant"; see structs/entity_kind.md §1). Then walks the board's
  *   pursuit-squad array (begin at `board+0x14`, end at `board+0x18`,
  *   stride 0x6c = the police_action squad object, structs/police-action.md):
  *     - First, checks the squad's tracked-target slot at `squad+0x60`;
@@ -67438,7 +67437,7 @@ undefined4 __thiscall police_board_is_actor_in_pursuit(int param_1,int param_2)
  * What it does: walks the mission actor list (g_act_mission+0x38) and C_game's temporary
  *  actors (C_game+0xf0); adds 10000 to the AI state +0xf40 of each kind-0x1b NPC that is
  *  neither param_2 nor param_3 and whose type group +0xf4c is not 2 (the police,
- *  structs/entity.md §4e), pushing it out of every state switch. Then hides the ambient
+ *  structs/entity.md §2c), pushing it out of every state switch. Then hides the ambient
  *  traffic (game_set_traffic_visible(0)), sets g_ambient_ai_suspended = 1 and parks the
  *  board's tracked NPC (+0x30) the same way. Undone by police_board_resume_npcs.
  * Parameters: param_1 (int, ECX): the police_board. param_2 (int): the arresting officer.
@@ -67558,6 +67557,9 @@ void __thiscall police_board_resume_npcs(int param_1,int param_2,int param_3)
  *
  * Evidence: behaviour-derived; 0x6c stride + target(+0x60) +
  *   flag-bit-0(+0x50) test. Renamed from `FUN_00448620`.
+ * PS2 twin: `HosiPrkynkujete__18ai_police_nastenkaFP7C_actor` (0x00371620)
+ *   [CONFIRMED] - the same squad walk (stride 0x80 against 0x6c), target PS2 +0x64 and
+ *   active bit `+0x54 & 1` against PC +0x60 / `+0x50 & 1`.
  */
 uint __thiscall police_board_has_active_group_for_target(int param_1,int param_2)
 
@@ -67585,26 +67587,31 @@ uint __thiscall police_board_has_active_group_for_target(int param_1,int param_2
 }
 
 /*
- * police_board_set_tracked_npc — store an NPC pointer in the
- *     manager's +0x30 slot.
+ * police_board_set_taxi_passenger - store the taxi passenger in the board's +0x30 slot.
  *
  * What it does:
- *   `*(param_1 + 0x30) = param_2`. The +0x30 slot holds the manager's
- *   currently-tracked NPC; it is read by the suspend/resume_npcs pair
- *   (which also adjusts that NPC's +0xf40 hold timer) and reseeded to 0
- *   by `police_board_reset`.
+ *   `*(param_1 + 0x30) = param_2`. The slot holds the taxi passenger C_entity that
+ *   pedestrian_wave_at_taxi builds (the same pointer is stored at C_game +0x204).
+ *   police_board_suspend_npcs / police_board_resume_npcs park and un-park it with the
+ *   other C_entity actors (its +0xf40 hold timer), police_board_invalidate_actor clears
+ *   it when that actor dies, and police_board_reset seeds it 0
+ *   (structs/police-board.md, taxi_passenger).
  *
  * Parameters:
  *   param_1 (int): the police_board (ECX `this`).
- *   param_2 (undefined4): the NPC pointer to store (may be 0 to clear).
+ *   param_2 (undefined4): the passenger C_entity to store (0 clears it).
  *
  * Returns:
  *   void.
  *
- * Evidence: behaviour-derived single-statement setter; consumer is the
- *   suspend/resume_npcs pair. Renamed from `FUN_00448680`.
+ * Evidence: one store of +0x30; its only caller is pedestrian_wave_at_taxi, which passes
+ *   the passenger entity it has just created. Renamed from `FUN_00448680`.
+ * PS2 twin: `TuMasZakaznika__18ai_police_nastenkaFP8C_entity` (0x00371690)
+ *   [CONFIRMED] - one store of the C_entity argument to PS2 +0x28 (PC +0x30); the PS2
+ *   name means "here is your customer".
  */
-void __thiscall police_board_set_tracked_npc(int param_1,undefined4 param_2)
+
+void __thiscall police_board_set_taxi_passenger(int param_1,undefined4 param_2)
 
 {
   *(undefined4 *)(param_1 + 0x30) = param_2;
@@ -67750,6 +67757,9 @@ void __fastcall police_board_release_all_group_vehicles(int param_1)
  *     as the symbol dump says (`kind=thunk`, `thunk_target=0x00448800`). In the
  *     DECOMPILED text a thunk and its target look alike because Ghidra inlines the
  *     target.
+ * PS2 twin: `SrackyPryc__18ai_police_nastenkaFv` (0x00371880)  [CONFIRMED] - the PS2
+ *   inlines the item clear statement for statement: reverse walk, three virtual calls
+ *   (PS2 slots 0x40 / 0x38 / 0x8), null, erase, clear; two callsites on each build.
  */
 void __fastcall thunk_ai_animitem_manager_clear(int param_1)
 
@@ -68527,7 +68537,7 @@ int ascii_toupper(int param_1)
  * Returns: int *: the handle.
  * PS2 twin: `__ct__9C_fstringFPCce`  [CONFIRMED]
  * Evidence: VA 0x00448fe0; 30 callsites. Statement for statement with the PS2 body.
- *  `exe-re/structs/string.md` §2. Renamed from `FUN_00448fe0`.
+ *  `exe-re/structs/string.md` §3. Renamed from `FUN_00448fe0`.
  */
 int * string_format(int *param_1,undefined4 param_2)
 
@@ -69547,7 +69557,7 @@ void __thiscall check_seg_get_special(int param_1,int param_2,uint *param_3,unde
  * Parameters: param_1 (S_vector &): the probe position. NOTE Ghidra lost the `this` receiver here — the real signature is `(check_seg *this, S_vector &pos)`, arity 2, matching PS2.
  * Returns: bool: true if the position is inside at least one special, false otherwise.
  * PS2 twin: `isInSpecial__9check_segFR8S_vector`  [CONFIRMED]
- * Evidence: VA 0x00449c90. CONFIRMED — same four type arms (1/2/4/8), same distance test, same re-read-the-count-per-iteration quirk. The radius float index shifts uniformly by ONE on PS2 (PC [4]/[9]/[0xc] <-> PS2 [5]/[10]/[0xd]) because a PS2 S_vector is 4 floats and a PC one is 3 — the same padding effect already measured on `ai_wayfind_test_corner_hide_side`. ⚠️ ratio 2.72 is a pure factoring difference: GCC duplicates the whole distance expression once per arm, MSVC hoists it and merges cases 2 and 8. ⚠️ That merge is also a real behavioural difference — PS2 reads a DIFFERENT radius for type 8 ([0xc]) than for type 2 ([10]), where PC reads [9] for both. Recorded, not explained (structs/check_seg.md §5). Renamed from `FUN_00449c90`.
+ * Evidence: VA 0x00449c90. CONFIRMED — same four type arms (1/2/4/8), same distance test, same re-read-the-count-per-iteration quirk. The radius float index shifts uniformly by ONE on PS2 (PC [4]/[9]/[0xc] <-> PS2 [5]/[10]/[0xd]) because a PS2 S_vector is 4 floats and a PC one is 3 — the same padding effect already measured on `ai_wayfind_test_corner_hide_side`. ⚠️ ratio 2.72 is a pure factoring difference: GCC duplicates the whole distance expression once per arm, MSVC hoists it and merges cases 2 and 8. ⚠️ That merge is also a real behavioural difference — PS2 reads a DIFFERENT radius for type 8 ([0xc]) than for type 2 ([10]), where PC reads [9] for both. Recorded, not explained (structs/check_seg.md §7). Renamed from `FUN_00449c90`.
  * Layout, the clusters.seg format and the full PC<->PS2 table: exe-re/structs/check_seg.md
  */
 uint check_seg_is_pos_in_any_special(float *param_1)
@@ -69824,7 +69834,7 @@ LAB_0044a04e:
 undefined4 __fastcall check_seg_cluster_ctor(undefined4 param_1)
 
 {
-  crt_ehvec_ctor(param_1,0x2c,4,folded_vector_ctor_at_0x04_0044a120,FUN_00566200);
+  crt_ehvec_ctor(param_1,0x2c,4,folded_vector_ctor_at_0x04_0044a120,vector_dispose_at_0x04);
   return param_1;
 }
 
@@ -69845,7 +69855,7 @@ undefined4 __fastcall check_seg_cluster_ctor(undefined4 param_1)
 void __fastcall check_seg_cluster_dtor(undefined4 param_1)
 
 {
-  crt_ehvec_dtor(param_1,0x2c,4,FUN_00566200);
+  crt_ehvec_dtor(param_1,0x2c,4,vector_dispose_at_0x04);
   return;
 }
 
@@ -70032,7 +70042,7 @@ void __fastcall check_seg_clusters_clear(uint *param_1)
  * (0x28/0x34/0x10 bytes by type) and every special (0x38/0x38/0x18/0x2c bytes by
  * type) — and hands it to `check_seg_clusters_add_segment`, which moves it in and
  * empties the local ready for the next record.
- * The full field-by-field format is in exe-re/structs/check_seg.md §4.
+ * The full field-by-field format is in exe-re/structs/check_seg.md §6.
  * Parameters: none (reads the mission name from the `g_act_mission` singleton).
  * Returns: int: 1 on success, 0 when the magic does not match (the file is still closed).
  * PS2 twin: `Load__18check_seg_clustersFv`  [CONFIRMED]
@@ -70292,7 +70302,7 @@ undefined1 __fastcall actor_shot_track_create(undefined4 param_1)
  * Returns: void.
  * PS2 twin: none — the C_recorder subsystem is PC-only; see Evidence
  * Evidence: VA 0x0044a690. 🔑 The bit-0x2000 branch means AN ANIMATION KEY CAN CHANGE THIS ACTOR'S WEAPON
- *   MID-CLIP — the behaviour actor_shot.md §2 flagged as the interesting half of
+ *   MID-CLIP — the behaviour actor_shot.md §3 flagged as the interesting half of
  *   this override. The whole C_recorder subsystem is absent from SLUS_206.71 (no class symbol, and none of its debug strings exist there), so this function has no PS2 counterpart by measurement rather than by search failure. Renamed from `FUN_0044a690`.
  * Class layout: exe-re/structs/actor_shot.md
  */
@@ -71100,7 +71110,7 @@ void actor_global_list_dtor(void)
  * Returns: void.
  * PS2 twin: none — see Evidence
  * Evidence: VA 0x0044b650. The object is the `std::vector<C_actor::S_posscoll_frame>` at `g_actor_posscoll_table_begin`
- *   (see structs/actor.md §2a). No PS2 twin — see
+ *   (see structs/actor.md §5a). No PS2 twin — see
  *   `actor_global_list_static_init`. Renamed from `FUN_0044b650`.
  * Class layout: exe-re/structs/actor.md
  */
@@ -71121,7 +71131,7 @@ void actor_posscoll_table_static_init(void)
  * Returns: void.
  * PS2 twin: none — see Evidence
  * Evidence: VA 0x0044b660. Element type `C_actor::S_posscoll_frame` = `{I3D_frame*, float radius}` (the PS2
- *   template argument; structs/actor.md §2a). Renamed from `FUN_0044b660`.
+ *   template argument; structs/actor.md §5a). Renamed from `FUN_0044b660`.
  * Class layout: exe-re/structs/actor.md
  */
 void __fastcall actor_posscoll_table_ctor(undefined4 param_1)
@@ -77279,6 +77289,8 @@ void __thiscall quat_multiply(float *param_1,float *param_2,float *param_3)
  *   (speed). `AIRPLANE_START` is opcode 0x035 and the opcode IS the case label.
  *
  * Evidence: BYTE-VERIFIED body. Renamed from `FUN_004520e0`.
+ * PS2 twin: `Start__10C_airplaneFUif`  [CONFIRMED] - SetActState(0), FindNodeID, the
+ *   start-node walk and the speed test, statement-aligned (structs/airplane.md §4).
  */
 void __thiscall airplane_start_ground_run(int param_1,undefined4 param_2,undefined4 param_3)
 
@@ -77376,6 +77388,8 @@ LAB_00452265:
  *   rule holds: parser raw 0x035 -> dispatcher case 0x36.
  *
  * Evidence: BYTE-VERIFIED body. Renamed from `FUN_004522c0`.
+ * PS2 twin: `Start2__10C_airplaneFv`  [CONFIRMED] - the same state test and
+ *   PlaySound(1) on both builds.
  */
 void __fastcall airplane_begin_takeoff(int param_1)
 
@@ -78042,6 +78056,8 @@ void __fastcall airplane_destroy_sounds(int param_1)
  *   znicene." `AIRPLANE_ISDESTROYED` is opcode 0x090 and the opcode IS the case label.
  *
  * Evidence: BYTE-VERIFIED body. Renamed from `FUN_00453190`.
+ * PS2 twin: `IsDestroyed__10C_airplaneFv`  [CONFIRMED] - 1 when both engine health
+ *   values are 0 on both builds.
  */
 ushort __fastcall airplane_is_destroyed(int param_1)
 
@@ -80913,24 +80929,28 @@ box_solve_impulse_vs_box(int param_1,int param_2,float *param_3,float *param_4,f
 }
 
 /*
- * box_solve_impulse_vs_world — solve the contact impulse between this box and static world geometry
+ * box_solve_impulse_vs_car - solve the contact impulse between this box and a car
  *
- * What it does: Queries the world contact through `vehicle_get_contact_impulse_terms`, then the one-body sequential
- *   impulse: effective mass `1/(1/m + n.((I^-1(r x n)) x r))` plus `+0x110`,
- *   restitution `-(+0xc8c + 1.0)`, and the resulting linear/angular deltas.
- * Parameters: this (C_box *, ECX); param_2 (int): state buffer index; param_3 (float *): normal;
- *   param_4 (float *): point; param_5 (float *): relative velocity; param_6 (int *):
- *   the world/geometry descriptor.
- * Returns: bool.
- * PS2 twin: none — PC-only class, see Evidence
- * Evidence: VA 0x00456b00. Discriminated from `box_solve_impulse_vs_box` by the `vehicle_get_contact_impulse_terms` world query and
- *   the absence of a second body's inertia term. PC-ONLY: the PS2 build's `__sinit_` symbols list
- *   C_bottle.cpp, C_box_new.cpp, C_bridge.cpp and no C_box.cpp, so there is no PS2 body to diff and
- *   STRUCTURAL is the ceiling. Renamed from `FUN_00456b00`.
+ * What it does: Takes the car's velocity, mass and inverse inertia at the contact
+ *   point from `vehicle_get_contact_impulse_terms` on the car's C_Vehicle at `+0x70`,
+ *   then solves the impulse with this box's inverse mass and inertia added and
+ *   restitution `-(+0xc8c + 1.0)`. Applies the deltas to this box only and reports
+ *   the hit through the car's Collision virtual (vtable `+0x78`).
+ * Parameters: this (C_box *, ECX); param_2 (int): state record index;
+ *   param_3 (float *): contact normal; param_4 (float *): contact point;
+ *   param_5 (float *): this box's velocity at the point; param_6 (int *): the car.
+ * Returns: 1.
+ * PS2 twin: none - PC-only class, see Evidence
+ * Evidence: VA 0x00456b00. `lea ecx,[edx+0x70]` before the vehicle query; the only
+ *   caller is the kind-4 arm of `box_ai_tick`. PC-ONLY: the PS2 build's `__sinit_`
+ *   symbols list C_bottle.cpp, C_box_new.cpp, C_bridge.cpp and no C_box.cpp, so there
+ *   is no PS2 body to diff and STRUCTURAL is the ceiling.
+ *   Renamed from `FUN_00456b00`.
  * Class layout: exe-re/structs/box.md
  */
+
 undefined4 __thiscall
-box_solve_impulse_vs_world(int param_1,int param_2,float *param_3,float *param_4,float *param_5,int *param_6)
+box_solve_impulse_vs_car(int param_1,int param_2,float *param_3,float *param_4,float *param_5,int *param_6)
 
 {
   float *pfVar1;
@@ -81181,7 +81201,7 @@ LAB_00457127:
     fStack_1c = *(float *)(iVar1 + 0x138) - pfVar4[2] * 10.0;
     fStack_20 = *(float *)(iVar1 + 0x134) - fStack_2c;
     fStack_24 = *(float *)(iVar1 + 0x130) - fStack_30;
-    box_build_inverse_inertia_tensor(&fStack_24,(float *)(iVar1 + 0x130),&fStack_48,auStack_c);
+    box_intersect_segment_side_faces(&fStack_24,(float *)(iVar1 + 0x130),&fStack_48,auStack_c);
   }
   fStack_34 = *(float *)(param_1 + 0x114) * 25.0;
   if (fStack_34 < 5.0) {
@@ -82217,22 +82237,29 @@ void stub_noop_cdecl_00458c60(void)
 }
 
 /*
- * box_build_inverse_inertia_tensor — build the world-space inverse inertia tensor from the frame and half-extents
+ * box_intersect_segment_side_faces - clip a segment against the box's four side faces
  *
- * What it does: Gated on `+0xc90`. Refreshes the frame world matrix, then forms the diagonal
- *   inverse inertia from the reciprocal half-extents at `frame+0x90/+0x94/+0x98`
- *   and rotates it into world space by the current basis.
- * Parameters: this (C_box *, ECX); param_2..5 (float *): the destination tensor rows.
- * Returns: bool.
- * PS2 twin: none — PC-only class, see Evidence
- * Evidence: VA 0x00458c70. Called from `box_on_collision` — i.e. the
- *   tensor is rebuilt at contact time, not cached across frames. PC-ONLY: the PS2 build's `__sinit_`
- *   symbols list C_bottle.cpp, C_box_new.cpp, C_bridge.cpp and no C_box.cpp, so there is no PS2 body
- *   to diff and STRUCTURAL is the ceiling. Renamed from `FUN_00458c70`.
+ * What it does: For a cylinder (`+0xc90`) copies the end point and returns 0. Otherwise
+ *   builds the planes of the frame's world matrix rows 0 and 2 over the scale, in both
+ *   directions, through corner_local[0] and corner_local[6] in world space. For the
+ *   first plane the segment enters at a point inside the other three, writes the point
+ *   and the normal and returns 1. With no such plane copies the end point and returns
+ *   0. It builds no inertia term: the world inverse inertia comes from
+ *   `box_integrate_state`.
+ * Parameters: this (C_box *, ECX); param_2 (float *): segment start; param_3 (float *):
+ *   segment end; param_4 (float *): out, the point; param_5 (float *): out, the normal.
+ * Returns: bool, 1 on a hit.
+ * PS2 twin: none - PC-only class, see Evidence
+ * Evidence: VA 0x00458c70. Its only caller is `box_on_collision`, with the segment from
+ *   10 units back along the push direction to the centre of mass. PC-ONLY: the PS2
+ *   build's `__sinit_` symbols list C_bottle.cpp, C_box_new.cpp, C_bridge.cpp and no
+ *   C_box.cpp, so there is no PS2 body to diff and STRUCTURAL is the ceiling.
+ *   Renamed from `FUN_00458c70`.
  * Class layout: exe-re/structs/box.md
  */
+
 undefined4 __thiscall
-box_build_inverse_inertia_tensor(int param_1,float *param_2,float *param_3,float *param_4,float *param_5)
+box_intersect_segment_side_faces(int param_1,float *param_2,float *param_3,float *param_4,float *param_5)
 
 {
   float *pfVar1;
@@ -84324,7 +84351,7 @@ LAB_0045c1be:
  * Returns: void.
  * PS2 twin: none — PC-only class, see Evidence
  * Evidence: VA 0x0045c240. Vtable slot 13 = the family AI slot. The host gate is byte-identical to the one
- *   `bottle_ai_tick` uses (`structs/bottle.md` §3c). PC-ONLY: the PS2 build's `__sinit_` symbols
+ *   `bottle_ai_tick` uses (`structs/bottle.md` §5a). PC-ONLY: the PS2 build's `__sinit_` symbols
  *   list C_bottle.cpp, C_box_new.cpp, C_bridge.cpp and no C_box.cpp, so there is no PS2 body to diff
  *   and STRUCTURAL is the ceiling. Renamed from `FUN_0045c240`.
  * Class layout: exe-re/structs/box.md
@@ -84822,7 +84849,7 @@ LAB_0045cf05:
                     }
                   }
                   else {
-                    cVar7 = box_solve_impulse_vs_world(param_1[0x21],param_1 + (int)fVar9 * 3 + 0xed,pfVar13,
+                    cVar7 = box_solve_impulse_vs_car(param_1[0x21],param_1 + (int)fVar9 * 3 + 0xed,pfVar13,
                                          pfVar11,piVar4);
                     if (cVar7 != '\0') {
                       if (*local_240 == param_1[0x43]) {
@@ -85349,7 +85376,7 @@ void __thiscall box_write_state_to_frame(int param_1,undefined4 *param_2)
  * Returns: bool: always true.
  * PS2 twin: none — PC-only class, see Evidence
  * Evidence: VA 0x0045ddf0. Vtable slot 9 = `actor_track_create` in the `C_actor_track` interface
- *   (`structs/actor_track.md` §2). The tracks it creates are the ones
+ *   (`structs/actor_track.md` §4). The tracks it creates are the ones
  *   `recorder_new_track` names `box%d`. PC-ONLY: the PS2 build's `__sinit_` symbols list
  *   C_bottle.cpp, C_box_new.cpp, C_bridge.cpp and no C_box.cpp, so there is no PS2 body to diff and
  *   STRUCTURAL is the ceiling. Renamed from `FUN_0045ddf0`.
@@ -85375,7 +85402,7 @@ undefined1 __fastcall box_track_create(undefined4 param_1)
  * Parameters: this (C_box *, ECX); param_2 (int): the current recorder time in ms.
  * Returns: int: 1 when a key was written, **0xffffffff when nothing was recorded**.
  * PS2 twin: none — PC-only class, see Evidence
- * Evidence: VA 0x0045de10. Vtable slot 0, whose documented role in `structs/actor_track.md` §2 is exactly
+ * Evidence: VA 0x0045de10. Vtable slot 0, whose documented role in `structs/actor_track.md` §4 is exactly
  *   "record a key now if one is due; -1 = nothing recorded" — and the body returns
  *   precisely that sentinel. PC-ONLY: the PS2 build's `__sinit_` symbols list C_bottle.cpp,
  *   C_box_new.cpp, C_bridge.cpp and no C_box.cpp, so there is no PS2 body to diff and STRUCTURAL is
@@ -85571,7 +85598,7 @@ void box_clamp_state_matrix(float *param_1)
  *   `box_apply_net_event_msg` handles exactly this type, and `box_ai_tick` calls it
  *   under the same host-role gate. Two independent code paths agreeing on a
  *   non-obvious guard is the grading evidence when there is no cross-build side
- *   (`structs/bottle.md` §3c). PC-ONLY: the PS2 build's `__sinit_` symbols list C_bottle.cpp,
+ *   (`structs/bottle.md` §5a). PC-ONLY: the PS2 build's `__sinit_` symbols list C_bottle.cpp,
  *   C_box_new.cpp, C_bridge.cpp and no C_box.cpp, so there is no PS2 body to diff and STRUCTURAL is
  *   the ceiling. Renamed from `FUN_0045e220`.
  * Class layout: exe-re/structs/box.md
@@ -86204,7 +86231,7 @@ undefined4 * __thiscall i3d_frame_get_scale(I3D_frame *param_1,undefined4 *param
  *   linker merged two classes' identical "no positional playback" overrides of
  *   `actor_track_get_pos_at_time` onto one symbol. Two owners means no owner.
  *   Renamed from `FUN_0045f0f0`.
- * Class layout: exe-re/structs/actor_track.md §2 — the slot-4 role
+ * Class layout: exe-re/structs/actor_track.md §4 — the slot-4 role
  */
 void stub_zero_vec3_out(undefined4 *param_1)
 
@@ -86227,7 +86254,7 @@ void stub_zero_vec3_out(undefined4 *param_1)
  * Evidence: VA 0x0045f110. 🔸 The quaternion sibling of `stub_zero_vec3_out`, and the same verdict: **slot 5
  *   of both `0x0063b720` and `0x0063b980`** ⇒ an ICF fold of two classes'
  *   `actor_track_get_rot_at_time` overrides, owned by no class. Renamed from `FUN_0045f110`.
- * Class layout: exe-re/structs/actor_track.md §2 — the slot-5 role
+ * Class layout: exe-re/structs/actor_track.md §4 — the slot-5 role
  */
 void stub_zero_quat_out(undefined4 *param_1)
 
@@ -86513,6 +86540,8 @@ void __fastcall box_new_game_init(int param_1)
  * ⚠️ THE NAME IS TARGET-DERIVED. It states what this address forwards to, and
  *   it is only as current as `physical_object_game_done`'s own name — if the target is
  *   renamed, re-derive this one too.
+ * PS2 twin: `GameDone__9C_box_newFv`  [CONFIRMED] - the PS2 body is an 8-byte tail-jump
+ *   to `GameDone__9C_PhThingFv`; this thunk is `C_box_new` vtable slot 26.
  */
 void thunk_physical_object_game_done(void)
 
@@ -86966,8 +86995,8 @@ void stub_noop_cdecl_0045f970(void)
  *   `+0x74` and `+0x84`, and seeds the whole tunable band: the five cycle
  *   durations `+0x160`=120000 / `+0x164`=4000 / `+0x168`=30000 / `+0x16c`=10000
  *   / `+0x170`=20000 ms, the travel limit `+0x178` = 0x3f5f66f3 (0.8727 rad =
- *   50 degrees), the four machinery sound ids `+0x17c`..`+0x188` = 0x71..0x74,
- *   the two siren ids `+0x18c`=0xb6 / `+0x190`=0xb5, and act state `+0x138` = 7.
+ *   50 degrees), the sound ids `+0x17c`..`+0x188` = 0x71..0x74,
+ *   `+0x18c` = 0xb6, `+0x190` = 0xb5, and the marker `+0x138` = 7.
  * Parameters: param_1 (ECX): the C_bridge being constructed.
  * Returns: undefined4 *: param_1, the MSVC ctor convention.
  * PS2 twin: __ct__8C_bridgeFv  [CONFIRMED]
@@ -87182,10 +87211,11 @@ undefined4 __thiscall bridge_init(int param_1,int param_2)
 /*
  * bridge_ai — the 6-state drawbridge raise/lower cycle
  *
- * What it does: Decrements the hold counter `+0x15c` and returns while it is non-zero, then
+ * What it does: Decrements the hold counter `+0x15c` (no code sets it non-zero) and returns
+ *   while it is non-zero, then
  *   runs a switch on the state `+0x144`:
  *     0 idle    — publish `is_up[idx] = 0`; when `need_up[idx]` is raised, arm
- *                 the warning phase (timer `+0x160`, blink `+0x154` = 600 ms),
+ *                 the warning phase (timer `+0x164`, blink `+0x154` = 600 ms),
  *                 play siren id `+0x190` on the emitter `+0x98`, act state 1;
  *     1 warn    — when the timer expires, refuse to proceed while
  *                 `traffic_car_get_bridge_car_count` is >= 1 (re-check in
@@ -87199,8 +87229,8 @@ undefined4 __thiscall bridge_init(int param_1,int param_2)
  *     5 lowering— ramp back down over `+0x170` ms, then return to state 0,
  *                 silence the siren, restore act state 7 and
  *                 `collision_dyn_erase` the collision object.
- *   The freeze flag `+0x13c` (set by `bridge_shut_down`) forces every state to
- *   take its exit branch immediately. Finally, if the angle changed, the frame
+ *   The freeze flag `+0x13c` (set by `bridge_shut_down`) makes states 2..5 take their exit
+ *   branch at once and holds states 0 and 1. Finally, if the angle changed, the frame
  *   rotation is rewritten (negated when the reverse flag `+0x174` is clear).
  * Parameters: param_1 (ECX): the C_bridge.  param_2: elapsed milliseconds this tick.
  * Returns: void.
@@ -87211,7 +87241,7 @@ undefined4 __thiscall bridge_init(int param_1,int param_2)
  *   them `bridgeIsUp[+0x148]` / `bridgeNeedUp[+0x148]`, PC `(&g_bridge_is_up)[+0x140]`
  *   / `(&g_bridge_raise_request_mask)[+0x140]`, the flat +8 field delta. 1424 B vs 1720 B
  *   (1.21). ⚠️ That mask is a BITMASK of requesting steamboats, not a flag, and its writer
- *   is `bridge_update` — see structs/bridge.md §2a. Renamed from `FUN_0045fc20`.
+ *   is `bridge_update` — see structs/bridge.md §4b. Renamed from `FUN_0045fc20`.
  * Class layout: exe-re/structs/bridge.md
  */
 void __thiscall bridge_ai(int param_1,uint param_2)
@@ -87989,13 +88019,14 @@ void stub_noop_args4_00461180(void)
  *   state — `+0x154` = 1, `+0x150` = the idle period `+0x160`, FSM state `+0x144` = 0,
  *   angle `+0x148` = 0, last-applied angle `+0x14c` = -1.0f, `actor_set_act_state(0)`,
  *   hold `+0x15c` = 0, freeze flag `+0x13c` = 0 — and clamps each of the four cycle
- *   durations to a minimum of 1 ms so a zero in the mission data cannot stall the
+ *   durations to a minimum of 1 ms so a zero cannot stall the
  *   cycle. It then builds the deck geometry: refreshes both leaves' world matrices,
  *   inverts each via `S_matrix::Inverse`, fills the two `S_BridgeCol` vectors `+0x74`
  *   and `+0x84` through `bridge_col_vector_copy` from
  *   `collision_find_hits_for_frame`, and creates the two I3D_sound emitters `+0x94`
  *   and `+0x98` via `g_i3d_driver` positioned at the MIDPOINT of the first leaf's frame
- *   `+0x68` and the second leaf `+0x90`, with bounding radius 20.0.
+ *   `+0x68` and the second leaf `+0x90`, with range 20..50. On the index-1 bridge it then
+ *   builds the boats and runs 60 passes of its own slots 13 and 14 with 1000 ms.
  * Parameters: param_1 (ECX): the C_bridge.
  * Returns: void.
  * PS2 twin: GameInit__8C_bridgeFv  [CONFIRMED]
@@ -88922,8 +88953,8 @@ undefined4 __thiscall bridge_save_game_save(int param_1,undefined4 *param_2)
 /*
  * bridge_shut_down — freeze the bridge and drop it out of dynamic collision
  *
- * What it does: Stores the freeze flag into `+0x13c` — the byte every `bridge_ai` case tests to
- *   take its exit branch immediately — and erases the dynamic collision object
+ * What it does: Stores the freeze flag into `+0x13c` — `bridge_ai`'s states 2..5 then exit at
+ *   once and states 0 and 1 hold — and erases the dynamic collision object
  *   `+0xb4` from `g_collision` when one exists.
  * Parameters: param_1 (ECX): the C_bridge.  param_2: the freeze flag to store.
  * Returns: void.
@@ -92327,7 +92358,8 @@ void car_release_force_feedback_effects(void)
  * Returns: void.
  * Evidence: VA 0x00465d90. Renamed from `FUN_00465d90`.
  * PS2 twin: `GameInit__5C_carFv` — CONFIRMED (same opening: EnableSounds(0) ->
- *   base-class GameInit -> model level = -1; PS2 car+0x242c = PC car+0x20ec). See structs/car.md §3.
+ *   base-class GameInit -> model level = -1; PS2 car+0x242c = PC car+0x20ec).
+ *   See structs/car.md §3.
  */
 void __fastcall car_game_init(int *param_1)
 
@@ -94879,7 +94911,7 @@ byte __fastcall car_pack_light_state(int param_1)
  * Returns: void.
  * PS2 twin: none — see Evidence
  * Evidence: VA 0x0046a270. PC-ONLY, same empty PS2 rank as its inverse — STRUCTURAL. 🔑 The `+0x3f8` call is
- *   the evidence behind `structs/vehicle.md` §8a: that slot is the `SetCallbackWU`
+ *   the evidence behind `structs/vehicle.md` §10a: that slot is the `SetCallbackWU`
  *   (wake-up) hook, and the light setters USE it as a change notification rather
  *   than owning it. Renamed from `FUN_0046a270`.
  * Class layout: exe-re/structs/car.md
@@ -95354,7 +95386,7 @@ car_hit(int param_1,undefined4 param_2,S_matrix *param_3,S_matrix *param_4,undef
             if (((uVar7 & 1) != 0) &&
                (-1 < *(int *)(*(int *)(*(int *)(param_1 + 0xd24) + iVar9 * 4) + 0x120))) {
               if (*(int *)(g_net_session + 0x100) == 7) {
-                car_post_hit_net_event_msg(iVar9);
+                car_post_tyre_burst_net_event_msg(iVar9);
               }
               iVar12 = *(int *)(*(int *)(param_1 + 0xd24) + iVar9 * 4);
               *(uint *)(iVar12 + 0x120) = *(uint *)(iVar12 + 0x120) | 0x80000000;
@@ -96847,7 +96879,7 @@ car_add_deform_scratch(undefined4 param_1,undefined4 param_2,undefined4 param_3,
  * Returns: void.
  * PS2 twin: Vehicle_Repair__5C_carFPCv  [CONFIRMED]
  * Evidence: VA 0x0046d550. Both bodies diffed: `ScratchDeleteFromCar` + `ClearFrameFromFireHole(this->frame)`
- *   on PS2, `game_scratch_delete_from_car` + `game_clear_frame_from_fire(*(this+0x68))`
+ *   on PS2, `game_scratch_delete_from_car` + `game_clear_frame_from_bullet_holes(*(this+0x68))`
  *   on the PC — same two calls, same order, same frame field. 48 B vs 64 B (0.75).
  *   Registered by `car_init` in the `SetCallbackVR` slot (`C_Vehicle+0x398`). Renamed from `FUN_0046d550`.
  * Class layout: exe-re/structs/car.md
@@ -96856,7 +96888,7 @@ void __fastcall car_clear_damage_decals(int param_1)
 
 {
   game_scratch_delete_from_car(param_1);
-  game_clear_frame_from_fire(*(undefined4 *)(param_1 + 0x68));
+  game_clear_frame_from_bullet_holes(*(undefined4 *)(param_1 + 0x68));
   return;
 }
 
@@ -96914,7 +96946,7 @@ void __fastcall car_break_glass(int param_1,int param_2,undefined4 *param_3,char
  *   THIS address in the `SetCallbackWU` slot exactly where PS2 `ChangeState`
  *   installs `Wake_Up` — and `car_init` leaves that slot NULL on BOTH builds. The
  *   `C_Vehicle` light setters INVOKE that slot when a lamp changes, so a light change
- *   on a sleeping car is what wakes it; they do not own the slot (structs/vehicle.md §8a). Renamed from `FUN_0046d620`.
+ *   on a sleeping car is what wakes it; they do not own the slot (structs/vehicle.md §10a). Renamed from `FUN_0046d620`.
  * Class layout: exe-re/structs/car.md
  */
 void car_wake_up(void)
@@ -98921,7 +98953,8 @@ void __thiscall car_set_enter_protect1(int param_1,byte param_2,char param_3)
  * Returns: void.
  * Evidence: VA 0x00470c90. Renamed from `FUN_00470c90`.
  * PS2 twin: `GetCarWheelColl__5C_carFPbi` — CONFIRMED (same loop; contact array
- *   car+0xd24=PS2+0xf8c, count car+0x5b0=PS2+0x7e8, flag +0x120=PS2+0x1fc bit 8). See structs/car.md §3.
+ *   car+0xd24=PS2+0xf8c, count car+0x5b0=PS2+0x7e8, flag +0x120=PS2+0x1fc bit 8).
+ *   See structs/car.md §3.
  */
 void __thiscall car_get_wheel_coll(int param_1,int param_2,int param_3)
 
@@ -103279,6 +103312,19 @@ bool car_extended_save_data_chunk(undefined4 param_1)
 }
 
 // thunk_FUN_00464f50 @ VA 0x00475c00 - THUNK def restored from the Aggressive Instruction Finder pass; Ghidra names a thunk after its TARGET. Body verified to call 0x00464f50.
+/*
+ * thunk_car_copy_carinit_from_actor — 5-byte jump thunk to `car_copy_carinit_from_actor`.
+ * What it does: forwards to `car_copy_carinit_from_actor` (0x00464f50) and nothing else; the
+ *   whole body is `jmp <target>` (5 bytes). Its only dataref is `C_car_ex`'s vtable slot 21
+ *   (DuplicateFrom), so it is that class's override.
+ * Parameters: whatever `car_copy_carinit_from_actor` takes; the jump does not touch the frame,
+ *   so the arguments and the calling convention are the target's.
+ * Returns: whatever `car_copy_carinit_from_actor` returns; control never comes back here.
+ * PS2 twin: DuplicateFrom__8C_car_exFP7C_actor  [CONFIRMED]
+ *   The 8-byte PS2 body is a tail-jump to the `C_car` DuplicateFrom: the same shape.
+ * Evidence: VA 0x00475c00, Ghidra id `thunk_FUN_00464f50`; one .rdata dataref (0x0063bdbc).
+ * Class layout: exe-re/structs/car_extended.md §3c
+ */
 void thunk_car_copy_carinit_from_actor(void)
 
 {
@@ -104202,7 +104248,7 @@ void crt_atexit_register_00476f70(void)
  *   between C_car_ex's last method and C_clock's first holds only C_car_ex container helpers (three
  *   structurally different searches). Its spawner `NewCartidge__6C_game...` is an 8-byte `{ return;
  *   }` stub there, so no casing is ever created on PS2. Class identity is established by five
- *   independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §1. Renamed from
+ *   independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §4. Renamed from
  *   `FUN_00476f80`.
  * Class layout: exe-re/structs/cartridge.md
  */
@@ -104241,10 +104287,10 @@ undefined4 * __fastcall cartridge_ctor(undefined4 *param_1)
   //
   // ⚠️ No PS2 twin exists for ANY row above, and that is measured rather than
   //    unsearched: the PS2 build emits no C_cartridge member function at all
-  //    (structs/cartridge.md §5a) - its spawner NewCartidge__6C_game... is an
+  //    (structs/cartridge.md §7a) - its spawner NewCartidge__6C_game... is an
   //    8-byte stub there, so the linker had nothing to keep.
-  // Slot roles: structs/bottle.md §2 (13-18, 22-28, 30-38), structs/box_new.md
-  // (19/20), structs/car_extended.md (21). Full table: structs/cartridge.md §4.
+  // Slot roles: structs/bottle.md §4 (13-18, 22-28, 30-38), structs/box_new.md
+  // (19/20), structs/car_extended.md (21). Full table: structs/cartridge.md §6.
   *param_1 = &g_cartridge_vt;
   *(undefined1 *)(param_1 + 0x3f) = 0;
   *(undefined1 *)((int)param_1 + 0x6d) = 0;
@@ -104262,13 +104308,13 @@ undefined4 * __fastcall cartridge_ctor(undefined4 *param_1)
  * Returns: undefined4: param_1.
  * PS2 twin: none — see Evidence
  * Evidence: VA 0x00476fb0. Vtable slot 16 of 0x0063be18, the slot every documented C_actor-family
- *   class uses for its sdd (`structs/box_new.md` §2, `structs/bottle.md` §2). The PS2 build emits NO
+ *   class uses for its sdd (`structs/box_new.md` §3, `structs/bottle.md` §4). The PS2 build emits NO
  *   `C_cartridge` member function — the only `11C_cartridge` symbol in it is the static member
  *   `sounds__11C_cartridge`, the symbol table has no row with that class, and the PS2 VA span
  *   between C_car_ex's last method and C_clock's first holds only C_car_ex container helpers (three
  *   structurally different searches). Its spawner `NewCartidge__6C_game...` is an 8-byte `{ return;
  *   }` stub there, so no casing is ever created on PS2. Class identity is established by five
- *   independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §1. Renamed from
+ *   independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §4. Renamed from
  *   `FUN_00476fb0`.
  * Class layout: exe-re/structs/cartridge.md
  */
@@ -104297,7 +104343,7 @@ undefined4 __thiscall cartridge_scalar_deleting_dtor(undefined4 param_1,byte par
  *   VA span between C_car_ex's last method and C_clock's first holds only C_car_ex container helpers
  *   (three structurally different searches). Its spawner `NewCartidge__6C_game...` is an 8-byte `{
  *   return; }` stub there, so no casing is ever created on PS2. Class identity is established by
- *   five independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §1. Renamed from
+ *   five independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §4. Renamed from
  *   `FUN_00476fd0`.
  * Class layout: exe-re/structs/cartridge.md
  */
@@ -104340,7 +104386,7 @@ void __fastcall cartridge_dtor(undefined4 *param_1)
  *   between C_car_ex's last method and C_clock's first holds only C_car_ex container helpers (three
  *   structurally different searches). Its spawner `NewCartidge__6C_game...` is an 8-byte `{ return;
  *   }` stub there, so no casing is ever created on PS2. Class identity is established by five
- *   independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §1. Renamed from
+ *   independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §4. Renamed from
  *   `FUN_00476fe0`.
  * Class layout: exe-re/structs/cartridge.md
  */
@@ -104461,7 +104507,7 @@ void thunk_bottle_update(void)
  *   between C_car_ex's last method and C_clock's first holds only C_car_ex container helpers (three
  *   structurally different searches). Its spawner `NewCartidge__6C_game...` is an 8-byte `{ return;
  *   }` stub there, so no casing is ever created on PS2. Class identity is established by five
- *   independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §1. Renamed from
+ *   independent PC/PS2 levers, listed in `exe-re/structs/cartridge.md` §4. Renamed from
  *   `FUN_00477200`.
  * Class layout: exe-re/structs/cartridge.md
  */
@@ -104498,7 +104544,7 @@ void __fastcall cartridge_game_init(int param_1)
  *   holds only C_car_ex container helpers (three structurally different searches). Its spawner
  *   `NewCartidge__6C_game...` is an 8-byte `{ return; }` stub there, so no casing is ever created on
  *   PS2. Class identity is established by five independent PC/PS2 levers, listed in
- *   `exe-re/structs/cartridge.md` §1. Renamed from `FUN_00477260`.
+ *   `exe-re/structs/cartridge.md` §4. Renamed from `FUN_00477260`.
  * Class layout: exe-re/structs/cartridge.md
  */
 void __fastcall cartridge_game_done(int param_1)
@@ -104546,7 +104592,7 @@ void __fastcall cartridge_game_done(int param_1)
  *   first holds only C_car_ex container helpers (three structurally different searches). Its spawner
  *   `NewCartidge__6C_game...` is an 8-byte `{ return; }` stub there, so no casing is ever created on
  *   PS2. Class identity is established by five independent PC/PS2 levers, listed in
- *   `exe-re/structs/cartridge.md` §1. Renamed from `FUN_004772e0`.
+ *   `exe-re/structs/cartridge.md` §4. Renamed from `FUN_004772e0`.
  * Class layout: exe-re/structs/cartridge.md
  */
 void __thiscall cartridge_set_type(int param_1,char param_2)
@@ -104660,8 +104706,8 @@ undefined4 * __fastcall clock_ctor(undefined4 *param_1)
   // 18 clock_init, 25 clock_game_init. Inherited unchanged from C_actor:
   // 17 Release, 27 ChangeState, 28 actor_get_actor_speed, 30 Collision, 31 Hit,
   // 32 GetMaterialID, 34 actor_get_bound_points_2d.
-  // Slot roles: structs/bottle.md §2 (13-18, 22-28, 30-38), structs/box_new.md
-  // (19/20), structs/car_extended.md (21). Full table: structs/clock.md §5a.
+  // Slot roles: structs/bottle.md §4 (13-18, 22-28, 30-38), structs/box_new.md
+  // (19/20), structs/car_extended.md (21). Full table: structs/clock.md §6a.
   *param_1 = &g_clock_vt;
   param_1[4] = 0x22;
   return param_1;
@@ -104735,7 +104781,7 @@ void __fastcall clock_dtor(undefined4 *param_1)
  *   0x4ab4e0/0x4ab4e8/0x4ab4f0, all read out of the binaries. 112 B vs 192 B
  *   (0.58). 🔑 The optional second hand is explained by the shipped assets:
  *   of the three models carrying these frame names, only `9hodinky.4ds` has a
- *   `Sekundova` — see `exe-re/structs/clock.md` §2. Renamed from `FUN_00477380`.
+ *   `Sekundova` — see `exe-re/structs/clock.md` §4. Renamed from `FUN_00477380`.
  * Class layout: exe-re/structs/clock.md
  */
 uint __thiscall clock_init(int param_1,uint param_2)
@@ -104789,8 +104835,8 @@ uint __thiscall clock_init(int param_1,uint param_2)
  *   maps that class's slot-21 thunk to `DuplicateFrom__8C_car_exFP7C_actor`.
  *   ⚠️ A role mapping, not a PS2 twin: this symbol is shared.
  *   Slot roles come from the project's documented map, not from position:
- *   structs/bottle.md §2 (13-18, 22-28, 30-38), structs/box_new.md (19/20),
- *   structs/car_extended.md (21). Tables: structs/clock.md §5a,
+ *   structs/bottle.md §4 (13-18, 22-28, 30-38), structs/box_new.md (19/20),
+ *   structs/car_extended.md (21). Tables: structs/clock.md §6a,
  *   structs/cartridge.md §3.
  */
 void thunk_stub_noop_args4_00461180(void)
@@ -104823,7 +104869,7 @@ void thunk_stub_noop_args4_00461180(void)
  *   0.083333336 = 1/12. 320 B vs 380 B (0.84).
  *   ⚠️ This function seeds a 12-hour dial while `clock_ai_tick` advances a
  *   24-hour one; the same mismatch is present on PS2, so it is original
- *   behaviour. Recorded, not adjudicated — `exe-re/structs/clock.md` §4. Renamed from `FUN_00477400`.
+ *   behaviour. Recorded, not adjudicated — `exe-re/structs/clock.md` §5. Renamed from `FUN_00477400`.
  * Class layout: exe-re/structs/clock.md
  */
 void __fastcall clock_game_init(int param_1)
@@ -104891,16 +104937,13 @@ void __fastcall clock_game_init(int param_1)
  * ⚠️ THE NAME IS TARGET-DERIVED. It states what this address forwards to, and
  *   it is only as current as `actor_game_done`'s own name — if the target is
  *   renamed, re-derive this one too.
- * PS2 twin: GameDone__7C_clockFv  [STRUCTURAL]
- *   🔑 THIS THUNK IS A CLASS METHOD, not a shared forwarder. Its only
+ * PS2 twin: GameDone__7C_clockFv  [CONFIRMED]
+ *   THIS THUNK IS A CLASS METHOD, not a shared forwarder. Its only
  *   .rdata dataref is `C_clock`'s vtable slot 26 (GameDone), and it is
- *   emitted inside the C_clock translation unit [0x00477330, 0x004776c0).
- *   PS2's `GameDone__7C_clockFv` is an 8-byte empty stub, so C_clock does no
- *   teardown of its own on either build — the PC spells that as a tail-jump
- *   to the base implementation, the PS2 as an empty override.
- *   STRUCTURAL, never CONFIRMED: an empty PS2 body establishes the SYMBOL and
- *   never the BODIES. See
- *   exe-re/structs/clock.md §5a.
+ *   emitted inside the C_clock translation unit [0x00477300, 0x004776c0).
+ *   The 8-byte PS2 `GameDone__7C_clockFv` is a tail-jump to the `C_actor`
+ *   GameDone, the same shape as this 5-byte `jmp`: C_clock does no teardown
+ *   of its own on either build. See exe-re/structs/clock.md §3c and §6a.
  */
 void thunk_actor_game_done(void)
 
@@ -105059,8 +105102,8 @@ void crt_atexit_register_004776e0(void)
  *   ⚠️ Read that as "this symbol STANDS WHERE that method stands", never as a
  *   PS2 twin: an ICF fold belongs to none of the classes it serves.
  *   Slot roles come from the project's documented map, not from position:
- *   structs/bottle.md §2 (13-18, 22-28, 30-38), structs/box_new.md (19/20),
- *   structs/car_extended.md (21). Tables: structs/clock.md §5a,
+ *   structs/bottle.md §4 (13-18, 22-28, 30-38), structs/box_new.md (19/20),
+ *   structs/car_extended.md (21). Tables: structs/clock.md §6a,
  *   structs/cartridge.md §3.
  */
 void stub_noop_args4_004776f0(void)
@@ -105098,8 +105141,8 @@ void stub_noop_args4_004776f0(void)
  *   to a savegame — consistent with slots 23/24 returning true without writing.
  *   ⚠️ A role mapping, not a PS2 twin: this symbol is shared.
  *   Slot roles come from the project's documented map, not from position:
- *   structs/bottle.md §2 (13-18, 22-28, 30-38), structs/box_new.md (19/20),
- *   structs/car_extended.md (21). Tables: structs/clock.md §5a,
+ *   structs/bottle.md §4 (13-18, 22-28, 30-38), structs/box_new.md (19/20),
+ *   structs/car_extended.md (21). Tables: structs/clock.md §6a,
  *   structs/cartridge.md §3.
  */
 undefined4 stub_ret0_cdecl_00477700(void)
@@ -105138,8 +105181,8 @@ undefined4 stub_ret0_cdecl_00477700(void)
  *     C_cartridge (0x0063be18) slots 19/20 SaveData/LoadData — same as C_bottle
  *   ⚠️ A role mapping, not a PS2 twin: this symbol is shared.
  *   Slot roles come from the project's documented map, not from position:
- *   structs/bottle.md §2 (13-18, 22-28, 30-38), structs/box_new.md (19/20),
- *   structs/car_extended.md (21). Tables: structs/clock.md §5a,
+ *   structs/bottle.md §4 (13-18, 22-28, 30-38), structs/box_new.md (19/20),
+ *   structs/car_extended.md (21). Tables: structs/clock.md §6a,
  *   structs/cartridge.md §3.
  */
 undefined1 stub_rettrue_args4_00477710(void)
@@ -105148,6 +105191,16 @@ undefined1 stub_rettrue_args4_00477710(void)
   return 1;
 }
 
+/*
+ * thunk_crash_obj_disable_frame_colls — the jump alias of `crash_obj_disable_frame_colls`.
+ * What it does: a 5-byte `jmp` to `crash_obj_disable_frame_colls`; the body shown below is
+ *   the decompiler's inlined copy of the target. MSVC kept this alias when it folded the two
+ *   identical PS2-side functions into one body (the target's docblock has the detail).
+ * Parameters: param_1 (I3D_frame*): root of the subtree whose collisions are disabled.
+ * Returns: void: nothing.
+ * Evidence: VA 0x00477720, `jmp 0x00477730`; one caller, `crash_obj_create_from_model`.
+ * Renamed from `thunk_FUN_00477730`.
+ */
 void __fastcall thunk_crash_obj_disable_frame_colls(int *param_1)
 
 {
@@ -106011,7 +106064,7 @@ LAB_004785c2:
  * Returns: undefined4*: `this`.
  * PS2 twin: __ct__11C_crash_objFv  [CONFIRMED]
  * Evidence: VA 0x004786c0. It chains `physical_object_ctor`, so this is one of C_PhThing's
- *   subclasses — `structs/physical_object.md` §2 lists this ctor among its five, from a
+ *   subclasses — `structs/physical_object.md` §5 lists this ctor among its five, from a
  *   caller census of the base constructor. Kind 0x1a matches the PS2 ctor census over
  *   the proven +0x10 <-> +0x50 bridge. Renamed from `FUN_004786c0`.
  * Class layout: exe-re/structs/crash_obj.md
@@ -106310,6 +106363,9 @@ void __thiscall crash_obj_ai(int param_1,undefined4 param_2)
  * ⚠️ THE NAME IS TARGET-DERIVED. It states what this address forwards to, and
  *   it is only as current as `actor_save_game_get_size`'s own name — if the target is
  *   renamed, re-derive this one too.
+ * PS2 twin: SaveGameGetSize__11C_crash_objFv  [STRUCTURAL]
+ *   Its only .rdata dataref is `C_crash_obj`'s vtable slot 22; the 8-byte PS2 body is a
+ *   tail-jump to the `C_actor` SaveGameGetSize. Class layout: exe-re/structs/crash_obj.md §3c
  */
 void thunk_actor_save_game_get_size(void)
 
@@ -108497,7 +108553,7 @@ void crt_atexit_register_0047ab00(void)
  * Parameters: param_1 (this): the C_program sub-object (= C_detector + 0x70); param_2: the MSVC free flag, passed through untouched.
  * Returns: the C_detector pointer, as the destructor returns it.
  * PS2 twin: @128@__dt__10C_detectorFv  [STRUCTURAL]
- * Evidence: VA 0x0047ab10. Byte-proven in Game.exe: `83 e9 70` + `e9 <rel32 -> 0x00479440>`. Exactly one dataref, in the sub-vtable. The 0x70 adjustment is the C_program base offset `structs/detector.md` §2 byte-proves three other ways; PS2 spells the same relationship as `@128@` (0x80, its own base offset). Renamed from `FUN_0047ab10`.
+ * Evidence: VA 0x0047ab10. Byte-proven in Game.exe: `83 e9 70` + `e9 <rel32 -> 0x00479440>`. Exactly one dataref, in the sub-vtable. The 0x70 adjustment is the C_program base offset `structs/detector.md` §4a byte-proves three other ways; PS2 spells the same relationship as `@128@` (0x80, its own base offset). Renamed from `FUN_0047ab10`.
  * Class layout: exe-re/structs/detector.md
  */
 void thunk_detector_scalar_deleting_dtor(void)
@@ -108516,7 +108572,7 @@ void thunk_detector_scalar_deleting_dtor(void)
  * Parameters: param_1 (this): the C_program sub-object (= C_detector + 0x70).
  * Returns: int: the byte count the base method returns.
  * PS2 twin: @128@SaveGameGetSize__10C_detectorFv  [STRUCTURAL]
- * Evidence: VA 0x0047ab20. Byte-proven `83 e9 70` + `e9 <rel32 -> 0x00479740>`; one dataref, sub-vtable slot 2. Third of the four `@128@` thunks `structs/detector.md` §2 counted but did not list. Renamed from `FUN_0047ab20`.
+ * Evidence: VA 0x0047ab20. Byte-proven `83 e9 70` + `e9 <rel32 -> 0x00479740>`; one dataref, sub-vtable slot 2. Third of the four `@128@` thunks `structs/detector.md` §4a counted but did not list. Renamed from `FUN_0047ab20`.
  * Class layout: exe-re/structs/detector.md
  */
 void thunk_detector_save_game_get_size(void)
@@ -111813,7 +111869,7 @@ undefined4 __fastcall dog_acquire_player_target(int param_1)
  * dog_replan_path — throw away the current route and plan a fresh one to the same destination
  *
  * What it does: Destroys and frees the `ai_path` at +0x2f8, publishes this dog's
- *   blocked-connection vector to `g_ai_wayfind_checkpoint_container` so the
+ *   blocked-connection vector to `g_ai_wayfind_blocked_cons` so the
  *   planner avoids the connections it has already found blocked, runs the
  *   shortest-route search to the destination still held at +0x23c, and
  *   advances the new path to its first waypoint.
@@ -111838,7 +111894,7 @@ uint __fastcall dog_replan_path(int param_1)
     operator_delete_wrapper(iVar2);
   }
   puVar1 = (undefined4 *)(param_1 + 0x24);
-  g_ai_wayfind_checkpoint_container = param_1 + 0x2fc;
+  g_ai_wayfind_blocked_cons = param_1 + 0x2fc;
   *(undefined4 *)(param_1 + 0x2f8) = 0;
   ai_wayfind_plan_shortest_route(puVar1,param_1 + 0x23c,3,1);
   uVar3 = ai_wayfind_build_optimal_path();
@@ -111887,7 +111943,7 @@ undefined4 __thiscall dog_set_destination_and_plan(int param_1,undefined4 *param
   *(undefined4 *)(param_1 + 0x240) = param_2[1];
   puVar1 = (undefined4 *)(param_1 + 0x24);
   *(undefined4 *)(param_1 + 0x244) = param_2[2];
-  g_ai_wayfind_checkpoint_container = param_1 + 0x2fc;
+  g_ai_wayfind_blocked_cons = param_1 + 0x2fc;
   ai_wayfind_plan_shortest_route(puVar1,(undefined4 *)(param_1 + 0x23c),3,1);
   if (*(int *)(param_1 + 0x2f8) != 0) {
     ai_path_destroy();
@@ -116650,7 +116706,8 @@ LAB_00483663:
 LAB_00483d3f:
   *(int *)(param_1 + 0x220) = *(int *)(param_1 + 0x220) + (int)param_2;
   // >>> inlined tail: PS2 C_driver::DoLights + DoSounds + final vehicle-control apply.
-  //     Sets the car's light-state bytes (car+0x594..+0x597), then applies the controls
+  //     Sets the car's analog-input bytes (car+0x594..+0x597, vehicle.md §2c), then applies
+  //     the controls
   //     computed above to the C_Vehicle: gas = speed_factor(driver+0x84) * driver+0x104 via
   //     the gas setter vehicle_set_power (0 when idle/blocked), brake vehicle_set_brake, steering
   //     vehicle_set_steer. This is the "utilization" point for g_police_speed_factor.
@@ -116681,7 +116738,7 @@ LAB_00485dc7:
 /*
  * driver_fill_start_values(this=C_driver, dt_ms, ai_pos_sel) -> per-frame drive setup.
  * What it does: computes prev/next node cursors, refreshes the speed jitter (rand%100/100*0.35+0.65
- *   every jitter period), sets the look-ahead distance (node_width * jitter, or 1000.0 in a non-free
+ *   every jitter period), sets the speed limit (node speed_cap * jitter, or 1000.0 in a non-free
  *   mode), calls driver_compute_radius, caches the car's basis vectors + world position (GetAIPos),
  *   and derives the current target-node position (+0x6c) and direction-to-target (+0x88).
  * Parameters: param_1 (this, ECX) = C_driver; param_2 = frame dt (ms); param_3 = AI-pos selector.
@@ -119245,7 +119302,7 @@ void crt_atexit_register_0048a0c0(void)
  * Parameters: param_1 (this): the C_drop_in_weapon.
  * Returns: the constructed object, MSVC ctor convention.
  * PS2 twin: __ct__16C_drop_in_weaponFv  [CONFIRMED]
- * Evidence: VA 0x0048a0d0. Kind 0x25 at `+0x10` matches PS2's 0x25 at `+0x50` over the proven kind-field bridge, and `structs/entity.md` §1 already carried 0x25 = C_drop_in_weapon from the PS2 ctor census. The PC field-clear list maps statement-for-statement onto PS2's `memset(+0x640, 0, 0x10)` plus its seven individual stores, which fixes the class band bridge at PC `+0x3b0` <-> PS2 `+0x640`. 112 B vs 160 (MSVC inlines the memsets). Closes row 5 of `structs/physical_object.md` §2. Renamed from `FUN_0048a0d0`.
+ * Evidence: VA 0x0048a0d0. Kind 0x25 at `+0x10` matches PS2's 0x25 at `+0x50` over the proven kind-field bridge, and `structs/entity_kind.md` §1 already carried 0x25 = C_drop_in_weapon from the PS2 ctor census. The PC field-clear list maps statement-for-statement onto PS2's `memset(+0x640, 0, 0x10)` plus its seven individual stores, which fixes the class band bridge at PC `+0x3b0` <-> PS2 `+0x640`. 112 B vs 160 (MSVC inlines the memsets). Closes row 5 of `structs/physical_object.md` §5. Renamed from `FUN_0048a0d0`.
  * Class layout: exe-re/structs/drop_in_weapon.md
  */
 undefined4 * __fastcall drop_in_weapon_ctor(undefined4 *param_1)
@@ -119624,7 +119681,7 @@ void crt_atexit_register_0048a520(void)
  *   playback path car_track_spawn_dropout_part.
  *   🔑 Its BASE IS C_PhThing (physical_object_ctor), not C_actor directly.
  *   Renamed from `FUN_0048a530`.
- * Class layout: exe-re/structs/car.md §4b · exe-re/structs/entity.md (kind 0x11)
+ * Class layout: exe-re/structs/car.md §6b · exe-re/structs/entity.md (kind 0x11)
  */
 undefined4 * __fastcall dropout_ctor(undefined4 *param_1)
 
@@ -119801,10 +119858,11 @@ undefined4 __fastcall dropout_init(int param_1)
 }
 
 /*
- * dropout_game_init — scene start — arms the part and clears its settled flag, vtable slot 25
+ * dropout_game_init — scene start — arms the part and clears retire_pending, vtable slot 25
  *
  * What it does: Chains `physical_object_game_init`, sets the actor byte at `+0x65`, and clears
- *   the settled flag at `+0x3b4` that every one of this class's virtuals gates on.
+ *   `retire_pending` at `+0x3b4`, the byte every per-frame virtual gates on (no store of a
+ *   non-zero value is known; structs/dropout.md §1).
  * Parameters: param_1 (this): the C_DropOut.
  * Returns: void: nothing.
  * PS2 twin: GameInit__9C_DropOutFv  [CONFIRMED]
@@ -119826,7 +119884,7 @@ void __fastcall dropout_game_init(int param_1)
  * What it does: Chains `physical_object_game_done` (the C_PhThing half: unregisters the
  *   body from the physics world). Then, when either C_actor_track mode bit is set
  *   (`this+0x04 & 3` — bit 0x01 playback active, bit 0x02 recording active, see
- *   structs/actor_track.md §3a), it rewinds the track's key cursors
+ *   structs/actor_track.md §2a), it rewinds the track's key cursors
  *   (`recorder_track_rewind_cursors`) and runs the second detach step. Finally it
  *   unbinds the I3D_frame at `this+0x68` through the frame's own vtable (SetOwner(0,0)
  *   then Release) and nulls the field, so the detached car part takes its scene frame
@@ -119862,9 +119920,9 @@ void __fastcall dropout_game_done(int param_1)
 // FUN_0048a880 @ VA 0x0048a880 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * dropout_ai_tick — per-frame AI — runs the physics solver until the part settles, vtable slot 13
+ * dropout_ai_tick — per-frame AI — runs the physics solver unless retire_pending, slot 13
  *
- * What it does: While the settled flag at `+0x3b4` is clear, forwards to
+ * What it does: While `retire_pending` at `+0x3b4` is clear, forwards to
  *   `physical_object_ai_tick`; once set, drives the actor to act-state 2 so the
  *   part is retired.
  * Parameters: param_1 (this): the C_DropOut. param_2 (uint): the frame delta, forwarded to the base.
@@ -119889,7 +119947,7 @@ void __fastcall dropout_ai_tick(int param_1)
 // FUN_0048a8a0 @ VA 0x0048a8a0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * dropout_update — per-frame transform update while the part is still moving, vtable slot 14
+ * dropout_update — per-frame transform update unless retire_pending, vtable slot 14
  *
  * What it does: Same shape as the AI tick: forwards to `physical_object_update` while `+0x3b4`
  *   is clear, otherwise drives the actor to act-state 2.
@@ -120014,7 +120072,7 @@ void __fastcall dropout_on_act_state_changed(int param_1)
  *   descriptor the car supplies, passed through untouched.
  * Returns: void — whatever the base returns.
  * PS2 twin: InitWheel__9C_DropOutFP15S_DROPOUT_WHEEL  [CONFIRMED]
- * Evidence: VA 0x0048aa30, inside the C_DropOut TU [0x0048a530, 0x0048af00), 0 .rdata
+ * Evidence: VA 0x0048aa30, inside the C_DropOut TU [0x0048a500, 0x0048af00), 0 .rdata
  *   datarefs (it is non-virtual — `car_track_spawn_dropout_part` calls it directly on the
  *   wheel arm). The PS2 symbol is 8 bytes, which on MIPS is EITHER an empty body OR a
  *   tail jump; it is the tail jump, and Ghidra renders it as the base's body,
@@ -120025,6 +120083,7 @@ void __fastcall dropout_on_act_state_changed(int param_1)
  *   is resolved through the symbol dump keyed `"thunk_" + <target's registry name>`, so a
  *   descriptive name here would make the record unresolvable.
  * Class layout: exe-re/structs/dropout.md
+ * Renamed from `thunk_FUN_004c4000`.
  */
 void __thiscall thunk_physical_object_init_wheel(int param_1,undefined4 *param_2)
 
@@ -120093,10 +120152,10 @@ void __thiscall dropout_init_box(int param_1,int param_2)
 // FUN_0048aa60 @ VA 0x0048aa60 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * dropout_on_collision — collision hook — ignored once the part has settled, vtable slot 30
+ * dropout_on_collision — collision hook — ignored while retire_pending is set, vtable slot 30
  *
  * What it does: Forwards to `physical_object_on_collision` while `+0x3b4` is clear; once the
- *   part has settled it instead drives the actor to act-state 2. Always reports
+ *   flag is set it instead drives the actor to act-state 2. Always reports
  *   the collision as handled.
  * Parameters: param_1 (this): the C_DropOut. param_2..param_7: the other actor, the three contact vectors, the impulse scalar and the contact frame — all forwarded untouched.
  * Returns: bool: 1 always, on both builds.
@@ -120121,9 +120180,9 @@ dropout_on_collision(int param_1,undefined4 param_2,undefined4 param_3,undefined
 // FUN_0048aaa0 @ VA 0x0048aaa0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * dropout_hit — damage hook — ignored once the part has settled, vtable slot 31
+ * dropout_hit — damage hook — ignored while retire_pending is set, vtable slot 31
  *
- * What it does: Forwards to `physical_object_hit` while `+0x3b4` is clear; once settled it
+ * What it does: Forwards to `physical_object_hit` while `+0x3b4` is clear; once it is set it
  *   drives the actor to act-state 2 instead. Always reports the hit as handled.
  * Parameters: param_1 (this): the C_DropOut. param_2..param_9: the hit type, the three vectors, the damage scalar, the attacker, the hit flags and the struck frame — all forwarded.
  * Returns: bool: 1 always, on both builds.
@@ -120148,7 +120207,8 @@ dropout_hit(int param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4
 // FUN_0048aaf0 @ VA 0x0048aaf0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * track_apply_rigid_pose_at_clock — applies a recorded rigid-body pose at the playback clock — an ICF fold
+ * folded_track_apply_rigid_pose_at_clock - applies a recorded rigid-body pose at the playback
+ *  clock; an ICF fold of two classes' C_actor_track slot-2 overrides.
  *
  * What it does: Walks the track's cached cursor pair against `g_recorder_playback_clock_ms`:
  *   before the first key it snaps to it, past the second it snaps to that, and
@@ -120156,19 +120216,22 @@ dropout_hit(int param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4
  *   the result onto the bound `I3D_frame` with the `& 0xfffffedf | 0x40000000`
  *   and `& 0xfffffecb | 0x40000008` dirty-flag rewrites, then re-registers the
  *   frame with the mission's dynamic-object list.
- * Parameters: param_1 (this): the actor whose track is being played back — either a `C_DropOut` or a `C_box`.
+ * Parameters: param_1 (this): the actor whose track is being played back, a `C_DropOut` or a
+ *   `C_box`.
  * Returns: void: nothing.
- * PS2 twin: none — see Evidence
- * Evidence: VA 0x0048aaf0. 🔴 **Owned by no class.** A vtable dataref scan finds TWO .rdata
- *   datarefs: slot 2 of `0x0063c320` (C_DropOut) AND slot 2 of `0x0063b980` (C_box, kind 9, ctor
- *   `box_ctor`) — an /OPT:ICF fold of two rigid bodies' identical playback overrides. It sits
- *   inside the C_DropOut TU and fills C_DropOut's slot, which is exactly why
- *   `dropout_track_apply_pose_at_clock` would be wrong: the same trap, and the same dataref-scan
- *   refutation, that `actor_track.md` §2b records for `stub_zero_vec3_out` / `stub_zero_quat_out`.
- *   **PC-only** subsystem. Renamed from `FUN_0048aaf0`.
- * Class layout: exe-re/structs/actor_track.md
+ * PS2 twin: none - the C_actor_track layer is PC-only.
+ * Evidence: VA 0x0048aaf0. Owned by no class: a vtable dataref scan finds two .rdata
+ *   datarefs, slot 2 of `0x0063c320` (C_DropOut) and slot 2 of `0x0063b980` (C_box, kind 9,
+ *   ctor `box_ctor`), and no E8 caller. The linker folded two rigid bodies' identical
+ *   playback overrides onto one address inside the C_DropOut unit; both owners record the same
+ *   `[time, 1, position, quaternion]` key this body replays. `actor_track.md` §4b records
+ *   the same trap for `stub_zero_vec3_out` / `stub_zero_quat_out`.
+ *   Renamed from `FUN_0048aaf0`.
+ * Class layout: exe-re/structs/actor_track.md; listed in exe-re/structs/dropout.md and
+ *   exe-re/structs/box.md.
  */
-void __fastcall track_apply_rigid_pose_at_clock(int param_1)
+
+void __fastcall folded_track_apply_rigid_pose_at_clock(int param_1)
 
 {
   float fVar1;
@@ -120281,7 +120344,7 @@ LAB_0048ad5a:
  * Parameters: param_1 (this): the C_DropOut.
  * Returns: bool: 1 — the track was created.
  * PS2 twin: none — see Evidence
- * Evidence: VA 0x0048ada0. `C_actor_track` interface slot 9 with exactly ONE .rdata dataref, so it is this class's own override and not an ICF fold. **PC-only**: the whole `C_recorder` subsystem is absent from SLUS_206.71 by measurement (`structs/recorder.md`), so no PS2 twin can exist. Adds a `C_DropOut` row to `actor_track.md` §4's key-size table. Renamed from `FUN_0048ada0`.
+ * Evidence: VA 0x0048ada0. `C_actor_track` interface slot 9 with exactly ONE .rdata dataref, so it is this class's own override and not an ICF fold. **PC-only**: the whole `C_recorder` subsystem is absent from SLUS_206.71 by measurement (`structs/recorder.md`), so no PS2 twin can exist. Adds a `C_DropOut` row to `actor_track.md` §6's key-size table. Renamed from `FUN_0048ada0`.
  * Class layout: exe-re/structs/dropout.md
  */
 undefined1 __fastcall dropout_track_create(undefined4 param_1)
@@ -120303,7 +120366,7 @@ undefined1 __fastcall dropout_track_create(undefined4 param_1)
  * Parameters: param_1 (this): the C_DropOut. param_2 (int): the recorder clock in ms.
  * Returns: int: 1 when a key was written, -1 (the interface's sentinel) when nothing was recorded.
  * PS2 twin: none — see Evidence
- * Evidence: VA 0x0048adc0. `C_actor_track` interface slot 0 with exactly ONE .rdata dataref. Its record shape `{time, type, pos[3], quat[4]}` is `actor_track.md` §4's documented key layout and its size is the 0x24 the slot-9 override declares — the two overrides cross-check each other. **PC-only** subsystem, no PS2 twin possible. Renamed from `FUN_0048adc0`.
+ * Evidence: VA 0x0048adc0. `C_actor_track` interface slot 0 with exactly ONE .rdata dataref. Its record shape `{time, type, pos[3], quat[4]}` is `actor_track.md` §6's documented key layout and its size is the 0x24 the slot-9 override declares — the two overrides cross-check each other. **PC-only** subsystem, no PS2 twin possible. Renamed from `FUN_0048adc0`.
  * Class layout: exe-re/structs/dropout.md
  */
 undefined4 __thiscall dropout_track_record_key(int param_1,int param_2)
@@ -120496,16 +120559,15 @@ void __fastcall grenade_dtor(undefined4 *param_1)
  *   returns whatever `bottle_init` returns for that frame. Vtable slot 18.
  * Parameters: param_1 (frame): the I3D_frame the actor is being bound to.
  * Returns: bool: false if the frame is null or `bottle_init` failed, true otherwise.
- * PS2 twin: none — see Evidence
- * Evidence: VA 0x0048af90. 🔴 **An ICF fold — deliberately NOT named `grenade_init`**. A vtable
- *   dataref scan finds THREE .rdata datarefs, all at slot 18: `0x0063be18` (C_cartridge),
- *   `0x0063c3c0` (C_grenade) and `0x0063cd80` (the kind-0xf class whose ctor is 0x004f60e0). All
- *   three owners are C_bottle subclasses and the body forwards to `bottle_init`, so the name states
- *   the FAMILY and asserts no single class. The PS2 side has three separate 44-byte bodies
- *   (`Init__9C_grenade`, and the corresponding methods of its siblings), each identical to this one
- *   — which is exactly why /OPT:ICF merged them — so no `PS2 twin:` line is stamped: a docblock
- *   cannot say 'one of three'. The mapping is in `structs/grenade.md` §3 and `structs/bottle.md`
- *   §5. Renamed from `FUN_0048af90`.
+ * PS2 twin: `Init__9C_grenadeFP9I3D_frame`  [CONFIRMED]
+ * PS2 twin: `Init__13C_smoke_trailFP9I3D_frame`  [CONFIRMED]
+ *  Two 44-byte PS2 bodies, each statement-identical to this body; `C_cartridge`, the third
+ *  owner, has no PS2 methods.
+ * Evidence: VA 0x0048af90. An ICF fold, named for the family rather than for one class. A
+ *   vtable dataref scan finds three .rdata datarefs, all at slot 18: `0x0063be18`
+ *   (C_cartridge), `0x0063c3c0` (C_grenade) and `0x0063cd80` (C_smoke_trail). All three owners
+ *   are C_bottle subclasses and the body forwards to `bottle_init`. The mapping is in
+ *   `structs/grenade.md` §3 and `structs/bottle.md` §3. Renamed from `FUN_0048af90`.
  * Class layout: exe-re/structs/bottle.md
  */
 bool bottle_subclass_init_require_frame(int param_1)
@@ -120558,7 +120620,7 @@ bool bottle_subclass_init_require_frame(int param_1)
  * terminal payload arms — `+0x141` explodes, `+0x14c` ignites. One class, two
  * weapons, selected by designer flags that the savegame record carries. The
  * PS2 name is `C_grenade`, so the prefix records the developers' class name;
- * "grenade" does not describe the whole contents. See `structs/grenade.md` §1.
+ * "grenade" does not describe the whole contents. See `structs/grenade.md` §4.
  */
 void __thiscall grenade_ai_tick(int param_1,int param_2)
 
@@ -120918,7 +120980,7 @@ grenade_hit(int param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4
  * PS2 twin: none — see Evidence
  * Evidence: VA 0x0048b510. **PC-only — there is no PS2 symbol to diff against**, and that is the
  *   PS2 port's GUTTED direction rather than a gap: the PS2 port emptied the per-class replication
- *   bodies (19 of 21 `NetDirect` bodies are 8-byte stubs, `structs/bottle.md` §3a), so the PC has
+ *   bodies (19 of 21 `NetDirect` bodies are 8-byte stubs, `structs/bottle.md` §9a), so the PC has
  *   strictly more here. One .rdata dataref, vtable slot 38, the same slot
  *   `bottle_apply_net_event_msg` occupies in the C_bottle vtable. `+0x15c` is the flag the ctor
  *   sets and `grenade_net_apply_remote_state` gates on, which ties the three together.
@@ -121042,7 +121104,7 @@ void crt_atexit_register_0048b5d0(void)
  *   The whole C_recorder subsystem is absent from SLUS_206.71 by MEASUREMENT:
  *   `C_actor_track` occurs 0 times in the PS2 symbol table, 0 times in the PS2
  *   decomp, and `__vt__7C_actor` there holds exactly the 27 methods that map to
- *   PC slots 13-38 (`structs/actor_track.md` §5).
+ *   PC slots 13-38 (`structs/actor_track.md` §7).
  *   Renamed from `FUN_0048b5e0`.
  * Class: declared by **C_human**, not C_entity. A vtable dataref scan puts it in exactly three
  *   vtables — 0x0063b488 (C_entity), 0x0063c468 (C_human), 0x0063c908 (C_player) — and C_human is
@@ -121284,7 +121346,7 @@ switchD_0048b734_caseD_5:
  * Evidence: VA 0x0048bad0. The whole keyframe-recorder subsystem is **PC-only, by measurement**:
  *   `C_actor_track` occurs 0 times in the PS2 symbol table and 0 times in the PS2 decomp, and
  *   `__vt__7C_actor` there holds exactly the 27 methods mapping to PC slots 13-38
- *   (`structs/actor_track.md` §5). No PS2 twin exists or can exist. Declared by **C_human**, not
+ *   (`structs/actor_track.md` §7). No PS2 twin exists or can exist. Declared by **C_human**, not
  *   C_entity: a vtable dataref scan puts it in exactly three vtables - 0x0063b488 (C_entity),
  *   0x0063c468 (C_human), 0x0063c908 (C_player) - and C_human is the BASE of the other two, so a
  *   C_entity declaration could not reach C_human's table. The TU placement (inside C_human.cpp)
@@ -121443,7 +121505,7 @@ LAB_0048bc0f:
  * Evidence: VA 0x0048bd30. The whole keyframe-recorder subsystem is **PC-only, by measurement**:
  *   `C_actor_track` occurs 0 times in the PS2 symbol table and 0 times in the PS2 decomp, and
  *   `__vt__7C_actor` there holds exactly the 27 methods mapping to PC slots 13-38
- *   (`structs/actor_track.md` §5). No PS2 twin exists or can exist. Declared by **C_human**, not
+ *   (`structs/actor_track.md` §7). No PS2 twin exists or can exist. Declared by **C_human**, not
  *   C_entity: a vtable dataref scan puts it in exactly three vtables - 0x0063b488 (C_entity),
  *   0x0063c468 (C_human), 0x0063c908 (C_player) - and C_human is the BASE of the other two, so a
  *   C_entity declaration could not reach C_human's table. The TU placement (inside C_human.cpp)
@@ -121687,7 +121749,7 @@ void __thiscall human_track_apply_pose_at_clock(int param_1,int param_2)
  * Evidence: VA 0x0048c320. The whole keyframe-recorder subsystem is **PC-only, by measurement**:
  *   `C_actor_track` occurs 0 times in the PS2 symbol table and 0 times in the PS2 decomp, and
  *   `__vt__7C_actor` there holds exactly the 27 methods mapping to PC slots 13-38
- *   (`structs/actor_track.md` §5). No PS2 twin exists or can exist. Declared by **C_human**, not
+ *   (`structs/actor_track.md` §7). No PS2 twin exists or can exist. Declared by **C_human**, not
  *   C_entity: a vtable dataref scan puts it in exactly three vtables - 0x0063b488 (C_entity),
  *   0x0063c468 (C_human), 0x0063c908 (C_player) - and C_human is the BASE of the other two, so a
  *   C_entity declaration could not reach C_human's table. The TU placement (inside C_human.cpp)
@@ -122116,7 +122178,7 @@ void __fastcall human_track_dump_keys(int param_1)
  * Evidence: VA 0x0048cc20. The whole keyframe-recorder subsystem is **PC-only, by measurement**:
  *   `C_actor_track` occurs 0 times in the PS2 symbol table and 0 times in the PS2 decomp, and
  *   `__vt__7C_actor` there holds exactly the 27 methods mapping to PC slots 13-38
- *   (`structs/actor_track.md` §5). No PS2 twin exists or can exist. Declared by **C_human**, not
+ *   (`structs/actor_track.md` §7). No PS2 twin exists or can exist. Declared by **C_human**, not
  *   C_entity: a vtable dataref scan puts it in exactly three vtables - 0x0063b488 (C_entity),
  *   0x0063c468 (C_human), 0x0063c908 (C_player) - and C_human is the BASE of the other two, so a
  *   C_entity declaration could not reach C_human's table. The TU placement (inside C_human.cpp)
@@ -122346,7 +122408,7 @@ void __thiscall human_track_get_pos_at_time(int param_1,float *param_2,int param
  * Evidence: VA 0x0048d0d0. The whole keyframe-recorder subsystem is **PC-only, by measurement**:
  *   `C_actor_track` occurs 0 times in the PS2 symbol table and 0 times in the PS2 decomp, and
  *   `__vt__7C_actor` there holds exactly the 27 methods mapping to PC slots 13-38
- *   (`structs/actor_track.md` §5). No PS2 twin exists or can exist. Declared by **C_human**, not
+ *   (`structs/actor_track.md` §7). No PS2 twin exists or can exist. Declared by **C_human**, not
  *   C_entity: a vtable dataref scan puts it in exactly three vtables - 0x0063b488 (C_entity),
  *   0x0063c468 (C_human), 0x0063c908 (C_player) - and C_human is the BASE of the other two, so a
  *   C_entity declaration could not reach C_human's table. The TU placement (inside C_human.cpp)
@@ -123096,7 +123158,7 @@ undefined4 human_notify_callback(I3D_frame *param_1,undefined4 param_2,int param
     if (*(int *)(*(int *)(g_act_mission + 0x24) + 0xe4) == 0) {
       iVar9 = iVar6;
     }
-    iVar6 = police_manager_get_num_of_offences(iVar9);
+    iVar6 = police_manager_get_capture_count(iVar9);
     if (iVar6 == 1) {
       uVar10 = 0x98;
     }
@@ -123115,7 +123177,7 @@ undefined4 human_notify_callback(I3D_frame *param_1,undefined4 param_2,int param
     if (*(int *)(*(int *)(g_act_mission + 0x24) + 0xe4) == 0) {
       iVar9 = iVar6;
     }
-    iVar6 = police_manager_get_num_of_offences(iVar9);
+    iVar6 = police_manager_get_capture_count(iVar9);
     if (iVar6 == 1) {
       uVar10 = 0x99;
     }
@@ -123131,7 +123193,7 @@ undefined4 human_notify_callback(I3D_frame *param_1,undefined4 param_2,int param
     if (*(int *)(*(int *)(g_act_mission + 0x24) + 0xe4) == 0) {
       iVar9 = iVar6;
     }
-    iVar6 = police_manager_get_num_of_offences(iVar9);
+    iVar6 = police_manager_get_capture_count(iVar9);
     if (iVar6 == 1) {
       uVar10 = 0x9a;
     }
@@ -123190,9 +123252,10 @@ void __thiscall ai_loc_init(undefined4 *param_1,int param_2)
  *
  * What it does: Runs only while the owner's `+0x98` field is 0, and returns early (clearing the flag
  * word) when the mission has no navigation web. Otherwise takes the owner frame's
- * origin and re-resolves it only if the owner has moved more than 2 units
- * (4.0 squared) from the cached position OR 5000 ms have elapsed - so this is a
- * throttled cache refresh, not a per-frame tick. On a refresh it calls
+ * origin and re-resolves it only if no refresh has happened yet, or the owner has moved at
+ * least 2 units (4.0 squared) from the cached position AND 5000 ms have elapsed - so this is
+ * a throttled cache refresh, not a per-frame tick. The flag word ends as 1 (refreshed), 3
+ * (outside every node radius and corridor) or 0x11 (inside a corridor). On a refresh it calls
  * `ai_wayfind_get_node_for_position`, stores the resolved node indices (`+0x0c`,
  * `+0x10`), the containing web connection (`+0x14`) found via
  * `ai_path_is_pos_in_connection_corridor`, and a flag word (`+0x18`). It then walks
@@ -124035,7 +124098,7 @@ void __fastcall inventory_dtor(int param_1)
  * Returns: void: nothing.
  * PS2 twin: none — see Evidence
  * Evidence: VA 0x0048f7b0. 🔴 **ICF FOLD - it belongs to NO class, and must not carry one** (the
- *   `stub_zero_vec3_out` case in `structs/actor_track.md` §2b). Byte-proven by its three unwind
+ *   `stub_zero_vec3_out` case in `structs/actor_track.md` §4b). Byte-proven by its three unwind
  *   funclets: 0x00635c79 does `add ecx, 0x724` = **`ai_loc`** at C_human+0x724, while 0x00635136
  *   and 0x006351a1 both do `add ecx, 0xe88` = **`ai_logs`** at C_entity+0xe88. Both struct docs
  *   independently place an MSVC `std::vector` header at their own `+0x20`/`+0x24` (`ai_loc.md`:
@@ -125021,7 +125084,7 @@ void __fastcall human_death(int param_1)
  *   four statements: IsActive(machine) -> guarded Tick(machine, t) -> virtual call through the frame
  *   field (PC +0x68 / PS2 +0x70) -> tail call UpdateDynColl. The PS2 side reaches its machine as
  *   `this+0x250` (an explicit arg); the PC side's is hidden in ECX because C_human EMBEDS the machine
- *   at +0xbc (structs/anim_machine.md §1) — the two agree.
+ *   at +0xbc (structs/anim_machine.md §4) — the two agree.
  *   This diff is also what identified `anim_machine_is_active` / `anim_machine_tick` /
  *   `human_update_dyn_coll`.
  *   Renamed from `FUN_00490b10`.
@@ -126245,13 +126308,13 @@ LAB_0049298d:
  * Evidence: VA 0x004929a0. Body-diff vs PS2 `ThrowFromCarTruck__7C_humanFR8S_vectorf` — CONFIRMED.
  *   Identical 3-guard prologue: vehicle ptr non-null; vehicle's KIND field == 4 (car) — PC reads
  *   `+0x10`, PS2 reads `+0x50`, which is exactly the documented PC/PS2 kind-field pair
- *   (structs/entity.md §1); seat_index == -1 (PC +0xac, PS2 word 0x8e). Both then zero the vehicle ptr
+ *   (structs/entity_kind.md §1); seat_index == -1 (PC +0xac, PS2 word 0x8e). Both then zero the vehicle ptr
  *   pair and re-parent the frame. The seat==-1 test is what makes this the BED ejector, matching the
  *   "CarTruck" name and pairing it with `human_intern_use_car_truck`.
  *   Renamed from `FUN_004929a0`.
  * PS2 twin: ThrowFromCarTruck__7C_humanFR8S_vectorf  [CONFIRMED]
  * INLINED PS2 HELPER: PS2 `ThrowFromCarTruck__7C_human` ends with `HitFall(this, dir, 5)`. HitFall has
- *   NO separate PC function (MSVC inlined it — see `human_hit`'s docblock and structs/human.md §4), so
+ *   NO separate PC function (MSVC inlined it — see `human_hit`'s docblock and structs/human.md §3), so
  *   its body is spliced into this function's tail. Marked in the body with a `// >>> INLINED PS2 HitFall`
  *   comment. This is also one of the two independent proofs that the Hit* family is inlined on PC.
  */
@@ -126968,7 +127031,7 @@ LAB_00493a79:
       local_5c = (undefined4 *)0x0;
       // ===== MELEE BLOCK POSE - pick the guard clip for the held weapon class =====
       // The table at 0x00494124 is indexed by action_state (+0x1e8). Only 0/5/6/7 reach it:
-      // the outer switch already excluded 1-4. Value -> clip: structs/human.md §2c.
+      // the outer switch already excluded 1-4. Value -> clip: structs/human.md §2b.
       switch(*(int *)(param_1 + 0x1e8)) {
       case 0:
       case 5:
@@ -126984,7 +127047,7 @@ LAB_00493a79:
       }
       i3d_cache_anim_create(pcVar14,&local_5c,0,0);   // fetch the clip from the anim-set cache
       if (local_5c != (undefined4 *)0x0) {
-        *(undefined1 *)(param_1 + 0x22c) = 1;         // extended_anim_active (structs/human.md)
+        *(undefined1 *)(param_1 + 0x22c) = 1;         // guard_clip_active (structs/human.md)
         anim_machine_set_extended_anim(local_5c,0x3f4ccccd,0x40800000,0);   // 0.8f blend, 4.0f
         (**(code **)*local_5c)(local_5c);             // vtable slot 0 on the clip object
       }
@@ -127272,7 +127335,7 @@ LAB_004941d8:
  *
  * CLASS: a **C_human** method, NOT C_actor. Receiver proof: it reads
  *   `this+0xd8`, `this+0xe8` and `this+0x1dc` — all three fall INSIDE the `+0xbc..+0x1e0` span that
- *   C_human's EMBEDDED animation machine occupies (structs/anim_machine.md §1), i.e. it reaches into
+ *   C_human's EMBEDDED animation machine occupies (structs/anim_machine.md §4), i.e. it reaches into
  *   the machine's fields directly through the human's `this`.
  *
  * PS2 twin: PersonAnim__7C_humanFfbb  [CONFIRMED]
@@ -129073,7 +129136,7 @@ void __fastcall human_update_dyn_coll(int param_1)
  *   The inline sites are marked with `// >>> INLINED PS2 ...` comments in the body, under a banner that
  *   maps each arm to its helper. Every arm is pinned by position (the PS2 dispatch order: landing,
  *   agony, fall, stroke, else gun) and by its clip ids, which are the PS2 ids plus a band offset
- *   (+0x22 for the landing and fall clips, +0x32 for the stroke clips). structs/human.md §4 lists
+ *   (+0x22 for the landing and fall clips, +0x32 for the stroke clips). structs/human.md §3 lists
  *   all six as INLINED.
  * Renamed from `FUN_00496710` (original Ghidra id).
  */
@@ -130369,7 +130432,7 @@ void __fastcall clear4_dwords_at(undefined4 *param_1)
  *   It is called from `human_hit` with its result assigned, exactly as PS2 `Hit` does
  *   `uVar8 = HitInCar(...)`.
  *   **This is the ONLY one of the 7 PS2 Hit* helpers that exists as a separate function on PC** — see the
- *   structs/human.md §4 for the other six (inlined, terminal).
+ *   structs/human.md §3 for the other six (inlined, terminal).
  *   Renamed from `FUN_00498760`.
  * PS2 twin: HitInCar__7C_humanF10E_hit_typeRC8S_vectorRC8S_vectorRC8S_vectorfP7C_actorUiP9I3D_frame  [CONFIRMED]
  */
@@ -132292,7 +132355,7 @@ LAB_0049b63f:
       return;
     }
     if (*(int **)(*(int *)(g_act_mission + 0x24) + 0xe4) == param_1) {
-      hud_set_theft_indicator_value(1.0 - (float)(int)param_2 / (float)param_1[0x11d]);
+      hud_set_timed_action_bar_value(1.0 - (float)(int)param_2 / (float)param_1[0x11d]);
       return;
     }
     break;
@@ -140222,7 +140285,7 @@ void __thiscall human_do_side_jump(int param_1,float *param_2,int param_3)
  *   deletes its shadow frames and fake shadow, stops every animation track, erases the dyn-colls
  *   — and loads the replacement via `i3d_cache_model_open`. On success it re-runs the subclass half:
  *   `player_change_model` if this human IS the active player (`*(g_act_mission+0x24)+0xe4` == this),
- *   and `entity_rebind_neck_bone_handle` if `kind` (+0x10) == 0x1b (a C_entity NPC).
+ *   and `entity_rebind_neck_frame` if `kind` (+0x10) == 0x1b (a C_entity NPC).
  * Parameters: param_1 (this, ECX): the C_human; param_2 (char*): the new model path;
  *   param_3 (bool): keep the actor's game-singleton registration (skips the invalidate).
  * Returns: void.
@@ -140425,7 +140488,7 @@ void __thiscall human_change_model(int param_1,undefined4 param_2,char param_3)
       }
       if (*(int *)(param_1 + 0x10) == 0x1b) {
         puStack_2c = (undefined4 *)0x4a7967;
-        entity_rebind_neck_bone_handle();
+        entity_rebind_neck_frame();
       }
       piStack_34 = *(int **)(param_1 + 0x68);
       puStack_2c = (undefined4 *)0x40;
@@ -142903,8 +142966,9 @@ void __fastcall human_force_ready_to_act(int param_1)
  * Returns: void.
  *
  * Evidence: VA 0x004ab1d0. Body-diff vs PS2 `Turn_Turn__7C_humanFv` - CONFIRMED, 1:1: set
- *   cur_anim_id (PC +0x74 / PS2 +0x204 - documented pair), clear motion_intent (PC +0x43c / PS2 +0x5a0 -
- *   documented pair), zero three consecutive fields (PC +0x430../ PS2 +0xd0..), then call the animation
+ *   cur_anim_id (PC +0x74 / PS2 +0x204 - documented pair), clear motion_ramp (PC +0x43c /
+ *   PS2 +0x5a0 - documented pair), zero three consecutive fields (PC +0x430../ PS2 +0xd0..),
+ *   then call the animation
  *   dispatcher with the SAME arguments on both sides: `(0, this, 1, 0)`. The clip id differs per build
  *   (PC 10 / PS2 8) - the two builds ship different animation tables, as established throughout.
  *   That last call is ALSO the cleanest confirmation that `human_animation_evaluate_and_dispatch` is
@@ -143777,7 +143841,7 @@ LAB_004abea1:
  *   proof run in reverse. Graded STRUCTURAL because three PC functions map to ONE PS2 method (an
  *   N->1 case): no single body agreement can be asserted when the PS2 side inlined all three.
  *   Extent check: 1520 + 1472 + 1168 + 1344 = 5504 against PS2's 7528 = x1.37, reproducing the
- *   ratio `structs/human.md` §4 already recorded. **The PS2 twin line belongs on
+ *   ratio `structs/human.md` §3 already recorded. **The PS2 twin line belongs on
  *   `human_recompile_death_pos`, not here** - none of the three helpers may claim to BE
  *   RecompileDeathPos. Renamed from `FUN_004ac430`.
  * Class layout: exe-re/structs/human.md
@@ -144461,7 +144525,7 @@ uint __fastcall human_is_this_car_stealing(int param_1)
  *        filter collects the matching attach-point frames.
  *     2. For each returned frame, filter on `frame+0x110 == 9`
  *        (frame type 9 = MODEL in ls3df.dll's frame-type names,
- *        structs/i3d_frame.md §3a; the sibling bone-
+ *        structs/i3d_frame.md §5b; the sibling bone-
  *        walking helpers `human_game_init`, `human_change_model`
  *        and `player_set_hand_scale` use the same
  *        `s_l_hand`/`s_r_hand` string pair). Collect matching
@@ -145608,7 +145672,7 @@ void crt_atexit_register_004ae820(void)
  *   `barrier.4ds` asset) in the only specific context observed. If
  *   future analysis finds type 0x1f used for other static-obstacle
  *   entity types, this name may need broadening (e.g. `static_obstacle_ctor`). See
- *   `exe-re/structs/police_manager.md` §3.6 for the wanted-state spawn
+ *   `exe-re/structs/police_manager.md` §6 for the wanted-state spawn
  *   pipeline that uses this. Renamed from `FUN_004ae830`.
  * PS2 twin: `__ct__8C_irenkaFv` — CONFIRMED (both call the C_actor
  *   ctor, set the class vtable, zero a block, and write kind 0x1f; PS2 class is `C_irenka`,
@@ -146268,7 +146332,7 @@ void crt_atexit_register_004af020(void)
  * PS2 twin: none — see Evidence.
  * Evidence: VA 0x004af030. Instance size byte-confirmed: entity factory `case 0x1d` does
  *   `operator_new(0xa0)` and this ctor's last write ends at `+0x9c`. Never constructed in the
- *   shipped game (`structs/bendable_plant.md` §5): `bendable_plant_ctor`'s only caller is
+ *   shipped game (`structs/bendable_plant.md` §6): `bendable_plant_ctor`'s only caller is
  *   entity-factory `case 0x1d`, and no shipped `scene2.bin` or `.chg` file names kind `0x1d`.
  *   **No PS2 twin — the class does not exist on the PS2 at all.** No PS2 constructor writes `0x1d`
  *   at the kind field `+0x50` (a sweep over every PS2 `__ct__*` returns 33 rows and none of them is
@@ -146318,7 +146382,7 @@ undefined4 * __fastcall bendable_plant_ctor(undefined4 *param_1)
  * PS2 twin: none — see Evidence.
  * Evidence: VA 0x004af080. Vtable `0x0063c608` slot 16 — the slot that carries the sdd across the
  *   whole `C_actor` family (the slot-#16 scalar-deleting-dtor fingerprint). Never constructed in the
- *   shipped game (`structs/bendable_plant.md` §5): `bendable_plant_ctor`'s only caller is
+ *   shipped game (`structs/bendable_plant.md` §6): `bendable_plant_ctor`'s only caller is
  *   entity-factory `case 0x1d`, and no shipped `scene2.bin` or `.chg` file names kind `0x1d`. **No
  *   PS2 twin — the class does not exist on the PS2 at all.** No PS2 constructor writes
  *   `0x1d` at the kind field `+0x50` (a sweep over every PS2 `__ct__*` returns 33 rows and none of
@@ -146354,7 +146418,7 @@ undefined4 __thiscall bendable_plant_scalar_deleting_dtor(undefined4 param_1,byt
  * PS2 twin: none — see Evidence.
  * Evidence: VA 0x004af0a0. Frees exactly the allocation `bendable_plant_element_vector_insert`
  *   makes; the clone frames themselves are released earlier, by `bendable_plant_game_done`. Never
- *   constructed in the shipped game (`structs/bendable_plant.md` §5): `bendable_plant_ctor`'s only
+ *   constructed in the shipped game (`structs/bendable_plant.md` §6): `bendable_plant_ctor`'s only
  *   caller is entity-factory `case 0x1d`, and no shipped `scene2.bin` or `.chg` file names kind
  *   `0x1d`. **No PS2 twin — the class does not exist on the PS2 at all.** No
  *   PS2 constructor writes `0x1d` at the kind field `+0x50` (a sweep over every PS2 `__ct__*`
@@ -146395,7 +146459,7 @@ void __fastcall bendable_plant_dtor(undefined4 *param_1)
  * PS2 twin: none — see Evidence.
  * Evidence: VA 0x004af0d0. Not the shared slot-18 `Init` ICF fold — a vtable dataref scan gives
  *   this body exactly 1 dataref, so it belongs to this class alone. Never constructed in the shipped
- *   game (`structs/bendable_plant.md` §5): `bendable_plant_ctor`'s only caller is entity-factory
+ *   game (`structs/bendable_plant.md` §6): `bendable_plant_ctor`'s only caller is entity-factory
  *   `case 0x1d`, and no shipped `scene2.bin` or `.chg` file names kind `0x1d`.
  *   **No PS2 twin — the class does not exist on the PS2 at all.** No PS2 constructor writes `0x1d`
  *   at the kind field `+0x50` (a sweep over every PS2 `__ct__*` returns 33 rows and none of them is
@@ -146486,7 +146550,7 @@ undefined4 __thiscall bendable_plant_save_data(int param_1,int param_2)
  * Returns: 1 always.
  * PS2 twin: none — see Evidence.
  * Evidence: VA 0x004af150. Same field pair and same order as the writer. Never constructed in the
- *   shipped game (`structs/bendable_plant.md` §5): `bendable_plant_ctor`'s only caller is
+ *   shipped game (`structs/bendable_plant.md` §6): `bendable_plant_ctor`'s only caller is
  *   entity-factory `case 0x1d`, and no shipped `scene2.bin` or `.chg` file names kind `0x1d`. **No
  *   PS2 twin — the class does not exist on the PS2 at all.** No PS2 constructor writes
  *   `0x1d` at the kind field `+0x50` (a sweep over every PS2 `__ct__*` returns 33 rows and none of
@@ -146812,7 +146876,7 @@ void __fastcall bendable_plant_game_init(int param_1)
  * Returns: void: nothing.
  * PS2 twin: none — see Evidence.
  * Evidence: VA 0x004af6b0. Exactly inverts `bendable_plant_game_init`'s per-clone work, in the same
- *   stride-0x74 walk. Never constructed in the shipped game (`structs/bendable_plant.md` §5):
+ *   stride-0x74 walk. Never constructed in the shipped game (`structs/bendable_plant.md` §6):
  *   `bendable_plant_ctor`'s only caller is entity-factory `case 0x1d`, and no shipped `scene2.bin`
  *   or `.chg` file names kind `0x1d`. **No PS2 twin — the class does not
  *   exist on the PS2 at all.** No PS2 constructor writes `0x1d` at the kind field `+0x50` (a sweep
@@ -146860,7 +146924,7 @@ void __fastcall bendable_plant_game_done(int param_1)
  *   arm gated on `*(int *)(record[0x11] + 0x10) == 0x1d` — the owner's entity kind, which is an
  *   independent byte-proof of the kind value. **Neither arm reports a hit**, so these objects never
  *   block movement or bullets; they are only pushed by whatever passes through them. Never
- *   constructed in the shipped game (`structs/bendable_plant.md` §5): `bendable_plant_ctor`'s only
+ *   constructed in the shipped game (`structs/bendable_plant.md` §6): `bendable_plant_ctor`'s only
  *   caller is entity-factory `case 0x1d`, and no shipped `scene2.bin` or `.chg` file names kind
  *   `0x1d`. **No PS2 twin — the class does not exist on the PS2 at all.** No PS2 constructor
  *   writes `0x1d` at the kind field `+0x50` (a sweep over every PS2 `__ct__*` returns 33 rows and
@@ -146914,7 +146978,7 @@ void bendable_plant_push_element(int param_1,int param_2)
  * Evidence: VA 0x004af7b0. Vtable slot 13, the `AI` slot across the whole `C_actor` family. The
  *   only external writer of the acceleration it integrates is `bendable_plant_push_element`, which
  *   is why nothing bends unless something passes through it — there is no wind or idle-sway term
- *   anywhere in the class. Never constructed in the shipped game (`structs/bendable_plant.md` §5):
+ *   anywhere in the class. Never constructed in the shipped game (`structs/bendable_plant.md` §6):
  *   `bendable_plant_ctor`'s only caller is entity-factory `case 0x1d`, and no shipped `scene2.bin`
  *   or `.chg` file names kind `0x1d`. **No PS2 twin — the class does not
  *   exist on the PS2 at all.** No PS2 constructor writes `0x1d` at the kind field `+0x50` (a sweep
@@ -147162,7 +147226,7 @@ void bendable_plant_static_list_free(void)
  * Evidence: VA 0x004afae0. 🔑 The OFFSETS it indexes (`+0x04`/`+0x08`/`+0x0c`) say *bare vector*, but
  * the CENSUS decides ownership — a receiver census shows **2 callsites, 0 datarefs, both inside
  * `bendable_plant_game_init`**, so this instantiation is not shared and belongs to this class. Never
- * constructed in the shipped game (`structs/bendable_plant.md` §5): `bendable_plant_ctor`'s only
+ * constructed in the shipped game (`structs/bendable_plant.md` §6): `bendable_plant_ctor`'s only
  * caller is entity-factory `case 0x1d`, and no shipped `scene2.bin` or `.chg` file names kind
  * `0x1d`. **No PS2 twin — the class does not exist on the PS2 at all.** No PS2
  * constructor writes `0x1d` at the kind field `+0x50` (a sweep over every PS2 `__ct__*` returns 33
@@ -149013,7 +149077,7 @@ undefined4 pedestrian_crowd_get_bound_points_2d(int param_1,I3D_frame *param_2)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 * __fastcall pedestrian_manager_ctor(undefined4 *param_1)
 
@@ -149048,7 +149112,7 @@ undefined4 * __fastcall pedestrian_manager_ctor(undefined4 *param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 __thiscall pedestrian_manager_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -149073,7 +149137,7 @@ undefined4 __thiscall pedestrian_manager_scalar_deleting_dtor(undefined4 param_1
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_dtor(undefined4 *param_1)
 
@@ -149107,7 +149171,7 @@ void __fastcall pedestrian_manager_dtor(undefined4 *param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __thiscall pedestrian_manager_duplicate_from(int param_1,int param_2)
 
@@ -149186,7 +149250,7 @@ void __thiscall pedestrian_manager_duplicate_from(int param_1,int param_2)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 __thiscall pedestrian_manager_save_data(int param_1,int param_2)
 
@@ -149271,7 +149335,7 @@ undefined4 __thiscall pedestrian_manager_save_data(int param_1,int param_2)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 __thiscall pedestrian_manager_load_data(int param_1,int param_2)
 
@@ -149553,7 +149617,7 @@ LAB_004b2580:
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 int __fastcall pedestrian_manager_save_game_get_size(int param_1)
 
@@ -149579,7 +149643,7 @@ int __fastcall pedestrian_manager_save_game_get_size(int param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 __thiscall pedestrian_manager_save_game_save(int param_1,int *param_2)
 
@@ -149718,7 +149782,7 @@ undefined4 __thiscall pedestrian_manager_save_game_save(int param_1,int *param_2
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 uint __thiscall pedestrian_manager_save_game_load(int param_1,int *param_2)
 
@@ -149874,7 +149938,7 @@ uint __thiscall pedestrian_manager_save_game_load(int param_1,int *param_2)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_game_init(int param_1)
 
@@ -150013,7 +150077,7 @@ void __fastcall pedestrian_manager_game_init(int param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_game_done(int param_1)
 
@@ -150059,7 +150123,7 @@ void __fastcall pedestrian_manager_game_done(int param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void pedestrian_manager_player_talked_to_pedestrian(void)
 
@@ -150121,7 +150185,7 @@ void pedestrian_manager_player_talked_to_pedestrian(void)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void pedestrian_manager_make_pedestrian_watch_player_on_weapon_drawn(void)
 
@@ -150183,7 +150247,7 @@ void pedestrian_manager_make_pedestrian_watch_player_on_weapon_drawn(void)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_set_visible(undefined4 param_1)
 
@@ -150224,7 +150288,7 @@ void __fastcall pedestrian_manager_set_visible(undefined4 param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 __fastcall pedestrian_manager_is_possible_coll_pedestrian(char *param_1)
 
@@ -150318,7 +150382,7 @@ undefined4 __fastcall pedestrian_manager_is_possible_coll_pedestrian(char *param
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 __fastcall pedestrian_manager_add_pedestrian(int param_1)
 
@@ -150392,7 +150456,7 @@ undefined4 __fastcall pedestrian_manager_add_pedestrian(int param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_del_pedestrian(int param_1)
 
@@ -150438,7 +150502,7 @@ void __fastcall pedestrian_manager_del_pedestrian(int param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __thiscall pedestrian_manager_ai(int param_1,int param_2)
 
@@ -150524,7 +150588,7 @@ void __thiscall pedestrian_manager_ai(int param_1,int param_2)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_tick_pedestrians(uint delta_ms)
 
@@ -150600,7 +150664,7 @@ void __fastcall pedestrian_manager_tick_pedestrians(uint delta_ms)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 uint __fastcall pedestrian_manager_is_car_claimed_by_pedestrian(int param_1)
 
@@ -150641,7 +150705,7 @@ uint __fastcall pedestrian_manager_is_car_claimed_by_pedestrian(int param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void pedestrian_manager_try_send_pedestrian_to_parked_car(void)
 
@@ -150887,7 +150951,7 @@ LAB_004b3c6a:
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_player_in_taxi(int param_1)
 
@@ -150928,7 +150992,7 @@ void __fastcall pedestrian_manager_player_in_taxi(int param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void pedestrian_manager_generate_passenger_for_taxi(void)
 
@@ -151123,7 +151187,7 @@ void pedestrian_manager_generate_passenger_for_taxi(void)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_enable_taxi_driver(char param_1)
 
@@ -151148,7 +151212,7 @@ void __fastcall pedestrian_manager_enable_taxi_driver(char param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void pedestrian_manager_end_all_taxi_waves(void)
 
@@ -151185,7 +151249,7 @@ void pedestrian_manager_end_all_taxi_waves(void)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void pedestrian_manager_clear_pedestrians(void)
 
@@ -151266,7 +151330,7 @@ void pedestrian_manager_clear_pedestrians(void)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall
 pedestrian_manager_spawn_cop_from_pedestrian(int player,undefined4 npc_state,int enemy_list,undefined4 list_param,float max_range,
@@ -151537,7 +151601,7 @@ joined_r0x004b4636:
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __thiscall pedestrian_manager_explosion(float *param_1,float param_2,float param_3)
 
@@ -151664,7 +151728,7 @@ LAB_004b4daf:
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __thiscall pedestrian_manager_fire(float *param_1,float param_2,undefined4 param_3)
 
@@ -151720,7 +151784,7 @@ void __thiscall pedestrian_manager_fire(float *param_1,float param_2,undefined4 
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 __fastcall pedestrian_manager_get_pedestrian_from_frame(int frame)
 
@@ -151754,7 +151818,7 @@ undefined4 __fastcall pedestrian_manager_get_pedestrian_from_frame(int frame)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void pedestrian_manager_deactivate_all_pedestrians(void)
 
@@ -151791,7 +151855,7 @@ void pedestrian_manager_deactivate_all_pedestrians(void)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_get_nearest_pedestrian_dist_sq(float *param_1)
 
@@ -151833,7 +151897,7 @@ void __fastcall pedestrian_manager_get_nearest_pedestrian_dist_sq(float *param_1
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 undefined4 __fastcall pedestrian_manager_find_pedestrian_ahead(char *param_1)
 
@@ -151876,7 +151940,7 @@ undefined4 __fastcall pedestrian_manager_find_pedestrian_ahead(char *param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_new_panic_at_position(undefined4 *param_1)
 
@@ -151914,7 +151978,7 @@ void __fastcall pedestrian_manager_new_panic_at_position(undefined4 *param_1)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void pedestrian_manager_new_panic_at_frame(void)
 
@@ -151945,7 +152009,7 @@ void pedestrian_manager_new_panic_at_frame(void)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_railway_in_station(float param_1,int param_2)
 
@@ -152120,7 +152184,7 @@ void __fastcall pedestrian_manager_railway_in_station(float param_1,int param_2)
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __thiscall pedestrian_manager_add_free_person(undefined4 model_ref,undefined4 position)
 
@@ -152162,7 +152226,7 @@ void __thiscall pedestrian_manager_add_free_person(undefined4 model_ref,undefine
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __thiscall pedestrian_manager_add_free_person_from_car(int *param_1,undefined4 *param_2)
 
@@ -152266,7 +152330,7 @@ void __thiscall pedestrian_manager_add_free_person_from_car(int *param_1,undefin
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall
 pedestrian_manager_play_pedestrian_scream(int param_1,int param_2,float *param_3,undefined4 param_4,float param_5)
@@ -152336,7 +152400,7 @@ pedestrian_manager_play_pedestrian_scream(int param_1,int param_2,float *param_3
  * Family: `pedestrian_manager_` = `C_traffic_generator` (entity kind 0x12), which generates ONLY
  * pedestrians; the ambient car traffic is `traffic_car_*` = `C_traffic_car` (kind 0xc).
  * `pedestrian_` = `C_traffic_element` (the record), `pedestrian_crowd_` = `C_don_ocas` (the proxy
- * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §1.
+ * actor). The developers' class name is in the `PS2 twin` line. See `structs/pedestrian.md` §4.
  */
 void __fastcall pedestrian_manager_release_pedestrians_from_car(int param_1)
 
@@ -153289,7 +153353,7 @@ LAB_004b6ae6:
       *puVar17 = 0;
       puVar17[1] = 0;
       *(undefined1 *)piVar11[0x1bd] = 1;
-      police_board_set_tracked_npc(piVar11);
+      police_board_set_taxi_passenger(piVar11);
       *(int **)(*(int *)(g_act_mission + 0x24) + 0x204) = piVar11;
       uStack_3c = 0xffffffff;
       (**(code **)(unaff_EBX + 4))(0,0);
@@ -157366,7 +157430,7 @@ LAB_004bd95d:
  *
  * What it does:
  *   - bails unless the element HAS an animation machine (`elem+0x8` != 0, the POINTER ownership model —
- *     see structs/anim_machine.md §1) and the requested state differs from the current one;
+ *     see structs/anim_machine.md §4) and the requested state differs from the current one;
  *   - when the re-attach countdown `+0x14c` reaches 1, the element is unflagged and still ALIVE
  *     (health `+0x15c` > 0.1), it re-attaches the pedestrian to its waypath (`+0xc4`), sets `+0x150`
  *     and clears the 4 bytes at `+0x1ac..+0x1af`;
@@ -158327,7 +158391,7 @@ undefined4 __thiscall physical_object_scalar_deleting_dtor(undefined4 param_1,by
  * Evidence: VA 0x004bea20. Statement-for-statement against the PS2 body: same vtable restore, same vector
  *   free, same three-field zero, same base-dtor chain. The vector pair
  *   PC `+0x340/+0x344/+0x348` <-> PS2 `+0x400/+0x404/+0x408` was already
- *   documented (structs/physical_object.md §3b), so this diff confirms itself
+ *   documented (structs/physical_object.md §7a), so this diff confirms itself
  *   against proven ground. Its sole caller is the CONFIRMED `box_new_dtor`.
  *   Renamed from `FUN_004bea20`.
  * Class layout: exe-re/structs/physical_object.md
@@ -158428,7 +158492,7 @@ undefined1 __thiscall physical_object_init(int param_1,undefined4 param_2)
  *   dyn-coll object, and the `0xfffffedf | 0x40000000` frame-flag rewrite. Two
  *   already-documented field pairs are re-derived by this diff: `+0xb8` <-> PS2
  *   `+0x530` and `+0x2f8` <-> PS2 `+0x5dc`. Vtable slot 25 — the same slot
- *   `box_new_game_init` overrides (structs/box_new.md §2). Renamed from `FUN_004bebd0`.
+ *   `box_new_game_init` overrides (structs/box_new.md §3). Renamed from `FUN_004bebd0`.
  * Class layout: exe-re/structs/physical_object.md
  */
 void __fastcall physical_object_game_init(int param_1)
@@ -158703,7 +158767,7 @@ void __fastcall physical_object_game_done(int param_1)
  * PS2 twin: AI__9C_PhThingFUi  [CONFIRMED]
  * Evidence: VA 0x004bf120. Shared constants in order: the 0x53 ms clamp, `83.0 / delta`, the 0.001 ms->s
  *   conversion, and the sub-step comparison against `+0x18c` <-> PS2 `+0x59c` —
- *   the 0.028f tunable already documented in structs/physical_object.md §3b. The
+ *   the 0.028f tunable already documented in structs/physical_object.md §7a. The
  *   wheel/box selector `+0x70` <-> PS2 `+0x590` is pinned independently by
  *   `physical_object_init_wheel`, which writes 1 to it on both builds. Vtable
  *   slot 13. Named for the family precedent airplane_ai_tick / bottle_ai_tick /
@@ -160920,8 +160984,8 @@ physical_object_accumulate_contact_impulse_matrix(int param_1,float *param_2,flo
  *   the inverse inertia
  *   diagonal at `+0x194..+0x19c` with the solid-disc value
  *   `1 / (m * r^2 * 0.5)`, copies the initial linear velocity and sleeps the body
- *   if it is negligible, precomputes the contact offset `(0, -1, 0) * m * width`
- *   into `+0x208..+0x210`, seeds friction `+0x200 = 0.03` and restitution
+ *   if it is negligible, precomputes the weight `(0, -1, 0) * m * g` (g = `+0x214`)
+ *   into `+0x208..+0x210`, seeds the contact skin `+0x200 = 0.03` and restitution
  *   `+0x1fc = 1.05`, sets the body type `+0x70 = 1` and clears the
  *   full-inertia-matrix flag `+0x76`.
  * Parameters: this (C_PhThing *, ECX); param_2 (S_THING_WHEEL *): the descriptor built by the
@@ -161193,7 +161257,7 @@ LAB_004c44f7:
  *   zero-`+0x594`/`+0x5d0` preamble, the 1.1 impulse scale, the 1/m divide on
  *   `+0x190` <-> `+0x5a0`, and the deepest-hit record keyed on
  *   `+0x30c` <-> `+0x5e4` — half of the -1-initialised id pair documented in
- *   structs/physical_object.md §3b. Vtable slot 30, the same slot
+ *   structs/physical_object.md §7a. Vtable slot 30, the same slot
  *   `box_new_on_collision` overrides. Renamed from `FUN_004c4880`.
  * Class layout: exe-re/structs/physical_object.md
  */
@@ -162557,7 +162621,7 @@ void __fastcall physical_object_net_snapshot_state(int param_1)
  *   can be certain while a body agreement cannot exist. The mapping rests on the
  *   vtable: `.rdata 0x0063c840` slot 15, byte-verified against the sibling
  *   `C_bottle` vtable 0x0063b870 slot 15 = `bottle_net_apply_remote_state` =
- *   `NetDirect__8C_bottleFUi` (structs/bottle.md §3a), plus the matching
+ *   `NetDirect__8C_bottleFUi` (structs/bottle.md §9a), plus the matching
  *   `(this, float)` signature. 1696 PC bytes against 8 PS2 bytes.
  *   Renamed from `FUN_004c6480`.
  * Class layout: exe-re/structs/physical_object.md
@@ -163451,7 +163515,7 @@ void __thiscall player_ai_walk(int param_1,void *param_2,float *param_3,int para
       local_d0 = 2.24208e-42;
     }
     local_d0 = (float)(int)local_d0 * 0.000625;
-    hud_set_theft_indicator_value(local_d0);
+    hud_set_timed_action_bar_value(local_d0);
   }
   if (*(char *)(param_1 + 0x5d) == '\0') {
     ExceptionList = local_c;
@@ -164013,7 +164077,7 @@ LAB_004c827c:
         if (300 < (int)local_d0) {
           local_d0 = 4.2039e-43;
         }
-        hud_set_theft_indicator_value((float)(int)local_d0 * 0.0033333334);
+        hud_set_timed_action_bar_value((float)(int)local_d0 * 0.0033333334);
       }
     }
     break;
@@ -166989,7 +167053,7 @@ void __thiscall player_try_use_car(int param_1,int param_2,undefined4 param_3)
     *(int *)(param_1 + 0x478) = iVar5;
     *(undefined4 *)(param_1 + 0x474) = *(undefined4 *)(param_1 + 0x44c);
     g_hud_flags = g_hud_flags | 0x1000;
-    hud_set_theft_indicator_value(0);
+    hud_set_timed_action_bar_value(0);
     *(undefined4 *)(param_1 + 0x74) = 0xf5;
     human_animation_evaluate_and_dispatch(0,1,0);
     piVar8 = *(int **)(param_1 + 0x564);
@@ -167134,7 +167198,7 @@ void __fastcall player_add_alpha_object(int param_1)
  * Field pairing: PS2 `+0xc48` is the vector's SIZE and PC `+0xac8` is its END POINTER. The
  *   vector OBJECTS pair PC `+0xac0` <-> PS2 `+0xc44`; the PC form is MSVC's 4-word {alloc,
  *   begin, end, cap} and the PS2 form is a 3-word `__vector_pod`. That 4-byte difference is
- *   the whole of `structs/player.md` §7a's packing shift.
+ *   the whole of `structs/player.md` §6a's packing shift.
  * Evidence: VA 0x004cd680. Renamed from `FUN_004cd680`.
  */
 void __fastcall player_alpha_list_add_frame_tree(int *param_1,int param_2)
@@ -167817,7 +167881,7 @@ void public_physics_list_free(void)
  * Parameters: param_1 (this): the `C_public_physics` instance (entity kind 0x20).
  * Returns: `C_public_physics*`: `this`.
  * PS2 twin: `__ct__16C_public_physicsFv` (0x001d4a70, 60 B)  [CONFIRMED]
- * Evidence: VA 0x004cde20. Statement-for-statement: base ctor, vtable store, kind store. The kind pair is the proven PC `+0x10` ↔ PS2 `+0x50` (`structs/entity.md` §1). Five creators, all enumerated: `human_free_hand`, `pedestrian_drop_umbrella`, `human_start_weapon_effect`, `program_process_command` case `0xcc`, and the entity factory `mission_create_actor` case `0x20`. Renamed from `FUN_004cde20`.
+ * Evidence: VA 0x004cde20. Statement-for-statement: base ctor, vtable store, kind store. The kind pair is the proven PC `+0x10` ↔ PS2 `+0x50` (`structs/entity_kind.md` §1). Five creators, all enumerated: `human_free_hand`, `pedestrian_drop_umbrella`, `human_start_weapon_effect`, `program_process_command` case `0xcc`, and the entity factory `mission_create_actor` case `0x20`. Renamed from `FUN_004cde20`.
  * Class layout: exe-re/structs/public_physics.md
  */
 undefined4 * __fastcall public_physics_ctor(undefined4 *param_1)
@@ -167870,6 +167934,16 @@ void __fastcall public_physics_dtor(undefined4 *param_1)
 }
 
 // thunk_FUN_004bf120 @ VA 0x004cde70 - THUNK def restored from the Aggressive Instruction Finder pass; Ghidra names a thunk after its TARGET. Body verified to call 0x004bf120.
+/*
+ * thunk_physical_object_ai_tick — 5-byte jump thunk to `physical_object_ai_tick` (0x004bf120)
+ * What it does: forwards to `physical_object_ai_tick` and nothing else.
+ * Parameters / Returns: the target's; the jump does not touch the frame.
+ * Evidence: VA 0x004cde70, bytes `e9 ab 12 ff ff` + `90 90 90`. Slot 13 of two vtables,
+ *   `g_drop_in_weapon_vt` and `g_public_physics_vt`, so no PS2 twin is stamped here: both
+ *   classes' PS2 `AI` bodies are tail jumps to the `C_PhThing` AI. See
+ *   structs/drop_in_weapon.md §3c and structs/public_physics.md.
+ * Renamed from `thunk_FUN_004bf120`.
+ */
 void thunk_physical_object_ai_tick(void)
 
 {
@@ -171222,13 +171296,16 @@ void __fastcall pumper_advance_to_next_node(int param_1)
 /*
  * pumper_start_refuel — begins serving a car — the entry point the player triggers from the driver seat
  *
- * What it does: asks `pumper_can_pump` first and does nothing if it refuses. Otherwise sets the action to 7, starts the approach animation, opens a dialogue channel, silences the idle props at `+0x238`..`+0x244`, destroys the three idle particles, and re-derives his facing from the served car's transform.
+ * What it does: asks `pumper_can_pump` first and does nothing on 0. Otherwise sets the action to
+ *   7, starts the approach clip, speaks line 28940023 on his own model, hides the props at
+ *   `+0x238`..`+0x244`, destroys the three particles, moves the car so its FUEL dummy sits on the
+ *   station frame, deactivates it, and pushes the refuel camera.
  * Parameters: param_1 (this): the `C_pumper`. param_2 (`C_car*`): the car to serve.
  * Returns: `bool`: true if the service started.
  * PS2 twin: `Start__8C_pumperFP5C_car` (0x001d9ec0, 800 B)  [CONFIRMED]
  * Evidence: VA 0x004d1c30. Gated on `CanPump` first on both builds, then the identical `action = 7`
- * + `GetAnimIndex(1)` opening and the same prop/particle teardown. Ratio 1.36 — the PC arm is longer
- * because PS2 spends part of its body on the dabing channel. 🔑 This is the function
+ * + `GetAnimIndex(1)` opening, the same line 28940023 on a free channel and the same
+ * prop/particle teardown. Ratio 1.36. 🔑 This is the function
  * `structs/pumper.md` predicted as the caller-side lever: PS2 `Do_AB_OwnerCar__8C_player` calls it,
  * and its PC twin `player_do_action_button_in_car` calls this. Renamed from `FUN_004d1c30`.
  * Class layout: exe-re/structs/pumper.md
@@ -171859,11 +171936,18 @@ char * pumper_get_special_anim_name(undefined4 param_1)
 /*
  * pumper_panic — abandons the job and flees — the attendant's panic entry
  *
- * What it does: refuses if `pumper_is_pumping` is true. Otherwise sets the action to `0x11`, silences the four idle props at `+0x238`..`+0x244`, destroys the three particle handles, and builds a driver object of type 9 bound to his frame, copying his world position across with the frame-flag rewrite `& 0xfffffedf | 0x40000000`.
+ * What it does: refuses if `pumper_is_pumping` is true. Otherwise sets the action to `0x11`,
+ *   hides the four props at `+0x238`..`+0x244`, destroys the three particle handles, and has
+ *   `g_i3d_driver` create a model frame (type 9) copied from his frame, with his position and
+ *   rotation (frame-flag rewrite `& 0xfffffedf | 0x40000000`). It gives that frame to the crowd
+ *   (`pedestrian_manager_add_free_person`, `pedestrian_manager_new_panic_at_frame`), hides his
+ *   own frame, and releases his coll objects and sounds.
  * Parameters: param_1 (this): the `C_pumper` instance (entity kind 0x19).
- * Returns: `void*`: the new driver object, or NULL if he was pumping.
+ * Returns: `void*`: the new model frame, or NULL if he was working.
  * PS2 twin: `PumperPanic__8C_pumperFv` (0x001dac70, 484 B)  [CONFIRMED]
- * Evidence: VA 0x004d2a70. Same `IsPumping` guard, same `0x11` action, same four prop releases and three particle destroys in the same order, the same **driver object type 9**, and the **shared frame-flag rewrite `& 0xfffffedf | 0x40000000`**. Ratio 0.93. Renamed from `FUN_004d2a70`.
+ * Evidence: VA 0x004d2a70. Same `IsPumping` guard, same `0x11` action, same four prop releases
+ *   and three particle destroys in the same order, the same frame type 9, and the shared
+ *   frame-flag rewrite. Ratio 0.93. Renamed from `FUN_004d2a70`.
  * Class layout: exe-re/structs/pumper.md
  */
 int * __fastcall pumper_panic(int param_1)
@@ -172444,7 +172528,7 @@ void crt_atexit_register_004d33c0(void)
  * Parameters: param_1 (this): the `C_racecam` instance (entity kind 0x1c).
  * Returns: `C_racecam*`: `this`.
  * PS2 twin: `__ct__9C_racecamFv` (0x001db690, 60 B)  [CONFIRMED]
- * Evidence: VA 0x004d33d0. Statement-for-statement (base ctor, vtable store, kind store) against a 3-line PS2 body; the kind literal `0x1c` is the shared falsifiable constant and it matches `structs/entity.md` §1 independently. Renamed from `FUN_004d33d0`.
+ * Evidence: VA 0x004d33d0. Statement-for-statement (base ctor, vtable store, kind store) against a 3-line PS2 body; the kind literal `0x1c` is the shared falsifiable constant and it matches `structs/entity_kind.md` §1 independently. Renamed from `FUN_004d33d0`.
  * Class layout: exe-re/structs/racecam.md
  */
 undefined4 * __fastcall racecam_ctor(undefined4 *param_1)
@@ -173894,11 +173978,11 @@ LAB_004d4fc0:
 }
 
 /*
- * rail_passenger_set_anim — drives the passenger's animation machine from its current state
+ * rail_passenger_set_anim — drives the passenger's animation machine from its requested clip
  *
- * What it does: when the state at `+0x14` differs from the last applied state at `+0x10`, selects
- * the clip for that state from the passenger anim table and starts it; then ticks the machine,
- * updates the frame and records the applied state.
+ * What it does: when the requested clip at `+0x14` differs from the applied clip at `+0x10`,
+ * selects it from the passenger anim table and starts it; then ticks the machine, updates the
+ * frame and records the applied clip.
  * Parameters: param_1 (this): the `S_rail_human` passenger record. param_2 (uint): the frame delta
  * in milliseconds.
  * Returns: void: nothing.
@@ -179003,7 +179087,7 @@ LAB_004dbbf6:
   else {
     piVar14 = piStack_15c + 1;
     *piStack_15c = iVar24;
-    crt_ehvec_ctor(piVar14,0x10,iVar24,gif_vector_ctor,FUN_00566200);
+    crt_ehvec_ctor(piVar14,0x10,iVar24,gif_vector_ctor,vector_dispose_at_0x04);
   }
   *(int **)(param_1 + 0xfc) = piVar14;
   uStack_10 = 0xffffffff;
@@ -180059,7 +180143,7 @@ void __fastcall railway_game_done(int param_1)
   *(undefined4 *)(param_1 + 0xf4) = uVar3;
   iVar5 = *(int *)(param_1 + 0xfc);
   if (iVar5 != 0) {
-    crt_ehvec_dtor(iVar5,0x10,*(undefined4 *)(iVar5 + -4),FUN_00566200);
+    crt_ehvec_dtor(iVar5,0x10,*(undefined4 *)(iVar5 + -4),vector_dispose_at_0x04);
     operator_delete_wrapper(iVar5 + -4);
   }
   for (uVar7 = 0;
@@ -185457,9 +185541,8 @@ railway_get_outer_entry_near(int param_1,float param_2,float param_3,float param
  * Evidence: VA 0x004e7450; stride-0x18 (6-float) entries; consumed by
  *   ai_action_new_follow_in_rail (vec3 from a gate's linked vehicle world-pos).
  * Renamed from `FUN_004e7450`.
- * PS2 twin: `GetInnerEntry__9C_railwayFRC8S_vectorP8S_vectorP8S_vector` (0x001f4ab0,
- * 584 B)  [CONFIRMED] — a by-value `S_vector` and exactly two out pointers, with no
- * trailing `PUi`, which is what separates it from the outer overload.
+ * PS2 twin: `GetInnerEntry__9C_railwayFRC8S_vectorP8S_vectorP8S_vectorPUi`
+ * (0x001f4ab0, 584 B)  [CONFIRMED] — the PC takes two out pointers against the symbol's three.
  */
 undefined4 __thiscall
 railway_get_inner_entry_near(int param_1,float param_2,float param_3,float param_4,float *param_5,float *param_6)
@@ -187620,9 +187703,9 @@ undefined4 __fastcall railway_get_material_id(int param_1)
  * receives the velocity.
  * Returns: void: nothing.
  * PS2 twin: `GetActorSpeed__9C_railwayFR8S_vector` (0x001f7bc0, 164 B)  [CONFIRMED]
- * Evidence: VA 0x004e9cd0. Vtable slot 28 — the virtual `structs/entity.md` §2 documents as "writes
- * a velocity vector". Identical `flag 0x10 -> S_quat::Normalize + S_matrix::SetRot3` guard and the
- * same forward-vector triple; PC frame `+0xac`/`+0x70` ↔ PS2 `+0xe0`/`+0xa0`. Renamed from
+ * Evidence: VA 0x004e9cd0. Vtable slot 28 — the virtual `structs/entity_kind.md` §2 documents as
+ * "writes a velocity vector". Identical `flag 0x10 -> S_quat::Normalize + S_matrix::SetRot3` guard
+ * and the same forward-vector triple; PC frame `+0xac`/`+0x70` ↔ PS2 `+0xe0`/`+0xa0`. Renamed from
  * `FUN_004e9cd0`.
  * Class layout: `exe-re/structs/railway.md`
  */
@@ -188131,10 +188214,10 @@ void __fastcall seagull_flock_dtor(undefined4 *param_1)
 // FUN_004ea280 @ VA 0x004ea280 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * seagull_flock_game_init — builds the flock: 50 seagulls scattered inside the actor's box
+ * seagull_flock_game_init — builds the flock: five seagulls scattered inside the actor's box
  *
  * What it does: chains `actor_game_init`, seeds the AABB `+0xf8..+0x10c` to ±FLT_MAX, resolves the
- * nearest web path node, then loops 0x32 (50) times: creates an I3D object, picks a random position
+ * nearest web path node, then loops five times: creates an I3D object, picks a random position
  * inside the box, a random normalised 2-D heading, loads `racek.i3d`, and pushes a 0x5c-byte bird
  * record into the vector at `+0x114`/`+0x118` (capacity `+0x11c`).
  * Parameters: param_1 (this): the seagull-flock actor (entity kind 0x17).
@@ -188661,8 +188744,9 @@ uint __fastcall seagull_flock_destroy_on_collision(int param_1)
  * seagull_flock_hit — shoots down the bird nearest the incoming ray
  *
  * What it does: when no bird is supplied, walks the flock computing each bird's perpendicular
- * distance to the ray (origin + direction), keeps the nearest under 1.0, sets that bird's state to
- * 4 and starts a 2000 ms timer.
+ * distance to the ray (origin + direction), keeps the nearest under 1.0 and sets that bird's state
+ * to 4. It also stores 2000 at `+0x58` of the slot one past the last bird (EBX after the loop), not
+ * on the bird hit; no function reads that offset.
  * Parameters: param_1 (this): the seagull-flock actor (entity kind 0x17). param_2: an optional
  * specific bird. param_3: ray direction. param_4: ray origin.
  * Returns: bool: true when a bird was hit.
@@ -188740,11 +188824,12 @@ uint __thiscall seagull_flock_hit(int param_1,undefined4 *param_2,float *param_3
 /*
  * seagull_flock_ai — per-frame update for every bird in the flock
  *
- * What it does: walks the bird vector at `+0x114`/`+0x118`. A bird with no target picks a random
- * point inside the AABB `+0xf8..+0x10c` and REJECTS it if it falls on the positive side of any of
- * the `+0x240` clipping planes stored from `+0x120` (4 floats each), retrying until one passes; it
- * then randomises a normalised 2-D heading, moves the frame there and sets state 2. A bird in state
- * 2 steers and banks toward its target using the frame's quaternion.
+ * What it does: walks the bird vector at `+0x114`/`+0x118`. A bird in state 1 picks a random
+ * point inside the AABB `+0xf8..+0x10c` and accepts it only on the non-negative side of all
+ * `+0x240` planes stored from `+0x120` (4 floats each), retrying otherwise; it then randomises
+ * two headings, moves the frame there and sets state 2. A bird in state 2 aims its frame at the
+ * point at bird `+0x14` and moves along the forward row. A bird in state 4 falls, fires
+ * `game_new_explosion` on landing and returns to state 1.
  * Parameters: param_1 (this): the seagull-flock actor (entity kind 0x17). param_2 (uint): the frame
  * delta in milliseconds.
  * Returns: void: nothing.
@@ -189348,7 +189433,7 @@ void crt_atexit_register_004ec1a0(void)
  * an MSVC `std::vector` is 4 dwords (allocator/begin/end/cap) where the Metrowerks
  * `compressed_pair` is 3. First start of the TU, at the rank emission order predicts. Ratio 48/68 =
  * 0.71. Renamed from `FUN_004ec1b0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void __fastcall pursuit_event_ctor(undefined1 *param_1)
 
@@ -189808,7 +189893,7 @@ pursuit_event_dispatch_pursuit_vehicle(int param_1,int param_2,int param_3,undef
   *(undefined1 *)(param_2 + 0x1ac) = 1;              // vehicle+0x1ac = 1 (under-pursuit flag)
   hud_radar_remove_car(param_2);
   hud_radar_add_car_with_color(param_2,0xffff0000); // paint the radar blip red
-  if (*(int *)(param_1 + 0x20) == 0) {               // first dispatch -> stamp manager+0x20 with game time
+  if (*(int *)(param_1 + 0x20) == 0) {               // first use: cache the C_roads singleton *(C_mission+0x30) at +0x20
     *(undefined4 *)(param_1 + 0x20) = *(undefined4 *)(g_act_mission + 0x30);
   }
   // change_tables gate: if the chase car has >1 model level, swap it to the top model-level variant
@@ -190197,7 +190282,7 @@ pursuit_event_dispatch_escape_vehicle(int param_1,int param_2,int param_3,float 
  *   other two are in `ai_follow_manager_update`.
  *   It is not a helper: its two siblings do this work inline and do not call it.
  * Renamed from `FUN_004ed0b0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined4 __thiscall
 pursuit_event_dispatch_move_to_vehicle(int param_1,int param_2,float *param_3,char param_4,char param_5,undefined4 param_6)
@@ -190573,7 +190658,7 @@ LAB_004eda86:
  *
  * Parameters:
  *   param_1 (`int`, ECX `this`): the pursuit-event manager (PS2 `C_sledovacka`,
- *     structs/pursuit-event-manager.md), which holds the stride-0x44 chase-record
+ *     structs/pursuit_event.md), which holds the stride-0x44 chase-record
  *     vector at `+0x14/+0x18`.
  *   param_2 (`int`): the vehicle entity pointer whose event should be
  *     cancelled. Compared against `record[0]` of every record in the
@@ -190600,7 +190685,7 @@ LAB_004eda86:
  *   ⚠️ `RemoveCar` is OVERLOADED on PS2 - `RemoveCar__13G_GarageClassFPc` is a different
  *   method on the garage class and takes a `char*` name. The C_sledovacka overload is the
  *   right one here: the argument is a car POINTER, and the PC `pursuit_event_*` family is
- *   C_sledovacka (structs/pursuit-event-manager.md).
+ *   C_sledovacka (structs/pursuit_event.md).
  */
 void __thiscall pursuit_event_remove_vehicle(int param_1,int param_2)
 
@@ -192846,7 +192931,7 @@ LAB_004f3dd4:
                             puVar23 = &local_4e8;
                             puVar34 = local_190;
                             local_4e8 = 0x40a00000;
-                            vehicle_get_forward_ptr(puVar34,puVar23);
+                            vehicle_get_right_axis_ptr(puVar34,puVar23);
                             pfVar14 = (float *)vec3_scale_to_by_ptr(puVar34,puVar23);
                             local_714 = *pfVar14;
                             local_710 = pfVar14[1];
@@ -194085,7 +194170,7 @@ LAB_004f43f2:
     iVar17 = iVar17 + -1;
     iVar13 = std_vector44_at(iVar17);
     if ((*(int *)(iVar13 + 0x20) != 0) && (*(int *)(iVar13 + 0x20) != 3)) {
-      vehicle_set_clutch_gate(0);
+      vehicle_set_automatic_gearbox(0);
       vehicle_set_brake(0x3f800000);
       vehicle_set_power(0,1);
     }
@@ -194236,7 +194321,7 @@ uint __thiscall pursuit_event_record_set_action_status_by_vehicle(int param_1,in
  *   `pursuit_event_remove_vehicle` forces the car back to model level 0 (un-boost)
  *   when the mode is in {3,4} even if the global boost flag `g_pursuit_change_tables`
  *   is clear (escape/move-to always restore level 0 on teardown).
- *   Full value table: `exe-re/structs/pursuit-event-manager.md` (VoleMode section).
+ *   Full value table: `exe-re/structs/pursuit_event.md` (VoleMode section).
  *
  *   Consumer: `police_action_tick`'s engagement-dispatch path polls this MODE;
  *   when it differs from the desired mode it re-issues the chase
@@ -194304,7 +194389,7 @@ undefined4 __thiscall pursuit_event_record_get_mode_by_vehicle(int param_1,int p
  * `rec+0x24`/`driver+0x1ec`/`rec+0x38`/`+0x1f0`/`+0x23c`/`+0x240` <-> PC
  * `rec+0x20`/`driver+0x1a0`/`rec+0x34`/`+0x1a4`/`+0x1fc`/`+0x200`. Ratio 0.59. §3b: the PS2 name is
  * crude slang and says nothing about the behaviour. Renamed from `FUN_004f4590`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void __thiscall pursuit_event_drop_actor_references(int param_1,int param_2)
 
@@ -194376,7 +194461,7 @@ void __thiscall pursuit_event_drop_actor_references(int param_1,int param_2)
  * (0x00425200): identical dirty-bit guard, returning `+0x10` where that one returns `+0x40` — and
  * `+0x10 + 0x30` IS the translation row of a 4x4, which is the arithmetic proof. 8 callsites in 3
  * unrelated modules, so it belongs to no game class. Renamed from `FUN_004f46c0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 I3D_frame * __fastcall i3d_frame_get_world_matrix_ptr(I3D_frame *param_1)
 
@@ -194472,7 +194557,7 @@ LAB_004f4729:
  * Evidence: VA 0x004f4760. Identical five-clause guard on both builds (`actor+0x65` <-> PS2
  * `actor+0x69`, `+0x1c != 2` <-> PS2 `+0x5c != 2`) and the identical return shape `nodes + records
  * * 0xb8 + 4` <-> `nodes + records * 0xbc + 4`. Ratio 0.68. Renamed from `FUN_004f4760`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 int __fastcall pursuit_event_save_game_get_size(int param_1)
 
@@ -194533,7 +194618,7 @@ int __fastcall pursuit_event_save_game_get_size(int param_1)
  * `memset(...,0,0xbc)`) and take actor ids from the same field. Ratio 1360/1916 = 0.71. The blob
  * size 0xb8 is exactly what `pursuit_event_save_game_get_size` charges per record. Renamed from
  * `FUN_004f4870`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined4 __thiscall pursuit_event_save_game_save(int param_1,int *param_2)
 
@@ -194752,7 +194837,7 @@ undefined4 __thiscall pursuit_event_save_game_save(int param_1,int *param_2)
  * Evidence: VA 0x004f4dc0. Same chunk tag `6` written by `pursuit_event_save_game_save`, same wipe-
  * then-rebuild order, same per-record blob. Ratio 1968/2804 = 0.70, inside this TU's measured band
  * (0.48-0.71). Renamed from `FUN_004f4dc0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 uint __thiscall pursuit_event_save_game_load(int param_1,int *param_2)
 
@@ -195060,7 +195145,7 @@ LAB_004f5526:
  * unrelated modules. 3 callsites in 3 unrelated modules — the pursuit dispatch,
  * `game_build_traffic_signal_model_idx` and `web_path_find_path_by_roads`. Renamed from
  * `FUN_004f5570`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void * __thiscall std_vector2_insert_one(int param_1,undefined2 *param_2,undefined2 *param_3)
 
@@ -195193,7 +195278,7 @@ int __fastcall std_vector2_size(int param_1)
  * unrelated modules. 4 callsites, all inside `pursuit_event_dispatch_move_to_vehicle` on a stack
  * vector. PS2 emits `erase__Q23std38__vector_pod<Us,…>FPUs` at the matching rank, but that body was
  * not read, so no twin is claimed. Renamed from `FUN_004f5730`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void __thiscall std_vector2_erase_one(int param_1,int param_2)
 
@@ -195225,7 +195310,7 @@ void __thiscall std_vector2_erase_one(int param_1,int param_2)
  * `+0x0c` cap), so the body cannot name an owner, and the callsite census is spread across
  * unrelated modules. 2 callsites, one of them inside `std_vector44_insert_one`. Renamed from
  * `FUN_004f5770`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 int __fastcall std_vector44_size(int param_1)
 
@@ -195251,7 +195336,7 @@ int __fastcall std_vector44_size(int param_1)
  * unrelated modules. 1 callsite only — deliberately NOT promoted to a pursuit-record accessor,
  * because one witness is not the two-witness case that justified `driver_path_node_at`. Renamed
  * from `FUN_004f57a0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 int __thiscall std_vector44_at(int param_1,int param_2)
 
@@ -195273,7 +195358,7 @@ int __thiscall std_vector44_at(int param_1,int param_2)
  * return 0.0f;` exactly where PC `car_get_condition_fraction` reads `+0x5e`. All 6 receivers
  * disassembled — the occupant returned by `car_get_owner`, and actors indexed out of the script
  * VM's register file. Renamed from `FUN_004f57c0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined1 __fastcall actor_is_death_processed(int param_1)
 
@@ -195296,7 +195381,7 @@ undefined1 __fastcall actor_is_death_processed(int param_1)
  * al,[ecx+0x2155]` immediately before the call, so `this` is the chased `C_car`. ⚠️ The noun
  * *sector* is `structs/actor.md`'s reading from the CONFIRMED `actor_tick` diff plus this census;
  * neither build exposes an `I3D_frame` sector accessor. Renamed from `FUN_004f57d0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined1 __fastcall actor_is_in_camera_sector(int param_1)
 
@@ -195310,14 +195395,14 @@ undefined1 __fastcall actor_is_in_camera_sector(int param_1)
  * What it does: returns `*(this + 0x04) + i * 0x70` — element `i` of the `C_driver` path-node
  * vector, whose object begins at `C_driver+0x160`.
  * Parameters: param_1 (this): the path-node vector at `C_driver+0x160`. param_2 (int): index.
- * Returns: the 0x70-byte path node (`structs/driver.md` §3).
+ * Returns: the 0x70-byte path node (`structs/driver.md` §1a).
  * PS2 twin: — (no PS2 symbol)
  * Evidence: VA 0x004f57e0. PROMOTED rather than left mechanical, on the
  * `ai_path_normal_waypoint_at` precedent: 2 callsites, BOTH `lea ecx,[eax+0x160]`, 0 datarefs, and
  * the index passed is `driver+0x170` = the path cursor — so the call returns the node the driver is
  * currently steering to. `structs/driver.md` independently places the vector at `+0x160` with
  * stride 0x70. Renamed from `FUN_004f57e0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 int __thiscall driver_path_node_at(int param_1,int param_2)
 
@@ -195458,7 +195543,7 @@ int __thiscall std_vector70_insert_one(int param_1,undefined4 *param_2,undefined
  * `vehicle_set_engine_on`, `vehicle_set_power`, `vehicle_set_brake`, `vehicle_get_engine_rpm` and
  * `vehicle_save_state`. Consumer gate here: `if (!engine_on || speed >= 1.0)`. Renamed from
  * `FUN_004f5a30`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined1 __fastcall vehicle_get_engine_on(int param_1)
 
@@ -195467,22 +195552,25 @@ undefined1 __fastcall vehicle_get_engine_on(int param_1)
 }
 
 /*
- * vehicle_set_clutch_gate — sets the drivetrain-engaged gate
- *
- * What it does: writes the byte at `this + 0x548`. Clearing it makes `vehicle_set_power` and
- * `vehicle_set_brake` take their idle/clutch-out path.
- * Parameters: param_1 (this, ECX): the `C_Vehicle` (= `C_car+0x70`). param_2 (bool): non-zero =
- * engaged.
- * Returns: void: nothing.
- * PS2 twin: — (inline on PS2)
- * Evidence: VA 0x004f5a40. `+0x548` is read by `vehicle_set_power` and `vehicle_set_brake`, both
- * CONFIRMED `C_Vehicle` twins, and serialised at state-record `+0xe3` by
- * `vehicle_save_state`/`_load_state`. Its one callsite here writes 0 beside
- * `vehicle_set_brake(1.0)` and `vehicle_set_power(0,1)` — a full hand-back. The noun `clutch_gate`
- * is inherited from `structs/vehicle.md` and is still graded [M]. Renamed from `FUN_004f5a40`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * vehicle_set_automatic_gearbox - switches the car between the automatic and the manual gearbox.
+ * What it does: writes the byte `this + 0x548` (= `C_car + 0x5b8`). While it is non-zero,
+ *  `vehicle_tick_drivetrain` runs the automatic up / down shift (revs against the per-gear
+ *  thresholds at `+0x54c` / `+0x57c`) and the standstill switch between first and reverse, and
+ *  `vehicle_set_power` / `vehicle_set_brake` swap the pedals in reverse; while it is zero the
+ *  accelerator drives the throttle and the brake the brake force in every gear.
+ *  `vehicle_game_init` sets it to 1; `player_ai` passes the same byte to the HUD speedometer.
+ * Parameters: param_1 (this, ECX): the `C_Vehicle` (= `C_car + 0x70`). param_2 (bool):
+ *  1 = automatic, 0 = manual.
+ * Returns: void.
+ * PS2 twin: - (inline on PS2)
+ * Evidence: VA 0x004f5a40. The automatic-shift block of `vehicle_tick_drivetrain` tests the byte
+ *  beside engine-on; `vehicle_update_visuals` tests it too, and the save-state pair keeps it.
+ *  Its callsite in `pursuit_event_tick` writes 0 beside `vehicle_set_brake(1.0)` and
+ *  `vehicle_set_power(0, 1)`. Renamed from `FUN_004f5a40`.
+ * Class layout: `exe-re/structs/vehicle.md` §1
  */
-void __thiscall vehicle_set_clutch_gate(int param_1,undefined1 param_2)
+
+void __thiscall vehicle_set_automatic_gearbox(int param_1,undefined1 param_2)
 
 {
   *(undefined1 *)(param_1 + 0x548) = param_2;
@@ -195501,7 +195589,7 @@ void __thiscall vehicle_set_clutch_gate(int param_1,undefined1 param_2)
  * *(byte*)(this + 0x221c))`. Consumer: a chase car scans for a traffic car close ahead within a
  * speed-scaled distance and 0.5 rad of its velocity, then honks in random 200-600 ms bursts
  * separated by a 200-1000 ms gap. Renamed from `FUN_004f5a50`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void __thiscall vehicle_set_horn(int param_1,undefined1 param_2)
 
@@ -195521,7 +195609,7 @@ void __thiscall vehicle_set_horn(int param_1,undefined1 param_2)
  * *(byte*)(this + 0x221d))`, directly beside `HornSnd(this, *(byte*)(this+0x221c))` and the
  * already-documented `+0x4ae sounds_enabled` (PS2 `+0x221e`). In `pursuit_event_tick` it is the
  * GATE on the whole horn block — a vehicle with a siren never honks. Renamed from `FUN_004f5a60`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined1 __fastcall vehicle_get_siren(int param_1)
 
@@ -195542,7 +195630,7 @@ undefined1 __fastcall vehicle_get_siren(int param_1)
  * `+0x634 > 0.9 && +0x5bc > 0.0` is the SAME gate as PS2 `+0x88c > 0.9 && +0x804 > 0.0`, which pins
  * the pair `+0x5bc <-> +0x804`. Consumer: a chase target applying no throttle and slower than 1.5
  * for >500 ms ends the pursuit. Renamed from `FUN_004f5a70`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 ushort __fastcall vehicle_is_throttle_applied(int param_1)
 
@@ -195575,7 +195663,7 @@ ushort __fastcall vehicle_is_throttle_applied(int param_1)
  * `contact = hub - radius * up`. Its two callsites here take the angle to world-up and, past 0.52
  * rad with speed < 3.0 for 10 s, abandon the chase — the car is on its side. Renamed from
  * `FUN_004f5aa0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 int __fastcall vehicle_get_up_axis(int param_1)
 
@@ -195595,7 +195683,7 @@ int __fastcall vehicle_get_up_axis(int param_1)
  * function, including `vehicle_wheel_contact_solve` — which reads `+0x540` and `+0xcb4` together —
  * and `vehicle_apply_carinit_params`. Other code indexes the array as `[count-1]` / `[count-2]`,
  * i.e. an axle pair. Renamed from `FUN_004f5ab0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined4 __fastcall vehicle_get_wheel_count(int param_1)
 
@@ -195616,7 +195704,7 @@ undefined4 __fastcall vehicle_get_wheel_count(int param_1)
  * function: `vehicle_apply_carinit_params` (87 accesses — it BUILDS the array from the CARINIT
  * record), `vehicle_load_state`, `vehicle_save_state`, `vehicle_game_done` and
  * `vehicle_wheel_contact_solve`. Receiver reached as `car+0x70`. Renamed from `FUN_004f5ac0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined4 __thiscall vehicle_get_wheel_at(int param_1,int param_2)
 
@@ -195640,7 +195728,7 @@ undefined4 __thiscall vehicle_get_wheel_at(int param_1,int param_2)
  * pushed immediate is literally `1` at all 8 pursuit sites. `+0x20b8` has exactly one named reader
  * in the binary — `car_get_condition_fraction` — and zero `vehicle_*` readers. Renamed from
  * `FUN_004f5ad0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined4 __thiscall car_set_condition_channel(int param_1,undefined4 param_2)
 
@@ -195681,7 +195769,7 @@ undefined4 __thiscall car_set_condition_channel(int param_1,undefined4 param_2)
  *     Receiver layout MUST have begin at +0x04, end at +0x08, cap at
  *     +0x0c (same convention as `std_vector8_insert_at` — receiver is
  *     offset 4 bytes BEFORE the begin pointer). For `police_manager`'s
- *     rndr_arr_b at +0xA0/+0xA4/+0xA8, the receiver passed by the
+ *     visibility_cells at +0xA0/+0xA4/+0xA8, the receiver passed by the
  *     `police_manager_apply_state` display-object walk is
  *     `police_manager + 0x9c` (so the helper sees begin/end/cap at
  *     +0x9c+4/+8/+0xc = +0xA0/+0xA4/+0xA8). Receiver discipline is
@@ -195698,12 +195786,11 @@ undefined4 __thiscall car_set_condition_channel(int param_1,undefined4 param_2)
  * Evidence: byte-verified stride from `*(param_1 + 8) += param_3 * 2`
  *   end-bump pattern in the shift and realloc arms, and from the `>> 1`
  *   element-count divisions throughout the body. Used to populate
- *   `police_manager.rndr_arr_b` (the stride-2 uint16_t vector at +0xA0)
+ *   `police_manager.visibility_cells` (the stride-2 uint16_t vector at +0xA0)
  *   during `police_manager_apply_state`'s display-object walk that
- *   filters by object type 0x14. This finding REVISES the prior
- *   `police_manager.md` documentation that called rndr_arr_b a
- *   `std::vector<void*>` (stride-4) — actual element type is `uint16_t`
- *   (stride-2). Sibling-in-spirit to `std_vector8_insert_at`.
+ *   filters by object type 0x14. The element type of
+ *   `police_manager.visibility_cells` is `uint16_t` (stride-2).
+ *   Sibling-in-spirit to `std_vector8_insert_at`.
  *   Renamed from `FUN_004f5af0`.
  */
 void __thiscall std_vector2_insert_at(int param_1,undefined2 *param_2,uint param_3,undefined2 *param_4)
@@ -195844,7 +195931,7 @@ void __thiscall std_vector2_insert_at(int param_1,undefined2 *param_2,uint param
  * `+0x0c` cap), so the body cannot name an owner, and the callsite census is spread across
  * unrelated modules. 4 callsites: three on the pursuit record vector at `manager+0x10`, but one in
  * `cache_base_block_open` on an unrelated stack vector — so it is shared. Renamed from `FUN_004f5d00`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 int __thiscall std_vector44_insert_one(int param_1,undefined4 *param_2,undefined4 *param_3)
 
@@ -195972,7 +196059,7 @@ int __thiscall std_vector44_insert_one(int param_1,undefined4 *param_2,undefined
  * (`opponent_create_driver_path`,
  * `roads_find_car_path_from_node_to_crossing`) — so this symbol is shared even though its sibling `driver_path_node_at` is not
  * Renamed from `FUN_004f5f10`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 undefined4 * __thiscall std_vector70_erase_range(int param_1,undefined4 *param_2,undefined4 *param_3)
 
@@ -196015,7 +196102,7 @@ undefined4 * __thiscall std_vector70_erase_range(int param_1,undefined4 *param_2
  * Evidence: VA 0x004f5f60. Generic: `this` IS the vector (`+0x04` begin, `+0x08` end,
  * `+0x0c` cap), so the body cannot name an owner, and the callsite census is spread across
  * unrelated modules. 10 callsites in 4 unrelated functions. Renamed from `FUN_004f5f60`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void stl_copy_range_stride2(undefined2 *param_1,undefined2 *param_2,undefined2 *param_3)
 
@@ -196043,7 +196130,7 @@ void stl_copy_range_stride2(undefined2 *param_1,undefined2 *param_2,undefined2 *
  * Evidence: VA 0x004f5f90. Generic: `this` IS the vector (`+0x04` begin, `+0x08` end,
  * `+0x0c` cap), so the body cannot name an owner, and the callsite census is spread across
  * unrelated modules. 5 callsites in 3 unrelated functions. Renamed from `FUN_004f5f90`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void stl_fill_n_stride2(undefined2 *param_1,int param_2,undefined2 *param_3)
 
@@ -196134,7 +196221,7 @@ void stl_fill_n_stride8(undefined4 *param_1,int param_2,undefined4 *param_3)
  * Evidence: VA 0x004f6020. Generic: `this` IS the vector (`+0x04` begin, `+0x08` end,
  * `+0x0c` cap), so the body cannot name an owner, and the callsite census is spread across
  * unrelated modules. 1 callsite, in `std_vector44_insert_one`. Renamed from `FUN_004f6020`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void stl_fill_n_stride44(undefined4 *param_1,int param_2,undefined4 *param_3)
 
@@ -196204,14 +196291,14 @@ void __fastcall array_copy_u16(undefined2 *param_1,undefined2 *param_2,undefined
  * stl_copy_range_stride70 — uninitialised copy of a 0x70-stride element range
  *
  * What it does: copies 0x1c dwords per element from `[param_1, param_2)` to `param_3`. The element
- * is the `C_driver` path node (`structs/driver.md` §3).
+ * is the `C_driver` path node (`structs/driver.md` §1a).
  * Parameters: param_1: first source. param_2: end of source. param_3: destination.
  * Returns: void: nothing.
  * PS2 twin: — (compiler-emitted)
  * Evidence: VA 0x004f6070. Generic: `this` IS the vector (`+0x04` begin, `+0x08` end,
  * `+0x0c` cap), so the body cannot name an owner, and the callsite census is spread across
  * unrelated modules. 6 callsites in 4 unrelated functions. Renamed from `FUN_004f6070`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void __fastcall stl_copy_range_stride70(undefined4 *param_1,undefined4 *param_2,undefined4 *param_3)
 
@@ -196251,7 +196338,7 @@ void __fastcall stl_copy_range_stride70(undefined4 *param_1,undefined4 *param_2,
  * Evidence: VA 0x004f60a0. Generic: `this` IS the vector (`+0x04` begin, `+0x08` end,
  * `+0x0c` cap), so the body cannot name an owner, and the callsite census is spread across
  * unrelated modules. 3 callsites in 2 unrelated functions. Renamed from `FUN_004f60a0`.
- * Class layout: `exe-re/structs/pursuit-event-manager.md`
+ * Class layout: `exe-re/structs/pursuit_event.md`
  */
 void __fastcall stl_copy_one_stride2(undefined2 *param_1,undefined2 *param_2)
 
@@ -196442,6 +196529,7 @@ void __thiscall smoke_trail_update(int param_1,undefined4 param_2)
  * Parameters: whatever `bottle_net_apply_remote_state` takes — the jump does not touch the frame,
  *   so the arguments and the calling convention are the target's.
  * Returns: whatever `bottle_net_apply_remote_state` returns; control never comes back here.
+ * PS2 twin: `NetDirect__13C_smoke_trailFUi`  [STRUCTURAL]
  * Evidence: VA 0x004f61d0. Ghidra symbol dump: kind=thunk, size=5,
  *   thunk_target=0x00454920. Body check: FORWARD — the decompiled body is a single call to `bottle_net_apply_remote_state`.
  *   Renamed from `thunk_FUN_00454920`.
@@ -197217,7 +197305,7 @@ void traffic_mafia_crews_static_dtor(void)
  * Returns: the constructed object.
  * PS2 twin: `__ct__13C_traffic_carFv` *(CONFIRMED)*
  * Evidence: VA 0x004f65a0. Body-diffed both sides; the kind write (`+0x10` PC / `+0x50` PS2) is
- * byte-identical and matches `structs/entity.md` §1. 112/116 B. Renamed from `FUN_004f65a0`.
+ * byte-identical and matches `structs/entity_kind.md` §1. 112/116 B. Renamed from `FUN_004f65a0`.
  * Class layout: `exe-re/structs/traffic_car.md`
  */
 undefined4 * __fastcall traffic_car_ctor(undefined4 *param_1)
@@ -209507,8 +209595,9 @@ void __fastcall railway_switch_game_done(int param_1)
  * What it does: Two symmetric arms. In state 2 the angle ramps up by `+0x74 * dt` until it reaches
  * `+0x70`; in state 3 it ramps down to `-(+0x70)`. On reaching an end-stop the state becomes 0 or
  * 1, the two rail-piece frames swap visibility, and the navigation graph is rewired through
- * `railway_switch_get_web_nodes` — both edges disconnected from the common node, exactly one
- * reconnected — after which `wagon_rebuild_all_forward_paths` rebuilds every kind-0x1e
+ * `railway_switch_get_web_nodes`: `web_path_toggle_connection` flips common-A and common-B, so
+ * the current edge goes and the other appears, `web_path_set_connection_one_way` marks the new
+ * one, after which `wagon_rebuild_all_forward_paths` rebuilds every kind-0x1e
  * `C_wagon` path. Every tick pushes the angle into the
  * frame direction.
  * Parameters: param_1 (this, ECX): the `C_turnout` railway switch. param_2: the frame delta in ms.
@@ -210393,7 +210482,7 @@ void crt_static_init_005095d0(void)
  * Returns: void: nothing.
  * PS2 twin: — (MSVC static-init scaffolding.)
  * Evidence: VA 0x005095e0. One of the five file-scope `std::vector` statics of the `C_Vehicle.cpp`
- * TU; this quartet is `vehicle.md` §11a guard bit `0x08`. Renamed from `FUN_005095e0`.
+ * TU; this quartet is `vehicle.md` §8a guard bit `0x08`. Renamed from `FUN_005095e0`.
  * Class layout: `exe-re/structs/vehicle.md`
  */
 void __fastcall vehicle_projector_sector_list_static_ctor(undefined4 param_1)
@@ -210494,7 +210583,7 @@ void crt_static_init_00509650(void)
  * Returns: void: nothing.
  * PS2 twin: — (MSVC static-init scaffolding.)
  * Evidence: VA 0x00509660. One of the five file-scope `std::vector` statics of the `C_Vehicle.cpp`
- * TU; this quartet is `vehicle.md` §11a guard bit `0x10`. Renamed from `FUN_00509660`.
+ * TU; this quartet is `vehicle.md` §8a guard bit `0x10`. Renamed from `FUN_00509660`.
  * Class layout: `exe-re/structs/vehicle.md`
  */
 void __fastcall vehicle_sound_sector_list_static_ctor(undefined4 param_1)
@@ -220050,10 +220139,11 @@ void __thiscall vehicle_set_seat_mass(int param_1,float param_2,float param_3)
       iVar4 = (*(int *)(param_1 + 0xd44) - *(int *)(param_1 + 0xd40)) / 0x1c;
     }
     // ===== INLINED ON PC: ComputeMass__9C_VehicleFii =====
-    // PS2 SetSeatMass writes the mass into the wheel record (just above) and
+    // PS2 SetSeatMass writes the mass into the seat record (just above) and
     // then CALLS ComputeMass; MSVC spliced ComputeMass in from here. Everything
     // below is its body: the running centre-of-mass weighted average over the
-    // wheel array at +0xd20 and then the body array at +0xd40, with the same
+    // seat vector at +0xd20 (SEAT* frames) and then the ballast vector at +0xd40
+    // (BALLAST* frames), with the same
     // 0.001 mass guard the PS2 uses. 156 + 1016 = 1172 B against this
     // function's 864 B (0.74) — an N->1 fold.
     pfVar1 = *(float **)(param_1 + 0xd20);
@@ -220682,7 +220772,7 @@ LAB_0051952f:
  *   `lea ecx,[eax + 0x70]` with eax = the
  *   C_car, and `vehicle_set_engine_on` (CONFIRMED C_Vehicle twin) is reached by the same
  *   `[reg + 0x70]` form at 11 of its 28 callsites. The gated field +0xca8 is independently
- *   documented as the C_Vehicle ignition flag (structs/vehicle.md §4, SetEngineOn).
+ *   documented as the C_Vehicle ignition flag (structs/vehicle.md §1, SetEngineOn).
  *   Sole consumer: the HUD instrument cluster, which divides this by `car+0x1f88 * 60` to get the
  *   normalised tachometer needle value (hud_elements.md §6b).
  *   Renamed from `FUN_005195e0`.
@@ -228669,7 +228759,7 @@ void __thiscall vehicle_animate_doors(int param_1,float param_2)
  * is the actor's current vehicle. Callers are NPCs winding a window down in a car.
  * Ghidra hides the `__thiscall` ECX operand, so the first VISIBLE argument is the window
  * index; the receiver is never in the argument list. Renamed from `FUN_005242d0`.
- * Class layout: `exe-re/structs/vehicle.md` §14.
+ * Class layout: `exe-re/structs/vehicle.md` §7.
  */
 void __thiscall vehicle_open_window(int param_1,int param_2,char param_3)
 
@@ -228801,7 +228891,7 @@ void __thiscall vehicle_animate_windows(int param_1,float param_2)
  * 0x70` x2 in `human_movement`. The broken-glass bit it tests is the one
  * `vehicle_deform_glass` sets. Ghidra hides the `__thiscall` ECX operand, so the first
  * VISIBLE argument is the window index, not the receiver. Renamed from `FUN_005244d0`.
- * Class layout: `exe-re/structs/vehicle.md` §14.
+ * Class layout: `exe-re/structs/vehicle.md` §7.
  */
 uint __thiscall vehicle_is_window_open(int param_1,int param_2)
 
@@ -228828,7 +228918,7 @@ uint __thiscall vehicle_is_window_open(int param_1,int param_2)
  * `+0xce4`/`+0xce8`, it walks the light array through `vehicle_light_at` (301 calls) and the
  * special-projector list through `vehicle_special_projector_at` (51 calls), positions and aims
  * every lamp frame, and swaps projector textures. It READS the `+0x19c` light-state word documented
- * in `vehicle.md` §1b.
+ * in `vehicle.md` §2a.
  * Parameters: param_1 (this, ECX): the `C_Vehicle` physics sub-object at `C_car+0x70`. param_2
  * (float): the frame delta in seconds.
  * Returns: void: nothing.
@@ -231316,11 +231406,11 @@ void __thiscall i3d_frame_get_local_direction_normalized(int param_1,float *para
  *   result to obtain the parent `I3D_frame *`, which is NULL for a root frame. Pure
  *   arithmetic: no read, no write, no side effect. A header inline the compiler emitted
  *   out of line; the `_ptr` suffix is the house convention for an inline that returns a
- *   reference (structs/i3d_frame.md §4).
+ *   reference (structs/i3d_frame.md §3).
  * Parameters: param_1 (this, ECX): the `I3D_frame`.
  * Returns: int: `frame + 0x120`, the address of the parent slot — never the parent itself.
  * Evidence: +0x120 is the PARENT, established from four independent
- *   readers that no other reading satisfies (structs/i3d_frame.md §3b):
+ *   readers that no other reading satisfies (structs/i3d_frame.md §6):
  *     * `i3d_frame_get_scale` returns the LOCAL scale triple at +0x90 unchanged when the
  *       field is null, and otherwise refreshes the world matrix and extracts the scale from
  *       it — i.e. it encodes "for a root frame, world scale IS local scale";
@@ -237747,7 +237837,7 @@ LAB_00535516:
  * PS2 twin:
  * `BodyCollision__9C_VehicleFP14S_COLBODY_HEADR8S_vectorR8S_vectorRfR8S_vectorR8S_vectorUi`
  * [CONFIRMED] — 🔑 the PS2's FIRST parameter is `P14S_COLBODY_HEAD` and the PC caller passes
- * `this+0x528`, which `vehicle.md` §11b already documents as the `vector<S_COLBODY_HEAD>`. Size
+ * `this+0x528`, which `vehicle.md` §1 already documents as the `vector<S_COLBODY_HEAD>`. Size
  * ratio 0.89 (7408 / 8344); both recurse.
  * Evidence: VA 0x00535610. The two static vectors are the container lever: the PS2 instantiates
  * `vector<S_SORT>` and `vector<S_COLBODY_EMITOR>` in this exact TU and nowhere else. ⚠️ On PC the
@@ -242728,17 +242818,24 @@ void __fastcall wagon_dtor(undefined4 *param_1)
 // FUN_0053c400 @ VA 0x0053c400 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * wagon_init — binds the wagon to its I3D frame.
- *
- * What it does: `return actor_init(frame) != 0;` — the wagon adds nothing of its own.
- * Parameters: param_1 (this, ECX): the `C_wagon` actor. param_2 (I3D_frame*): the scene frame.
- * Returns: bool: whatever the base returned.
- * PS2 twin: `Init__7C_wagonFP9I3D_frame` *(CONFIRMED)*
- * Evidence: VA 0x0053c400. Statement-identical, and 32 bytes against 32 bytes (ratio 1.00). Renamed
- * from `FUN_0053c400`.
- * Class layout: `exe-re/structs/wagon.md`
+ * folded_actor_init_bool - the slot-18 Init of three actor classes, folded into one body.
+ * What it does: `return actor_init(frame) != 0;` - the class adds nothing of its own.
+ * Parameters: param_1 (this, ECX): the actor (`C_door`, `C_traffic_generator` or `C_wagon`).
+ *  param_2 (I3D_frame *): the scene frame.
+ * Returns: bool: whatever `actor_init` returned, narrowed to a bool.
+ * PS2 twin: `Init__6C_doorFP9I3D_frame`  [CONFIRMED]
+ * PS2 twin: `Init__19C_traffic_generatorFP9I3D_frame`  [CONFIRMED]
+ * PS2 twin: `Init__7C_wagonFP9I3D_frame`  [CONFIRMED]
+ *  Three 32-byte PS2 bodies, each statement-identical to this 32-byte body; the PC linker
+ *  folded them into one function.
+ * Evidence: VA 0x0053c400; slot 18 of `g_door_vt` (0x0063c180), `g_pedestrian_manager_vt`
+ *  (0x0063c778) and `g_wagon_vt` (0x0063cff0), the only three dword references to it in the
+ *  image. Renamed from `FUN_0053c400`.
+ * Class layout: exe-re/structs/door.md §3, exe-re/structs/pedestrian.md §3,
+ *  exe-re/structs/wagon.md §3
  */
-bool wagon_init(undefined4 param_1)
+
+bool folded_actor_init_bool(undefined4 param_1)
 
 {
   char cVar1;
@@ -244768,11 +244865,12 @@ void __fastcall wagon_update(int param_1)
 // FUN_0053f7d0 @ VA 0x0053f7d0 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * wagon_game_init — builds the wagon's wheels, collider and randomised state at scene start.
+ * wagon_game_init — builds the wagon's paths, collider and randomised state at scene start.
  *
  * What it does: Chains `actor_game_init`, collects the `kolo*` wheel frames through
- * `wagon_cb_collect_wheel_frames`, allocates the six per-wheel arrays sized by the wheel count at
- * `+0x180`, seeds phases with `rand_float`, debustizes two frames, builds the world matrices and
+ * `wagon_cb_collect_wheel_frames` into the vector at `+0x170`, allocates the six per-vagon arrays
+ * sized by the count at `+0x180` (only the ctor stores it, 0), seeds phases with `rand_float`,
+ * debustizes two frames, builds the world matrices and
  * inserts the dynamic collider.
  * Parameters: param_1 (this, ECX): the `C_wagon` actor.
  * Returns: void: nothing.
@@ -245334,8 +245432,8 @@ LAB_00540260:
  * Returns: void: nothing.
  * PS2 twin: `cbEnumFrame__Q27C_wagon21S_hlp$3866C_wagon_cppFP9I3D_frame…` *(CONFIRMED)*
  * Evidence: VA 0x00540590. The PS2 mangling `Q2<class><N>S_hlp$<file>_cpp` is a direct statement
- * that the symbol is file-scope. Sole caller `wagon_game_init`, which is what fills the
- * `+0xc4` wheel-frame array. Renamed from `FUN_00540590`.
+ * that the symbol is file-scope. Sole caller `wagon_game_init`, which passes the wheel vector at
+ * `+0x16c`. Renamed from `FUN_00540590`.
  * Class layout: `exe-re/structs/wagon.md`
  */
 void __fastcall wagon_cb_collect_wheel_frames(int *param_1,int param_2)
@@ -245381,7 +245479,7 @@ void __fastcall wagon_cb_collect_wheel_frames(int *param_1,int param_2)
  * wagon_game_done — tears the wagon down at scene end.
  *
  * What it does: Empties both node-path vectors (`+0x84 = +0x80`, `+0xb0 = +0xac`), releases the
- * `+0x194` object through its slots 0x2c / 0x24 / 0x00, destroys and frees the six per-wheel arrays
+ * `+0x194` object through its slots 0x2c / 0x24 / 0x00, destroys and frees the six per-vagon arrays
  * hanging off `+0xb8..+0xcc`, chains `actor_game_done` and erases the dynamic collider at
  * `this+0xe0`.
  * Parameters: param_1 (this, ECX): the `C_wagon` actor.
@@ -245840,9 +245938,9 @@ recorder_new_track(undefined4 param_1,undefined4 param_2,undefined4 param_3,unde
  * Parameters: param_1: the 0x5c-byte track record.
  * Returns: void: nothing.
  * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
- * Evidence: VA 0x00540db0. `C_recorder` vtable `0x0063d0e8` slot 6. ⚠️ Writes the sentinel at
- * `+0x14`, exactly as `recorder_new_track` does. `structs/recorder.md` §4 puts it at `+0x50` — that
- * row is now questionable. Renamed from `FUN_00540db0`.
+ * Evidence: VA 0x00540db0. `C_recorder` vtable `0x0063d0e8` slot 6. Writes the sentinel at
+ * `+0x14`, exactly as `recorder_new_track` does (`last_key_time`, `structs/recorder.md` §1d).
+ * Renamed from `FUN_00540db0`.
  * Class layout: `exe-re/structs/recorder.md`
  */
 void recorder_track_reset_fields(undefined4 *param_1)
@@ -246096,7 +246194,7 @@ undefined4 __fastcall recorder_get_source_clock_ms(int param_1)
  * Returns: uint: the clock every `*_track_apply_*` compares key times against.
  * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
  * Evidence: VA 0x005411e0. `C_recorder` vtable `0x0063d0e8` slot 4. This is the value
- * `structs/recorder.md` §5 records as `g_recorder_playback_clock_ms`' in-object counterpart.
+ * `structs/recorder.md` §9 records as `g_recorder_playback_clock_ms`' in-object counterpart.
  * Renamed from `FUN_005411e0`.
  * Class layout: `exe-re/structs/recorder.md`
  */
@@ -249404,17 +249502,20 @@ undefined4 __thiscall recorder_load_anim_for_object(int *param_1,undefined4 para
 }
 
 /*
- * recorder_names_free_row_array — frees the name table's row array and its object vector.
+ * recorder_tck_record_free_vectors - frees the two sample vectors of a `.tck` record.
  *
- * What it does: Releases `+0x34` and `+0x24`, nulling begin/end/cap on both.
- * Parameters: param_1 (this, ECX): the name↔id table embedded at `recorder+0x80`.
+ * What it does: Releases `+0x34` and `+0x24`, nulling begin/end/cap on both. These are the arrays
+ *   `recorder_load_tck` appends to through `record+0x38` and `record+0x28`.
+ * Parameters: param_1 (ECX): the `.tck` record at element + 4 of an object-table element. Inferred
+ *   from the offsets: the funclet's ECX does not show in the decomp.
  * Returns: void: nothing.
- * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
- * Evidence: VA 0x005447d0. Its ONLY reference is an EH unwind funclet (`Unwind_006369c0`) — the
- * cleanup arm of a constructor, not dead code. Renamed from `FUN_005447d0`.
+ * PS2 twin: - (`C_recorder` does not exist on the PS2).
+ * Evidence: VA 0x005447d0. Its ONLY reference is the EH unwind funclet `Unwind_006369c0`. Renamed
+ *   from `FUN_005447d0`.
  * Class layout: `exe-re/structs/recorder.md`
  */
-void __fastcall recorder_names_free_row_array(int param_1)
+
+void __fastcall recorder_tck_record_free_vectors(int param_1)
 
 {
   operator_delete_wrapper(*(undefined4 *)(param_1 + 0x34));
@@ -249544,7 +249645,7 @@ void __fastcall recorder_release_object_table(int param_1)
         }
         iVar2 = *piVar3;
         if (iVar2 != 0) {
-          recorder_names_free_buffers();
+          recorder_anim_object_free_vectors();
           operator_delete_wrapper(iVar2);
         }
       }
@@ -249556,16 +249657,20 @@ void __fastcall recorder_release_object_table(int param_1)
 }
 
 /*
- * recorder_names_free_buffers — frees the two object vectors that hang off the name table.
+ * recorder_anim_object_free_vectors - frees the two sample vectors of an object-table element.
  *
- * What it does: Releases `+0x38` and `+0x28`, nulling begin/end/cap on both.
- * Parameters: param_1 (this, ECX): the name↔id table embedded at `recorder+0x80`.
+ * What it does: Releases `+0x38` and `+0x28`, nulling begin/end/cap on both. The element is the
+ *   0x48-byte record `recorder_load_anim_by_name` allocates; the vectors belong to the `.tck`
+ *   record at its `+0x04`.
+ * Parameters: param_1 (ECX): the element, one slot value of the object table.
  * Returns: void: nothing.
- * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
- * Evidence: VA 0x00544a60. Sole caller `recorder_release_object_table`. Renamed from `FUN_00544a60`.
+ * PS2 twin: - (`C_recorder` does not exist on the PS2).
+ * Evidence: VA 0x00544a60. Sole caller `recorder_release_object_table`, which loads ECX with the
+ *   slot value and frees the element afterwards. Renamed from `FUN_00544a60`.
  * Class layout: `exe-re/structs/recorder.md`
  */
-void __fastcall recorder_names_free_buffers(int param_1)
+
+void __fastcall recorder_anim_object_free_vectors(int param_1)
 
 {
   operator_delete_wrapper(*(undefined4 *)(param_1 + 0x38));
@@ -250210,7 +250315,7 @@ void recorder_singleton_construct(void)
  * Returns: the constructed object.
  * PS2 twin: — (compiler-emitted or PC-only; no PS2 method).
  * Evidence: VA 0x00545130. 🥇 Sole caller `recorder_singleton_construct` = `mov ecx, 0x656368 ; jmp`
- * — this is the byte-proof for the singleton address `structs/recorder.md` §1 could only record as
+ * — this is the byte-proof for the singleton address `structs/recorder.md` §4 could only record as
  * a capstone hit count. Renamed from `FUN_00545130`.
  * Class layout: `exe-re/structs/recorder.md`
  */
@@ -251000,7 +251105,7 @@ void __thiscall recorder_bindings_add_value(int param_1,char *param_2,undefined4
  * param_4 (char*): the track NAME, the lookup key. param_5 (int): the scene object, or 0. param_6
  * (uint): the track. param_7 (uint): the object's entity kind.
  * Returns: void: nothing.
- * PS2 twin: — (the whole `C_recorder` subsystem is PC-only; `recorder.md` §6, MEASURED).
+ * PS2 twin: — (the whole `C_recorder` subsystem is PC-only; `recorder.md` §10, MEASURED).
  * Evidence: VA 0x00545c30. The 0x58-byte row layout falls out of both branches plus
  * `recorder_bindings_attach_object`: `+0x00` mode, `+0x04` KIND (compared against `actor+0x10`),
  * `+0x08` char[0x24] frame name defaulting to the literal `"<NONE>"` at `0x006477a0`, `+0x2c`
@@ -251786,7 +251891,7 @@ void __fastcall recorder_stop(undefined4 *param_1)
  * `.rep` and the tracks producing keys.
  * Parameters: param_1 (this, ECX): the `C_recorder` singleton at `0x00656368`.
  * Returns: bool: true while a sequence is playing or recording.
- * PS2 twin: — (PC-only; `C_recorder` has no PS2 counterpart — `structs/recorder.md` §6).
+ * PS2 twin: — (PC-only; `C_recorder` has no PS2 counterpart — `structs/recorder.md` §10).
  * Evidence: Receiver byte-proven: 8 of the 59 `mov ecx, 0x00656368` sites in `.text` call this
  * function. Consumers are `engine_game_loop` x3, `game_done`, `program_process_command` x3
  * (script case `0x2d` aborts on it) and the racing menu — every one of them REFUSES an action while
@@ -253775,7 +253880,7 @@ int __fastcall actor_track_key_stream_size(int param_1)
  *   first chunk of a stream.
  * Returns: the new chunk (in EAX; Ghidra types the def `void`, the caller uses the value).
  *
- * PS2 twin: — (the whole `C_recorder` subsystem is PC-only; `recorder.md` §6, MEASURED).
+ * PS2 twin: — (the whole `C_recorder` subsystem is PC-only; `recorder.md` §10, MEASURED).
  *
  * Evidence: VA 0x005489b0. `__stdcall` (`ret 4`). Exactly TWO call sites, both inside
  *   `recorder_key_stream_alloc` — a private growth primitive, not an interface.
@@ -253809,12 +253914,12 @@ void recorder_key_stream_new_chunk(undefined4 *param_1)
  *   would reach the chunk's soft limit — chains a fresh chunk, stamps the continuation
  *   sentinel 0xEEEEEEEE at the old cursor and restarts at `newchunk+8`.
  *
- * Parameters: param_1 (int*): the track (`recorder.md` §4) — cursor `+0x00`, last record
+ * Parameters: param_1 (int*): the track (`recorder.md` §1) — cursor `+0x00`, last record
  *   `+0x04`, first chunk `+0x18`, current chunk `+0x1c`, key-size table `+0x44`;
  *   param_2 (int): the key type, which selects the record stride.
  * Returns: int: the cursor the caller writes the new keyframe record into.
  *
- * PS2 twin: — (the whole `C_recorder` subsystem is PC-only; `recorder.md` §6, MEASURED).
+ * PS2 twin: — (the whole `C_recorder` subsystem is PC-only; `recorder.md` §10, MEASURED).
  *
  * Evidence: VA 0x005489e0. `__stdcall` (`ret 8`), so the object is PUSHED, not in ECX.
  *   Byte-proven receiver: `car_track_record_key` does `mov eax,[esi+8] ; push 2 ; push eax`
@@ -253971,7 +254076,7 @@ void __fastcall actor_track_apply_mode_changes(int param_1)
  * Returns: void.
  * PS2 twin: none — the C_recorder subsystem is PC-only; see Evidence
  * Evidence: VA 0x00548ac0. The same four-function shape documented for the two C_actor file-scope globals in
- *   structs/actor.md §2d: {static-init entry, ctor, crt_atexit registrar, dtor}.
+ *   structs/actor.md §3a: {static-init entry, ctor, crt_atexit registrar, dtor}.
  *   No PS2 twin exists for any member: GCC implements file-scope static
  *   construction through `__sti__` routines and the `.ctors` section, an entirely
  *   different mechanism. A toolchain artifact, not a missing method. Renamed from `FUN_00548ac0`.
@@ -255676,7 +255781,7 @@ void __thiscall hud_speedometer_set_gear(int param_1,int param_2,undefined1 para
  *   A fourth float, the odometer reading, is passed on the stack after them and read only
  *   through the `__ftol` operand; Ghidra's signature drops it. The two per-frame callers,
  *   `player_ai` and `player_ai_drive`, pass `car+0x1f90`, a value `car_game_init` sets once
- *   to `251000 + 150 * crt_rand()` and nothing advances (`exe-re/structs/car.md` §1).
+ *   to `251000 + 150 * crt_rand()` and nothing advances (`exe-re/structs/car.md` §4a).
  * Returns: void.
  * Evidence: VA 0x0054a7a0. Body-diff vs PS2 TachometrSetValues — same `* 3.6`, same change-gated
  *   needle calls into the confirmed `hud_build_needle_quad` twin, same odometer digit
@@ -257149,34 +257254,32 @@ void __thiscall hud_compass_set_destination_frame(int param_1,undefined4 param_2
 }
 
 /*
- * hud_set_theft_indicator_value — 1-line setter `*(hud_state + 0x9450) = value`.
+ * hud_set_timed_action_bar_value - 1-line setter `*(hud_state + 0x9450) = value`.
  *
- * +0x9450 is the fill of the timed-action progress bar shown while the player
- * performs a held "thief" action, and its visibility bit is g_hud_flags 0x1000.
+ * +0x9450 is the fill of the timed-action progress bar; its visibility bit is
+ * g_hud_flags 0x1000. Three player actions drive it:
+ *   - the car break-in: `human_movement` with `1.0 - remaining/total`, the total being the steal
+ *     time clamped to 2000..30000 ms, and `player_try_use_car` with the seed 0;
+ *   - the throw wind-up: `player_ai_walk` with `(t-400)/1600`, t from `throw_charge_start_ms`;
+ *   - the melee hold: `player_ai_walk` with `(t-200)/300`, for weapon classes 0, 5, 6 and 7.
  *
  * Parameters:
  *   this  (ECX via __thiscall, param_1) : HUD singleton pointer.
- *   value (param_2)                     : a normalized value written by
- *                                         whichever HUD element is active.
+ *   value (param_2)                     : the fill, normalized to [0,1].
  * Returns: void.
  *
- * Evidence: BYTE-VERIFIED one-line body; 4 callers confirmed by grep —
- *   `human_movement` (`1.0 - x/max`), `player_ai_walk` (two sites, one `x/300`) and
- *   `player_try_use_car` (`0`); the HUD init seeds the field to 0.5f. All FOUR PC callers match
- *   all four PS2 ThiefIndicatorSetValue callers constant-for-constant:
- *   - car theft: steal time from the car database clamped to 2000..30000 ms, then the bar is
- *     driven as `1.0 - remaining/total`, seeded with 0 at the start of the steal;
- *   - a held action gated at 400 ms then scaled `(t-400)/1600`;
- *   - a second held action gated at 200 ms then scaled `(t-200)/300`.
- *   Every one of those sites sets `g_hud_flags |= 0x1000` immediately before the call.
+ * Evidence: BYTE-VERIFIED one-line body; 4 callsites, listed above; the HUD init seeds the field
+ *   to 0.5f. All four match the four PS2 ThiefIndicatorSetValue callsites constant for constant,
+ *   and each site that shows a value sets `g_hud_flags |= 0x1000`.
  *   Renamed from `FUN_0054c160`.
  * PS2 twin: ThiefIndicatorSetValue__17G_IndicatorsClassFf  [CONFIRMED]
- *   ⚠️ Identical-sibling trap: this and `hud_set_airplane_damage_fill` (+0x9454) are both
- *   one-line float stores to adjacent fields, and PS2's pair (ThiefIndicatorSetValue +0x4b98 /
+ *   Identical-sibling trap: this and `hud_set_airplane_damage_fill` (+0x9454) are both one-line
+ *   float stores to adjacent fields, and PS2's pair (ThiefIndicatorSetValue +0x4b98 /
  *   RefullingIndicatorSetValue +0x4b9c) is likewise. They are separated by the CALLER side, not
- *   by shape — see the note on `hud_set_airplane_damage_fill`.
+ *   by shape: see the note on `hud_set_airplane_damage_fill`.
  */
-void __thiscall hud_set_theft_indicator_value(int param_1,undefined4 param_2)
+
+void __thiscall hud_set_timed_action_bar_value(int param_1,undefined4 param_2)
 
 {
   *(undefined4 *)(param_1 + 0x9450) = param_2;
@@ -257208,7 +257311,7 @@ void __thiscall hud_set_theft_indicator_value(int param_1,undefined4 param_2)
  * PS2 twin: RefullingIndicatorSetValue__17G_IndicatorsClassFf  [CONFIRMED]
  *   The PS2 symbol is a DEAD DEV NAME — the field is the airplane-damage gauge on both builds,
  *   so the PC name stands (never transliterate a PS2 symbol). Proof is the caller, which also
- *   resolves the identical-sibling trap against `hud_set_theft_indicator_value`: PS2's ONLY
+ *   resolves the identical-sibling trap against `hud_set_timed_action_bar_value`: PS2's ONLY
  *   caller of RefullingIndicatorSetValue is ShowDamageIndicator__10C_airplaneFb, which is itself
  *   the exact twin of PC `airplane_hud_damage_toggle` — same `1.0 - (engine_a + engine_b)/(2*max)`
  *   damage ratio, same per-actor visibility byte, and the same HUD flag bit 0x40000 set on show /
@@ -259524,10 +259627,10 @@ LAB_0054e2e8:
       } while (uVar25 < *(uint *)(param_1 + 0x93e0));
     }
   }
-  // ===== bit 0x1000 — TIMED-ACTION / THEFT PROGRESS BAR =====
-  // Fill [0,1] at +0x9450 via `hud_set_theft_indicator_value`. Raised by the car-theft path
-  // (steal time clamped 2000..30000 ms, bar = 1.0 - remaining/total) and by two held-action
-  // timers gated at 400 ms (/1600) and 200 ms (/300).
+  // ===== bit 0x1000 — TIMED-ACTION PROGRESS BAR =====
+  // Fill [0,1] at +0x9450 via `hud_set_timed_action_bar_value`. Raised by the car break-in
+  // (steal time clamped 2000..30000 ms, bar = 1.0 - remaining/total), the throw wind-up
+  // gated at 400 ms (/1600) and the melee hold gated at 200 ms (/300).
   if ((*(uint *)(param_1 + 0x90a4) & 0x1000) != 0) {
     fVar20 = *(float *)(param_1 + 0x90c0) * 250.0;
     piStack_b60 = (int *)0x0;
@@ -263675,24 +263778,24 @@ void loadsave_static_dtor_call(void)
 void car_database_static_init(void)
 
 {
-  car_database_static_ctor_call();
-  car_database_static_atexit_register();
+  car_database_static_ctor();
+  car_database_register_atexit_dtor();
   return;
 }
 
 /*
- * car_database_static_ctor_call — Constructs the file-scope G_CarDatabase singleton.
- *
- * What it does: Single tail call to `car_database_ctor`.
+ * car_database_static_ctor - constructs the file-scope G_CarDatabase singleton.
+ * What it does: `mov ecx, 0x00671ef0; jmp car_database_ctor`.
  * Parameters: none.
  * Returns: void.
- * PS2 twin: — none. PC-only; no PS2 rank holds this behaviour.
- * Evidence: VA 0x00556f60. Half of the `car_database_static_init` group. Renamed from
- * `FUN_00556f60`.
- * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` —
- *   see `exe-re/structs/loadsave.md`.
+ * PS2 twin: - none.
+ * Evidence: VA 0x00556f60. Called by `car_database_static_init`, the singleton's `.CRT$XCU`
+ *  entry. Renamed from `FUN_00556f60`.
+ * Translation unit: the `G_LoadSaveClass` unit `[0x00556ee0, 0x00561b40)`, hosted by
+ *  `exe-re/structs/loadsave.md`; the class is `exe-re/structs/car_database.md` §3a.
  */
-void car_database_static_ctor_call(void)
+
+void car_database_static_ctor(void)
 
 {
   car_database_ctor();
@@ -263700,40 +263803,40 @@ void car_database_static_ctor_call(void)
 }
 
 /*
- * car_database_static_atexit_register — Registers the G_CarDatabase teardown with the CRT.
- *
- * What it does: `crt_atexit(&car_database_static_dtor_call)`.
+ * car_database_register_atexit_dtor - registers the G_CarDatabase teardown with the CRT.
+ * What it does: `crt_atexit(&car_database_static_dtor)`.
  * Parameters: none.
  * Returns: void.
- * PS2 twin: — none. PC-only; no PS2 rank holds this behaviour.
- * Evidence: VA 0x00556f70. Half of the `car_database_static_init` group. Renamed from
- * `FUN_00556f70`.
- * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` —
- *   see `exe-re/structs/loadsave.md`.
+ * PS2 twin: - none.
+ * Evidence: VA 0x00556f70. Called by `car_database_static_init`. Renamed from `FUN_00556f70`.
+ * Translation unit: the `G_LoadSaveClass` unit `[0x00556ee0, 0x00561b40)`, hosted by
+ *  `exe-re/structs/loadsave.md`; the class is `exe-re/structs/car_database.md` §3a.
  */
-void car_database_static_atexit_register(void)
+
+void car_database_register_atexit_dtor(void)
 
 {
-  crt_atexit(&car_database_static_dtor_call);
+  crt_atexit(&car_database_static_dtor);
   return;
 }
 
 // FUN_00556f80 @ VA 0x00556f80 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * car_database_static_dtor_call — crt_atexit trampoline that releases the G_CarDatabase tables.
- *
- * What it does: Single tail call to `car_database_close`, which frees the carindex and playerindex
- * buffers.
+ * car_database_static_dtor - the atexit destructor of the G_CarDatabase singleton.
+ * What it does: `mov ecx, 0x00671ef0; jmp car_database_close`, which frees the carindex and
+ *  playerindex buffers. The class destructor is inlined here: the PS2 `__dt__13G_CarDatabaseFv`
+ *  is `Close()` plus the delete.
  * Parameters: none.
  * Returns: void.
- * PS2 twin: — none. PC-only; no PS2 rank holds this behaviour.
- * Evidence: VA 0x00556f80. Registered by `car_database_static_atexit_register`. Renamed from
- * `FUN_00556f80`.
- * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` —
- *   see `exe-re/structs/loadsave.md`.
+ * PS2 twin: - none of its own (the inlined destructor: `exe-re/structs/car_database.md` §3a).
+ * Evidence: VA 0x00556f80. Registered by `car_database_register_atexit_dtor`. Renamed from
+ *  `FUN_00556f80`.
+ * Translation unit: the `G_LoadSaveClass` unit `[0x00556ee0, 0x00561b40)`, hosted by
+ *  `exe-re/structs/loadsave.md`.
  */
-void car_database_static_dtor_call(void)
+
+void car_database_static_dtor(void)
 
 {
   car_database_close();
@@ -266375,7 +266478,7 @@ void __thiscall loadsave_default_settings(int param_1,byte param_2)
  *   Same bounds check, same index-by-id, same fall back to the table BASE on a miss.
  *   Record stride differs per build (PC 0xbc, PS2 0xf0).
  *   The PS2 selecting its slot out of a vector first is the storage-model divergence
- *   documented in `structs/inventory.md` §5: the PS2 keeps items in ONE
+ *   documented in `structs/inventory.md` §7: the PS2 keeps items in ONE
  *   `gif::vector<S_GameItem,8>` and must index it by the in-hand INDEX at `+0xc`,
  *   while the PC uses four FIXED bands whose in-hand slot is at a constant `+0x20` —
  *   so the PC needs no indirection to reach the same item. Same function, same
@@ -266428,7 +266531,7 @@ undefined4 inventory_get_left_hand_item_def(void)
  * PS2 twin: `Select__11G_InventoryFUiUiPQ23gif22vector<10S_GameItem,8>`  [CONFIRMED]
  * Evidence: VA 0x00559be0. Arity 4<->4 and the same emission rank (immediately before SelectByID).
  * Ratio 23.9 is entirely the storage-model divergence: PC four fixed bands vs PS2 one vector — see
- * `exe-re/structs/inventory.md` §5. Renamed from `FUN_00559be0`.
+ * `exe-re/structs/inventory.md` §7. Renamed from `FUN_00559be0`.
  * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` —
  *   see `exe-re/structs/loadsave.md`.
  */
@@ -266699,7 +266802,7 @@ LAB_00559e45:
  *   selects the Thompson 1928 SMG that was just equipped. Renamed from
  *   `FUN_0055a1f0`. Name marked *approximate* — bank-to-category mapping +
  *   `inventory_select_slot`'s exact semantic not yet verified.
- * PS2 twin: SelectByID__11G_Inventory  [CONFIRMED]
+ * PS2 twin: `SelectByID__11G_InventoryFUiPQ23gif22vector<10S_GameItem,8>` [CONFIRMED]
  */
 uint __thiscall inventory_select_by_id(int param_1,uint param_2,undefined4 param_3)
 
@@ -268253,7 +268356,7 @@ LAB_0055bbba:
  * Parameters: param_1 (G_Inventory *, ECX): the inventory, at C_human+0x480. param_2 (std::vector<S_GameItem *> *): caller-owned out-vector; CLEARED first, then filled with one pointer per occupied slot.
  * Returns: void.
  * PS2 twin: `EnemyToList__11G_InventoryFPQ23gif23vector<P10S_GameItem,8>`  [CONFIRMED]
- * Evidence: VA 0x0055bbd0. CONFIRMED - same clear-then-fill shape, same skip-empty-slot test, same console print on an empty result. 🔑 The PS2 template argument types the out-param as a vector of S_GameItem POINTERS, which the PC decomp cannot show (container lever). The loop shapes differ exactly as structs/inventory.md §5 predicts: PC walks four FIXED bands where PS2 walks one gif::vector, which is also why the ratio is 440/256 = 1.72. Renamed from `FUN_0055bbd0`.
+ * Evidence: VA 0x0055bbd0. CONFIRMED - same clear-then-fill shape, same skip-empty-slot test, same console print on an empty result. 🔑 The PS2 template argument types the out-param as a vector of S_GameItem POINTERS, which the PC decomp cannot show (container lever). The loop shapes differ exactly as structs/inventory.md §7 predicts: PC walks four FIXED bands where PS2 walks one gif::vector, which is also why the ratio is 440/256 = 1.72. Renamed from `FUN_0055bbd0`.
  * Layout and the full PC<->PS2 method table: exe-re/structs/inventory.md
  */
 void __thiscall inventory_collect_items_to_list(int param_1,short *param_2)
@@ -268318,7 +268421,7 @@ void __thiscall inventory_collect_items_to_list(int param_1,short *param_2)
  * Parameters: param_1 (G_Inventory *, ECX): the inventory. param_2 (S_GameItem *): the item to remove, identified by address.
  * Returns: void.
  * PS2 twin: `RemoveByPtr__11G_InventoryFP10S_GameItem`  [CONFIRMED]
- * Evidence: VA 0x0055bcd0. CONFIRMED - both locate the element by ADDRESS rather than by id and then empty it; arity 2 <-> 2. PS2 additionally decrements-or-clears its in-hand index (`param_1[3]`) and shifts the tail down 0x10, neither of which PC can need under the four-band model (structs/inventory.md §5). That divergence is also the whole of the 256/112 = 2.29 ratio. Renamed from `FUN_0055bcd0`.
+ * Evidence: VA 0x0055bcd0. CONFIRMED - both locate the element by ADDRESS rather than by id and then empty it; arity 2 <-> 2. PS2 additionally decrements-or-clears its in-hand index (`param_1[3]`) and shifts the tail down 0x10, neither of which PC can need under the four-band model (structs/inventory.md §7). That divergence is also the whole of the 256/112 = 2.29 ratio. Renamed from `FUN_0055bcd0`.
  * Layout and the full PC<->PS2 method table: exe-re/structs/inventory.md
  */
 void __thiscall inventory_remove_item_by_ptr(int param_1,undefined2 *param_2)
@@ -268377,12 +268480,12 @@ void __thiscall inventory_remove_item_by_ptr(int param_1,undefined2 *param_2)
  *   else *out=reserve, clip). PS2 keys on the in-hand INDEX (`param_1[3]`) into its
  *   single `gif::vector<S_GameItem,8>` and reads `slot+4` / `slot+8`; PC keys on the
  *   in-hand BAND and reads `+0x24` / `+0x28` — the storage-model divergence in
- *   exe-re/structs/inventory.md §5. 🔑 That correspondence NAMES TWO `S_GameItem`
+ *   exe-re/structs/inventory.md §7. 🔑 That correspondence NAMES TWO `S_GameItem`
  *   FIELDS: `+0x04` = clip ammo, `+0x08` = reserve ammo.
  *   Size ratio 116/64 = 1.81 is above band and the body is identical — the ratio is
  *   the smell test, the body is the fact.
  *   Renamed from `FUN_0055bd40`.
- * Full PC<->PS2 method table: exe-re/structs/inventory.md §2.
+ * Full PC<->PS2 method table: exe-re/structs/inventory.md §3.
  */
 undefined4 __thiscall inventory_get_active_weapon_ammo(int param_1,undefined4 *param_2)
 
@@ -269107,7 +269210,7 @@ int __thiscall car_database_get_player_record(int param_1,uint param_2)
  * Returns: char*: the model name, or the default string — never null.
  * PS2 twin: `GetPlayerModel__13G_CarDatabaseFUi` (0x00045170)  [CONFIRMED]
  * Evidence: VA 0x0055c510. Identical three-way structure, identical `0x24` entry stride, identical never-null contract. Reached from `opponent_game_init` to name the racer's driver model before it is opened. Renamed from `FUN_0055c510`.
- * Class layout: exe-re/structs/racing.md §5c (the `G_CarDatabase` tables)
+ * Class layout: exe-re/structs/car_database.md (the `G_CarDatabase` tables)
  */
 undefined * __thiscall car_database_get_player_model(int param_1,uint param_2)
 
@@ -269257,8 +269360,8 @@ int __thiscall car_database_get_max_color_index(uint *param_1,uint param_2)
  * Parameters: param_1 (this): the `G_CarDatabase`. param_2: the packed car id. param_3 (char*): out, the filename buffer. param_4 (bool): select the second colour bank (+10).
  * Returns: bool: true when the filename was written.
  * PS2 twin: `GetCarModel__13G_CarDatabaseFUiPUcb` (0x00045231)  [CONFIRMED]
- * Evidence: VA 0x0055c6b0. Identical gate, identical `"%s%02d.i3d"` format and identical `+10` bank offset. ⚠️ The record stride is **0xa4 on PC and 0xa8 on PS2** — this is the car LIST, a different table from the 200-vs-204-byte `carcyclopedia.def` detail record already recorded in `racing.md` §5c. Renamed from `FUN_0055c6b0`.
- * Class layout: exe-re/structs/racing.md §5c (the `G_CarDatabase` tables)
+ * Evidence: VA 0x0055c6b0. Identical gate, identical `"%s%02d.i3d"` format and identical `+10` bank offset. ⚠️ The record stride is **0xa4 on PC and 0xa8 on PS2** — this is the car LIST, a different table from the 200-vs-204-byte `carcyclopedia.def` detail record recorded in `car_database.md`. Renamed from `FUN_0055c6b0`.
+ * Class layout: exe-re/structs/car_database.md (the `G_CarDatabase` tables)
  */
 undefined4 __thiscall car_database_get_car_model(uint *param_1,uint param_2,undefined4 param_3,char param_4)
 
@@ -269286,7 +269389,7 @@ undefined4 __thiscall car_database_get_car_model(uint *param_1,uint param_2,unde
  * Returns: bool: true when the id resolved.
  * PS2 twin: `GetCarParams__13G_CarDatabaseFUiPUiPUiPUi` (0x0004526c)  [CONFIRMED]
  * Evidence: VA 0x0055c710. Statement-for-statement: the same three null-guarded zeroings, the same `(id & 0xffff) < count` gate, the same `id >> 0x18` colour clamped at 4. PS2 carries a dead `2 < *level` re-check the PC does not. Reached from `opponent_game_init` to pick the racer's model level. Renamed from `FUN_0055c710`.
- * Class layout: exe-re/structs/racing.md §5c (the `G_CarDatabase` tables)
+ * Class layout: exe-re/structs/car_database.md (the `G_CarDatabase` tables)
  */
 uint __thiscall
 car_database_get_car_params(uint *param_1,uint param_2,uint *param_3,undefined4 *param_4,uint *param_5)
@@ -270086,6 +270189,18 @@ void __fastcall stream_ctor(int param_1)
   return;
 }
 
+/*
+ * thunk_stream_close — 5-byte jump thunk to `stream_close`.
+ * What it does: forwards to `stream_close` and nothing else.
+ * Parameters / Returns: the target's; the jump does not touch the frame. param_1 (int)
+ *   is the stream in ECX; returns bool, the sticky error flag at +0x2d.
+ * Evidence: VA 0x0055d040. Ghidra symbol dump: kind=thunk, size=5,
+ *   thunk_target=0x0055d130. Byte-verified in Game.exe: `e9 eb 00 00 00`
+ *   (`jmp rel32` -> 0x0055d130) followed by `90 90 90` padding. Body check: INLINED,
+ *   Ghidra copied the target's body here rather than emitting the jump. 17 callsites.
+ * PS2 twin: not determined.
+ * Renamed from `thunk_FUN_0055d130`.
+ */
 bool __fastcall thunk_stream_close(int param_1)
 
 {
@@ -271920,7 +272035,7 @@ LAB_0055ede9:
       // This caller lockstep is what identifies the screen below as GM_GarageFull rather
       // than its near-identical sibling GM_GarageSelect - the two build almost the same
       // row list, so only the caller discriminates.
-      // See exe-re/structs/garage.md §3.
+      // See exe-re/structs/garage.md §5.
       if (uVar4 <= (iVar10 - (uint)((char)iVar7 != '\0')) + 0x10) break;
       pcStack_88 = (char *)operator_new(0x50);
       uStack_1c = 2;
@@ -272575,7 +272690,7 @@ LAB_0055fae9:
  *
  * What it does: sets the one-shot request byte `+0x1cd` of the garage block to 1.
  *  `garage_game_done` banks the tracked car when `+0x1cc` or `+0x1cd` is set and then clears
- *  both (`exe-re/structs/garage.md` 2a).
+ *  both (`exe-re/structs/garage.md` §4a).
  * Parameters:
  *  param_1 (this, ECX): the garage block of the `G_LoadSaveClass` singleton `0x00671fb0`.
  * Returns: void.
@@ -272956,7 +273071,7 @@ void __thiscall loadsave_freeride_enable_car_group(int param_1,byte param_2)
  *   builds take this accessor's result, OR in `0x2000000`, and hand it to
  *   `GetCarsByCarcyclopediaMask` / `car_database_collect_cars_by_carcyclopedia_mask`.
  *   An edge that holds on both builds. This closes one of the 14
- *   "not located" rows in `structs/loadsave.md` §9e. `CanStart` remains not located.
+ *   "not located" rows in `structs/loadsave.md` §10e. `CanStart` remains not located.
  *
  * Renamed from `FUN_0055ffb0`. `G_GarageClass` is folded into the loadsave object on the
  *   PC, but this method belongs to `G_LoadSaveClass` itself.
@@ -273042,7 +273157,7 @@ void __thiscall loadsave_apply_settings(int param_1,byte param_2)
  *  `g_key_binding_label_string_ids[slot]`, the textdb id of that action's on-screen
  *  name. Out of range it returns the fallback id 100.
  * Parameters: param_1 (int): the binding slot, 0..0x3b. Same index space as the
- *  60-entry key-binding table at `G_LoadSaveClass+0x1f4` (`structs/loadsave.md` §7).
+ *  60-entry key-binding table at `G_LoadSaveClass+0x1f4` (`structs/loadsave.md` §9).
  * Returns: undefined4: a textdb string id, or 100 when the slot is out of range.
  * PS2 twin: — none. PC-only: the PS2 has no rebindable input, so neither this function
  *  nor any of the `loadsave_binding_*` family has a PS2 rank.
@@ -273061,7 +273176,7 @@ void __thiscall loadsave_apply_settings(int param_1,byte param_2)
  *  It is not a GUI class and not an option value.
  *  Renamed from `FUN_00560120`.
  * Translation unit: the `g_loadsave` file `[0x00556f10, 0x00561b70)` — see
- *  `exe-re/structs/loadsave.md` §7a.
+ *  `exe-re/structs/loadsave.md` §9a.
  */
 undefined4 loadsave_get_key_binding_label_id(int param_1)
 
@@ -274834,7 +274949,7 @@ void __fastcall carcyclopedia_dtor(int param_1)
  *  `PopMode__8G_Camera(.., 0)` <-> the camera pop with the same literal 0; the model
  *  release through the object's own vtable; and the framework-default chain, which on
  *  the PS2 is `Clear__11G_CarcCache` (the PC has no model cache — see
- *  `exe-re/structs/carcyclopedia.md` §6). Slot 2 of vtable 0x0063d378, and 1 vtable
+ *  `exe-re/structs/carcyclopedia.md` §8). Slot 2 of vtable 0x0063d378, and 1 vtable
  *  dataref total, so the function belongs to this class alone.
  *  Renamed from `FUN_00562040`.
  * Translation unit: `g_m_carc.cpp` — see `exe-re/structs/carcyclopedia.md`.
@@ -275503,7 +275618,7 @@ void __thiscall carcyclopedia_refresh_car(int param_1,int param_2)
  *  `tables\menu.def` is exactly this layout. Sole caller: `gui_mp_lobby_tick`
  *  case `0x2afa`, the lobby's `Person:` button (textdb 662, cz "Postava:").
  *  Renamed from `FUN_00562fa0`.
- * Doc: `exe-re/structs/multiplayer.md` §3.
+ * Doc: `exe-re/structs/multiplayer.md` §6.
  */
 undefined4 * __thiscall
 gui_mp_person_select_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,undefined4 *param_4)
@@ -275862,7 +275977,7 @@ void __fastcall gui_menu_on_exchange_forward_to_parent(int param_1)
  * PS2 twin: none — PC-only class.
  * Evidence: VA 0x005634b0, slot 2 of vtable 0x0063d398 and the ONLY slot this class
  *  overrides besides the tick. Renamed from `FUN_005634b0`.
- * Doc: `exe-re/structs/multiplayer.md` §3.
+ * Doc: `exe-re/structs/multiplayer.md` §6.
  */
 void __fastcall gui_mp_person_select_on_close(int param_1)
 
@@ -275892,7 +276007,7 @@ void __fastcall gui_mp_person_select_on_close(int param_1)
  * Evidence: VA 0x005634d0, slot 5 of vtable 0x0063d398. Each arm ends in
  *  `gui_mp_person_select_show_model`, which is what ties the widget ids to the model
  *  table. Renamed from `FUN_005634d0`.
- * Doc: `exe-re/structs/multiplayer.md` §3.
+ * Doc: `exe-re/structs/multiplayer.md` §6.
  */
 undefined4 __thiscall
 gui_mp_person_select_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -276061,7 +276176,7 @@ switchD_005637e2_caseD_2:
  *  table is `tables\playerindex.def`, 66 `civilNN.i3d` character models — which is what
  *  reconciles `walk1.i3d` with the screen.
  *  Renamed from `FUN_005639e0`.
- * Doc: `exe-re/structs/multiplayer.md` §3.
+ * Doc: `exe-re/structs/multiplayer.md` §6.
  */
 void __fastcall gui_mp_person_select_show_model(int param_1)
 
@@ -276168,7 +276283,7 @@ void crt_atexit_register_00563b20(void)
  *  SingleRace", 604 "Host Championship", 605 "Join existing game", 606 "Settings",
  *  607 "Back to Main Menu". Sole caller: `net_multiplayer_run`.
  *  Renamed from `FUN_00563b30`.
- * Doc: `exe-re/structs/multiplayer.md` §2.
+ * Doc: `exe-re/structs/multiplayer.md` §5.
  */
 undefined4 * __thiscall gui_mp_menu_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -276233,7 +276348,7 @@ undefined4 * __thiscall gui_mp_menu_ctor(undefined4 *param_1,undefined4 param_2,
  *  five enables `gui_mp_menu_ctor` sets, which is what identifies it as the
  *  return-from-child refresh rather than a change handler.
  *  Renamed from `FUN_00563c20`.
- * Doc: `exe-re/structs/multiplayer.md` §2.
+ * Doc: `exe-re/structs/multiplayer.md` §5.
  */
 void gui_mp_menu_refresh_mode_items(undefined4 param_1,undefined4 param_2)
 
@@ -276283,7 +276398,7 @@ void gui_mp_menu_refresh_mode_items(undefined4 param_1,undefined4 param_2)
  *  🔴 `0x65` and `0x66` — the two DEATHMATCH modes — are fully implemented here but have
  *  no `menu.def` record in retail.
  *  Renamed from `FUN_00563cc0`.
- * Doc: `exe-re/structs/multiplayer.md` §2.
+ * Doc: `exe-re/structs/multiplayer.md` §5.
  */
 undefined4 __thiscall
 gui_mp_menu_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -276387,7 +276502,7 @@ switchD_00563d47_caseD_69:
  *  Opponents" buttons and the Circuit/Garage/Person/laps/Direction rows — every one of
  *  which this constructor or `gui_mp_lobby_tick` addresses.
  *  Renamed from `FUN_00563ee0`.
- * Doc: `exe-re/structs/multiplayer.md` §4.
+ * Doc: `exe-re/structs/multiplayer.md` §7.
  */
 undefined4 * __thiscall gui_mp_lobby_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -276495,7 +276610,7 @@ undefined4 * __thiscall gui_mp_lobby_ctor(undefined4 *param_1,undefined4 param_2
  *  out-pointer the lobby hands to `gui_mp_person_select_ctor`, which is what closes the
  *  loop between the picker and the session field.
  *  Renamed from `FUN_00564110`.
- * Doc: `exe-re/structs/multiplayer.md` §4.
+ * Doc: `exe-re/structs/multiplayer.md` §7.
  */
 void __thiscall gui_mp_lobby_on_child_result(int param_1,uint param_2,undefined4 param_3)
 
@@ -276605,7 +276720,7 @@ LAB_00564305:
  *  a member of GUI design `0x2a` in the shipped `tables\menu.def`, including the nine
  *  `netp` participant rows and the seven `stxt` chat lines.
  *  Renamed from `FUN_00564320`.
- * Doc: `exe-re/structs/multiplayer.md` §4.
+ * Doc: `exe-re/structs/multiplayer.md` §7.
  */
 undefined4 __thiscall
 gui_mp_lobby_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -277109,7 +277224,7 @@ LAB_00564d24:
 /*
  * gui_mp_settings_ctor — build the "Multiplayer Settings" screen.
  *
- * What it does: chains the `GM_Menu` constructor, zeroes the seven combo-item vectors,
+ * What it does: chains the `GM_Menu` constructor, zeroes the eight option lists,
  *  installs vtable 0x0063d3e4, and copies the session's 0x9c-byte network-settings block
  *  (`net_session_settings_addr`) into its own working copy at `this+0xc8`. It then builds GUI
  *  design `0x2b` with the gate that matches the stored provider type (1 -> 1, 2 -> 2,
@@ -277128,7 +277243,7 @@ LAB_00564d24:
  *  and the COM/baud/parity/flow labels 632-638). Sole caller: `gui_mp_menu_tick`
  *  case `0x78`, the menu's "Settings" item (textdb 606).
  *  Renamed from `FUN_00564f20`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 undefined4 * __thiscall gui_mp_settings_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -277359,7 +277474,7 @@ undefined4 * __thiscall gui_mp_settings_ctor(undefined4 *param_1,undefined4 para
  * Evidence: VA 0x00565610, 32 bytes, slot 0 of vtable 0x0063d3e4. This is the only class
  *  in the TU with its OWN slot-0 entry; the other four use the shared framework stub
  *  `gui_menu_scalar_deleting_dtor_common`. Renamed from `FUN_00565610`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 undefined4 __thiscall gui_mp_settings_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -277374,9 +277489,10 @@ undefined4 __thiscall gui_mp_settings_scalar_deleting_dtor(undefined4 param_1,by
 /*
  * gui_mp_settings_dtor — destroy the Multiplayer Settings screen.
  *
- * What it does: frees the seven combo-item vectors the constructor built — the session
- *  list (`this+0x5c`), the provider list (`+0x6c`), and the COM port, baud rate, stop
- *  bit, parity and flow-control lists (`+0x7c`, `+0x8c`, `+0x9c`, `+0xac`, `+0xbc`) —
+ * What it does: frees the eight option lists the constructor built — the provider list
+ *  (`this+0x4c`), the provider-entry list (`+0x5c`), the never-filled list (`+0x6c`), and the
+ *  COM port, baud rate, stop bit, parity and flow-control lists (`+0x7c`, `+0x8c`, `+0x9c`,
+ *  `+0xac`, `+0xbc`) —
  *  zeroing each triple, then disposes the base component vector and tail-calls
  *  `GM_Menu::~GM_Menu` (`gui_menu_dtor`).
  * Parameters: param_1 (int, ECX `this`): the Multiplayer Settings screen.
@@ -277385,7 +277501,7 @@ undefined4 __thiscall gui_mp_settings_scalar_deleting_dtor(undefined4 param_1,by
  * Evidence: VA 0x00565630. The tail-call to `gui_menu_dtor` is the same base-destructor
  *  signature that identified the `GM_Menu` framework.
  *  Renamed from `FUN_00565630`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 void __fastcall gui_mp_settings_dtor(int param_1)
 
@@ -277452,7 +277568,7 @@ void __fastcall gui_mp_settings_dtor(int param_1)
  * Evidence: VA 0x00565760, slot 1 of vtable 0x0063d3e4. It repeats the constructor's own
  *  design/gate selection verbatim, which is the tell that it is the rebuild path rather
  *  than a refresh. Renamed from `FUN_00565760`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 void __fastcall gui_mp_settings_on_exchange(int param_1)
 
@@ -277571,7 +277687,7 @@ void __fastcall gui_mp_settings_on_exchange(int param_1)
  *  address:", 631 "Port:"), and the destinations are the same offsets
  *  `gui_mp_settings_write_widgets` writes back out.
  *  Renamed from `FUN_00565a70`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 void __fastcall gui_mp_settings_read_widgets(int param_1)
 
@@ -277596,7 +277712,7 @@ void __fastcall gui_mp_settings_read_widgets(int param_1)
  * Returns: void.
  * PS2 twin: none — PC-only.
  * Evidence: VA 0x00565ac0. Renamed from `FUN_00565ac0`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 void __fastcall gui_mp_settings_write_widgets(int param_1)
 
@@ -277633,7 +277749,7 @@ void __fastcall gui_mp_settings_write_widgets(int param_1)
  *  the serial combos of design `0x2b`; the write targets are the same fields
  *  `gui_mp_settings_write_widgets` reads back.
  *  Renamed from `FUN_00565bc0`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 void __thiscall gui_mp_settings_on_change(int *param_1,uint param_2,int param_3)
 
@@ -277705,7 +277821,7 @@ LAB_00565ce7:
  * Evidence: VA 0x00565d00, slot 5 of vtable 0x0063d3e4. `0x26d` / `0x26e` / `0x26f` are
  *  the OK / Cancel / Advanced buttons of GUI design `0x2b` (textdb 621 / 622 / 629) in
  *  the shipped `tables\menu.def`. Renamed from `FUN_00565d00`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 undefined4 __thiscall
 gui_mp_settings_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -277756,7 +277872,7 @@ gui_mp_settings_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 par
  * Evidence: VA 0x00565db0. Every id in the table is a component of GUI design `0x2b` in
  *  the shipped `tables\menu.def`, and the pairs line up label-then-field exactly as that
  *  design lays them out. Renamed from `FUN_00565db0`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 void __thiscall gui_mp_settings_set_advanced_visible(int param_1,undefined1 param_2)
 
@@ -277808,7 +277924,7 @@ void __thiscall gui_mp_settings_set_advanced_visible(int param_1,undefined1 para
  * Evidence: VA 0x00565e90. Reads the advanced flag at `this+0x164` and the provider type
  *  at `this+0xe8` — the same two fields `gui_mp_settings_set_advanced_visible` and
  *  `gui_mp_settings_on_change` write. Renamed from `FUN_00565e90`.
- * Doc: `exe-re/structs/multiplayer.md` §5.
+ * Doc: `exe-re/structs/multiplayer.md` §8.
  */
 void __fastcall gui_mp_settings_resize_window(int param_1)
 
@@ -277854,7 +277970,7 @@ void __fastcall gui_mp_settings_resize_window(int param_1)
  *  "ROUND 1") + item `0x1a7` (textdb 422 "EXIT"). Sole caller: `gui_mp_lobby_tick`
  *  case `0x2afd`, the lobby's championship button.
  *  Renamed from `FUN_00565f00`.
- * Doc: `exe-re/structs/multiplayer.md` §6.
+ * Doc: `exe-re/structs/multiplayer.md` §9.
  */
 undefined4 * __thiscall gui_race_champ_select_ctor(undefined4 *param_1,undefined4 param_2,float param_3)
 
@@ -277933,7 +278049,7 @@ undefined4 * __thiscall gui_race_champ_select_ctor(undefined4 *param_1,undefined
  *  `gui_mp_message_screen_ctor`'s class); the two tables are byte-identical, i.e. that
  *  class inherits this behaviour rather than sharing it by identical-code folding.
  *  Renamed from `FUN_005660f0`.
- * Doc: `exe-re/structs/multiplayer.md` §6.
+ * Doc: `exe-re/structs/multiplayer.md` §9.
  */
 undefined4 __thiscall
 gui_race_champ_select_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -277992,7 +278108,7 @@ LAB_0056617c:
  *  Sole entry point: Multiplayer-menu component `0x6f`, which has no `menu.def` record in
  *  any design and which `gui_mp_menu_ctor` disables unconditionally.
  *  Renamed from `FUN_00566190`.
- * Doc: `exe-re/structs/multiplayer.md` §6.
+ * Doc: `exe-re/structs/multiplayer.md` §9.
  */
 undefined4 * __thiscall gui_mp_message_screen_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -278148,7 +278264,7 @@ void crt_atexit_register_00566270(void)
  *  / "Single Race" / "Championship" / "Multiplayer" / "Exit" — read the fr/cz columns, the
  *  English rows 411/412 were overwritten with debug strings in the retail build.
  *  Renamed from `FUN_00566280`.
- * Doc: `exe-re/structs/racing_menus.md` §2.
+ * Doc: `exe-re/structs/racing_menus.md` §5.
  */
 undefined4 * __thiscall gui_race_root_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -278190,7 +278306,7 @@ undefined4 * __thiscall gui_race_root_ctor(undefined4 *param_1,undefined4 param_
  *  the close codes differ (PC `0x2e`/`0x27`, PS2 `0x33`/`0x2c`).
  * Evidence: VA 0x00566310, slot 5 of vtable 0x0063d434. True size 384 B.
  *  Renamed from `FUN_00566310`.
- * Doc: `exe-re/structs/racing_menus.md` §2.
+ * Doc: `exe-re/structs/racing_menus.md` §5.
  */
 undefined4 __thiscall
 gui_race_root_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -278263,7 +278379,7 @@ switchD_00566393_caseD_f1cce:
  * PS2 twin: `OpenMenuForSingleRace__9GM_RacingFb` — CONFIRMED
  *  (208 B against 220 B, ratio 0.95).
  * Evidence: VA 0x00566490. Renamed from `FUN_00566490`.
- * Doc: `exe-re/structs/racing_menus.md` §2.
+ * Doc: `exe-re/structs/racing_menus.md` §5.
  */
 undefined4 __fastcall gui_race_root_open_single_race(char param_1)
 
@@ -278324,7 +278440,7 @@ undefined4 __fastcall gui_race_root_open_single_race(char param_1)
  * PS2 twin: `OpenMenuForChampionship__9GM_RacingFi` — CONFIRMED
  *  (320 B against 468 B).
  * Evidence: VA 0x00566560. Renamed from `FUN_00566560`.
- * Doc: `exe-re/structs/racing_menus.md` §2.
+ * Doc: `exe-re/structs/racing_menus.md` §5.
  */
 undefined4 __fastcall gui_race_root_open_championship(int param_1)
 
@@ -278410,7 +278526,7 @@ undefined4 __fastcall gui_race_root_open_championship(int param_1)
  *  SAME design id `0x17`) always sets the pair unconditionally.
  * Evidence: VA 0x005666a0. `C_championship+0xcc` ↔ PS2 `+0x30`.
  *  Renamed from `FUN_005666a0`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 * __thiscall gui_race_championship_ctor(undefined4 *param_1,undefined4 param_2,float param_3)
 
@@ -278504,7 +278620,7 @@ LAB_0056689c:
  *  setter and same child class with the same two stored fields.
  * Evidence: VA 0x005668c0, slot 5 of vtable 0x0063d44c.
  *  Renamed from `FUN_005668c0`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 __thiscall
 gui_race_championship_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -278572,7 +278688,7 @@ gui_race_championship_tick(int *param_1,undefined4 param_2,uint param_3,undefine
  *  `(1, 500, 0x1f5, 0)` on BOTH builds, so the tails discriminate the two screens.
  * Evidence: VA 0x005669f0. The vector lives at `C_championship+0xac` (PS2 `+0x44`).
  *  Renamed from `FUN_005669f0`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 * __thiscall
 gui_race_round_select_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefined4 param_4,int param_5)
@@ -278668,7 +278784,7 @@ LAB_00566b63:
  * Evidence: VA 0x00566b80, slot 5 of vtable 0x0063d464. The `-400 + id*4` displacement is
  *  the vector indexed from widget id 100.
  *  Renamed from `FUN_00566b80`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 __thiscall
 gui_race_round_select_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -278734,7 +278850,7 @@ gui_race_round_select_tick(int *param_1,undefined4 param_2,uint param_3,undefine
  *  preceded by a `DeleteComponent` on the same ids — which is also what confirmed
  *  `gui_menu_delete_component`.
  * Evidence: VA 0x00566c80. Renamed from `FUN_00566c80`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 * __thiscall gui_race_champ_launch_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -278894,7 +279010,7 @@ undefined4 * __thiscall gui_race_champ_launch_ctor(undefined4 *param_1,undefined
  * PS2 twin: `OnCloseChild__19GM_ChampionshipRaceFP7GM_MenuUiUi` — CONFIRMED.
  * Evidence: VA 0x00567170, slot 3 of vtable 0x0063d47c.
  *  Renamed from `FUN_00567170`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 void __thiscall gui_race_champ_launch_on_close_child(int param_1,int param_2,int param_3)
 
@@ -278946,7 +279062,7 @@ void __thiscall gui_race_champ_launch_on_close_child(int param_1,int param_2,int
  * Evidence: VA 0x00567280, slot 5 of vtable 0x0063d47c. 🔴 `0x1c8` is where the builds
  *  diverge: the PS2 opens a whole `GM_DamageDifficulty` screen, the PC toggles inline. The
  *  PC has no such class. Renamed from `FUN_00567280`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 __thiscall
 gui_race_champ_launch_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -279029,7 +279145,7 @@ gui_race_champ_launch_tick(int *param_1,undefined4 param_2,uint param_3,undefine
  * Evidence: VA 0x00567450. The "Championship position:" / "%d pt" strings in design `0x1a`
  *  are what separate it from the single-race results screen (design `0x22`).
  *  Renamed from `FUN_00567450`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 * __thiscall gui_race_champ_results_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -279291,7 +279407,7 @@ LAB_0056756f:
  *  (3->1 fold; the PC handles all six of design `0x1a`'s widgets, the PS2 four of them).
  * Evidence: VA 0x00567b20, slot 5 of vtable 0x0063d494.
  *  Renamed from `FUN_00567b20`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 __thiscall
 gui_race_champ_results_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
@@ -279433,7 +279549,7 @@ gui_race_champ_results_tick(int *param_1,undefined4 param_2,undefined4 param_3,u
  *  widget-id ORDER `0x1de -> 0x1df -> 0x1dd -> 100 -> 0xc -> 200` and the identical helper
  *  sequence.
  * Evidence: VA 0x00567fb0. Renamed from `FUN_00567fb0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 * __thiscall gui_race_setup_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -279491,7 +279607,7 @@ undefined4 * __thiscall gui_race_setup_ctor(undefined4 *param_1,undefined4 param
  * PS2 twin: `OnCloseChild__13GM_SingleRaceFP7GM_MenuUiUi` — CONFIRMED.
  * Evidence: VA 0x00568100, slot 3 of vtable 0x0063d4ac.
  *  Renamed from `FUN_00568100`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 void __thiscall gui_race_setup_on_close_child(int param_1,int param_2,int param_3)
 
@@ -279543,7 +279659,7 @@ void __thiscall gui_race_setup_on_close_child(int param_1,int param_2,int param_
  * Evidence: VA 0x005681e0, slot 5 of vtable 0x0063d4ac. 🔴 the PS2's EIGHTH case `0x1dc`
  *  opens `GM_DamageDifficulty`; the PC has no such case and no such class.
  *  Renamed from `FUN_005681e0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 __thiscall
 gui_race_setup_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -279659,7 +279775,7 @@ switchD_00568251_caseD_1d9:
  * Evidence: VA 0x00568410. The PC parameterises the vector where the PS2 reads
  *  `CRacing+0x5f4`/`+0x5f8` directly. PC circuit state is `+0x50`, PS2 `+0x00`.
  *  Renamed from `FUN_00568410`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 * __thiscall
 gui_race_circuit_select_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefined4 param_4,int param_5)
@@ -279754,7 +279870,7 @@ gui_race_circuit_select_ctor(undefined4 *param_1,undefined4 param_2,float param_
  *  CONFIRMED (2->1 fold, 288 B against 136+120).
  * Evidence: VA 0x005685d0, slot 5 of vtable 0x0063d4c4.
  *  Renamed from `FUN_005685d0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 __thiscall
 gui_race_circuit_select_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -279817,7 +279933,7 @@ LAB_00568693:
  *  (the PS2 spells it `memset(this+0x2c, 0, 0x28)`).
  * Evidence: VA 0x005686f0. ⚠️ the PC clones a FIXED 19 rows and walks 20; the PS2 derives
  *  the count from the circuit. Renamed from `FUN_005686f0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 * __thiscall gui_race_opponents_ctor(undefined4 *param_1,undefined4 param_2,float param_3)
 
@@ -279890,7 +280006,7 @@ undefined4 * __thiscall gui_race_opponents_ctor(undefined4 *param_1,undefined4 p
  * Evidence: VA 0x00568830, slot 3 of vtable 0x0063d4dc. The `-0x148 + id*4` displacement
  *  is the slot array at `this+0x48` indexed from widget id 100.
  *  Renamed from `FUN_00568830`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 void __thiscall gui_race_opponents_on_close_child(int param_1,uint param_2,int param_3)
 
@@ -279922,7 +280038,7 @@ void __thiscall gui_race_opponents_on_close_child(int param_1,uint param_2,int p
  * Evidence: VA 0x00568880, slot 5 of vtable 0x0063d4dc. ⚠️ the PC passes a HARDCODED `0x14`
  *  opponent count where the PS2 passes the circuit's own `+0x08`.
  *  Renamed from `FUN_00568880`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 __thiscall
 gui_race_opponents_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -279991,7 +280107,7 @@ gui_race_opponents_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
  *  `| 0x2000000`, the same `i < 0x14` loop bound and the same enable of widget `i+100`.
  * Evidence: VA 0x005689c0. The `0xffffffff` sentinel its two callers pass is itself shared
  *  with the PS2. Renamed from `FUN_005689c0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 * __thiscall
 gui_race_car_maker_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
@@ -280142,7 +280258,7 @@ gui_race_car_maker_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_
  * PS2 twin: `OnCloseChild__24GM_SelectCarManufacturerFP7GM_MenuUiUi` — CONFIRMED.
  * Evidence: VA 0x00568c70, slot 3 of vtable 0x0063d4f4.
  *  Renamed from `FUN_00568c70`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 void __thiscall gui_race_car_maker_on_close_child(int *param_1,uint param_2,int param_3)
 
@@ -280168,7 +280284,7 @@ void __thiscall gui_race_car_maker_on_close_child(int *param_1,uint param_2,int 
  * PS2 twin: `OnClick__24GM_SelectCarManufacturerFUi` — CONFIRMED.
  * Evidence: VA 0x00568cc0, slot 5 of vtable 0x0063d4f4. True size 208 B.
  *  Renamed from `FUN_00568cc0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 __thiscall
 gui_race_car_maker_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -280232,7 +280348,7 @@ LAB_00568d3e:
  *  mask, and the same championship-mask derivation (`mode == 1 ? champ+0xd8 : -1` against
  *  the PS2's `CRacing+0xaa8 == 1 ? champ+0x3c : -1`).
  * Evidence: VA 0x00568d90. Renamed from `FUN_00568d90`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 * __thiscall
 gui_race_car_model_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefined4 param_4,
@@ -280352,7 +280468,7 @@ gui_race_car_model_ctor(undefined4 *param_1,undefined4 param_2,float param_3,und
  * Evidence: VA 0x00569080, slot 0 of vtable 0x0063d50c — the only cluster-A class that
  *  overrides slot 0, because it is the only one that owns a container.
  *  Renamed from `FUN_00569080`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 __thiscall gui_race_car_model_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -280377,7 +280493,7 @@ undefined4 __thiscall gui_race_car_model_scalar_deleting_dtor(undefined4 param_1
  * Evidence: VA 0x005690a0. This is the only class in the TU that owns a container, which
  *  is why it is also the only one to override vtable slot 0.
  *  Renamed from `FUN_005690a0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 void __fastcall gui_race_car_model_dtor(int param_1)
 
@@ -280402,7 +280518,7 @@ void __fastcall gui_race_car_model_dtor(int param_1)
  * Evidence: VA 0x005690d0, slot 4 of vtable 0x0063d50c. On the PC the PS2's separate
  *  `OnClose` virtual is fused into the slot-4 close path, which is why the override sits
  *  in slot 4 and not slot 2. Renamed from `FUN_005690d0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 void gui_race_car_model_close(undefined4 param_1,undefined4 param_2)
 
@@ -280425,7 +280541,7 @@ void gui_race_car_model_close(undefined4 param_1,undefined4 param_2)
  * PS2 twin: `OnCloseChild__17GM_SelectCarModelFP7GM_MenuUiUi` — CONFIRMED.
  * Evidence: VA 0x00569100, slot 3 of vtable 0x0063d50c.
  *  Renamed from `FUN_00569100`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 void __thiscall gui_race_car_model_on_close_child(int *param_1,uint param_2,int param_3)
 
@@ -280455,7 +280571,7 @@ void __thiscall gui_race_car_model_on_close_child(int *param_1,uint param_2,int 
  * Evidence: VA 0x00569150, slot 5 of vtable 0x0063d50c. The PS2 branches on
  *  `GetCarMaxColor(...) == 0`, the PC on `< 2` — the same decision, stated differently.
  *  Renamed from `FUN_00569150`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 __thiscall
 gui_race_car_model_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -280561,7 +280677,7 @@ gui_race_car_model_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
  *  item per variant while the PS2 builds a colour-swatch vector and `SetPointer`s it into
  *  widget `100`.
  * Evidence: VA 0x005693d0. Renamed from `FUN_005693d0`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 * __thiscall
 gui_race_car_color_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefined4 param_4,
@@ -280641,7 +280757,7 @@ void thunk_gui_menu_close(void)
  *  behaviour lives in its `OnKey`; the PC folds the pair into slot 5.
  * Evidence: VA 0x00569510, slot 5 of vtable 0x0063d524. The `0x3b` Carcyclopedia arm is
  *  PC-only. Renamed from `FUN_00569510`.
- * Doc: `exe-re/structs/racing_menus.md` §3.
+ * Doc: `exe-re/structs/racing_menus.md` §6.
  */
 undefined4 __thiscall
 gui_race_car_color_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -280712,7 +280828,7 @@ gui_race_car_color_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
  *  the only racing constructor that uses the widget-id set `0x1c8`/`0x1ca`/`0x1cb` together
  *  with `0x515`/`0x5dd`/`0x641`, and the PC body uses exactly those.
  * Evidence: VA 0x00569660. Renamed from `FUN_00569660`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 * __thiscall gui_race_launch_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -280859,7 +280975,7 @@ undefined4 * __thiscall gui_race_launch_ctor(undefined4 *param_1,undefined4 para
  *  opponent-list refresh.
  * Evidence: VA 0x00569ab0, slot 3 of vtable 0x0063d53c.
  *  Renamed from `FUN_00569ab0`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 void __thiscall gui_race_launch_on_close_child(int param_1,int param_2,int param_3)
 
@@ -280915,7 +281031,7 @@ void __thiscall gui_race_launch_on_close_child(int param_1,int param_2,int param
  *  separates this class from `GM_ChampionshipRace` (that one does have `0x1c7`).
  * Evidence: VA 0x00569bd0, slot 5 of vtable 0x0063d53c.
  *  Renamed from `FUN_00569bd0`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 __thiscall
 gui_race_launch_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -280994,7 +281110,7 @@ gui_race_launch_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 par
  *  the only one of the three results/launch constructors that uses widget ids
  *  `0x212`/`0x213`/`0x216`/`0x21b`/`0x231`/`0x708`, and the PC body uses exactly those.
  * Evidence: VA 0x00569da0. Renamed from `FUN_00569da0`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 * __thiscall gui_race_results_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -281303,7 +281419,7 @@ LAB_00569eb6:
  *  which returns `0x33` for Continue where this one returns `0x2f`).
  * Evidence: VA 0x0056a570, slot 5 of vtable 0x0063d554, design `0x22`.
  *  Renamed from `FUN_0056a570`.
- * Doc: `exe-re/structs/racing_menus.md` §4.
+ * Doc: `exe-re/structs/racing_menus.md` §7.
  */
 undefined4 __thiscall
 gui_race_results_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
@@ -281497,7 +281613,7 @@ gui_race_results_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefin
  * Evidence: VA 0x0056ab40. textdb `0x45d`/`0x45e` pick the variant wording; the PC fuses
  *  the PS2 `{ctor}` + `OnBeforeCreate` + `OnCreate` into one function.
  *  Renamed from `FUN_0056ab40`.
- * Doc: `exe-re/structs/racing_menus.md` §5.
+ * Doc: `exe-re/structs/racing_menus.md` §8.
  */
 undefined4 * __thiscall
 gui_race_bonus_car_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4)
@@ -281566,7 +281682,7 @@ LAB_0056ac92:
  *  (2->1 fold; PS2 closes with `0x3a`, the PC with `0x34`).
  * Evidence: VA 0x0056acd0, slot 5 of vtable 0x0063d56c. The `0x1f6` Carcyclopedia arm is
  *  PC-only. Renamed from `FUN_0056acd0`.
- * Doc: `exe-re/structs/racing_menus.md` §5.
+ * Doc: `exe-re/structs/racing_menus.md` §8.
  */
 undefined4 __thiscall
 gui_race_bonus_car_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4,undefined4 param_5,
@@ -281677,7 +281793,7 @@ void thunk_gui_scale_static_init(void)
  * PS2 twin: none by construction — see `gui_mouse_pos_static_init`. STRUCTURAL.
  * Evidence: VA 0x0056ae00, reached only from the `.CRT$XCU` table through its own 5-byte
  *  thunk at `0x0056adf0`. Renamed from `FUN_0056ae00`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void gui_scale_static_init(void)
 
@@ -281708,7 +281824,7 @@ void thunk_gui_mouse_pos_static_init(void)
  *  rather than as one function per object. STRUCTURAL.
  * Evidence: VA 0x0056ae30, reached only from the `.CRT$XCU` table through its own 5-byte
  *  thunk at `0x0056ae20`. Renamed from `FUN_0056ae30`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void gui_mouse_pos_static_init(void)
 
@@ -281736,7 +281852,7 @@ void gui_mouse_pos_static_init(void)
  * Evidence: VA 0x0056ae50. Every screen in the game chains it — the racing menus, the
  *  multiplayer front end, the Carcyclopedia, options and save/load.
  *  Renamed from `FUN_0056ae50`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 * __thiscall gui_menu_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -281785,7 +281901,7 @@ undefined4 * __thiscall gui_menu_ctor(undefined4 *param_1,undefined4 param_2,und
  * Evidence: VA 0x0056aef0, slot 0 of vtable `0x0063d584`. It is what `gui_menu_destroy`
  *  reaches when it deletes a screen through its own vtable.
  *  Renamed from `FUN_0056aef0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 __thiscall gui_menu_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -281809,7 +281925,7 @@ undefined4 __thiscall gui_menu_scalar_deleting_dtor(undefined4 param_1,byte para
  * Evidence: VA 0x0056af10. `carcyclopedia_dtor` and `gui_mp_settings_dtor` both
  *  tail-call it exactly where the PS2 tail-calls `__dt__7GM_MenuFv`, which is what
  *  establishes its identity. Renamed from `FUN_0056af10`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_dtor(undefined4 *param_1)
 
@@ -281885,7 +282001,7 @@ void __fastcall gui_screen_design_table_load(int param_1)
  *  code. Two tags in the shipped file — `'gate'` (37x) and `'vers'` (1x) — have no arm here
  *  and are consumed by `gui_menu_build_components_from_design` instead.
  *  Renamed from `FUN_0056afb0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __fastcall gui_widget_create_from_design(int param_1,undefined4 *param_2,undefined1 param_3)
 
@@ -282796,7 +282912,7 @@ undefined4 stub_ret0_args20_0056c070(void)
  *  scalar-deleting symbol.
  * Evidence: VA 0x0056c080, the slot-0 entry of the base vtable `0x0063dbdc`.
  *  Renamed from `FUN_0056c080`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 * __thiscall gui_widget_scalar_deleting_dtor(undefined4 *param_1,byte param_2)
 
@@ -282820,7 +282936,7 @@ undefined4 * __thiscall gui_widget_scalar_deleting_dtor(undefined4 *param_1,byte
  * PS2 twin: none — PC-only. The framed-panel tags `'frac'`/`'frmt'` are absent from the PS2's
  *  complete 52-entry `GetType` roster.
  * Evidence: VA 0x0056c0a0. Renamed from `FUN_0056c0a0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __thiscall gui_widget_frame_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -282850,7 +282966,7 @@ undefined4 * __thiscall gui_widget_frame_ctor(undefined4 *param_1,undefined4 par
  * PS2 twin: none — PC-only.
  * Evidence: VA 0x0056c0f0, slot 0 of vtable `0x0063d77c`.
  *  Renamed from `FUN_0056c0f0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall gui_widget_rect_tex_file_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -282872,7 +282988,7 @@ undefined4 __thiscall gui_widget_rect_tex_file_scalar_deleting_dtor(undefined4 p
  * PS2 twin: none — PC-only.
  * Evidence: VA 0x0056c110, slot 0 of vtable `0x0063d7f4`.
  *  Renamed from `FUN_0056c110`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall gui_widget_rect_tex_alpha_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -282884,6 +283000,21 @@ undefined4 __thiscall gui_widget_rect_tex_alpha_scalar_deleting_dtor(undefined4 
   return param_1;
 }
 
+/*
+ * thunk_gui_widget_rect_tex_file_dtor — 5-byte jump thunk to
+ *   `gui_widget_rect_tex_file_dtor`.
+ * What it does: forwards to `gui_widget_rect_tex_file_dtor`; it is how the `'rcta'`
+ *   scalar-deleting destructor reaches the destructor body folded with `'rctf'`.
+ * Parameters / Returns: the target's; param_1 (undefined4 *) is `this` in ECX;
+ *   returns void.
+ * Evidence: VA 0x0056c130. Ghidra symbol dump: kind=thunk, size=5,
+ *   thunk_target=0x00570ec0. Byte-verified in Game.exe: `e9 8b 4d 00 00`
+ *   (`jmp rel32` -> 0x00570ec0) followed by `90 90 90` padding. Body check: INLINED.
+ *   One callsite: `gui_widget_rect_tex_alpha_scalar_deleting_dtor`.
+ * PS2 twin: none, PC-only like its target.
+ * Renamed from `thunk_FUN_00570ec0`.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
+ */
 void __fastcall thunk_gui_widget_rect_tex_file_dtor(undefined4 *param_1)
 
 {
@@ -282917,7 +283048,7 @@ void __fastcall thunk_gui_widget_rect_tex_file_dtor(undefined4 *param_1)
  * PS2 twin: the `if (0 < flag) __dl__FPv(this)` tail of `__dt__19GM_RectangleTextureFv` —
  *  CONFIRMED.
  * Evidence: VA 0x0056c140. Renamed from `FUN_0056c140`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall gui_widget_rect_tex_dynamic_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -282940,7 +283071,7 @@ undefined4 __thiscall gui_widget_rect_tex_dynamic_scalar_deleting_dtor(undefined
  *  the first three here and the delete test as
  *  `gui_widget_rect_tex_dynamic_scalar_deleting_dtor`.
  * Evidence: VA 0x0056c160. Renamed from `FUN_0056c160`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_rect_tex_dynamic_dtor(undefined4 *param_1)
 
@@ -282977,7 +283108,7 @@ void __fastcall gui_widget_rect_tex_dynamic_dtor(undefined4 *param_1)
  *  slot-0 symbol instead.
  * Evidence: VA 0x0056c1b0. Counted directly off the 53 vtables dumped from
  *  `.rdata 0x0063d59c..0x0063ddfc`. Renamed from `FUN_0056c1b0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_scalar_deleting_dtor_common(undefined4 param_1,byte param_2)
 
@@ -283009,7 +283140,7 @@ undefined4 __thiscall gui_widget_scalar_deleting_dtor_common(undefined4 param_1,
  *  `puVar2[1]` (the id), while `gui_menu_add_component_from_template` also writes
  *  `puVar2[5]` (y) from its float parameter.
  *  Renamed from `FUN_0056c1d0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 * __thiscall
 gui_menu_clone_component_under(int param_1,uint param_2,undefined4 *param_3,undefined4 param_4)
@@ -283244,7 +283375,7 @@ LAB_0056c479:
  *  also a ready-made map of the `GM_Component` subclasses. "Pridej" is Czech for "add" —
  *  the PC name states the behaviour rather than transliterating it (§3b).
  *  Renamed from `FUN_0056c600`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 float10 __thiscall
 gui_menu_add_component_from_template(int param_1,float param_2,uint param_3,undefined4 *param_4,int param_5,int param_6,
@@ -283485,7 +283616,7 @@ LAB_0056cb64:
  *  bodies.
  * Evidence: VA 0x0056cb80. The racing constructors always pass `5.0f`.
  *  Renamed from `FUN_0056cb80`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 float10 gui_menu_layout_add_vertical_space(float param_1,float param_2,int param_3,int param_4,int param_5,int param_6)
 
@@ -283533,7 +283664,7 @@ float10 gui_menu_layout_add_vertical_space(float param_1,float param_2,int param
  *  ids `0x44c`/`0x4b0`/`0x514` exactly where the PC calls this on the same three.
  * Evidence: VA 0x0056cc20. The PS2 additionally recurses into child components; the PC list
  *  is flat. Renamed from `FUN_0056cc20`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_delete_component(int param_1,int param_2)
 
@@ -283585,7 +283716,7 @@ void __thiscall gui_menu_delete_component(int param_1,int param_2)
  *  is `&gui_menu_i3d_draw_callback`, handed to an I3D object's vtable `+0x50` with message `4`
  *  inside `gui_mp_person_select_ctor`; it is only ever taken by address.
  *  Renamed from `FUN_0056cc90`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 gui_menu_i3d_draw_callback(int param_1)
 
@@ -283622,7 +283753,7 @@ undefined4 gui_menu_i3d_draw_callback(int param_1)
  *   the same value; `activeMenuWindow__7GM_Menu` is `g_gui_active_screen`.
  * Evidence: VA 0x0056ccc0, 5936 B vs 1488+1352+1388 B on PS2.
  *   Renamed from `FUN_0056ccc0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 float __fastcall gui_menu_execute_modal(int *param_1,undefined1 param_2)
 
@@ -284249,8 +284380,8 @@ LAB_0056e117:
  * PS2 twin: OPEN - see `gui_notice_panel_ctor`.
  * Evidence: VA 0x0056e3f0. The push/pop pair around the construction is what proves the role
  *  of the two `g_hud_flags` stack globals. Renamed from `FUN_0056e3f0`.
- *  ⚠️ This def lives in the CLOSED `g_menu.cpp` TU `[0x0056adf0, 0x00575c20)`.
- * Doc: `exe-re/structs/gui_screen.md` §10, `exe-re/structs/game_menus.md` §3.
+ *  ⚠️ This def lives in the CLOSED `g_menu.cpp` TU `[0x0056adc0, 0x00575c20)`.
+ * Doc: `exe-re/structs/gui_screen.md` §9, `exe-re/structs/game_menus.md` §6.
  */
 void __fastcall gui_notice_panel_present_once(undefined4 param_1,undefined4 param_2)
 
@@ -284452,7 +284583,7 @@ void __fastcall gui_menu_build_components_from_design(uint param_1)
  * PS2 twin: none as a separate symbol — the PS2 `Destroy` does both halves in one function.
  *  PC-only factoring; `gui_menu_dtor` needs the widgets gone without a self-delete.
  * Evidence: VA 0x0056e850. Renamed from `FUN_0056e850`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_free_components(int param_1)
 
@@ -284485,7 +284616,7 @@ void __fastcall gui_menu_free_components(int param_1)
  * Evidence: VA 0x0056e8a0. ⚠️ this is the function the existing registry rows call "the
  *  `GM_Menu` slot-2 default"; `carcyclopedia_on_close` and `gui_mp_person_select_on_close`
  *  chain it. Renamed from `FUN_0056e8a0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_destroy(undefined4 *param_1)
 
@@ -284519,7 +284650,7 @@ void __fastcall gui_menu_destroy(undefined4 *param_1)
  *  PS2 body is an EMPTY 8-byte stub while the PC base does real work — the gutted-on-PS2
  *  direction, seen from the PC side.
  * Evidence: VA 0x0056e8f0. Renamed from `FUN_0056e8f0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_on_close_child(int param_1)
 
@@ -284552,7 +284683,7 @@ void __fastcall gui_menu_on_close_child(int param_1)
  *  and slot 2 as the destroyer, which is what makes every screen's
  *  `(**(*this + 0x10))(this[0x11], n)` idiom read as "close me with result n".
  *  Renamed from `FUN_0056e930`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_close(int *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -284580,7 +284711,7 @@ void __thiscall gui_menu_close(int *param_1,undefined4 param_2,undefined4 param_
  *  past the SAME 700 ms blink threshold and both recurse into the parent under the SAME
  *  `0x10000` flag bit.
  * Evidence: VA 0x0056e960. Renamed from `FUN_0056e960`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_draw(int param_1)
 
@@ -284647,7 +284778,7 @@ void __fastcall gui_menu_draw(int param_1)
  *  helper pair, and the same menu-change sound on a focus change.
  * Evidence: VA 0x0056ea70. Every slot-5 override in the game calls this first and switches
  *  on its return value. Renamed from `FUN_0056ea70`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 int __thiscall
 gui_menu_tick(int param_1,uint param_2,undefined1 param_3,int param_4,int param_5,int param_6,
@@ -284814,7 +284945,7 @@ LAB_0056ed8c:
  * PS2 twin: none as a separate symbol — the PS2 folds the same walk into
  *  `Tick__7GM_MenuFiiiUiUiUiUi`. PC-only factoring.
  * Evidence: VA 0x0056eeb0. Renamed from `FUN_0056eeb0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_update_hover_focus(int param_1)
 
@@ -284866,7 +284997,7 @@ LAB_0056ef01:
  * PS2 twin: `ActivateByID__7GM_MenuFUi` — STRUCTURAL: same three
  *  steps, different focus bit and a shorter validity test on the PC.
  * Evidence: VA 0x0056ef20. Renamed from `FUN_0056ef20`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_activate_by_id(int param_1,undefined4 param_2)
 
@@ -284901,7 +285032,7 @@ void __thiscall gui_menu_activate_by_id(int param_1,undefined4 param_2)
  *  role and same fallback helper, but the focus bit differs (PC `comp+0x08 & 0x10` against
  *  PS2 `comp+0x04 & 0x80000000`).
  * Evidence: VA 0x0056ef60. Renamed from `FUN_0056ef60`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_activate_by_id_or_prev(int param_1,undefined4 param_2)
 
@@ -284933,7 +285064,7 @@ void __thiscall gui_menu_activate_by_id_or_prev(int param_1,undefined4 param_2)
  * Returns: void.
  * PS2 twin: none located — the PS2 spells this inline as `ActivateByID(-1)`-style code.
  * Evidence: VA 0x0056efa0. Renamed from `FUN_0056efa0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_clear_focus(int param_1)
 
@@ -284957,7 +285088,7 @@ void __fastcall gui_menu_clear_focus(int param_1)
  * Returns: void.
  * PS2 twin: none located — the PS2 folds the equivalent guard into `Tick`.
  * Evidence: VA 0x0056efc0. Renamed from `FUN_0056efc0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_refocus_if_disabled(int param_1)
 
@@ -284986,7 +285117,7 @@ void __fastcall gui_menu_refocus_if_disabled(int param_1)
  *  `OnCreate__19GM_ChampionshipRaceFv` does `SetText(0x4b0, buf)`, and the PC calls this
  *  function on exactly those two ids with exactly those `sprintf` buffers.
  * Evidence: VA 0x0056eff0. Renamed from `FUN_0056eff0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 __thiscall gui_menu_set_component_text(int param_1,int param_2,undefined4 param_3)
 
@@ -285020,7 +285151,7 @@ undefined4 __thiscall gui_menu_set_component_text(int param_1,int param_2,undefi
  *  independent callsites — so this one is `SetString` by elimination, not by a body match.
  * Evidence: VA 0x0056f030. Eight callers, all passing stack buffers.
  *  Renamed from `FUN_0056f030`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 __thiscall gui_menu_set_component_string(int param_1,int param_2,undefined4 param_3)
 
@@ -285048,7 +285179,7 @@ undefined4 __thiscall gui_menu_set_component_string(int param_1,int param_2,unde
  * PS2 twin: `GetDisabled__7GM_MenuFUi` — CONFIRMED (the PS2 tests
  *  its own `0x20` bit and returns the same sense its setter writes).
  * Evidence: VA 0x0056f070. Renamed from `FUN_0056f070`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 uint __thiscall gui_menu_get_component_enabled(int param_1,int param_2)
 
@@ -285081,7 +285212,7 @@ uint __thiscall gui_menu_get_component_enabled(int param_1,int param_2)
  * Evidence: VA 0x0056f0a0. Bit 0 is proven "selectable" independently of the PS2 by all
  *  four focus walkers, each of which skips any widget with `(flags & 1) == 0`.
  *  Renamed from `FUN_0056f0a0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_set_component_enabled(int param_1,int param_2,char param_3)
 
@@ -285128,7 +285259,7 @@ void __thiscall gui_menu_set_component_enabled(int param_1,int param_2,char para
  *  non-zero. Naming the PC one `visible` records what the parameter measures rather than
  *  transliterating the PS2 symbol (§3b).
  * Evidence: VA 0x0056f100. Renamed from `FUN_0056f100`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_set_component_visible(int param_1,int param_2,char param_3)
 
@@ -285170,7 +285301,7 @@ void __thiscall gui_menu_set_component_visible(int param_1,int param_2,char para
  * PS2 twin: `GetText__7GM_MenuFUi` — STRUCTURAL (the PS2 dispatches
  *  through the widget virtual `+0x4c`; the PC reads the shared field).
  * Evidence: VA 0x0056f160. Renamed from `FUN_0056f160`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 __thiscall gui_menu_get_component_text_ptr(int param_1,int param_2)
 
@@ -285203,7 +285334,7 @@ undefined4 __thiscall gui_menu_get_component_text_ptr(int param_1,int param_2)
  *  name): `gui_race_circuit_select_ctor` feeds it both a circuit name and a
  *  `circuit%d.bmp`.
  * Evidence: VA 0x0056f190. Renamed from `FUN_0056f190`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_set_component_text_ptr(int param_1,int param_2,undefined4 param_3)
 
@@ -285232,7 +285363,7 @@ void __thiscall gui_menu_set_component_text_ptr(int param_1,int param_2,undefine
  * PS2 twin: `GetFloat__7GM_MenuFUi` — STRUCTURAL.
  * Evidence: VA 0x0056f1c0. This getter is what proves `+0x2c` is a float rather than an
  *  integer flag. Renamed from `FUN_0056f1c0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 float10 __thiscall gui_menu_get_component_float(int param_1,int param_2)
 
@@ -285263,7 +285394,7 @@ float10 __thiscall gui_menu_get_component_float(int param_1,int param_2)
  *  builds' `SetBool`/`SetFloat` split collapses into one PC function.
  * Evidence: VA 0x0056f1f0. The getter at `0x0056f1c0` returns `*(float *)(comp + 0x2c)`,
  *  which is what types the field. Renamed from `FUN_0056f1f0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_set_component_float(int param_1,int param_2,undefined4 param_3)
 
@@ -285291,7 +285422,7 @@ void __thiscall gui_menu_set_component_float(int param_1,int param_2,undefined4 
  * PS2 twin: none — `GM_Menu` has no `GetPointer` on the PS2; the getter exists only on
  *  `GM_Component`. STRUCTURAL as the mirror of the setter above.
  * Evidence: VA 0x0056f220. Renamed from `FUN_0056f220`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 __thiscall gui_menu_get_component_pointer(int param_1,int param_2)
 
@@ -285320,7 +285451,7 @@ undefined4 __thiscall gui_menu_get_component_pointer(int param_1,int param_2)
  *  the same field ORDER within the record, but the PS2 dispatches through the widget's own
  *  virtual (`+0x68`) where the PC writes the shared field directly.
  * Evidence: VA 0x0056f250. Renamed from `FUN_0056f250`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_set_component_pointer(int param_1,int param_2,undefined4 param_3)
 
@@ -285348,7 +285479,7 @@ void __thiscall gui_menu_set_component_pointer(int param_1,int param_2,undefined
  * PS2 twin: `GetDword__7GM_MenuFUi` — CONFIRMED: the lap-count read
  *  in `gui_race_setup_tick` matches the PS2 `GetDword(0x1dd)` exactly.
  * Evidence: VA 0x0056f280. Renamed from `FUN_0056f280`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 __thiscall gui_menu_get_component_dword(int param_1,int param_2)
 
@@ -285376,7 +285507,7 @@ undefined4 __thiscall gui_menu_get_component_dword(int param_1,int param_2)
  * PS2 twin: `SetDword__7GM_MenuFUiUi` — CONFIRMED: matched on widget
  *  ids `0x44c`, `0x514` and `0x1dd` against the PS2 championship and race constructors.
  * Evidence: VA 0x0056f2b0. Renamed from `FUN_0056f2b0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_set_component_dword(int param_1,int param_2,undefined4 param_3)
 
@@ -285404,7 +285535,7 @@ void __thiscall gui_menu_set_component_dword(int param_1,int param_2,undefined4 
  * PS2 twin: `GetTextID__7GM_MenuFUi` — CONFIRMED.
  * Evidence: VA 0x0056f2e0. `gui_race_setup_tick` uses it to decide which way to flip the
  *  track-mode label. Renamed from `FUN_0056f2e0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 undefined4 __thiscall gui_menu_get_component_text_id(int param_1,int param_2)
 
@@ -285437,7 +285568,7 @@ undefined4 __thiscall gui_menu_get_component_text_id(int param_1,int param_2)
  *  call-for-call against `OnCreate__15GM_ChampionshipFv`, which does `SetTextID(100, ...)`
  *  then `SetTextID(0x1b8, 0x1b8)` exactly where the PC does.
  * Evidence: VA 0x0056f310. Renamed from `FUN_0056f310`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_set_component_text_id(int param_1,int param_2,undefined4 param_3)
 
@@ -285470,7 +285601,7 @@ void __thiscall gui_menu_set_component_text_id(int param_1,int param_2,undefined
  * Evidence: VA 0x0056f360. `gui_race_car_model_tick` calls it on widget `1000` after
  *  repointing that widget at a new `car%2d.bmp`.
  *  Renamed from `FUN_0056f360`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __thiscall gui_menu_force_update_component(int param_1,int param_2)
 
@@ -285500,7 +285631,7 @@ void __thiscall gui_menu_force_update_component(int param_1,int param_2)
  * Evidence: VA 0x0056f390. Every racing screen constructor ends with this call after it has
  *  finished cloning and labelling rows.
  *  Renamed from `FUN_0056f390`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 void __fastcall gui_menu_force_update_all(int param_1)
 
@@ -285532,7 +285663,7 @@ void __fastcall gui_menu_force_update_all(int param_1)
  *  only `'swnd'` and `'lstc'` override it on the PC, and only
  *  `GM_WindowScroll` and `GM_ListCars` have a `Tick` on the PS2 — 2 for 2 over a closed set.
  *  Renamed from `FUN_0056f3c0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __thiscall gui_menu_tick_components(int param_1,undefined4 param_2)
 
@@ -285563,7 +285694,7 @@ void __thiscall gui_menu_tick_components(int param_1,undefined4 param_2)
  * Evidence: VA 0x0056f3f0. Always paired with `gui_menu_set_component_option_list` at the same
  *  widget id — `gui_mp_settings_ctor` does exactly that for ids 0xb, 0xc and 0x32c..0x330.
  *  Renamed from `FUN_0056f3f0`.
- * Doc: `exe-re/structs/gui_widget.md` §6.
+ * Doc: `exe-re/structs/gui_widget.md` §8.
  */
 void gui_menu_set_component_text_from_option_list(undefined4 param_1,int param_2,int param_3)
 
@@ -285600,7 +285731,7 @@ void gui_menu_set_component_text_from_option_list(undefined4 param_1,int param_2
  *  sites, every one immediately followed by
  *  `gui_menu_set_component_text_from_option_list` at the same id.
  *  Renamed from `FUN_0056f430`.
- * Doc: `exe-re/structs/gui_widget.md` §6.
+ * Doc: `exe-re/structs/gui_widget.md` §8.
  */
 void gui_menu_set_component_option_list(undefined4 param_1,undefined4 param_2)
 
@@ -285627,7 +285758,7 @@ void gui_menu_set_component_option_list(undefined4 param_1,undefined4 param_2)
  * Evidence: VA 0x0056f450. Used by the racing constructors to read a widget's geometry
  *  (`+0x14` y, `+0x1c` height) when stacking cloned rows.
  *  Renamed from `FUN_0056f450`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 int __thiscall gui_menu_find_component_by_id(int param_1,int param_2)
 
@@ -285658,7 +285789,7 @@ int __thiscall gui_menu_find_component_by_id(int param_1,int param_2)
  *  reaches it from scancode `0xc8` exactly where the PS2 `Tick` reaches it from
  *  `0x48`/`0xc8`.
  * Evidence: VA 0x0056f480. Renamed from `FUN_0056f480`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 int __thiscall gui_menu_find_component_by_id_prev(int param_1,uint param_2)
 
@@ -285719,7 +285850,7 @@ int __thiscall gui_menu_find_component_by_id_prev(int param_1,uint param_2)
  * Evidence: VA 0x0056f510. The PS2 additionally requires flags `0x10` and `0x8000`; the PC
  *  keeps only bit 0, its own "selectable" bit.
  *  Renamed from `FUN_0056f510`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 int __thiscall gui_menu_find_component_by_id_next(int param_1,uint param_2)
 
@@ -285776,7 +285907,7 @@ int __thiscall gui_menu_find_component_by_id_next(int param_1,uint param_2)
  * PS2 twin: none located — the mirror of `gui_menu_find_next_selectable_in_order`.
  * Evidence: VA 0x0056f5a0. Reached from `gui_menu_tick` scancodes `0x0f` (shift-tab) and
  *  `0xcb` (left arrow). Renamed from `FUN_0056f5a0`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 int __thiscall gui_menu_find_prev_selectable_in_order(int param_1,int param_2)
 
@@ -285821,7 +285952,7 @@ int __thiscall gui_menu_find_prev_selectable_in_order(int param_1,int param_2)
  * Evidence: VA 0x0056f610. Reached from `gui_menu_tick` scancodes `0x0f` (tab) and `0xcd`
  *  (right arrow); `gui_race_car_model_ctor` uses it to seed the initial focus.
  *  Renamed from `FUN_0056f610`.
- * Doc: `exe-re/structs/gui_screen.md` §7.
+ * Doc: `exe-re/structs/gui_screen.md` §3.
  */
 int __thiscall gui_menu_find_next_selectable_in_order(int param_1,int param_2)
 
@@ -285863,7 +285994,7 @@ int __thiscall gui_menu_find_next_selectable_in_order(int param_1,int param_2)
  * Evidence: VA 0x0056f680. Sole consumer is `gui_widget_line_draw`. First entry of the PC
  *  primitive block, which order-aligns 1:1 with the PS2 block at 0x002e2c40.
  *  Renamed from `FUN_0056f680`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void gui_draw_line(float param_1,float param_2,float param_3,float param_4)
 
@@ -285913,7 +286044,7 @@ void gui_draw_line(float param_1,float param_2,float param_3,float param_4)
  *  `y + h` on the third, closed strip.
  * Evidence: VA 0x0056f720. Consumers: the rect, checkbox, combo, scrollbar and resize-grip
  *  draws. Renamed from `FUN_0056f720`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void gui_draw_rect_outline(float param_1,float param_2,float param_3,float param_4)
 
@@ -286004,7 +286135,7 @@ void gui_draw_rect_outline(float param_1,float param_2,float param_3,float param
  *  immediately precedes `call 0x56f880` at 0x00573522, with `xor edx, edx` before it.
  *  Twelve consumers — the busiest primitive in the TU.
  *  Renamed from `FUN_0056f880`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void __fastcall
 gui_draw_rect_filled(undefined4 param_1,undefined4 param_2,float param_3,float param_4,float param_5,
@@ -286084,7 +286215,7 @@ gui_draw_rect_filled(undefined4 param_1,undefined4 param_2,float param_3,float p
  * Evidence: VA 0x0056f9a0. Sole consumer is `gui_widget_progress_bar_track_draw`, which calls
  *  it twice: once at 1.0 for the track and once at the value.
  *  Renamed from `FUN_0056f9a0`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void __fastcall
 gui_draw_rect_filled_partial(undefined4 param_1,undefined4 param_2,float param_3,float param_4,float param_5,
@@ -286162,7 +286293,7 @@ gui_draw_rect_filled_partial(undefined4 param_1,undefined4 param_2,float param_3
  *  assignment — the second colour lands on `local_50`/`local_10` here and on
  *  `local_30`/`local_10` there. Sole consumer is `gui_widget_rect_gradient_h_draw`, whose
  *  designer tag is `'rctg'`. Renamed from `FUN_0056fad0`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void __fastcall
 gui_draw_rect_gradient_h(undefined4 param_1,undefined4 param_2,float param_3,float param_4,float param_5,
@@ -286242,7 +286373,7 @@ gui_draw_rect_gradient_h(undefined4 param_1,undefined4 param_2,float param_3,flo
  * Evidence: VA 0x0056fbf0. Sole consumer is `gui_widget_rect_gradient_v_draw`, designer tag
  *  `'rctv'` — the tag corroborates the axis the disassembly measured.
  *  Renamed from `FUN_0056fbf0`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void __fastcall
 gui_draw_rect_gradient_v(undefined4 param_1,undefined4 param_2,float param_3,float param_4,float param_5,
@@ -286327,7 +286458,7 @@ gui_draw_rect_gradient_v(undefined4 param_1,undefined4 param_2,float param_3,flo
  *  the progress bar and from the net-player row, `mov ecx, 1` once — so the even-polarity
  *  outer branch has no traced caller.
  *  Renamed from `FUN_0056fd10`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void __thiscall gui_draw_rect_double_bevel(uint param_1,float param_2,float param_3,float param_4,float param_5)
 
@@ -286554,7 +286685,7 @@ void __thiscall gui_draw_rect_double_bevel(uint param_1,float param_2,float para
  *  never written.
  * Evidence: VA 0x005701f0. Consumers: `gui_widget_triangle_draw` and the carousel arrows.
  *  Renamed from `FUN_005701f0`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void __fastcall
 gui_draw_triangle_dir(undefined4 param_1,undefined4 param_2,float param_3,float param_4,float param_5,
@@ -286666,7 +286797,7 @@ switchD_005701fc_default:
  *  (PS2 `igraph+0x20`/`+0x24`, PC `g_engine+0x6c`/`+0x70`).
  * Evidence: VA 0x00570400. Consumers: `gui_widget_clip_draw`, `gui_widget_window_scroll_draw`
  *  and `gui_widget_frame_draw`. Renamed from `FUN_00570400`.
- * Doc: `exe-re/structs/gui_widget.md` §5.
+ * Doc: `exe-re/structs/gui_widget.md` §7.
  */
 void __fastcall gui_set_clip_rect(uint param_1,uint param_2,undefined4 param_3,undefined4 param_4)
 
@@ -286724,7 +286855,7 @@ void __fastcall gui_set_clip_rect(uint param_1,uint param_2,undefined4 param_3,u
  *  self-inserts into the parent's child vector — neither of which the PC has.
  * Evidence: VA 0x005704b0. 37 of the 53 factory arms call it directly.
  *  Renamed from `FUN_005704b0`.
- * Doc: `exe-re/structs/gui_widget.md` §2.
+ * Doc: `exe-re/structs/gui_widget.md` §1.
  */
 undefined4 * __thiscall gui_widget_ctor(undefined4 *param_1,undefined4 *param_2,undefined4 param_3)
 
@@ -286777,7 +286908,7 @@ undefined4 * __thiscall gui_widget_ctor(undefined4 *param_1,undefined4 *param_2,
  * Evidence: VA 0x00570580. Both `gui_menu_add_component_from_template` and
  *  `gui_menu_clone_component_under` build their clones through it.
  *  Renamed from `FUN_00570580`.
- * Doc: `exe-re/structs/gui_widget.md` §2.
+ * Doc: `exe-re/structs/gui_widget.md` §1.
  */
 void __thiscall gui_widget_copy_ctor_below(undefined4 *param_1,int param_2)
 
@@ -286813,7 +286944,7 @@ void __thiscall gui_widget_copy_ctor_below(undefined4 *param_1,int param_2)
  *  reaches through `GetClientOrigin` into this one function.
  * Evidence: VA 0x005705f0. Slot 4 of ALL 53 widget vtables — no class overrides it in this TU.
  *  Renamed from `FUN_005705f0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 uint __thiscall gui_widget_is_point_inside(int param_1,float param_2,float param_3)
 
@@ -286871,7 +287002,7 @@ LAB_00570670:
  *  memory-card background, read) and `GM_WindowTutorial` (read) are PS2-only. A chrome-less
  *  filled window exists on neither build but the PC.
  * Evidence: VA 0x00570680. Renamed from `FUN_00570680`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 void __thiscall gui_widget_window_draw(int param_1,undefined4 param_2)
 
@@ -286924,7 +287055,7 @@ void __thiscall gui_widget_window_draw(int param_1,undefined4 param_2)
  *  origin `+0x3c` by `scaleY*40.0`, which is exactly what
  *  `GetClientOrigin__9GM_WindowFRfRf` returns.
  *  Renamed from `FUN_00570740`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_window_titled_draw(int param_1,undefined4 param_2)
 
@@ -286984,7 +287115,7 @@ void __thiscall gui_widget_window_titled_draw(int param_1,undefined4 param_2)
  * PS2 twin: none — PC-only. Slot 6 has no PS2 virtual.
  * Evidence: VA 0x005708f0. Slot 6 of the titled window and both framed-panel tags.
  *  Renamed from `FUN_005708f0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall
 gui_widget_window_drag_mouse(int param_1,int param_2,int param_3,undefined4 param_4,byte param_5)
@@ -287019,7 +287150,7 @@ gui_widget_window_drag_mouse(int param_1,int param_2,int param_3,undefined4 para
  *  body — it paints a full-screen `textureMemory` background with no framed panel, no corner
  *  ornament and no clip reset.
  * Evidence: VA 0x00570950. Renamed from `FUN_00570950`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 void __fastcall gui_widget_frame_draw(int param_1)
 
@@ -287057,7 +287188,7 @@ void __fastcall gui_widget_frame_draw(int param_1)
  *  `'trib'` widgets that the designer places, visible in `menu.def` design 0x0c.
  * Evidence: VA 0x00570a90, vtable `0x0063d63c`, `operator_new(0x48)`.
  *  Renamed from `FUN_00570a90`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_window_scroll_draw(int param_1)
 
@@ -287093,7 +287224,7 @@ void __fastcall gui_widget_window_scroll_draw(int param_1)
  * Returns: undefined4 — always 0.
  * PS2 twin: none — PC-only. Slot 6 has no PS2 virtual at all.
  * Evidence: VA 0x00570b10. Renamed from `FUN_00570b10`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall
 gui_widget_window_scroll_mouse(int param_1,undefined4 param_2,int param_3,undefined4 param_4,byte param_5)
@@ -287127,7 +287258,7 @@ gui_widget_window_scroll_mouse(int param_1,undefined4 param_2,int param_3,undefi
  *  widgets in the TU that implement slot 7 — the other is the car carousel, and those are
  *  exactly the two classes with a PS2 `Tick`.
  *  Renamed from `FUN_00570b50`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __thiscall gui_widget_window_scroll_tick(int param_1,uint param_2)
 
@@ -287181,7 +287312,7 @@ LAB_00570be8:
  *  `+0x48`; the PC hardcodes 10.0 and exposes the operation as a free function, because PC
  *  `'swnd'` slot 5 is the framework stub — scroll keys are handled by the SCREENS here.
  * Evidence: VA 0x00570c10. Renamed from `FUN_00570c10`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_window_scroll_page_up(int param_1)
 
@@ -287198,7 +287329,7 @@ void __fastcall gui_widget_window_scroll_page_up(int param_1)
  * PS2 twin: the DOWN arm of `Key__15GM_WindowScrollFUiUi` — STRUCTURAL, the other half of the
  *  same 1 -> 2 fold as `gui_widget_window_scroll_page_up`.
  * Evidence: VA 0x00570c20. Renamed from `FUN_00570c20`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_window_scroll_page_down(int param_1)
 
@@ -287227,7 +287358,7 @@ void __fastcall gui_widget_window_scroll_page_down(int param_1)
  * of `gui_load_game_tick`, which hit-tests component 4 and passes the WHEEL delta. ⚠️ PC/PS2 field
  * roles are SWAPPED for this class: PC `+0x44` is the target and `+0x40` the current value; on the
  * PS2 `+0x40` is the target and `+0x44` the current.
- * Doc: `exe-re/structs/gui_widget.md` §7.
+ * Doc: `exe-re/structs/gui_widget.md` §10.
  * Renamed from `FUN_00570c30`.
  */
 void __thiscall gui_widget_window_scroll_by(int param_1,float param_2)
@@ -287250,7 +287381,7 @@ void __thiscall gui_widget_window_scroll_by(int param_1,float param_2)
  *  through vtable `+0x50` (`ScrollToShow`, an 8-byte stub on the base) and called directly
  *  here. The PS2 margin is 2.0 where the PC uses 5.0.
  * Evidence: VA 0x00570c40. Renamed from `FUN_00570c40`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_window_scroll_to_show(int param_1,float param_2,float param_3)
 
@@ -287283,7 +287414,7 @@ void __thiscall gui_widget_window_scroll_to_show(int param_1,float param_2,float
  *  The shipped `tables/menu.def` proves the sentinel arm is live: design 0x0c carries exactly
  *  one `'orez'` record with `w = -1, h = -1`, and design 0x13 one with a real 360x180 rect.
  *  Renamed from `FUN_00570c90`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_clip_draw(int param_1)
 
@@ -287336,7 +287467,7 @@ void __fastcall gui_widget_clip_draw(int param_1)
  * Evidence: VA 0x00570d40, tag `'view'`, vtable `0x0063d5ec`. `tables/menu.def` design 0x0d
  *  ("Select Car") places it at 100,200 sized 600x350 — the car preview window.
  *  Renamed from `FUN_00570d40`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_viewport_draw(int param_1)
 
@@ -287363,7 +287494,7 @@ void __fastcall gui_widget_viewport_draw(int param_1)
  *  NOT that sibling pair.
  * Evidence: VA 0x00570d80, vtable `0x0063d704`. 10 uses in `tables/menu.def`.
  *  Renamed from `FUN_00570d80`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_rect_outline_draw(int param_1)
 
@@ -287398,7 +287529,7 @@ void __fastcall gui_widget_rect_outline_draw(int param_1)
  *  52-entry roster and it is already claimed by the `'rctt'` family.
  * Evidence: VA 0x00570e30, slot 2 of BOTH `'rctf'` (vtable `0x0063d77c`) and `'rcta'`
  *  (`0x0063d7f4`). Renamed from `FUN_00570e30`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_rect_tex_draw(int param_1)
 
@@ -287430,7 +287561,7 @@ void __fastcall gui_widget_rect_tex_draw(int param_1)
  * Evidence: VA 0x00570e90, slot 8 of tag `'rctf'`. The only difference from
  *  `gui_widget_rect_tex_alpha_set_text` is that mode literal — the two tags are one class
  *  parameterised by it. Renamed from `FUN_00570e90`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_rect_tex_file_set_text(int param_1,undefined4 param_2)
 
@@ -287458,7 +287589,7 @@ void __thiscall gui_widget_rect_tex_file_set_text(int param_1,undefined4 param_2
  *  `thunk_gui_widget_rect_tex_file_dtor` (0x0056c130). The intermediate vtable this
  *  body installs is `'rctf'`'s, which is the tell that the fold happened.
  *  Renamed from `FUN_00570ec0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_rect_tex_file_dtor(undefined4 *param_1)
 
@@ -287495,7 +287626,7 @@ void __fastcall gui_widget_rect_tex_file_dtor(undefined4 *param_1)
  * PS2 twin: none — PC-only.
  * Evidence: VA 0x00570f20, slot 8 of tag `'rcta'`. 3 uses in `tables/menu.def`.
  *  Renamed from `FUN_00570f20`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_rect_tex_alpha_set_text(int param_1,undefined4 param_2)
 
@@ -287522,7 +287653,7 @@ void __thiscall gui_widget_rect_tex_alpha_set_text(int param_1,undefined4 param_
  * PS2 twin: none — PC-only, same evidence as the horizontal sibling.
  * Evidence: VA 0x00570f50, tag `'rctv'` (rect vertical), vtable `0x0063d754`.
  *  Renamed from `FUN_00570f50`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_rect_gradient_v_draw(int param_1)
 
@@ -287546,7 +287677,7 @@ void __fastcall gui_widget_rect_gradient_v_draw(int param_1)
  * Evidence: VA 0x00570fa0, tag `'rctg'` (rect gradient), vtable `0x0063d7a4`. The alpha
  *  treatment is what separates it from its vertical sibling, which uses `xor` instead.
  *  Renamed from `FUN_00570fa0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_rect_gradient_h_draw(int param_1)
 
@@ -287571,7 +287702,7 @@ void __fastcall gui_widget_rect_gradient_h_draw(int param_1)
  *  `+0x38`. Tag `'rctt'` on both.
  * Evidence: VA 0x00570ff0, vtable `0x0063d7cc`. 8 uses in `tables/menu.def`.
  *  Renamed from `FUN_00570ff0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_rect_tex_dynamic_draw(int param_1)
 
@@ -287593,7 +287724,7 @@ void __fastcall gui_widget_rect_tex_dynamic_draw(int param_1)
  * PS2 twin: none as a separate function — the PS2 releases inside
  *  `SetString__19GM_RectangleTextureFPUc`. A PC-only factoring split, not a feature.
  * Evidence: VA 0x00571030, slot 3. Renamed from `FUN_00571030`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_rect_tex_dynamic_force_update(int param_1)
 
@@ -287625,7 +287756,7 @@ void __fastcall gui_widget_rect_tex_dynamic_force_update(int param_1)
  *  destructor. That factoring split is what separates this class from the file-loading
  *  `'rctf'`/`'rcta'` pair.
  * Evidence: VA 0x00571070, slot 8. Renamed from `FUN_00571070`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_rect_tex_dynamic_set_text(int param_1,undefined4 param_2)
 
@@ -287655,7 +287786,7 @@ void __thiscall gui_widget_rect_tex_dynamic_set_text(int param_1,undefined4 para
  *  line primitive and pick the colour from a flag. Tag `'line'` on both builds.
  * Evidence: VA 0x005710b0, vtable `0x0063d95c`. 10 uses in `tables/menu.def`.
  *  Renamed from `FUN_005710b0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_line_draw(int param_1)
 
@@ -287677,7 +287808,7 @@ void __fastcall gui_widget_line_draw(int param_1)
  *  no meaning without a pointer.
  * Evidence: VA 0x005710f0, vtable `0x0063d81c`. One use in `tables/menu.def`.
  *  Renamed from `FUN_005710f0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_resize_grip_draw(int param_1)
 
@@ -287702,7 +287833,7 @@ void __fastcall gui_widget_resize_grip_draw(int param_1)
  * Returns: undefined4 — always 0.
  * PS2 twin: none — PC-only.
  * Evidence: VA 0x00571170. Renamed from `FUN_00571170`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall
 gui_widget_resize_grip_mouse(int param_1,int param_2,int param_3,undefined4 param_4,uint param_5)
@@ -287752,7 +287883,7 @@ gui_widget_resize_grip_mouse(int param_1,int param_2,int param_3,undefined4 para
  *  folds the alignment into a flag byte (`bit0` = focus, `2` = centre, `4` = right) where the
  *  PC bakes the centre constant in. 132 uses in the shipped `tables/menu.def`.
  * Evidence: VA 0x00571250. Renamed from `FUN_00571250`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_item_draw(int param_1,uint param_2)
 
@@ -287800,7 +287931,7 @@ void __thiscall gui_widget_item_draw(int param_1,uint param_2)
  * PS2 twin: `Draw__14GM_MenuItemMemFUi` — body-identical to the PS2 `GM_MenuItem` draw, which
  *  reads `+0x0c` after `SetText` has repointed it at the buffer.
  * Evidence: VA 0x005712c0, class size 0x138. Renamed from `FUN_005712c0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_item_buffered_draw(int param_1)
 
@@ -287849,7 +287980,7 @@ void __fastcall gui_widget_item_buffered_draw(int param_1)
  *  `0x4af3f8` = `"+"` at align 4, PC `s_minus_0064d82c` and `s_plus_0064dc9c`.
  * Evidence: VA 0x00571330. `menu.def` design 0x1b labels its one instance *"Laps:"*.
  *  Renamed from `FUN_00571330`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_item_num_draw(int param_1,uint param_2)
 
@@ -287911,7 +288042,7 @@ void __thiscall gui_widget_item_num_draw(int param_1,uint param_2)
  *  (0x1c, 0x9c, 0x0c, 0x4a, 0x0d, 0x4e). The PS2 does the whole increment/wrap/reformat in
  *  the widget; the PC splits the work with the screen, which is what the -2 encodes.
  * Evidence: VA 0x00571510. Renamed from `FUN_00571510`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall gui_widget_item_num_key(int param_1,undefined4 param_2,int param_3)
 
@@ -287945,7 +288076,7 @@ undefined4 __thiscall gui_widget_item_num_key(int param_1,undefined4 param_2,int
  *  every handler in it is a PC addition.
  * Evidence: VA 0x00571560, `'iten'` vtable slot 6.
  *  Renamed from `FUN_00571560`.
- * Doc: `exe-re/structs/gui_widget.md` §3, §6b.
+ * Doc: `exe-re/structs/gui_widget.md` §5, §8b.
  */
 undefined4 __thiscall
 gui_widget_item_num_mouse(int param_1,int param_2,undefined4 param_3,undefined4 param_4,byte param_5)
@@ -287977,7 +288108,7 @@ gui_widget_item_num_mouse(int param_1,int param_2,undefined4 param_3,undefined4 
  *  uses `'~'` as a LINE BREAK with a hit box of `h * lines`.
  * Evidence: VA 0x005715a0, 26 uses in `menu.def`.
  *  Renamed from `FUN_005715a0`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 undefined4 * __thiscall gui_widget_select_item_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -287999,7 +288130,7 @@ undefined4 * __thiscall gui_widget_select_item_ctor(undefined4 *param_1,undefine
  * PS2 twin: none — `Draw__15GM_ButtonSelectFUi` is a plain two-branch text draw with no prefix
  *  skipping and no highlight bar.
  * Evidence: VA 0x005715d0. Renamed from `FUN_005715d0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_select_item_draw(int param_1)
 
@@ -288066,7 +288197,7 @@ LAB_00571671:
  *  `IsOverActive` all disagree with `'seli'`, so the position belongs to the class and the
  *  body does not.
  * Evidence: VA 0x005716a0. Renamed from `FUN_005716a0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_select_item_key(int param_1,undefined4 param_2,int param_3)
 
@@ -288090,7 +288221,7 @@ undefined4 __thiscall gui_widget_select_item_key(int param_1,undefined4 param_2,
  * PS2 twin: none — slot 6 is a PC addition (see `gui_widget_item_num_mouse`).
  * Evidence: VA 0x005716d0. The `0x7d3` special case is worth an in-game look.
  *  Renamed from `FUN_005716d0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_select_item_mouse(int param_1)
 
@@ -288119,7 +288250,7 @@ undefined4 __thiscall gui_widget_select_item_mouse(int param_1)
  *  fields into the single field at `+0x38`.
  * Evidence: VA 0x00571700, 2 uses in `menu.def`.
  *  Renamed from `FUN_00571700`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __thiscall gui_widget_race_round_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -288156,7 +288287,7 @@ undefined4 * __thiscall gui_widget_race_round_ctor(undefined4 *param_1,undefined
  *  stored field `+0x2c` and the recompute reads it from vtable slot 3, so the PC function has
  *  no parameter to name. That is why this carries the slot verb, not `set_bool`.
  * Evidence: VA 0x00571770, `'rari'` vtable `0x0063dc2c` slot 3. Renamed from `FUN_00571770`.
- * Doc: `exe-re/structs/gui_widget.md` §3, §4.
+ * Doc: `exe-re/structs/gui_widget.md` §5, §6.
  */
 void __fastcall gui_widget_race_round_force_update(int param_1)
 
@@ -288189,7 +288320,7 @@ void __fastcall gui_widget_race_round_force_update(int param_1)
  * PS2 twin: `Draw__16GM_RaceRoundItemFUi` — two `OutText` calls, the second at
  *  `align | 4`, exactly as here.
  * Evidence: VA 0x005717c0. Renamed from `FUN_005717c0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_race_round_draw(int param_1,uint param_2)
 
@@ -288246,7 +288377,7 @@ void __thiscall gui_widget_race_round_draw(int param_1,uint param_2)
  *  the vtable install. The opaque-colour default is a PC addition: the PS2 hardcodes its
  *  colours inside `Draw` instead of reading a field.
  * Evidence: VA 0x005718d0. Renamed from `FUN_005718d0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __thiscall gui_widget_text_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -288275,7 +288406,7 @@ undefined4 * __thiscall gui_widget_text_ctor(undefined4 *param_1,undefined4 para
  *  0/2/4 AT RUNTIME from flag bits 0x40 and 0x80 of `+0x04`; the PC compiled the constant in
  *  and shipped one class per alignment, so no single-body agreement is assertable.
  * Evidence: VA 0x00571910, 146 uses. Renamed from `FUN_00571910`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8d.
  */
 void __fastcall gui_widget_text_left_draw(int param_1)
 
@@ -288312,7 +288443,7 @@ void __fastcall gui_widget_text_left_draw(int param_1)
  *  PS2's single runtime-dispatched `Draw__13GM_StaticTextFUi`. The twin line belongs on the
  *  `'stxt'` realisation, not here.
  * Evidence: VA 0x00571960, 44 uses. Renamed from `FUN_00571960`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8d.
  */
 void __fastcall gui_widget_text_center_draw(int param_1)
 
@@ -288348,7 +288479,7 @@ void __fastcall gui_widget_text_center_draw(int param_1)
  * PS2 twin: no own symbol — the align-4 arm of `Draw__13GM_StaticTextFUi` (see the `'ctxt'`
  *  sibling).
  * Evidence: VA 0x005719b0, 8 uses. Renamed from `FUN_005719b0`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8d.
  */
 void __fastcall gui_widget_text_right_draw(int param_1)
 
@@ -288386,7 +288517,7 @@ void __fastcall gui_widget_text_right_draw(int param_1)
  *  after `SetText` repointed it at its own buffer at `+0x3c`.
  * Evidence: VA 0x00571a00, class size 0x138, 16 uses.
  *  Renamed from `FUN_00571a00`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_text_buffered_draw(int param_1)
 
@@ -288468,7 +288599,7 @@ LAB_00571a9a:
  *  a different function in a different slot).
  * Evidence: VA 0x00571ad0; `'mtxt'` vtable `0x0063d90c` slot 8 and `'memi'` `0x0063d8e4` slot 8
  *  are the same address. 0x38 + 0x100 = 0x138 = the class size. Renamed from `FUN_00571ad0`.
- * Doc: `exe-re/structs/gui_widget.md` §3, §4.
+ * Doc: `exe-re/structs/gui_widget.md` §5, §6.
  */
 void __thiscall gui_widget_text_buffered_set_text(int param_1,char *param_2)
 
@@ -288491,7 +288622,7 @@ void __thiscall gui_widget_text_buffered_set_text(int param_1,char *param_2)
  *  answering to PC `+0x30`/`+0x38`. Different shape: the PS2 is a setter that takes the value,
  *  the PC is the no-argument slot-3 recompute.
  * Evidence: VA 0x00571b00, `'ntxt'` vtable `0x0063d86c` slot 3. Renamed from `FUN_00571b00`.
- * Doc: `exe-re/structs/gui_widget.md` §3, §4.
+ * Doc: `exe-re/structs/gui_widget.md` §5, §6.
  */
 void __fastcall gui_widget_text_num_force_update(int param_1)
 
@@ -288518,7 +288649,7 @@ void __fastcall gui_widget_text_num_force_update(int param_1)
  *  `hud_text_draw_line`), reading its own buffer at PS2 `+0x3c` / PC `+0x38`.
  * Evidence: VA 0x00571b30, class size 0x58, 12 uses.
  *  Renamed from `FUN_00571b30`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_text_num_draw(int param_1)
 
@@ -288596,7 +288727,7 @@ LAB_00571bcc:
  *  format string. Different shape, exactly as for the `'ntxt'` sibling: PS2 setter, PC slot-3
  *  recompute.
  * Evidence: VA 0x00571c00, `'htxt'` vtable `0x0063d9d4` slot 3. Renamed from `FUN_00571c00`.
- * Doc: `exe-re/structs/gui_widget.md` §3, §4.
+ * Doc: `exe-re/structs/gui_widget.md` §5, §6.
  */
 void __fastcall gui_widget_text_time_force_update(int param_1)
 
@@ -288627,7 +288758,7 @@ void __fastcall gui_widget_text_time_force_update(int param_1)
  *  behaviour.
  * Evidence: VA 0x00571c70, class size 0x58, 11 uses.
  *  Renamed from `FUN_00571c70`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_text_time_draw(int param_1)
 
@@ -288676,7 +288807,7 @@ LAB_00571cc9:
  *  classes with the constants baked in. The tag `'butt'` matches on both builds, which is why
  *  the twin line sits here rather than on a sibling.
  * Evidence: VA 0x00571d00, 29 uses. Renamed from `FUN_00571d00`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8d.
  */
 void __fastcall gui_widget_button_center_draw(int param_1)
 
@@ -288720,7 +288851,7 @@ void __fastcall gui_widget_button_center_draw(int param_1)
  * Returns: void.
  * PS2 twin: no own symbol — the align-0 arm of the PS2's runtime-dispatched button draw.
  * Evidence: VA 0x00571d70, 25 uses. Renamed from `FUN_00571d70`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8d.
  */
 void __fastcall gui_widget_button_left_draw(int param_1)
 
@@ -288764,7 +288895,7 @@ void __fastcall gui_widget_button_left_draw(int param_1)
  * Returns: void.
  * PS2 twin: no own symbol — the align-4 arm of the PS2's runtime-dispatched button draw.
  * Evidence: VA 0x00571de0, 3 uses. Renamed from `FUN_00571de0`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8d.
  */
 void __fastcall gui_widget_button_right_draw(int param_1)
 
@@ -288813,7 +288944,7 @@ void __fastcall gui_widget_button_right_draw(int param_1)
  *  inverts its colour on focus.
  * Evidence: VA 0x00571e50, 0 uses in `menu.def` — built from code only.
  *  Renamed from `FUN_00571e50`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 void __fastcall gui_widget_button_highlight_draw(int param_1)
 
@@ -288859,7 +288990,7 @@ void __fastcall gui_widget_button_highlight_draw(int param_1)
  * PS2 twin: none — see the `'butu'` sibling for the roster this was measured against.
  * Evidence: VA 0x00571ec0, 1 use in `menu.def`: the *"CONTINUE"* button.
  *  Renamed from `FUN_00571ec0`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 void __fastcall gui_widget_button_right_white_draw(int param_1)
 
@@ -288908,7 +289039,7 @@ void __fastcall gui_widget_button_right_white_draw(int param_1)
  *  18x10 `'trib'` records as the scroll list's up and down arrows, the second with `flags`
  *  bit 0 set — the direction selector.
  *  Renamed from `FUN_00571f20`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_triangle_draw(int param_1)
 
@@ -288931,7 +289062,7 @@ void __fastcall gui_widget_triangle_draw(int param_1)
  * PS2 twin: none — PC-only, same closed-set evidence as `gui_widget_click_activate`.
  * Evidence: VA 0x00571f60. Slot 6 of the triangle-arrow and buffered-item classes.
  *  Renamed from `FUN_00571f60`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_activate_on_hover_mouse(int param_1)
 
@@ -288959,7 +289090,7 @@ undefined4 __thiscall gui_widget_activate_on_hover_mouse(int param_1)
  *  label origin at `x + h` and the same alignment 0.
  * Evidence: VA 0x00571f80, 0 uses in `menu.def`.
  *  Renamed from `FUN_00571f80`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_checkbox_draw(int param_1)
 
@@ -289018,7 +289149,7 @@ void __fastcall gui_widget_checkbox_draw(int param_1)
  *  ENTER (0x1c/0x9c) and returns the widget id; the PC toggles on SPACE and returns -1, which
  *  tells the screen "handled, no activation".
  * Evidence: VA 0x005720f0. Renamed from `FUN_005720f0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_checkbox_key(int param_1,undefined4 param_2,int param_3)
 
@@ -289042,7 +289173,7 @@ undefined4 __thiscall gui_widget_checkbox_key(int param_1,undefined4 param_2,int
  * PS2 twin: none — slot 6 is a PC addition. `SetBool__11GM_CheckBoxFb` is a separate
  *  8-byte PS2 setter, not this handler.
  * Evidence: VA 0x00572110. Renamed from `FUN_00572110`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_checkbox_mouse(int param_1)
 
@@ -289069,7 +289200,7 @@ undefined4 __thiscall gui_widget_checkbox_mouse(int param_1)
  *  test against `activeMenuWindow`, the same `h/4` inset, the same `h/2 + 1` arrow size and
  *  the same alignment constant 0x18.
  * Evidence: VA 0x00572130, 9 uses. Renamed from `FUN_00572130`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_combo_draw(int param_1,uint param_2)
 
@@ -289138,7 +289269,7 @@ LAB_00572158:
  *  `GM_ComboMenu` and calls `MenuOpen`. The PC passes the option vector explicitly where the
  *  PS2 reaches back through the owner's `GetPointer` virtual.
  * Evidence: VA 0x005722e0. Renamed from `FUN_005722e0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall gui_widget_combo_key(int param_1,undefined4 param_2,int param_3)
 
@@ -289183,7 +289314,7 @@ undefined4 __thiscall gui_widget_combo_key(int param_1,undefined4 param_2,int pa
  * Returns: undefined4 — always 0.
  * PS2 twin: none — slot 6 is a PC addition.
  * Evidence: VA 0x00572390. Renamed from `FUN_00572390`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_combo_mouse(int param_1)
 
@@ -289233,7 +289364,7 @@ undefined4 __thiscall gui_widget_combo_mouse(int param_1)
  *  no option vector.
  * Evidence: VA 0x00572430, class size 0x44, 0 uses in `menu.def`.
  *  Renamed from `FUN_00572430`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 undefined4 * __thiscall gui_widget_combo_range_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -289343,7 +289474,7 @@ undefined4 * __thiscall gui_widget_combo_range_ctor(undefined4 *param_1,undefine
  * PS2 twin: none as a symbol. GCC emits a single destructor carrying the delete flag, so every
  *  MSVC scalar-deleting-dtor in this TU is half of a 1 -> 2 fold with no PS2 counterpart.
  * Evidence: VA 0x00572690. Renamed from `FUN_00572690`.
- * Doc: `exe-re/structs/gui_widget.md` §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §8d.
  */
 undefined4 __thiscall gui_widget_combo_range_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -289365,7 +289496,7 @@ undefined4 __thiscall gui_widget_combo_range_scalar_deleting_dtor(undefined4 par
  * Returns: void.
  * PS2 twin: none — `'cmbs'` is a PC-only class (see the constructor).
  * Evidence: VA 0x005726b0. Renamed from `FUN_005726b0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_combo_range_dtor(undefined4 *param_1)
 
@@ -289394,7 +289525,7 @@ void __fastcall gui_widget_combo_range_dtor(undefined4 *param_1)
  * Returns: void.
  * PS2 twin: none — the PS2 `GM_ComboBox` has no `ForceUpdate` at all.
  * Evidence: VA 0x00572700, `'cmbs'` vtable `0x0063dc7c` slot 3. Renamed from `FUN_00572700`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __fastcall gui_widget_combo_range_force_update(int param_1)
 
@@ -289422,7 +289553,7 @@ void __fastcall gui_widget_combo_range_force_update(int param_1)
  *  so the twin line sits on `gui_widget_combo_key` and this row records the
  *  specialisation instead.
  * Evidence: VA 0x00572720. Renamed from `FUN_00572720`.
- * Doc: `exe-re/structs/gui_widget.md` §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §8d.
  */
 undefined4 __thiscall gui_widget_combo_range_key(int param_1,undefined4 param_2,int param_3)
 
@@ -289468,7 +289599,7 @@ undefined4 __thiscall gui_widget_combo_range_key(int param_1,undefined4 param_2,
  * Returns: undefined4 — always 0.
  * PS2 twin: none — slot 6 is a PC addition.
  * Evidence: VA 0x005727d0. Renamed from `FUN_005727d0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_combo_range_mouse(int param_1)
 
@@ -289518,7 +289649,7 @@ undefined4 __thiscall gui_widget_combo_range_mouse(int param_1)
  * PS2 twin: `Draw__9GM_SliderFUi` — statement-aligned: the same `(w - 2h) * v`, the same `h/4`
  *  and `h/2` constants, the same arrow directions 3 and 2, and the same inner outline width.
  * Evidence: VA 0x00572870, 21 uses. Renamed from `FUN_00572870`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_slider_float_draw(int param_1)
 
@@ -289599,7 +289730,7 @@ void __fastcall gui_widget_slider_float_draw(int param_1)
  * PS2 twin: `Key__9GM_SliderFUiUi` — the same 0.1 step and the same [0, 1] clamps. The PS2 also
  *  accepts the keypad aliases 0x4b/0x4d, which the PC dropped.
  * Evidence: VA 0x00572b10. Renamed from `FUN_00572b10`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_slider_float_key(int param_1,undefined4 param_2,int param_3)
 
@@ -289640,7 +289771,7 @@ undefined4 __thiscall gui_widget_slider_float_key(int param_1,undefined4 param_2
  * Returns: int — the widget id when it changed the value, else 0.
  * PS2 twin: none — slot 6 is a PC addition.
  * Evidence: VA 0x00572b80. Renamed from `FUN_00572b80`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 int __thiscall gui_widget_slider_float_mouse(int *param_1,int param_2,uint param_3,uint param_4)
 
@@ -289693,7 +289824,7 @@ int __thiscall gui_widget_slider_float_mouse(int *param_1,int param_2,uint param
  *  `id % 10` at `x - 40`, a debug readout with no PC counterpart.
  * Evidence: VA 0x00572c90, class size 0x5c, 0 uses.
  *  Renamed from `FUN_00572c90`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_slider_num_draw(int param_1)
 
@@ -289760,7 +289891,7 @@ void __fastcall gui_widget_slider_num_draw(int param_1)
  * PS2 twin: `Key__12GM_SliderNumFUiUi` — the same clamps. The PS2 offers a fine step of ±0.01
  *  on the keypad in addition to ±0.1 on the arrows; the PC kept only the coarse step.
  * Evidence: VA 0x00572e70. Renamed from `FUN_00572e70`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_slider_num_key(int param_1,undefined4 param_2,int param_3)
 
@@ -289804,7 +289935,7 @@ LAB_00572efc:
  * Returns: undefined4 — the widget id, or 0.
  * PS2 twin: none — slot 6 is a PC addition.
  * Evidence: VA 0x00572f10. Renamed from `FUN_00572f10`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_slider_num_mouse(int param_1)
 
@@ -289852,7 +289983,7 @@ undefined4 __thiscall gui_widget_slider_num_mouse(int param_1)
  * PS2 twin: `Draw__16GM_SliderIntegerFUi` — the same chrome; the PS2 computes the fraction from
  *  an explicit `[min, max]` pair at `+0x3c`/`+0x40` where the PC uses `[0, count - 1]`.
  * Evidence: VA 0x00572ff0, 0 uses. Renamed from `FUN_00572ff0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_slider_int_draw(int param_1)
 
@@ -289922,7 +290053,7 @@ void __fastcall gui_widget_slider_int_draw(int param_1)
  * PS2 twin: `Key__16GM_SliderIntegerFUiUi` — the same two scancodes and the same single step.
  *  The PS2 WRAPS at each end (`max` -> `min`); the PC CLAMPS.
  * Evidence: VA 0x005731b0. Renamed from `FUN_005731b0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_slider_int_key(int param_1,undefined4 param_2,int param_3)
 
@@ -289961,7 +290092,7 @@ undefined4 __thiscall gui_widget_slider_int_key(int param_1,undefined4 param_2,i
  * Returns: int — the widget id, or 0.
  * PS2 twin: none — slot 6 is a PC addition.
  * Evidence: VA 0x00573230. Renamed from `FUN_00573230`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 int __thiscall gui_widget_slider_int_mouse(int *param_1,int param_2,uint param_3,uint param_4)
 
@@ -290026,7 +290157,7 @@ int __thiscall gui_widget_slider_int_mouse(int *param_1,int param_2,uint param_3
  *  `'sbig'` and two `'trib'` — which is visible in `menu.def` design 0x0c.
  * Evidence: VA 0x005733d0, class size 0x3c, 0 uses.
  *  Renamed from `FUN_005733d0`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6b.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8b.
  */
 void __fastcall gui_widget_scrollbar_draw(int param_1)
 
@@ -290070,7 +290201,7 @@ void __fastcall gui_widget_scrollbar_draw(int param_1)
  * PS2 twin: none — slot 6 is a PC addition, and `GM_ViewScroll` (the other candidate) has no
  *  `Draw` and no input method at all.
  * Evidence: VA 0x00573490. Renamed from `FUN_00573490`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall
 gui_widget_scrollbar_mouse(int param_1,undefined4 param_2,int param_3,undefined4 param_4,byte param_5)
@@ -290109,7 +290240,7 @@ gui_widget_scrollbar_mouse(int param_1,undefined4 param_2,int param_3,undefined4
  *  name search: PS2 `RectangleBB` has exactly 3 callsites, all inside
  *  `Draw__12GM_NetPlayerFUi`, so no PS2 progress bar uses the bevel at all.
  * Evidence: VA 0x00573510, 0 uses. Renamed from `FUN_00573510`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 void __fastcall gui_widget_progress_bar_draw(int param_1)
 
@@ -290135,7 +290266,7 @@ void __fastcall gui_widget_progress_bar_draw(int param_1)
  *  with the literal 1.0 and the second with the value at `+0x3c`, both against the same
  *  progress texture.
  * Evidence: VA 0x00573580, 2 uses. Renamed from `FUN_00573580`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_progress_bar_track_draw(int param_1)
 
@@ -290165,7 +290296,7 @@ void __fastcall gui_widget_progress_bar_track_draw(int param_1)
  *  it is a wrapping horizontal strip of colour swatches.
  * Evidence: VA 0x00573600, class size 0x40, 0 uses in `menu.def`. The `+0x3c` field is seeded
  *  1.0f by the factory arm. Renamed from `FUN_00573600`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 void __fastcall gui_widget_axis_range_draw(int param_1)
 
@@ -290224,7 +290355,7 @@ void __fastcall gui_widget_axis_range_draw(int param_1)
  * Evidence: VA 0x00573860. The clamp relationship (inner never passes outer, outer never
  *  passes 1) is what identifies the two handles as an inner and an outer bound.
  *  Renamed from `FUN_00573860`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall
 gui_widget_axis_range_mouse(int param_1,int param_2,undefined4 param_3,undefined4 param_4,byte param_5)
@@ -290303,7 +290434,7 @@ gui_widget_axis_range_mouse(int param_1,int param_2,undefined4 param_3,undefined
  *  console build has no key-rebinding UI to host it.
  * Evidence: VA 0x005739f0, class size 0x138, 59 uses — every row of design 0x0a, which carries
  *  149 records. Renamed from `FUN_005739f0`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 undefined4 * __thiscall gui_widget_key_binding_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -290433,7 +290564,7 @@ undefined4 * __thiscall gui_widget_key_binding_ctor(undefined4 *param_1,undefine
  * Returns: void.
  * PS2 twin: none — see the constructor.
  * Evidence: VA 0x00573b50. Renamed from `FUN_00573b50`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_key_binding_draw(int param_1)
 
@@ -290478,7 +290609,7 @@ void __fastcall gui_widget_key_binding_draw(int param_1)
  * Returns: void.
  * PS2 twin: none — see the constructor.
  * Evidence: VA 0x00573c70, `'vidc'` vtable `0x0063dca4` slot 3. Renamed from `FUN_00573c70`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __fastcall gui_widget_key_binding_force_update(int param_1)
 
@@ -290602,7 +290733,7 @@ void __fastcall gui_widget_key_binding_force_update(int param_1)
  * PS2 twin: none — see the constructor.
  * Evidence: VA 0x00573da0. The three-dword clear is what proves the binding record is 0xc
  *  bytes. Renamed from `FUN_00573da0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall gui_widget_key_binding_key(int param_1,undefined4 param_2,undefined4 param_3)
 
@@ -290656,7 +290787,7 @@ switchD_00573dd5_caseD_f:
  * Returns: undefined4 — always 0.
  * PS2 twin: none — slot 6 is a PC addition.
  * Evidence: VA 0x00573f00. Renamed from `FUN_00573f00`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_key_binding_mouse(int param_1)
 
@@ -290704,7 +290835,7 @@ undefined4 __thiscall gui_widget_key_binding_mouse(int param_1)
  *  uses the `GM_PSX*` memory-card screens instead of an in-panel savegame slot.
  * Evidence: VA 0x00573f80, class size 0x174, 0 uses in `menu.def`.
  *  Renamed from `FUN_00573f80`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 undefined4 * __thiscall gui_widget_save_slot_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -290767,7 +290898,7 @@ undefined4 * __thiscall gui_widget_save_slot_ctor(undefined4 *param_1,undefined4
  * Returns: undefined4 — the widget.
  * PS2 twin: none as a symbol — the MSVC half of the 1 -> 2 destructor fold.
  * Evidence: VA 0x00574180. Renamed from `FUN_00574180`.
- * Doc: `exe-re/structs/gui_widget.md` §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §8d.
  */
 undefined4 __thiscall gui_widget_save_slot_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -290790,7 +290921,7 @@ undefined4 __thiscall gui_widget_save_slot_scalar_deleting_dtor(undefined4 param
  * PS2 twin: none — see the design constructor.
  * Evidence: VA 0x005741a0. Reached from `gui_menu_clone_component_under`.
  *  Renamed from `FUN_005741a0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __thiscall gui_widget_save_slot_copy_ctor(undefined4 *param_1,int param_2)
 
@@ -290845,7 +290976,7 @@ undefined4 * __thiscall gui_widget_save_slot_copy_ctor(undefined4 *param_1,int p
  * Evidence: VA 0x00574350. The `+0x170` call convention (object on the stack, not in ECX)
  *  identifies it as an LS3D engine interface rather than a game object.
  *  Renamed from `FUN_00574350`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_save_slot_dtor(undefined4 *param_1)
 
@@ -290882,7 +291013,7 @@ void __fastcall gui_widget_save_slot_dtor(undefined4 *param_1)
  * Returns: void.
  * PS2 twin: none — see the design constructor.
  * Evidence: VA 0x005743a0. Renamed from `FUN_005743a0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_save_slot_draw(int param_1)
 
@@ -290929,7 +291060,7 @@ void __fastcall gui_widget_save_slot_draw(int param_1)
  * Evidence: VA 0x00574560, 0x43 bytes. `'load'` vtable `0x0063dce4` SLOT 8; slot 3 is
  *  `stub_noop_cdecl_00574a40`, so this class has no ForceUpdate at all.
  *  Renamed from `FUN_00574560`.
- * Doc: `exe-re/structs/gui_widget.md` §3, §7.
+ * Doc: `exe-re/structs/gui_widget.md` §5, §10.
  */
 void __fastcall gui_widget_save_slot_set_text(int param_1)
 
@@ -290960,7 +291091,7 @@ void __fastcall gui_widget_save_slot_set_text(int param_1)
  *  from `+0xdc` onward by four bytes.
  * Evidence: VA 0x005745b0, class size 0xf4, 9 uses.
  *  Renamed from `FUN_005745b0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __thiscall gui_widget_net_player_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -291004,7 +291135,7 @@ undefined4 * __thiscall gui_widget_net_player_ctor(undefined4 *param_1,undefined
  * Returns: undefined4 — the widget.
  * PS2 twin: none as a symbol — the MSVC half of the 1 -> 2 destructor fold.
  * Evidence: VA 0x00574680. Renamed from `FUN_00574680`.
- * Doc: `exe-re/structs/gui_widget.md` §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §8d.
  */
 undefined4 __thiscall gui_widget_net_player_scalar_deleting_dtor(undefined4 param_1,byte param_2)
 
@@ -291027,7 +291158,7 @@ undefined4 __thiscall gui_widget_net_player_scalar_deleting_dtor(undefined4 para
  *  `gui_widget_dtor` and therefore stands for several classes at once. A `PS2 twin:` line may
  *  not claim a single owner here — the mapping is real, the stamping is not.
  * Evidence: VA 0x005746a0. Renamed from `FUN_005746a0`.
- * Doc: `exe-re/structs/gui_widget.md` §6d.
+ * Doc: `exe-re/structs/gui_widget.md` §8d.
  */
 void __fastcall gui_widget_net_player_dtor(undefined4 *param_1)
 
@@ -291052,7 +291183,7 @@ void __fastcall gui_widget_net_player_dtor(undefined4 *param_1)
  *  height, and `RectangleBB` answering to `gui_draw_rect_double_bevel` in the same three-way
  *  branch. That branch is what proves the bevel's even-polarity arm is live.
  * Evidence: VA 0x005746b0. Renamed from `FUN_005746b0`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §5.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §7.
  */
 void __thiscall gui_widget_net_player_draw(int param_1,byte param_2)
 
@@ -291152,15 +291283,15 @@ LAB_0057488c:
  *
  * What it does: runs the shared point-in-widget test first; if the point is inside, it
  *  additionally reports which side of `x + w - h` the point lies on, so the caller can tell a
- *  click on the row apart from a click on the ready box.
+ *  click on the row apart from a click on the remove box (`removable`, the host's X box).
  * Parameters: param_1 (int, ECX): the widget; param_2 (float): x; param_3: y.
  * Returns: uint — a byte pair: the low byte is the hit flag, the second byte the column flag.
  * PS2 twin: none. `GM_NetPlayer`'s complete 8-method roster has no `IsOverActive` override —
  *  `IsOverActive__12GM_NetPlayerFff` is a composed symbol that does not exist.
  * Evidence: VA 0x005749f0, `'netp'` vtable `0x0063dd0c` SLOT 4. This is the one class in 53
- *  that overrides slot 4, which corrects `gui_widget.md` §3.
+ *  that overrides slot 4, which corrects `gui_widget.md` §5.
  *  Renamed from `FUN_005749f0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 uint __thiscall gui_widget_net_player_is_point_inside(int param_1,float param_2,undefined4 param_3)
 
@@ -291200,7 +291331,7 @@ uint __thiscall gui_widget_net_player_is_point_inside(int param_1,float param_2,
  *   bytes, NOT against decompiler output - a trivial decomp body can also be a Ghidra
  *   render artifact over live FPU code, and only the binary separates the two.
  * Callers include every teardown of a `C_animations_machine_de_luxe`: the machine's destructor
- *   is empty and folded here (`structs/anim_machine.md` §1a).
+ *   is empty and folded here (`structs/anim_machine.md` §4a).
  * Renamed from `FUN_00574a40` (original Ghidra id, VA 0x00574a40).
  */
 void stub_noop_cdecl_00574a40(void)
@@ -291226,7 +291357,7 @@ void stub_noop_cdecl_00574a40(void)
  * Evidence: VA 0x00574a50. Slot 5 of eleven vtables — an ICF fold across the item, button,
  *  race-round, save-slot and net-player classes.
  *  Renamed from `FUN_00574a50`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_key_activate(int param_1,undefined4 param_2,int param_3)
 
@@ -291251,7 +291382,7 @@ undefined4 __thiscall gui_widget_key_activate(int param_1,undefined4 param_2,int
  *  (`GM_Menu::Tick(x, y, ...)`, `OnMouse`), never per widget.
  * Evidence: VA 0x00574a70. Slot 6 of nine vtables.
  *  Renamed from `FUN_00574a70`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall gui_widget_click_activate(int param_1)
 
@@ -291277,7 +291408,7 @@ undefined4 __thiscall gui_widget_click_activate(int param_1)
  * PS2 twin: none as a symbol — the PS2 fills the same fields through the base class's
  *  `SetText` and `SetString` virtuals rather than one aggregate setter.
  * Evidence: VA 0x00574a90. Renamed from `FUN_00574a90`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall
 gui_widget_net_player_set_row(int param_1,undefined4 param_2,char *param_3,char *param_4,undefined1 param_5,
@@ -291316,7 +291447,7 @@ gui_widget_net_player_set_row(int param_1,undefined4 param_2,char *param_3,char 
  *  build passes the result through an out-parameter, which is why slot 9 across this TU is a
  *  GETTER and not a `SetString`.
  * Evidence: VA 0x00574b00, `'netp'` vtable `0x0063dd0c` slot 9. Renamed from `FUN_00574b00`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __thiscall gui_widget_net_player_get_pointer(int param_1,undefined4 *param_2)
 
@@ -291339,7 +291470,7 @@ void __thiscall gui_widget_net_player_get_pointer(int param_1,undefined4 *param_
  *  with the cap stored in a field (`+0x7c`, default 0x3f); the PC compiles the cap in.
  * Evidence: VA 0x00574b10, class size 0x58, 7 uses.
  *  Renamed from `FUN_00574b10`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __thiscall gui_widget_edit_text_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -291382,10 +291513,10 @@ undefined4 * __thiscall gui_widget_edit_text_ctor(undefined4 *param_1,undefined4
  * PS2 twin: `Key__11GM_TextEditFUiUi` — the same shape: strlen, backspace, printable append
  *  guarded by `char > 0x1f`. The PS2 reads the cap from `+0x7c`; the PC has it as a literal,
  *  and that literal is the ONLY difference between `'edit'` and `'edtl'` — the standing open
- *  item in `gui_widget.md` §7, now closed.
+ *  item in `gui_widget.md` §10, now closed.
  * Evidence: VA 0x00574b70, `'edit'` vtable `0x0063dd34` slot 5, cap literal 10.
  *  Renamed from `FUN_00574b70`.
- * Doc: `exe-re/structs/gui_widget.md` §7.
+ * Doc: `exe-re/structs/gui_widget.md` §10.
  */
 undefined4 __thiscall gui_widget_edit_text_key_max10(int param_1,undefined4 param_2,undefined4 param_3)
 
@@ -291446,7 +291577,7 @@ undefined4 __thiscall gui_widget_edit_text_key_max10(int param_1,undefined4 para
  *  and its stored cap.
  * Evidence: VA 0x00574cf0, slot 8 of both `'edit'` (`0x0063dd34`) and `'edtl'` (`0x0063da74`).
  *  Renamed from `FUN_00574cf0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __thiscall gui_widget_edit_text_set_text(int param_1,char *param_2)
 
@@ -291486,7 +291617,7 @@ void __thiscall gui_widget_edit_text_set_text(int param_1,char *param_2)
  *  bytes out, so no body agreement is assertable.
  * Evidence: VA 0x00574d30, slot 9 of both edit vtables.
  *  Renamed from `FUN_00574d30`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __thiscall gui_widget_edit_text_get_text(int param_1,char *param_2)
 
@@ -291514,7 +291645,7 @@ void __thiscall gui_widget_edit_text_get_text(int param_1,char *param_2)
  *  `0x4af418`, PC `"|"` at `s_pipe_0064dcec`.
  * Evidence: VA 0x00574d60, slot 2 of both edit vtables.
  *  Renamed from `FUN_00574d60`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_edit_text_draw(int param_1,uint param_2)
 
@@ -291559,7 +291690,7 @@ void __thiscall gui_widget_edit_text_draw(int param_1,uint param_2)
  *  On the PS2 the same effect is a runtime field, not a second class.
  * Evidence: VA 0x00574e20, `'edtl'` vtable `0x0063da74` slot 5, cap literal 0x1f.
  *  Renamed from `FUN_00574e20`.
- * Doc: `exe-re/structs/gui_widget.md` §7.
+ * Doc: `exe-re/structs/gui_widget.md` §10.
  */
 undefined4 __thiscall gui_widget_edit_text_key_max31(int param_1,undefined4 param_2,undefined4 param_3)
 
@@ -291622,7 +291753,7 @@ undefined4 __thiscall gui_widget_edit_text_key_max31(int param_1,undefined4 para
  *  initial value, where the PC seeds a text buffer. The tags differ too (`'ednu'` vs `'edin'`).
  * Evidence: VA 0x00574fa0, class size 0x58, 8 uses.
  *  Renamed from `FUN_00574fa0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __thiscall gui_widget_edit_number_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -291661,7 +291792,7 @@ undefined4 * __thiscall gui_widget_edit_number_ctor(undefined4 *param_1,undefine
  *  at the right edge and picks its alignment from flag bits; only the "draw the formatted
  *  number inside a box" role is shared.
  * Evidence: VA 0x00575000. Renamed from `FUN_00575000`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_edit_number_draw(int param_1)
 
@@ -291695,7 +291826,7 @@ void __fastcall gui_widget_edit_number_draw(int param_1)
  *  space).
  * Evidence: VA 0x005750a0. This is NOT a digit filter: any single-character key name is
  *  accepted. Renamed from `FUN_005750a0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall gui_widget_edit_number_key(int param_1,byte param_2,undefined4 param_3)
 
@@ -291780,7 +291911,7 @@ undefined4 __thiscall gui_widget_edit_number_key(int param_1,byte param_2,undefi
  *  verb because the two builds' own names disagree: the PC slot is 8 (`SetText`), the PS2
  *  symbol says `SetDword`.
  * Evidence: VA 0x00575270, `'ednu'` vtable `0x0063dd5c` slot 8. Renamed from `FUN_00575270`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __thiscall gui_widget_edit_number_set_value(int param_1,undefined4 *param_2)
 
@@ -291814,7 +291945,7 @@ void __thiscall gui_widget_edit_number_set_value(int param_1,undefined4 *param_2
  *  holding in a field; the PC re-parses its text buffer, which is the direct consequence of
  *  the PC storing the value as text and the PS2 storing it as a number.
  * Evidence: VA 0x005752b0, `'ednu'` vtable `0x0063dd5c` slot 9. Renamed from `FUN_005752b0`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __thiscall gui_widget_edit_number_get_value(int param_1,undefined4 *param_2)
 
@@ -291842,7 +291973,7 @@ void __thiscall gui_widget_edit_number_get_value(int param_1,undefined4 *param_2
  *  and no IP-named string symbol.
  * Evidence: VA 0x005752d0. Sole consumer is the `'edip'` widget's draw.
  *  Renamed from `FUN_005752d0`.
- * Doc: `exe-re/structs/gui_widget.md` §6.
+ * Doc: `exe-re/structs/gui_widget.md` §8.
  */
 void __fastcall gui_format_ip_address(undefined1 *param_1,undefined1 *param_2,uint param_3,uint *param_4)
 
@@ -291889,7 +292020,7 @@ void __fastcall gui_format_ip_address(undefined1 *param_1,undefined1 *param_2,ui
  *  `%d.%d.%d.%d` format strings, because the console build has no LAN address entry.
  * Evidence: VA 0x00575350, class size 0x60, 0 uses in `menu.def`.
  *  Renamed from `FUN_00575350`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6e.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8e.
  */
 undefined4 * __thiscall gui_widget_edit_ip_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -291930,7 +292061,7 @@ undefined4 * __thiscall gui_widget_edit_ip_ctor(undefined4 *param_1,undefined4 p
  * Returns: void.
  * PS2 twin: none — see the constructor.
  * Evidence: VA 0x005753b0. Renamed from `FUN_005753b0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_edit_ip_draw(int param_1,uint param_2)
 
@@ -291991,7 +292122,7 @@ void __thiscall gui_widget_edit_ip_draw(int param_1,uint param_2)
  * Returns: undefined4 — always 0.
  * PS2 twin: none — see the constructor.
  * Evidence: VA 0x00575540. Renamed from `FUN_00575540`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 __thiscall gui_widget_edit_ip_key(int param_1,undefined4 param_2,undefined4 param_3)
 
@@ -292064,7 +292195,7 @@ undefined4 __thiscall gui_widget_edit_ip_key(int param_1,undefined4 param_2,unde
  *  page keys, and is a different class entirely.
  * Evidence: VA 0x005756f0, class size 0x1038, 2 uses.
  *  Renamed from `FUN_005756f0`.
- * Doc: `exe-re/structs/gui_widget.md` §4, §6c.
+ * Doc: `exe-re/structs/gui_widget.md` §6, §8c.
  */
 undefined4 * __thiscall gui_widget_text_block_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -292101,7 +292232,7 @@ undefined4 * __thiscall gui_widget_text_block_ctor(undefined4 *param_1,undefined
  * PS2 twin: `Draw__16GM_StaticTextBigFUi` — the same multi-line call, the same
  *  `0xffbe002c`-and-white colour pair and the same alignment 2-and-0 pair.
  * Evidence: VA 0x00575780. Renamed from `FUN_00575780`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_text_block_draw(int param_1)
 
@@ -292163,7 +292294,7 @@ undefined4 stub_ret0_args20_005757f0(void)
  * PS2 twin: `Clear__16GM_StaticTextBigFv` — the same one-line clear, plus a reset of the PS2's
  *  separate line counter at `+0x3c`, which the PC keeps elsewhere.
  * Evidence: VA 0x00575800. Renamed from `FUN_00575800`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_text_block_clear(int param_1)
 
@@ -292187,7 +292318,7 @@ void __fastcall gui_widget_text_block_clear(int param_1)
  *  helper. That helper's PS2 symbol is `HledejZlom__17G_IndicatorsClassFPUcffUiPUc` (Czech
  *  "find break"), which confirms the twin of the already-named PC `hud_text_find_line_break`.
  * Evidence: VA 0x00575810. Renamed from `FUN_00575810`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_text_block_add_text(int param_1,char *param_2)
 
@@ -292253,7 +292384,7 @@ void __thiscall gui_widget_text_block_add_text(int param_1,char *param_2)
  *  height from the design record.
  * Evidence: VA 0x005758d0, class size 0x48, 1 use — design 0x0d *"Select Car"*.
  *  Renamed from `FUN_005758d0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 undefined4 * __thiscall gui_widget_car_carousel_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -292281,7 +292412,7 @@ undefined4 * __thiscall gui_widget_car_carousel_ctor(undefined4 *param_1,undefin
  *  (`gui_widget_scalar_deleting_dtor`).
  * Evidence: VA 0x00575920. `gui_widget_net_player_dtor` is its ICF twin on the net-player class.
  *  Renamed from `FUN_00575920`.
- * Doc: `exe-re/structs/gui_widget.md` §2.
+ * Doc: `exe-re/structs/gui_widget.md` §1.
  */
 void __fastcall gui_widget_dtor(undefined4 *param_1)
 
@@ -292305,7 +292436,7 @@ void __fastcall gui_widget_dtor(undefined4 *param_1)
  *  same selected colour `0xffbe002c`, and the same install-clip / walk / restore-clip
  *  structure.
  * Evidence: VA 0x00575930. Renamed from `FUN_00575930`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __fastcall gui_widget_car_carousel_draw(int param_1)
 
@@ -292392,7 +292523,7 @@ undefined4 stub_ret0_args8_00575a60(void)
  * Returns: undefined4 — the widget id, or 0.
  * PS2 twin: none — slot 6 is a PC addition.
  * Evidence: VA 0x00575a70, `'lstc'` vtable `0x0063ddd4` slot 6. Renamed from `FUN_00575a70`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 undefined4 __thiscall
 gui_widget_car_carousel_mouse(int param_1,undefined4 param_2,undefined4 param_3,int param_4,byte param_5)
@@ -292467,7 +292598,7 @@ gui_widget_car_carousel_mouse(int param_1,undefined4 param_2,undefined4 param_3,
  *  pair is half of the closed set that proved slot 7 is `Tick`: only `'swnd'` and `'lstc'`
  *  override it, and only `GM_WindowScroll` and `GM_ListCars` have a PS2 `Tick`.
  * Evidence: VA 0x00575b50, `'lstc'` vtable `0x0063ddd4` slot 7. Renamed from `FUN_00575b50`.
- * Doc: `exe-re/structs/gui_widget.md` §3.
+ * Doc: `exe-re/structs/gui_widget.md` §5.
  */
 void __thiscall gui_widget_car_carousel_tick(int param_1,uint param_2)
 
@@ -292510,7 +292641,7 @@ void __thiscall gui_widget_car_carousel_tick(int param_1,uint param_2)
  *  says `list` rather than `pointer` because the draw walks the target as a vector of `char *`,
  *  which promotes the mechanical name to a described one.
  * Evidence: VA 0x00575be0. Renamed from `FUN_00575be0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_car_carousel_set_list(int param_1,undefined4 param_2)
 
@@ -292529,7 +292660,7 @@ void __thiscall gui_widget_car_carousel_set_list(int param_1,undefined4 param_2)
  * PS2 twin: `SetDword__11GM_ListCarsFUi` — the same store; the PS2 also commits the displayed
  *  index immediately, where the PC leaves that entirely to the tick.
  * Evidence: VA 0x00575bf0. Renamed from `FUN_00575bf0`.
- * Doc: `exe-re/structs/gui_widget.md` §4.
+ * Doc: `exe-re/structs/gui_widget.md` §6.
  */
 void __thiscall gui_widget_car_carousel_set_index(int param_1,undefined4 param_2)
 
@@ -292666,7 +292797,7 @@ void crt_atexit_register_00575c40(void)
  *  layout the PS2 computes in code.
  * Evidence: VA 0x00575c50. This function lives in the TU AFTER `g_menu.cpp`.
  *  Renamed from `FUN_00575c50`.
- * Doc: `exe-re/structs/gui_screen.md` §10.
+ * Doc: `exe-re/structs/gui_screen.md` §9.
  */
 undefined4 * __thiscall
 gui_combo_dropdown_screen_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,float param_4,float param_5,
@@ -292702,7 +292833,7 @@ gui_combo_dropdown_screen_ctor(undefined4 *param_1,undefined4 param_2,undefined4
   // virtual, and `OnCreate` then clones one row per option (`PridejComponent`) and sets
   // each row's text. The PC can do it all here because design 0x13 in the shipped screen
   // design table already carries the layout the PS2 computes in code.
-  // See `exe-re/structs/gui_screen.md` §10.
+  // See `exe-re/structs/gui_screen.md` §9.
   gui_menu_build_components_from_design(&g_gui_screen_design_table,0x13,0);
   param_1[0x12] = param_9;
   iVar4 = *(int *)param_1[8];
@@ -292794,7 +292925,7 @@ gui_combo_dropdown_screen_ctor(undefined4 *param_1,undefined4 param_2,undefined4
  * here.
  * Evidence: VA 0x00575ea0, vtable `0x0063ddfc` slot 5. The click-outside dismissal is PC-only -
  * there is no mouse on the console.
- * Doc: `exe-re/structs/game_menus.md` §3a.
+ * Doc: `exe-re/structs/game_menus.md` §6a.
  * Renamed from `FUN_00575ea0`.
  */
 undefined4 __thiscall
@@ -292855,7 +292986,7 @@ gui_combo_dropdown_tick(int *param_1,undefined4 param_2,uint param_3,int param_4
  *  1320/1321), `gui_notice_panel_present_once`, `net_host_session_start`,
  *  `net_open_session_browser` and three in `net_multiplayer_run`.
  *  Renamed from `FUN_00575f50`.
- * Doc: `exe-re/structs/game_menus.md` §3.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  */
 undefined4 * __thiscall
 gui_notice_panel_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4,
@@ -292881,7 +293012,7 @@ gui_notice_panel_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
   // of `GM_QuestionBox` is `gui_question_box_ctor` / `gui_question_box_tick` on shipped
   // design 1. This class is a two-line NOTICE PANEL and its own PS2 counterpart is OPEN -
   // not searched, not tagged terminal.
-  // See `exe-re/structs/game_menus.md` §3.
+  // See `exe-re/structs/game_menus.md` §6.
   gui_menu_build_components_from_design(&g_gui_screen_design_table,0,0);
   param_1[0x10] = param_1[0x10] | 0x80000;
   gui_menu_set_component_text_id(0x82,param_4);
@@ -292965,7 +293096,7 @@ gui_notice_panel_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
  * PS2 twin: - (PC-only; see `gui_notice_panel_ctor`).
  * Evidence: VA 0x005761d0, 639 bytes - the same size as the id-taking overload. Callers:
  * `entity_process_command` (entity-script command `0x1010`) and `gui_gun_shop_tick`.
- * Doc: `exe-re/structs/game_menus.md` §3.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_005761d0`.
  */
 undefined4 * __thiscall
@@ -293071,7 +293202,7 @@ gui_notice_panel_ctor_from_strings(undefined4 *param_1,undefined4 param_2,undefi
  * PS2 twin: - (PC-only; see `gui_notice_panel_ctor`). Design 0 has NO buttons, which is the
  * clearest single reason this class is not `GM_QuestionBox`.
  * Evidence: VA 0x00576450, vtable `0x0063de14` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §3.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_00576450`.
  */
 undefined4 __thiscall
@@ -293114,7 +293245,7 @@ gui_notice_panel_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefin
  * Evidence: VA 0x005764c0. `gui_profile_delete_tick` opens it with textdb `0x82` "Delete" - exactly
  * the id PS2 `OnClick__16GM_ProfileDeleteFUi` passes to `GM_QuestionBox` at the same site. Another
  * caller passes textdb 716 "Abort game?".
- * Doc: `exe-re/structs/game_menus.md` §3.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_005764c0`.
  */
 undefined4 * __thiscall
@@ -293139,7 +293270,7 @@ gui_question_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
   // `+0x2c`/`+0x30` plus a bool; the framework then calls `OnCreate` to build and
   // re-lay-out the box. The `0x8a`/`0x8b` ids belong to this class, not to the
   // design-0 notice panel.
-  // See `exe-re/structs/game_menus.md` §3.
+  // See `exe-re/structs/game_menus.md` §6.
   gui_menu_build_components_from_design(&g_gui_screen_design_table,1,0);
   param_1[0x10] = param_1[0x10] | 0x80000;
   gui_menu_set_component_text_id(0x82,param_4);
@@ -293165,7 +293296,7 @@ gui_question_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
  * Same two ids, the SAME two result constants 0xb and 0xc, ESC mapped to
  * the No path on both builds, and the same root-vs-child fork (PS2 tests `+0x20`, PC `+0x18`).
  * Evidence: VA 0x00576560, vtable `0x0063de2c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §3.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_00576560`.
  */
 undefined4 __thiscall
@@ -293223,7 +293354,7 @@ gui_question_box_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 pa
  * vocabulary three ways - notice panel, question box, message box.
  * Evidence: VA 0x00576620. Callers include the profile flow ("This Profile Already Exists", textdb
  * `0x83`) and five sites in `net_multiplayer_run` that pass `g_net_session+0x1fc`.
- * Doc: `exe-re/structs/game_menus.md` §3.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_00576620`.
  */
 undefined4 * __thiscall
@@ -293294,7 +293425,7 @@ gui_message_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,u
  * PS2 twin: none - see `gui_message_box_ctor`. In PS2 terms this is a 2 -> 1 fold of what would be
  * OnClick and OnKey.
  * Evidence: VA 0x005767a0, vtable `0x0063de44` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §3.
+ * Doc: `exe-re/structs/game_menus.md` §6.
  * Renamed from `FUN_005767a0`.
  */
 undefined4 __thiscall
@@ -293330,7 +293461,7 @@ gui_message_box_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 par
  * body that sets the SAME component `0x82` to the SAME textdb id `0x77`.
  * Evidence: VA 0x00576810, opened from `gui_main_menu_tick` case `0xf1ba1` with
  * `operator_new(0x48)`.
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_00576810`.
  */
 undefined4 * __thiscall gui_main_menu_exit_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -293366,7 +293497,7 @@ undefined4 * __thiscall gui_main_menu_exit_box_ctor(undefined4 *param_1,undefine
  * PS2 twin: `OnClick__15GM_MainMenuExitFUi` [CONFIRMED]. Same two ids and
  * the SAME result constant 0x18. A 2 -> 1 fold - it also carries the PS2 `OnKey` ESC arm.
  * Evidence: VA 0x00576890, vtable `0x0063de5c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_00576890`.
  */
 undefined4 __thiscall
@@ -293398,7 +293529,7 @@ gui_main_menu_exit_box_tick(int *param_1,undefined4 param_2,uint param_3,undefin
  *  group that carries the extra "Free Ride Extreme" row. Then it points the menu camera at
  *  item `0xf1b31`, disables `0xf1b9a` (Free Ride Extreme) when `g_freeride_unlock_level < 3`, and
  *  disables AND DELETES `0xf1b9b` and `0xf1b9c` - the two rows the retail `menu.def` does not
- *  ship (`0xf1b9c` is the cut Multiplayer entry, `structs/multiplayer.md` §1). Finally it
+ *  ship (`0xf1b9c` is the cut Multiplayer entry, `structs/multiplayer.md` §4). Finally it
  *  seeds the free-ride parameter block through `loadsave_freeride_store_params`.
  * Parameters: param_1 (undefined4 *, ECX): the new screen; param_2: the parent screen;
  *  param_3 (undefined4): the screen id handed back on close.
@@ -293408,7 +293539,7 @@ gui_main_menu_exit_box_tick(int *param_1,undefined4 param_2,uint param_3,undefin
  *  gates on `ProfileNumEnabledSaves` where the PC gates on the shipped design.
  * Evidence: VA 0x00576920. Design 6's frame caption is textdb 101 "Main Menu:".
  *  Renamed from `FUN_00576920`.
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  */
 undefined4 * __thiscall gui_main_menu_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -293464,7 +293595,7 @@ undefined4 * __thiscall gui_main_menu_ctor(undefined4 *param_1,undefined4 param_
  * this screen has no ESC arm.
  * Evidence: VA 0x00576a20, vtable `0x0063de74` slot 5. `0xf1b9b`/`0xf1b9c` are the two rows the
  * retail `menu.def` does not ship, which is why the constructor deletes them.
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_00576a20`.
  */
 undefined4 __thiscall
@@ -293577,7 +293708,7 @@ switchD_00576a74_default:
  * PS2 twin: `OnCreate__15GM_GameMenuExitFv` [CONFIRMED] - sets the SAME
  * component `0x82` to the SAME textdb id `0x95` (it additionally pre-focuses `0x8b`).
  * Evidence: VA 0x00576cc0, opened from `gui_game_menu_tick` case `0x66`.
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_00576cc0`.
  */
 undefined4 * __thiscall gui_game_menu_exit_box_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -293614,7 +293745,7 @@ undefined4 * __thiscall gui_game_menu_exit_box_ctor(undefined4 *param_1,undefine
  * split and the same shape; the close result is per-build (PC 0x21, PS2 0x26). A 2 -> 1 fold
  * (+OnKey).
  * Evidence: VA 0x00576d40, vtable `0x0063de8c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_00576d40`.
  */
 undefined4 __thiscall
@@ -293655,7 +293786,7 @@ gui_game_menu_exit_box_tick(int *param_1,undefined4 param_2,uint param_3,undefin
  * Evidence: VA 0x00576dd0. Design 7's frame caption is textdb 140 "Game menu:".
  *  The TU also holds the racing variant `gui_racing_game_menu_ctor` (design 0x2e).
  *  Renamed from `FUN_00576dd0`.
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  */
 undefined4 * __thiscall gui_game_menu_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
 
@@ -293688,7 +293819,7 @@ undefined4 * __thiscall gui_game_menu_ctor(undefined4 *param_1,undefined4 param_
  * OnBeforeCreate - there is no `OnExchange` override, because the console build cannot change
  * language or resolution at runtime.
  * Evidence: VA 0x00576e30, vtable `0x0063dea4` slot 1 (read from the vtable, not source order).
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_00576e30`.
  */
 void __fastcall gui_game_menu_on_exchange(int param_1)
@@ -293716,7 +293847,7 @@ void __fastcall gui_game_menu_on_exchange(int param_1)
  * ids, and `0x6c` opens `GM_Options` on both builds. A 2 -> 1 fold (+`OnKey__11GM_GameMenuFUcUi`).
  * Evidence: VA 0x00576e60, vtable `0x0063dea4` slot 5. Design 7 ships rows 102/103/108/111 =
  * `0x66`/`0x67`/`0x6c`/`0x6f`.
- * Doc: `exe-re/structs/game_menus.md` §2.
+ * Doc: `exe-re/structs/game_menus.md` §5.
  * Renamed from `FUN_00576e60`.
  */
 undefined4 __thiscall
@@ -293801,7 +293932,7 @@ switchD_00576ee9_caseD_68:
  * Evidence: VA 0x00576fe0, vtable `0x0063dec4` slot-less ctor; design literal 8 in
  * `gui_menu_build_components_from_design`. Slot 1 is the only screen in the TU that stubs
  * `OnExchange` to a no-op instead of forwarding to the parent.
- * Doc: `exe-re/structs/game_menus.md` §4a.
+ * Doc: `exe-re/structs/game_menus.md` §7a.
  * Renamed from `FUN_00576fe0`.
  */
 undefined4 * __thiscall gui_options_audio_video_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -293872,7 +294003,7 @@ void thunk_gui_menu_on_close_child(void)
  * Evidence: VA 0x005771b0, vtable `0x0063dec4` slot 5. The `0.625` and `1.4285715` seeds in the
  * constructor are the exact inverses of the two display setters' clamps, which is what pins each
  * slider to its field.
- * Doc: `exe-re/structs/game_menus.md` §4a.
+ * Doc: `exe-re/structs/game_menus.md` §7a.
  * Renamed from `FUN_005771b0`.
  */
 int __thiscall
@@ -294086,7 +294217,7 @@ switchD_0057721d_caseD_21:
  * with the IDENTICAL mask `0xfffeffff`. The PS2 additionally seeds its volume sliders here; on the
  * PC those live on the separate audio/video page.
  * Evidence: VA 0x00577990. Design 9 ships 100 "Controls", 101 "Audio & Video", 400 "Back".
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_00577990`.
  */
 undefined4 * __thiscall gui_options_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -294124,7 +294255,7 @@ undefined4 * __thiscall gui_options_ctor(undefined4 *param_1,undefined4 param_2,
  * `GM_OptionsControls` on both builds. A 2 -> 1 fold (+OnKey). The PS2's save-and-close arm has no
  * PC counterpart because the PC persists settings from the pages themselves.
  * Evidence: VA 0x00577a20, vtable `0x0063dedc` slot 5; the three ids are design 9's rows.
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_00577a20`.
  */
 undefined4 __thiscall
@@ -294191,7 +294322,7 @@ gui_options_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 param_4
  * bit with the identical mask `0xfffeffff` and then delegates the text seeding, exactly as the PC
  * does (here the seeding lives in slot 1, `gui_options_controls_on_exchange`).
  * Evidence: VA 0x00577b10. Design 10's frame caption is textdb 205 "Player Controls:".
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_00577b10`.
  */
 undefined4 * __thiscall gui_options_controls_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -294233,7 +294364,7 @@ undefined4 * __thiscall gui_options_controls_ctor(undefined4 *param_1,undefined4
  * is shared.
  * Evidence: VA 0x00577b90, vtable `0x0063def4` slot 1. The identical seeding block is INLINED a
  * second time in the tick's "restore defaults" arm (id `0x35`).
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_00577b90`.
  */
 void __fastcall gui_options_controls_on_exchange(int param_1)
@@ -294259,7 +294390,7 @@ void __fastcall gui_options_controls_on_exchange(int param_1)
   // the seeding is inlined here, and again in the tick's `case 0x35` (restore
   // defaults). The PS2 version seeds 0x12 key-name rows per device; the PC seeds
   // sliders and toggle labels, which is why the pairing is STRUCTURAL.
-  // See `exe-re/structs/game_menus.md` §4.
+  // See `exe-re/structs/game_menus.md` §7.
   gui_menu_set_component_float(0x44,g_steering_linearity);
   gui_menu_set_component_float(0x41,g_aiming_sensitivity_x);
   gui_menu_set_component_float(0x42,g_aiming_sensitivity_y);
@@ -294317,7 +294448,7 @@ void __fastcall gui_options_controls_on_exchange(int param_1)
  * OnKey, SetUpTexts, {dtor}, OnBeforeCreate) - it has no `OnClose`/`MenuClose` override, and the
  * PS2 has no speedometer unit switch.
  * Evidence: VA 0x00577d20, vtable `0x0063def4` slot 4.
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_00577d20`.
  */
 void gui_options_controls_close(undefined4 param_1,undefined4 param_2)
@@ -294347,7 +294478,7 @@ void gui_options_controls_close(undefined4 param_1,undefined4 param_2)
  * method is an EMPTY STUB (`return 0`), so no body agreement is assertable; the pairing rests on
  * the class and the slot. A 3 -> 1 fold: it also carries the PS2 `OnKey` and `Tick`.
  * Evidence: VA 0x00577d50, vtable `0x0063def4` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_00577d50`.
  */
 int __thiscall
@@ -294412,7 +294543,7 @@ LAB_00577ddb:
         // PS2-INLINED HERE (second copy): the block below is
         // `SetUpTexts__18GM_OptionsControlsFv` again - the same PS2 method the PC inlines
         // in `gui_options_controls_on_exchange`. On the PS2 this arm would be one CALL.
-        // See `exe-re/structs/game_menus.md` §4.
+        // See `exe-re/structs/game_menus.md` §7.
         gui_menu_set_component_float(0x44,g_steering_linearity);
         gui_menu_set_component_float(0x41,g_aiming_sensitivity_x);
         gui_menu_set_component_float(0x42,g_aiming_sensitivity_y);
@@ -294612,7 +294743,7 @@ switchD_0057802a_caseD_47:
  * control PRESET, and the closed `GM_*` roster contains no capture screen.
  * Evidence: VA 0x005782e0, vtable `0x0063df0c`; design literal 0xb. Opened from
  * `gui_options_controls_tick` and from both key-binding widgets.
- * Doc: `exe-re/structs/game_menus.md` §4b.
+ * Doc: `exe-re/structs/game_menus.md` §7b.
  * Renamed from `FUN_005782e0`.
  */
 undefined4 * __thiscall
@@ -294655,7 +294786,7 @@ gui_key_capture_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,u
  * Returns: void.
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x00578370, vtable `0x0063df0c` slot 3.
- * Doc: `exe-re/structs/game_menus.md` §4b.
+ * Doc: `exe-re/structs/game_menus.md` §7b.
  * Renamed from `FUN_00578370`.
  */
 void __thiscall gui_key_capture_on_close_child(int *param_1,undefined4 param_2,undefined4 param_3)
@@ -294685,7 +294816,7 @@ void __thiscall gui_key_capture_on_close_child(int *param_1,undefined4 param_2,u
  * Evidence: VA 0x005783a0 (657 B), vtable `0x0063df0c` slot 5. The `*0xc` stride and the
  * `g_key_binding_table` records (`S_key_binding`: `.device_kind`/`.code` at +4, `.device_index`
  * at +8) are the binding table; its writer in the input subsystem is still unread.
- * Doc: `exe-re/structs/game_menus.md` §4b.
+ * Doc: `exe-re/structs/game_menus.md` §7b.
  * Renamed from `FUN_005783a0`.
  */
 undefined4 __thiscall
@@ -294880,7 +295011,7 @@ LAB_00578601:
  * PS2 twin: none - the console has no key rebinding, so it has no conflict box either.
  * Evidence: VA 0x005786e0, vtable `0x0063df24`; design literal 0x35 (textdb 185 'Control already
  * used', 186 'Use new setting?', 189 'Already used by:').
- * Doc: `exe-re/structs/game_menus.md` §4b.
+ * Doc: `exe-re/structs/game_menus.md` §7b.
  * Renamed from `FUN_005786e0`.
  */
 undefined4 * __thiscall
@@ -294929,7 +295060,7 @@ gui_key_conflict_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3,
  * vtables spanning the racing menus, the multiplayer front end and this TU. It is the
  * screen-side counterpart of `gui_widget_scalar_deleting_dtor_common`, which covers 46 of the
  * 53 widgets.
- * Doc: `exe-re/structs/gui_screen.md` §3.
+ * Doc: `exe-re/structs/gui_screen.md` §8.
  * Renamed from `FUN_00578790`.
  */
 undefined4 __thiscall gui_menu_scalar_deleting_dtor_common(undefined4 param_1,byte param_2)
@@ -294942,6 +295073,16 @@ undefined4 __thiscall gui_menu_scalar_deleting_dtor_common(undefined4 param_1,by
   return param_1;
 }
 
+/*
+ * thunk_gui_menu_dtor — the jump to `gui_menu_dtor`.
+ * What it does: a 5-byte `jmp` to `gui_menu_dtor` (`0x0056af10`); the body shown below is
+ *   the decompiler's inlined copy of the target.
+ * Parameters: param_1 (GM_Menu*): the screen being destroyed, in ECX.
+ * Returns: void: nothing.
+ * Evidence: VA 0x005787b0, `jmp 0x0056af10`; called by
+ *   `gui_menu_scalar_deleting_dtor_common`.
+ * Renamed from `thunk_FUN_0056af10`.
+ */
 void __fastcall thunk_gui_menu_dtor(undefined4 *param_1)
 
 {
@@ -294978,7 +295119,7 @@ void __fastcall thunk_gui_menu_dtor(undefined4 *param_1)
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x005787c0, vtable `0x0063df24` slot 5. It writes the same `*0xc` binding record as
  * `gui_key_capture_tick`, which is what pairs the two screens.
- * Doc: `exe-re/structs/game_menus.md` §4b.
+ * Doc: `exe-re/structs/game_menus.md` §7b.
  * Renamed from `FUN_005787c0`.
  */
 undefined4 __thiscall
@@ -295054,7 +295195,7 @@ switchD_0057883e_caseD_6:
  * PS2 twin: none - the PS2 has no inventory screen, and its HUD build formats the equivalent
  * strings inline with `sprintf`.
  * Evidence: VA 0x00578940. Called eight times by `gui_inventory_ctor`, once per fixed slot.
- * Doc: `exe-re/structs/game_menus.md` §4c.
+ * Doc: `exe-re/structs/game_menus.md` §7c.
  * Renamed from `FUN_00578940`.
  */
 void gui_inventory_format_slot_row(undefined4 param_1,undefined4 param_2,undefined4 param_3,ushort *param_4)
@@ -295095,14 +295236,15 @@ void gui_inventory_format_slot_row(undefined4 param_1,undefined4 param_2,undefin
  * gui_inventory_ctor - build the player's 'Inventory:' screen (shipped design 0xf).
  *
  * What it does: runs the base ctor, installs vtable `0x0063df3c`, stores the `G_Inventory` at
- * `+0x848` and the owning actor at `+0x84c`, then builds shipped design 0xf with gate 1 or 2 —
+ * `+0x848` and the caller's vector for removed items at `+0x84c`, then builds shipped design 0xf
+ * with gate 1 or 2 —
  * gate 2 is the in-car layout, which swaps the Weapons band for a Car band. Formats the fixed slot
  * rows through `gui_inventory_format_slot_row`: `0x100` Hands, `0x102`..`0x106` the five weapon
  * slots, `0x107` Coat, `0x108` Car. Then clones one `'seli'` row per carried item into the
  * `0x200+` band, labels each from textdb `item_id + 0xdac`, disables the ones whose item flags
  * carry `0x100`, and grows the window and its frame by the accumulated row height.
  * Parameters: param_1 (undefined4 *, ECX) the screen; param_2, param_3 parent and open id; param_4
- * the `G_Inventory`; param_5 the owning actor.
+ * the `G_Inventory`; param_5 the caller's stack vector that receives removed items.
  * Returns: undefined4 * - param_1.
  * PS2 twin: none, and the feature is NOT missing - the PS2 draws the inventory in the HUD instead
  * of as a screen (`G_IndicatorsClass::_InventorySet`, `::InventoryScroll`, `::DrawInventory`,
@@ -295110,7 +295252,7 @@ void gui_inventory_format_slot_row(undefined4 param_1,undefined4 param_2,undefin
  * alternative location, not a failed grep.
  * Evidence: VA 0x00578a30, vtable `0x0063df3c`; design literal 0xf. `+0x848` is the same field the
  * gun-shop screen uses, so the two classes share a layout.
- * Doc: `exe-re/structs/game_menus.md` §4c.
+ * Doc: `exe-re/structs/game_menus.md` §7c.
  * Renamed from `FUN_00578a30`.
  */
 undefined4 * __thiscall
@@ -295228,7 +295370,7 @@ gui_inventory_ctor(undefined4 *param_1,uint param_2,float param_3,int param_4,un
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x00578d10, vtable `0x0063df3c` slot 3. The `0xbc` stride into `g_game_item_table`
  * is the shared `predmety.def` record size.
- * Doc: `exe-re/structs/game_menus.md` §4c.
+ * Doc: `exe-re/structs/game_menus.md` §7c.
  * Renamed from `FUN_00578d10`.
  */
 void gui_inventory_on_close_child(int param_1,uint param_2)
@@ -295260,14 +295402,15 @@ void gui_inventory_on_close_child(int param_1,uint param_2)
  * `inventory_remove_item_by_id`, translating the row id back to a slot address (`0x100` Hands,
  * `0x107` Coat, the `0x102`..`0x106` weapon band by `(id-0xff)*0x10`, the `0x200+` item band by
  * `(id-0x1f7)*0x10`); `0x1e`/`0x1f` fall through to the select path. A widget activation in the
- * `0x100`..`0x1fe` or `0x200`..`0x2fe` bands calls `inventory_select_slot(index, kind, actor)`
+ * `0x100`..`0x1fe` or `0x200`..`0x2fe` bands calls
+ * `inventory_select_slot(index, kind, removed_items)`
  * with kind 0 Hands, 1 weapon, 2 Coat, 3 item, 4 Car, then closes.
  * Parameters: param_1 (int *, ECX) the screen; param_2..param_8 forwarded to `gui_menu_tick`.
  * Returns: uint - the activated row id, `0xff` on a plain close, or 0.
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x00578d90, vtable `0x0063df3c` slot 5. The five `kind` constants are the same enum
  * `inventory_select_slot` takes elsewhere.
- * Doc: `exe-re/structs/game_menus.md` §4c.
+ * Doc: `exe-re/structs/game_menus.md` §7c.
  * Renamed from `FUN_00578d90`.
  */
 uint __thiscall
@@ -295408,7 +295551,7 @@ LAB_00578f08:
  *    this constructor and closes with `0xb3`. The PC runs the same test — same `& 2`
  *    flag on the same mission field — in `gui_action_menu_tick` instead. Do not read
  *    that as a fold; both builds have both functions.
- * Doc: `exe-re/structs/game_menus.md` §4d.
+ * Doc: `exe-re/structs/game_menus.md` §7d.
  */
 undefined4 * __thiscall
 gui_action_menu_ctor(undefined4 *param_1,float param_2,int *param_3,undefined4 param_4,undefined4 param_5,
@@ -295580,7 +295723,7 @@ gui_action_menu_ctor(undefined4 *param_1,float param_2,int *param_3,undefined4 p
  * Evidence: VA 0x00579480, vtable `0x0063df54` slot 0. This is the only screen in the TU with a
  * class-specific slot 0; every sibling shares `gui_menu_scalar_deleting_dtor_common`, because only
  * this class owns heap storage of its own.
- * Doc: `exe-re/structs/game_menus.md` §4d.
+ * Doc: `exe-re/structs/game_menus.md` §7d.
  * Renamed from `FUN_00579480`.
  */
 undefined4 __thiscall gui_action_menu_scalar_deleting_dtor(undefined4 param_1,byte param_2)
@@ -295604,7 +295747,7 @@ undefined4 __thiscall gui_action_menu_scalar_deleting_dtor(undefined4 param_1,by
  * destroys the `gif::vector` at `+0x40` and chains to `~GM_Menu`. `+0x1060` and PS2 `+0x40` are
  * the same member under the class's constant `+0x101c` field-offset delta.
  * Evidence: VA 0x005794a0. Reached only through slot 0.
- * Doc: `exe-re/structs/game_menus.md` §4d.
+ * Doc: `exe-re/structs/game_menus.md` §7d.
  * Renamed from `FUN_005794a0`.
  */
 void __fastcall gui_action_menu_dtor(int param_1)
@@ -295637,8 +295780,8 @@ void __fastcall gui_action_menu_dtor(int param_1)
  * because the signature and the behaviour agree with it.
  * Evidence: VA 0x005794d0. Field map is 1:1 at a constant `+0x101c` delta: PC `+0x104c`/`+0x1050`
  * /`+0x1054`/`+0x1058`/`+0x1060` are PS2 `+0x30`/`+0x34`/`+0x38`/`+0x3c`/`+0x40`. This closes a
- * method `game_menus.md` §10d listed as having no PC counterpart located.
- * Doc: `exe-re/structs/game_menus.md` §4d.
+ * method `game_menus.md` §13d listed as having no PC counterpart located.
+ * Doc: `exe-re/structs/game_menus.md` §7d.
  * Renamed from `FUN_005794d0`.
  */
 void __thiscall gui_action_menu_pick_up(int param_1,int param_2,char param_3)
@@ -295687,7 +295830,7 @@ void __thiscall gui_action_menu_pick_up(int param_1,int param_2,char param_3)
  * PS2 twin: none. `GM_ItemPickUp` has no `OnCloseChild` override at all - on that build the
  * equivalent decision is taken inside `OnCreate`, which auto-takes a lone option and closes.
  * Evidence: VA 0x00579590, vtable `0x0063df54` slot 3.
- * Doc: `exe-re/structs/game_menus.md` §4d.
+ * Doc: `exe-re/structs/game_menus.md` §7d.
  * Renamed from `FUN_00579590`.
  */
 void __thiscall gui_action_menu_on_close_child(int param_1,int param_2,int param_3)
@@ -295724,7 +295867,7 @@ void __thiscall gui_action_menu_on_close_child(int param_1,int param_2,int param
  * Evidence: VA 0x00579610, vtable `0x0063df54` slot 5. The lone-option auto-take is the same test
  * the PS2 runs in `OnCreate` (same `& 2` flag on the same mission field) - relocated across
  * virtuals, not inlined.
- * Doc: `exe-re/structs/game_menus.md` §4d.
+ * Doc: `exe-re/structs/game_menus.md` §7d.
  * Renamed from `FUN_00579610`.
  */
 int __thiscall
@@ -295858,7 +296001,7 @@ LAB_0057980b:
  * agreement is assertable.
  * Evidence: VA 0x00579900. Design 4's frame caption is textdb 120 "Player Profile:" and its rows
  * are 100 "< none >", 201 Create, 202 Delete, 203 Quit Game.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_00579900`.
  */
 undefined4 * __thiscall gui_profile_select_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -295903,7 +296046,7 @@ undefined4 * __thiscall gui_profile_select_ctor(undefined4 *param_1,undefined4 p
  * PS2 twin: none. Measured against the complete `GM_ProfileSelect` method set (OnKey, OnCreate,
  * OnCloseChild, OnTick, OnClick, {dtor}, OnBeforeCreate) - it has no `OnExchange` override.
  * Evidence: VA 0x005799d0, vtable `0x0063df6c` slot 1.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_005799d0`.
  */
 void __fastcall gui_profile_select_on_exchange(int param_1)
@@ -295937,7 +296080,7 @@ void __fastcall gui_profile_select_on_exchange(int param_1)
  * Evidence: VA 0x00579a00. The 0x54 stride and the `+0x10` name offset are PC facts read off the
  * three consumers of the profile vector in this TU. `folded_return_this` (0x005575f0) is the
  * folded `return this` accessor that yields it.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_00579a00`.
  */
 void __fastcall gui_profile_select_build_rows(int param_1)
@@ -296033,7 +296176,7 @@ void __fastcall gui_profile_select_build_rows(int param_1)
  * same slot and same role, but the PS2 body is a memory-card state machine, so nothing beyond the
  * role is shared.
  * Evidence: VA 0x00579bf0, vtable `0x0063df6c` slot 3.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_00579bf0`.
  */
 void __thiscall gui_profile_select_on_close_child(int *param_1,int param_2,int param_3)
@@ -296091,7 +296234,7 @@ LAB_00579c66:
  * the same `100..199` row band with the same `id - 100` index, the same "at least one profile"
  * guard on Delete, and the SAME two result constants 0xf and 0x10.
  * Evidence: VA 0x00579cc0, vtable `0x0063df6c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_00579cc0`.
  */
 undefined4 __thiscall
@@ -296240,7 +296383,7 @@ gui_profile_select_tick(int *param_1,undefined4 param_2,undefined4 param_3,undef
  * which the PC replaces with the engine text-input mode switch.
  * Evidence: VA 0x00579fb0. Design 3 ships ids 1 (caption, textdb 127), 11 = `0xb` (the edit field),
  * 101 = `0x65` OK and 102 = `0x66` Cancel.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_00579fb0`.
  */
 undefined4 * __thiscall
@@ -296286,7 +296429,7 @@ gui_profile_create_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_
  * Evidence: VA 0x0057a070, vtable `0x0063df84` slot 0. Notable because this is one of the few
  * screens that does NOT use the shared `gui_menu_scalar_deleting_dtor_common` - it has real
  * teardown work to do.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_0057a070`.
  */
 undefined4 __thiscall gui_profile_create_scalar_deleting_dtor(undefined4 param_1,byte param_2)
@@ -296311,7 +296454,7 @@ undefined4 __thiscall gui_profile_create_scalar_deleting_dtor(undefined4 param_1
  * PS2 has no input-mode switch to undo, so only the destructor role corresponds.
  * Evidence: VA 0x0057a090. The 2 -> 1 pairing of this call with the constructor's is what proves
  * `g_engine` vtable `+0x88` is a keyboard/text-input mode selector.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_0057a090`.
  */
 void __fastcall gui_profile_create_dtor(undefined4 *param_1)
@@ -296350,7 +296493,7 @@ void __fastcall gui_profile_create_dtor(undefined4 *param_1)
  * result constants 0xd and 0xe, and the same root-vs-child fork; the PS2 `OnKey` literally
  * forwards ESC to `OnClick(0x66)`.
  * Evidence: VA 0x0057a0f0, vtable `0x0063df84` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_0057a0f0`.
  */
 undefined4 __thiscall
@@ -296368,7 +296511,7 @@ gui_profile_create_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
       // PS2 is a real method that CALLS `OnClick(0x66)` back through the vtable
       // (`(**(this->vt + 0x34))(this, 0x66)`). The PC folds the two into this one slot-5
       // body, and additionally gates ESC on Cancel being enabled - a PC-only guard.
-      // See `exe-re/structs/game_menus.md` §8.
+      // See `exe-re/structs/game_menus.md` §11.
       cVar1 = gui_menu_get_component_enabled(0x66);
       if (cVar1 != '\0') {
         (**(code **)(*param_1 + 0x10))(param_1[0x11],0);
@@ -296415,7 +296558,7 @@ gui_profile_create_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
  * clear with the identical mask and the same one-row-per-profile loop from component 100 upward.
  * Evidence: VA 0x0057a1f0. Design 5's caption is textdb 125 "Delete Profile:" and its Cancel row is
  * 201 with textdb 126.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_0057a1f0`.
  */
 undefined4 * __thiscall gui_profile_delete_ctor(undefined4 *param_1,undefined4 param_2,float param_3)
@@ -296490,7 +296633,7 @@ undefined4 * __thiscall gui_profile_delete_ctor(undefined4 *param_1,undefined4 p
  * PS2 twin: `OnCloseChild__16GM_ProfileDeleteFP7GM_MenuUiUi` [STRUCTURAL] -
  * same slot, same role and the same `100..199` row band, but the PS2 body is memory-card driven.
  * Evidence: VA 0x0057a370, vtable `0x0063df9c` slot 3.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_0057a370`.
  */
 void __thiscall gui_profile_delete_on_close_child(int *param_1,uint param_2,int param_3)
@@ -296520,7 +296663,7 @@ void __thiscall gui_profile_delete_on_close_child(int *param_1,uint param_2,int 
  * `0x82` handed to the question box - the PS2 line is `__ct__14GM_QuestionBoxFUiUib(new, 0x82,
  * 0x86, 0)`. A 2 -> 1 fold (+OnKey).
  * Evidence: VA 0x0057a3c0, vtable `0x0063df9c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §8.
+ * Doc: `exe-re/structs/game_menus.md` §11.
  * Renamed from `FUN_0057a3c0`.
  */
 undefined4 __thiscall
@@ -296588,7 +296731,7 @@ gui_profile_delete_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 
  * `SetRangeFloat` through vtable `+0x70`). The record stride differs: PC 0x18, PS2 0x38.
  * Evidence: VA 0x0057a4a0. 🔑 The scroll-range write is what independently proves that the PC
  * `'swnd'` range lives at `+0x28` - the field `gui_widget_window_scroll_tick` clamps against.
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  * Renamed from `FUN_0057a4a0`.
  */
 undefined4 * __thiscall gui_load_game_ctor(undefined4 *param_1,undefined4 param_2,int param_3)
@@ -296684,7 +296827,7 @@ LAB_0057a625:
  * loading the header, and the SAME textdb id `0xaf` into the SAME component `0x3f2`. A 5 -> 1 fold
  * - it also carries OnChange, OnTick, OnKey and OnMouse.
  * Evidence: VA 0x0057a670, vtable `0x0063dfb4` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  * Renamed from `FUN_0057a670`.
  */
 undefined4 __thiscall
@@ -296821,7 +296964,7 @@ gui_load_game_tick(int *param_1,undefined4 param_2,uint param_3,int param_4,int 
  * same car-name fallback to textdb `0x2bf` under the identical range test `(id & 0xffff) != 0 &&
  * id < count`, and the same free-ride parameter store.
  * Evidence: VA 0x0057aaf0. Design 0xe's frame caption is textdb 1055 "Free Ride:".
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_0057aaf0`.
  */
 undefined4 * __thiscall gui_free_ride_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -296886,7 +297029,7 @@ LAB_0057aba5:
  * `0x65` arm is statement-for-statement the PS2 body, including the `0x2bf` fallback. The id-100
  * arm is a PC extension - the console build has no free-ride mode gallery.
  * Evidence: VA 0x0057ac40, vtable `0x0063dfcc` slot 3.
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_0057ac40`.
  */
 void __thiscall gui_free_ride_on_close_child(int param_1,int param_2,int param_3)
@@ -296963,7 +297106,7 @@ switchD_0057ac69_default:
  * 100 / `0x65` / 200 / `0xc9`, and `0x65` opens the car-manufacturer chooser on both builds. A 2
  * -> 1 fold (+OnKey).
  * Evidence: VA 0x0057ad80, vtable `0x0063dfcc` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §4.
+ * Doc: `exe-re/structs/game_menus.md` §7.
  * Renamed from `FUN_0057ad80`.
  */
 undefined4 __thiscall
@@ -297071,7 +297214,7 @@ switchD_0057adf4_caseD_66:
  * `GM_*` roster has no equivalent class.
  * Evidence: VA 0x0057aff0, vtable `0x0063dfe4`; design literal 0x34. Opened from
  * `gui_free_ride_tick`'s Start arm (id 0xc9) whenever the mode is not `0x1c`.
- * Doc: `exe-re/structs/game_menus.md` §4f.
+ * Doc: `exe-re/structs/game_menus.md` §7f.
  * Renamed from `FUN_0057aff0`.
  */
 undefined4 * __thiscall
@@ -297114,7 +297257,7 @@ gui_free_ride_location_ctor(undefined4 *param_1,undefined4 param_2,undefined4 pa
  * Returns: int - the free-ride mode on a pick, else 0.
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x0057b0b0, vtable `0x0063dfe4` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §4f.
+ * Doc: `exe-re/structs/game_menus.md` §7f.
  * Renamed from `FUN_0057b0b0`.
  */
 int __thiscall
@@ -297166,7 +297309,7 @@ gui_free_ride_location_tick(int *param_1,undefined4 param_2,uint param_3,undefin
  * both callers of this constructor are in `net_multiplayer_run`.
  * Evidence: VA 0x0057b150. Design 0x2f's two shipped records are exactly the frame + row template
  * this body assumes.
- * Doc: `exe-re/structs/game_menus.md` §7.
+ * Doc: `exe-re/structs/game_menus.md` §10.
  * Renamed from `FUN_0057b150`.
  */
 undefined4 * __thiscall
@@ -297253,7 +297396,7 @@ gui_session_list_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undef
  * PS2 twin: none - see `gui_session_list_ctor`. A 3 -> 1 fold in PS2 terms: it carries what would
  * be OnClick, OnKey and OnTick.
  * Evidence: VA 0x0057b2e0, vtable `0x0063dffc` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §7.
+ * Doc: `exe-re/structs/game_menus.md` §10.
  * Renamed from `FUN_0057b2e0`.
  */
 int __thiscall
@@ -297309,7 +297452,7 @@ gui_session_list_tick(int *param_1,undefined4 param_2,uint param_3,undefined4 pa
  * `gunshop_menu` (parser raw 0x060, dispatcher case 0x61) as a modal, passing `player+0x480`; the
  * shipped scripts use it in `MISE19-MESTO/1ProdZ.script` and `MISE20-MESTO/1ProdZ.script`, the
  * weapons dealer. It is a weapon PICKUP screen despite the window caption 'Inventory (Drop)'.
- * Doc: `exe-re/structs/game_menus.md` §4e.
+ * Doc: `exe-re/structs/game_menus.md` §7e.
  * Renamed from `FUN_0057b3a0`.
  */
 undefined4 * __thiscall
@@ -297395,7 +297538,7 @@ gui_gun_shop_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefined
  * Returns: void. Side effect: enables/disables the component and sets its text pointer.
  * PS2 twin: none - the PS2 formats the equivalent strings inline with `sprintf`.
  * Evidence: VA 0x0057b530. Called eight times by `gui_gun_shop_refresh_slots`.
- * Doc: `exe-re/structs/game_menus.md` §4e.
+ * Doc: `exe-re/structs/game_menus.md` §7e.
  * Renamed from `FUN_0057b530`.
  */
 void gui_gun_shop_format_slot_row(undefined4 param_1,undefined4 param_2,undefined4 param_3,ushort *param_4)
@@ -297443,7 +297586,7 @@ void gui_gun_shop_format_slot_row(undefined4 param_1,undefined4 param_2,undefine
  * is pinned instead by TWO independent identical call positions: the tail of `OnCreate` and the
  * default arm of `OnClick`. The verb is carried because the PS2 declares exactly this method.
  * Evidence: VA 0x0057b600.
- * Doc: `exe-re/structs/game_menus.md` §4e.
+ * Doc: `exe-re/structs/game_menus.md` §7e.
  * Renamed from `FUN_0057b600`.
  */
 void __fastcall gui_gun_shop_refresh_slots(int param_1)
@@ -297508,7 +297651,7 @@ void __fastcall gui_gun_shop_refresh_slots(int param_1)
  * PS2 twin: `OnClick__10GM_GunShopFUi` [CONFIRMED]. A 1 -> 1 fold: the same
  * `0x44c` close id and the same tail call to `RefreshInventory` on every other id.
  * Evidence: VA 0x0057b700, vtable `0x0063e014` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §4e.
+ * Doc: `exe-re/structs/game_menus.md` §7e.
  * Renamed from `FUN_0057b700`.
  */
 undefined4 __thiscall
@@ -297634,7 +297777,7 @@ LAB_0057b8f0:
  * a CONFIRMED twin of `CarManager__13G_GarageClassFv`. The PS2 texture-preview release in
  * `OnClose` has no PC counterpart - the PC list has no previews.
  * Evidence: VA 0x0057b930 (992 B), vtable `0x0063e02c`; design literal 0x25.
- * Doc: `exe-re/structs/garage.md` §3.
+ * Doc: `exe-re/structs/garage.md` §5.
  * Renamed from `FUN_0057b930`.
  */
 undefined4 * __thiscall
@@ -297918,7 +298061,7 @@ LAB_0057bb12:
  * activate-writes-the-selection pair through the class's out-pointer. The PS2 does the toggle in
  * `CarManager` after the menu returns.
  * Evidence: VA 0x0057bd10, vtable `0x0063e02c` slot 5. True size 608 B.
- * Doc: `exe-re/structs/garage.md` §3.
+ * Doc: `exe-re/structs/garage.md` §5.
  * Renamed from `FUN_0057bd10`.
  */
 undefined4 __thiscall
@@ -298043,7 +298186,7 @@ LAB_0057bf46:
  * `garage_game_done`, with the PC cap literal `0x10`.
  * Evidence: VA 0x0057bfa0 (925 B), vtable `0x0063e044`; design literal 0x26 (textdb 1111 'The
  * garage is full', 1112 'Which car do you want to discard from the Garage?').
- * Doc: `exe-re/structs/garage.md` §3.
+ * Doc: `exe-re/structs/garage.md` §5.
  * Renamed from `FUN_0057bfa0`.
  */
 undefined4 * __thiscall
@@ -298288,7 +298431,7 @@ LAB_0057c20b:
  * `HlidejPocetVect` after `ExecuteMenu` returns, so there is no PC-side body to diff against
  * (graded STRUCTURAL on slot, class and the caller lockstep rather than on a body match).
  * Evidence: VA 0x0057c340, vtable `0x0063e044` slot 5.
- * Doc: `exe-re/structs/garage.md` §3.
+ * Doc: `exe-re/structs/garage.md` §5.
  * Renamed from `FUN_0057c340`.
  */
 undefined4 __thiscall
@@ -298382,7 +298525,7 @@ gui_garage_full_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefine
  * composition. No sibling screen builds two bands. Its caller `garage_show_results` is already a
  * CONFIRMED twin of `GarageShowResultsProc__13G_GarageClassFv`.
  * Evidence: VA 0x0057c540 (817 B), vtable `0x0063e05c`; design literal 0x27, gate variable.
- * Doc: `exe-re/structs/garage.md` §3.
+ * Doc: `exe-re/structs/garage.md` §5.
  * Renamed from `FUN_0057c540`.
  */
 undefined4 * __thiscall
@@ -298499,7 +298642,7 @@ gui_garage_summary_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_
  * `OnClick__16GM_GarageSummaryFUi`, which is an 8-byte stub on that build. The PS2 closes only on
  * key `0x1c`; the PC closes on any key, because it also has a mouse.
  * Evidence: VA 0x0057c880, vtable `0x0063e05c` slot 5.
- * Doc: `exe-re/structs/garage.md` §3.
+ * Doc: `exe-re/structs/garage.md` §5.
  * Renamed from `FUN_0057c880`.
  */
 undefined4 __thiscall
@@ -298542,7 +298685,7 @@ gui_garage_summary_tick(int *param_1,undefined4 param_2,undefined4 param_3,undef
  *  `FreerideGetState` -> disable 1000 + activate `0x3ea` tail.
  * Evidence: VA 0x0057c8e0. Design 0x30's frame caption is textdb 1403 "Game Over".
  *  Renamed from `FUN_0057c8e0`.
- * Doc: `exe-re/structs/game_menus.md` §5.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  */
 undefined4 * __thiscall
 gui_game_over_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefined4 param_4)
@@ -298614,7 +298757,7 @@ gui_game_over_ctor(undefined4 *param_1,undefined4 param_2,float param_3,undefine
  * / 0x506).
  * Evidence: VA 0x0057ca40, vtable `0x0063e074` slot 5. Design 0x30 ships exactly those two rows,
  * 1000 textdb 1402 "Retry" and 1002 textdb 1400 "Exit to Main Menu".
- * Doc: `exe-re/structs/game_menus.md` §5.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057ca40`.
  */
 undefined4 __thiscall
@@ -298648,7 +298791,7 @@ gui_game_over_tick(int *param_1,undefined4 param_2,undefined4 param_3,undefined4
  * PS2 twin: `OnCreate__17GM_GameMenuRacingFv` [CONFIRMED] - the same class,
  * and the PS2 body pre-focuses `0x3ec` (Resume) where the PC leaves the design's own focus.
  * Evidence: VA 0x0057cab0. Design 0x2e's shipped ids 1001..1004 are exactly `0x3e9`..`0x3ec`.
- * Doc: `exe-re/structs/game_menus.md` §5.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057cab0`.
  */
 undefined4 * __thiscall gui_racing_game_menu_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -298689,7 +298832,7 @@ undefined4 * __thiscall gui_racing_game_menu_ctor(undefined4 *param_1,undefined4
  * PS2 twin: `OnClick__17GM_GameMenuRacingFUi` [CONFIRMED] - the SAME four
  * ids and `0x3ea` opens `GM_Options` on both builds. A 2 -> 1 fold (+OnKey).
  * Evidence: VA 0x0057cb40, vtable `0x0063e08c` slot 5.
- * Doc: `exe-re/structs/game_menus.md` §5.
+ * Doc: `exe-re/structs/game_menus.md` §8.
  * Renamed from `FUN_0057cb40`.
  */
 undefined4 __thiscall
@@ -298766,7 +298909,7 @@ gui_racing_game_menu_tick(int *param_1,undefined4 param_2,uint param_3,undefined
  *  15-row multiplayer roster is a PC-only extension.
  * Evidence: VA 0x0057cc90. Design 0x32's caption is textdb 650 "Loading progress".
  *  Renamed from `FUN_0057cc90`.
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  */
 undefined4 * __thiscall
 gui_load_progress_ctor(undefined4 *param_1,float param_2,int param_3,float param_4,undefined4 param_5,
@@ -298878,7 +299021,7 @@ gui_load_progress_ctor(undefined4 *param_1,float param_2,int param_3,float param
  * SetRawProgress, Present) - there is no OnExchange, and the console build has no network roster
  * at all.
  * Evidence: VA 0x0057cf80, vtable `0x0063e0a4` slot 1.
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  * Renamed from `FUN_0057cf80`.
  */
 void __fastcall gui_load_progress_on_exchange(int param_1)
@@ -298952,7 +299095,7 @@ void __fastcall gui_load_progress_on_exchange(int param_1)
  * slot, and everything this function does is the PC multiplayer extension.
  * Evidence: VA 0x0057d0c0, vtable `0x0063e0a4` slot 5. Note it does NOT call `gui_menu_tick` - the
  * loading screen takes no input.
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  * Renamed from `FUN_0057d0c0`.
  */
 undefined4 gui_load_progress_tick(undefined4 param_1,char param_2)
@@ -299028,7 +299171,7 @@ LAB_0057d197:
  * Evidence: VA 0x0057d240. 🔴 This function and its sibling were briefly filed as "network message
  * classes" because they touch the message vtable `0x0063e0bc` - that vtable belongs to the message
  * they CONSTRUCT, not to them. The PS2 formulas are what assigned the two names correctly.
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  * Renamed from `FUN_0057d240`.
  */
 void __thiscall gui_load_progress_set_progress_game_init(int param_1,float param_2)
@@ -299048,7 +299191,7 @@ void __thiscall gui_load_progress_set_progress_game_init(int param_1,float param
   // component 300 with `FindComponentByID` and dispatches the widget's vtable +0x50;
   // the PC writes the same component 300 directly. The arithmetic above
   // (`base + (1 - base) * t`) is byte-for-byte the PS2's.
-  // See `exe-re/structs/game_menus.md` §6.
+  // See `exe-re/structs/game_menus.md` §9.
   gui_menu_set_component_float(300,fVar2);
   if (g_net_session != 0) {
     cVar3 = net_session_is_active();
@@ -299089,7 +299232,7 @@ void __thiscall gui_load_progress_set_progress_game_init(int param_1,float param
  * formula is byte-for-byte `t * *(base)`, feeding `SetRawProgress` and the same component 300.
  * Evidence: VA 0x0057d320. Together with its sibling this pins `+0x48` as the split point between
  * the two loading phases: mission-open fills `[0, base]` and game-init fills `[base, 1]`.
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  * Renamed from `FUN_0057d320`.
  */
 void __thiscall gui_load_progress_set_progress_mission_open(int param_1,float param_2)
@@ -299105,7 +299248,7 @@ void __thiscall gui_load_progress_set_progress_mission_open(int param_1,float pa
   // PS2-INLINED HERE: this write is `SetRawProgress__15GM_LoadProgressFf`, which the
   // PS2 `SetProgressMissionOpen__15GM_LoadProgressFf` CALLS. The multiplication
   // `t * base` is byte-for-byte the PS2's; only the call is gone.
-  // See `exe-re/structs/game_menus.md` §6.
+  // See `exe-re/structs/game_menus.md` §9.
   gui_menu_set_component_float(300,param_2 * *(float *)(param_1 + 0x48));
   if (g_net_session != 0) {
     cVar2 = net_session_is_active();
@@ -299145,7 +299288,7 @@ void __thiscall gui_load_progress_set_progress_mission_open(int param_1,float pa
  * `OnCreate__15GM_LoadProgressFv` [STRUCTURAL]; the PC out-lined it so the
  * loading sequence can change the caption between phases.
  * Evidence: VA 0x0057d400, 18 bytes. Component 400 is design 0x32's `rtxt` at (400, 15).
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  * Renamed from `FUN_0057d400`.
  */
 void gui_load_progress_set_caption(undefined4 param_1)
@@ -299170,7 +299313,7 @@ void gui_load_progress_set_caption(undefined4 param_1)
  * SAME `Draw(0xffffffff)` argument.
  * Evidence: VA 0x0057d420. The 1:1 correspondence of the six graphics calls is what maps `g_engine`
  * vtable `+0x30`..`+0x44` onto the PS2 `igraph` `+0x68`..`+0x78` band.
- * Doc: `exe-re/structs/game_menus.md` §6.
+ * Doc: `exe-re/structs/game_menus.md` §9.
  * Renamed from `FUN_0057d420`.
  */
 void __fastcall gui_load_progress_present(int *param_1)
@@ -299208,7 +299351,7 @@ void __fastcall gui_load_progress_present(int *param_1)
  * Evidence: VA 0x0057d4b0, vtable `0x0063e0cc`; design literal 0x33. Rows 401..405 are textdb
  * 1050..1054: City - Small, City - Night, Countryside - Night, City - Daytime, Countryside -
  * Daytime. `g_freeride_unlock_level` is deliberately left `DAT_` - its writer is not traced.
- * Doc: `exe-re/structs/game_menus.md` §4f.
+ * Doc: `exe-re/structs/game_menus.md` §7f.
  * Renamed from `FUN_0057d4b0`.
  */
 undefined4 * __thiscall gui_free_ride_mode_ctor(undefined4 *param_1,undefined4 param_2,undefined4 param_3)
@@ -299256,7 +299399,7 @@ LAB_0057d558:
  * PS2 twin: none - the class is PC-only.
  * Evidence: VA 0x0057d580, vtable `0x0063e0cc` slot 5. The row-to-mode map is what pairs the five
  * `freerideN.bmp` previews with the modes `0x1c`..`0x20` the free-ride screen stores.
- * Doc: `exe-re/structs/game_menus.md` §4f.
+ * Doc: `exe-re/structs/game_menus.md` §7f.
  * Renamed from `FUN_0057d580`.
  */
 undefined4 __thiscall
@@ -299402,7 +299545,7 @@ void crt_atexit_register_0057d700(void)
  * PS2 twin: none - MSVC toolchain scaffolding.
  * Evidence: VA 0x0057d710. It sits immediately after the `game_menus` TU's CLOSING static-init
  * pair, which is what marks it as the head of the next translation unit.
- * Doc: `exe-re/structs/textdb.md` §4.
+ * Doc: `exe-re/structs/textdb.md` §6.
  * Renamed from `FUN_0057d710`.
  */
 void crt_static_init_textdb(void)
@@ -299425,7 +299568,7 @@ void crt_static_init_textdb(void)
  * Evidence: VA 0x0057d720. `textdb_ctor` has ONE inbound edge in the whole image — this
  * function's own `E9` tail jump at 0x0057d725 — so it is class-owned: it is
  * `G_TextDatabase`'s constructor.
- * Doc: `exe-re/structs/textdb.md` §4.
+ * Doc: `exe-re/structs/textdb.md` §6.
  * Renamed from `FUN_0057d720`.
  */
 void crt_zero_init_textdb(void)
@@ -299443,7 +299586,7 @@ void crt_zero_init_textdb(void)
  * Returns: void.
  * PS2 twin: none - MSVC toolchain scaffolding.
  * Evidence: VA 0x0057d730. Matches the 235-member `crt_atexit_register_*` family.
- * Doc: `exe-re/structs/textdb.md` §4.
+ * Doc: `exe-re/structs/textdb.md` §6.
  * Renamed from `FUN_0057d730`.
  */
 void crt_atexit_register_textdb(void)
@@ -299465,7 +299608,7 @@ void crt_atexit_register_textdb(void)
  * PS2 twin: none - MSVC toolchain scaffolding.
  * Evidence: VA 0x0057d740. Reached ONLY as an address (`crt_atexit(&crt_atexit_free_textdb)`),
  * never called.
- * Doc: `exe-re/structs/textdb.md` §4.
+ * Doc: `exe-re/structs/textdb.md` §6.
  * Renamed from `FUN_0057d740`.
  */
 void crt_atexit_free_textdb(void)
@@ -299500,7 +299643,7 @@ void crt_atexit_free_textdb(void)
  *     0x0057d710 is reached from the MSVC `.CRT$XCU` dynamic-initializer table at
  *     `.data:0x00646190`. A scan for DATA references alone never follows that `E8`/`E9`
  *     code chain.
- * Doc: `exe-re/structs/textdb.md` §4.
+ * Doc: `exe-re/structs/textdb.md` §6.
  */
 void __fastcall textdb_ctor(undefined4 *param_1)
 
@@ -299525,7 +299668,7 @@ void __fastcall textdb_ctor(undefined4 *param_1)
  * Evidence: VA 0x0057d760. ONE real caller (the crt_atexit adaptor above), which is what makes it
  * class-owned rather than a shared helper. `textdb_ctor` likewise has ONE inbound edge and is
  * equally class-owned.
- * Doc: `exe-re/structs/textdb.md` §4.
+ * Doc: `exe-re/structs/textdb.md` §6.
  * Renamed from `FUN_0057d760`.
  */
 void __fastcall textdb_dtor(int *param_1)
@@ -299555,7 +299698,7 @@ void __fastcall textdb_dtor(int *param_1)
  * record's text pointer. The PS2 signature carries a trailing `bool` that neither body reads.
  * Evidence: VA 0x0057d770. The layout it builds is exactly what `textdb_get_string_by_id` binary-
  * searches: 8-byte records at `+0x08`, key at +0, text pointer at +4, count at `+0x04`. 2 callers.
- * Doc: `exe-re/structs/textdb.md` §2.
+ * Doc: `exe-re/structs/textdb.md` §4.
  * Renamed from `FUN_0057d770`.
  */
 uint __thiscall textdb_load(int *param_1,int param_2)
@@ -300067,7 +300210,7 @@ void __fastcall collision_classify_static_primitives(int param_1)
                 // intervening call. Everything either side is statement-identical, including the
                 // `& 0xa0` skip gate (PS2 splits it into `& 0x80` and `& 0x20`), the 8/9/10
                 // intermediate codes and the 1..7 refinement. Only the epsilon differs:
-                // 0.0001 here, 0.0002 on PS2. See `exe-re/structs/collision.md` §2b.
+                // 0.0001 here, 0.0002 on PS2. See `exe-re/structs/collision.md` §9.
                 if (ABS((float)puVar2[4]) <= ABS((float)puVar2[5])) {
                   uVar5 = 10;
                   if (ABS((float)puVar2[6]) <= ABS((float)puVar2[5])) {
@@ -300156,7 +300299,7 @@ void __fastcall collision_classify_static_primitives(int param_1)
  * PS2 twin: `LoadCollision__11g_collisionFPCcb`  [CONFIRMED]
  *  Same `GifC` test, 0x7fff branch, `MIRR` exclusion and 0x20 for an unresolved triangle.
  * Evidence: VA 0x0057dca0; 14 callsites. The layout parses all 81 shipped `tree.klz` files.
- *  `exe-re/structs/collision.md` §2, §4. Renamed from `FUN_0057dca0`.
+ *  `exe-re/structs/collision.md` §3, §7. Renamed from `FUN_0057dca0`.
  */
 void __thiscall collision_load_level(int param_1,undefined4 param_2,char param_3)
 
@@ -302133,7 +302276,7 @@ undefined1 __thiscall collision_line_in_dynamics(int param_1,float *param_2)
               case 0x48:
                 // Blood decal sphere: no hit. Arms the querying actor's bloody prints
                 // (vtable +0x90: dog_arm_bloody_paw_prints / human_arm_bloody_footprints).
-                // +0x2c4 = g_collision_next_query_actor (structs/collision.md §1d).
+                // +0x2c4 = g_collision_next_query_actor (structs/collision.md §5c).
                 if (*(int **)(param_1 + 0x2c4) != (int *)0x0) {
                   (**(code **)(**(int **)(param_1 + 0x2c4) + 0x90))(puVar7);
                 }
@@ -304003,7 +304146,7 @@ collision_test_line_horizontal_dynamic(int param_1,float *param_2,float *param_3
  *   on axis-major + sign quadrant; per-cell narrow-phase via collision_line_in_tree_level;
  *   output semantics (hit_pos = origin + t * delta, hit_normal renormalised)
  *   match standard raycast API.
- *   Renamed from `thunk_FUN_005838a0`.
+ *   Renamed from `FUN_005838a0`.
  * PS2 twin: _TestLineH__11g_collisionFRC8S_vectorRC8S_vectorP8S_vectorP8S_vectorUiUi  [CONFIRMED]
  *   The HORIZONTAL line/ray test against BOTH grids (static +0x284 2-D DDA + dynamic +0x28c).
  *   "Horizontal" confirmed by in-game observation. Delegates its dynamic phase to
@@ -308828,7 +308971,7 @@ collision_test_sphere_swept(int param_1,float *param_2,float *param_3,float para
  * Evidence: VA 0x0058f670. 🔴 PC-ONLY, and this is a measurement over a CLOSED SET rather than a
  * failed search: the PS2 collision band `0x00276000..0x0029b000` was enumerated
  * from the symbol table with the CLASS COLUMN IGNORED and holds exactly 64
- * `g_collision` methods - all 64 already accounted for in `structs/collision.md` §2 - plus
+ * `g_collision` methods - all 64 already accounted for in `structs/collision.md` §3 - plus
  * exactly ONE free function, `GrantCoherence`, which is the twin of
  * `collision_classify_static_primitives`. None of the 65 is a slide solver. The one consumer
  * chain ends in `box_ai_tick`, a method of `C_box`, which is itself PC-only (`structs/box.md`).
@@ -309634,6 +309777,7 @@ void collision_test_line_vertical_inner_dyn_thunk(void)
  *   emitting the call, so this record is a 418-line copy that is identical to
  *   `collision_test_line_horizontal`'s def once Ghidra's stack-local spellings are
  *   canonicalised. The def comes from the Aggressive Instruction Finder pass.
+ * PS2 twin: `TestLineH__11g_collisionFRC8S_vectorRC8S_vectorP8S_vectorP8S_vectorUiUi`  [CONFIRMED]
  * Renamed from `thunk_FUN_005838a0`.
  */
 int __thiscall
@@ -310092,7 +310236,7 @@ void collision_test_sphere_swept_thunk(void)
  * What it does: runs `collision_slide_sphere` with two throwaway out-vectors and no layer masks,
  * then hands the caller the two things it actually wants: `*param_4 = &g_collision` (the base of
  * the contact-record array, which is the singleton's own address) and `*param_5 =
- * g_collision_contact_count`. It is the `collision_test_*` shape of `structs/collision.md` §1c -
+ * g_collision_contact_count`. It is the `collision_test_*` shape of `structs/collision.md` §5b -
  * a short public wrapper that delegates to exactly one worker.
  * Parameters: param_1 (S_vector *): start position. param_2 (S_vector *): motion delta. param_3:
  * sphere radius. param_4 (void **): out, the contact-record array base. param_5 (int *): out,
@@ -310116,6 +310260,18 @@ void collision_test_sphere_slide(undefined4 param_1,undefined4 param_2,undefined
   return;
 }
 
+/*
+ * thunk_collision_test_moving_box — 5-byte jump thunk to `collision_test_moving_box`
+ *   (0x0057f9e0), the public swept oriented-box test.
+ * What it does: forwards to `collision_test_moving_box` and nothing else.
+ * Parameters / Returns: the target's; the jump does not touch the frame.
+ * PS2 twin: [STRUCTURAL]
+ *  `TestDBox__11g_collisionFRC8I3D_bboxRC8S_matrixRC8S_matrixRC8S_vectorRC8S_vectorRC8S_vectorUiUi`
+ * Evidence: VA 0x00590ab0, bytes `e9 2b ef fe ff` + `90 90 90`, 16-aligned; the PS2 public
+ *   entry is the matching 8-byte forwarder to `_TestDBox`. Ghidra copies the target's body into
+ *   this record. See structs/collision.md §3c and §9.
+ * Renamed from `thunk_FUN_0057f9e0`.
+ */
 undefined4 __thiscall
 thunk_collision_test_moving_box(int param_1,float *param_2,undefined4 param_3,undefined4 param_4,float *param_5,
                   float *param_6,float *param_7,int param_8,int param_9)
@@ -314051,7 +314207,7 @@ undefined4 __thiscall event_msg_dword_pair_reversed_deserialize(int param_1,int 
  * Returns: void.
  * Evidence: VA 0x005946a0. **1 callsite, inside `door_set_state`**, called as `(door+0x18,
  * param_2 == 2)`. That single callsite is what decodes the payload: field 0 is the door GUID
- * and field 1 is "state 2", the open/close verb (`structs/door.md` §2).
+ * and field 1 is "state 2", the open/close verb (`structs/door.md` §8).
  * PS2 twin: none — the whole subsystem is PC-only.
  * Renamed from `FUN_005946a0`.
  */
@@ -315188,7 +315344,7 @@ LAB_00595d5b:
  * Renamed from `FUN_00595d90` (original Ghidra id), VA 0x00595d90. `racing_` is used
  * here as the module prefix for a FREE function in the racing front end, not as a
  * `C_racing` method prefix.
- * Doc: `exe-re/structs/racing.md` §6.
+ * Doc: `exe-re/structs/racing.md` §9.
  * PS2 twin: `ExecuteRacingMenu__Fv`  [CONFIRMED]
  *  Body-diff: same `g_racing+0x2c` = 1/2/3 dispatch, the same
  *  `+0x280 = +0x27c; +0x27c = 99` vs `1` lap-count swap, and the same replay-load arm.
@@ -315507,7 +315663,7 @@ undefined4 net_open_session_browser(void)
  * Renamed from `FUN_00596370` (original Ghidra id), VA 0x00596370. This function touches
  * no options; the main menu's real Options item (`0xf1b9e`) opens `gui_options_ctor`
  * directly and never reaches here.
- * Doc: `exe-re/structs/multiplayer.md` §1.
+ * Doc: `exe-re/structs/multiplayer.md` §4.
  * A GLOBAL FREE function of the PS2 `multiloop.cpp` translation unit. `net_` is this
  *  project's free/subsystem root for the networking code; the session class itself takes
  *  `net_session_`.
@@ -315775,7 +315931,7 @@ LAB_00596a5a:
 }
 
 /*
- * race_mission6_init — set up the mission-6 street race from the script
+ * race_mission6_init — set up the mission-6 circuit race from the script
  *
  * What it does: creates `C_racing` if it does not exist, marks it a mission race (`g_racing+3`),
  *  selects the circuit by index out of the `g_racing+0x0c` vector, stores the lap count in
@@ -315833,7 +315989,7 @@ void __fastcall race_mission6_init(undefined4 param_1,undefined4 param_2,uint pa
 }
 
 /*
- * race_mission6_execute_loop — run the mission-6 street race and report its outcome
+ * race_mission6_execute_loop — run the mission-6 circuit race and report its outcome
  *
  * What it does: the body of the shipped script command `racing_mission6_start xx`. Returns
  *  3 immediately when `g_racing+3` is clear, i.e. no mission race has been set up. Otherwise
@@ -316335,10 +316491,10 @@ undefined1 __thiscall net_session_create_connection(int param_1,undefined4 param
  * Evidence: VA 0x00597190. 🔑 **This is the gate that decides whether multiplayer is
  *  reachable at all:** `net_multiplayer_run` calls it and then refuses with a message box
  *  when `g_net_session+0x100 == 0`, so a machine without DirectPlay installed bounces
- *  straight back to the menu. That also settles `structs/net_session.md` §6's open
+ *  straight back to the menu. That also settles `structs/net_session.md` §7's open
  *  question about the `+0x100` enum — 0 means "no provider was ever created".
  *  Renamed from `FUN_00597190`.
- * Doc: `exe-re/structs/net_session.md` §7.
+ * Doc: `exe-re/structs/net_session.md` §6.
  * The receiver is the multiplayer session singleton (`g_net_session`, `operator_new(0x2c8)`
  *  in `engine_init`), which is what the per-class root `net_session_` names; free helpers of
  *  the same subsystem keep `net_`.
@@ -316506,7 +316662,7 @@ void __fastcall net_session_dtor(int param_1)
  *  Multiplayer Settings design `0x2b` branches on (1 and 2 show an IP/port block, 4 shows
  *  the COM/baud/parity/flow block), which is what identifies the field as the provider
  *  type rather than an index. Renamed from `FUN_005974c0`.
- * Doc: `exe-re/structs/net_session.md` §7.
+ * Doc: `exe-re/structs/net_session.md` §6.
  * The receiver is the multiplayer session singleton (`g_net_session`, `operator_new(0x2c8)`
  *  in `engine_init`), which is what the per-class root `net_session_` names; free helpers of
  *  the same subsystem keep `net_`.
@@ -316611,7 +316767,7 @@ int __fastcall net_session_enumerate_providers(int param_1)
  * Evidence: VA 0x00597710. Its size is pinned independently by
  *  `gui_mp_settings_ctor`, which copies exactly 0x27 dwords (0x9c bytes) from here.
  *  Renamed from `FUN_00597710`.
- * Doc: `exe-re/structs/net_session.md` §7.
+ * Doc: `exe-re/structs/net_session.md` §6.
  * The receiver is the multiplayer session singleton (`g_net_session`, `operator_new(0x2c8)`
  *  in `engine_init`), which is what the per-class root `net_session_` names; free helpers of
  *  the same subsystem keep `net_`.
@@ -316678,7 +316834,7 @@ void __fastcall net_session_settings_save(int param_1)
  * Evidence: VA 0x005977e0; the whole function is
  *  `push 0x6724d0; call net_session_settings_apply; ret`.
  *  Renamed from `FUN_005977e0`.
- * Doc: `exe-re/structs/net_session.md` §7.
+ * Doc: `exe-re/structs/net_session.md` §6.
  * The receiver is the multiplayer session singleton (`g_net_session`, `operator_new(0x2c8)`
  *  in `engine_init`), which is what the per-class root `net_session_` names; free helpers of
  *  the same subsystem keep `net_`.
@@ -316747,7 +316903,7 @@ void __thiscall net_session_set_state(int param_1,undefined4 param_2)
  * there — the same block at the same size; and all three call sites are multiplayer.
  * It arms nothing on an NPC; `police-system/artifacts/offences.md` §5.4's headline — that
  * the `+0x1b8` police-call slot is never armed — does not depend on this function.
- * Doc: `exe-re/structs/net_session.md` §7.
+ * Doc: `exe-re/structs/net_session.md` §6.
  * The receiver is the multiplayer session singleton (`g_net_session`, `operator_new(0x2c8)`
  *  in `engine_init`), which is what the per-class root `net_session_` names; free helpers of
  *  the same subsystem keep `net_`.
@@ -316783,7 +316939,7 @@ void __thiscall net_session_settings_apply(int param_1,char *param_2)
  *  `gui_mp_menu_refresh_mode_items` apply to the whole mode mask, so a machine with no
  *  usable provider gets every host and join item greyed out.
  *  Renamed from `FUN_005978b0`.
- * Doc: `exe-re/structs/net_session.md` §7.
+ * Doc: `exe-re/structs/net_session.md` §6.
  * The receiver is the multiplayer session singleton (`g_net_session`, `operator_new(0x2c8)`
  *  in `engine_init`), which is what the per-class root `net_session_` names; free helpers of
  *  the same subsystem keep `net_`.
@@ -316825,7 +316981,7 @@ uint __fastcall net_session_selected_provider_is_valid(int param_1)
  * Evidence: VA 0x005978f0. Its result is fed straight to the INet driver's session
  *  enumerator by `gui_mp_settings_ctor` and `gui_mp_settings_on_exchange`.
  *  Renamed from `FUN_005978f0`.
- * Doc: `exe-re/structs/net_session.md` §7.
+ * Doc: `exe-re/structs/net_session.md` §6.
  * The receiver is the multiplayer session singleton (`g_net_session`, `operator_new(0x2c8)`
  *  in `engine_init`), which is what the per-class root `net_session_` names; free helpers of
  *  the same subsystem keep `net_`.
@@ -317844,7 +318000,7 @@ void __fastcall net_session_start(int param_1)
  * Returns: char: whatever slot 9 returns — non-zero when the description was
  *   re-applied successfully.
  * PS2 twin: — (PC-only: the DirectPlay transport lives behind `inet.dll` and the
- *   PS2 build has no DLL boundary; see structs/net_session.md §5.)
+ *   PS2 build has no DLL boundary; see structs/net_session.md §8.)
  * Evidence: VA 0x00598a30. ONE callsite, 0x005961b0 in `net_host_session_start`:
  *   `mov ecx,[g_net_session]; push offset "GALAXIAN BEST ARCADE EVER!"`, issued
  *   immediately before `net_session_create_as_host`. Its sibling
@@ -317860,7 +318016,7 @@ void __fastcall net_session_start(int param_1)
  *   ⚠️ Ghidra renders this def `__fastcall(int param_1)` and drops the ECX
  *   `this` — `param_1` as rendered is the pushed STRING, not the receiver
  *. Renamed from `FUN_00598a30`.
- * Class layout: `g_net_session` — structs/net_session.md §7a (`+0x108` = the INet
+ * Class layout: `g_net_session` — structs/net_session.md §1a (`+0x108` = the INet
  *   connection object, `+0x10c` = the INet driver).
  */
 void __fastcall net_session_set_password(int param_1)
@@ -318813,7 +318969,7 @@ undefined1 __fastcall net_session_local_player_is_configured(int param_1)
  *  the other peers.
  * Returns: void.
  * Evidence: VA 0x00599610. 5 callsites incl. net_session_ping_tick's timeout arm. ⚠️ Its 3..4
- *  gate is on the GAME MODE at +0x1e4, which corrects `structs/net_session.md` §2's "session
+ *  gate is on the GAME MODE at +0x1e4, which corrects `structs/net_session.md` §1d's "session
  *  phase" reading.
  * Renamed from `FUN_00599610`.
  */
@@ -319508,7 +319664,7 @@ void __fastcall net_session_settings_init_defaults(int param_1)
  * Parameters: param_1 (this); param_2 the actor GUID; param_3 the new owner slot; param_4
  *  broadcast the change.
  * Returns: void.
- * Evidence: VA 0x0059a070. This is the `FUN_0059a070` that `structs/physical_object.md` §5's
+ * Evidence: VA 0x0059a070. This is the `FUN_0059a070` that `structs/physical_object.md` §6's
  *  diagram already cites as the ownership node.
  * Producer of `g_event_msg_vt_actor_owner`.
  * Renamed from `FUN_0059a070`.
@@ -320132,7 +320288,7 @@ void thunk_car_clear_collision_damage_records(void)
  *
  * What it does: `C_car` vtable `0x0063bc08` slot 15 — the `NetDirect(Ui)` slot, which is the
  *  dead-reckoning entry point family-wide (byte-proven on `C_airplane`, whose slot 15 is a bare
- *  `ret 4`; see `structs/bottle.md` §3a). It extrapolates the car's transform from the last
+ *  `ret 4`; see `structs/bottle.md` §9a). It extrapolates the car's transform from the last
  *  snapshot a peer sent, and it is the `C_car` sibling of `bottle_net_apply_remote_state` and
  *  `physical_object_net_apply_remote_state`.
  *
@@ -321546,17 +321702,24 @@ car_post_break_glass_net_event_msg(int param_1,int param_2,undefined4 param_3,un
 }
 
 /*
- * car_post_hit_net_event_msg - post a type-0x2c car-hit event.
+ * car_post_tyre_burst_net_event_msg - posts a type-0x2c tyre-burst message for one wheel.
  *
- * What it does: builds a `{guid, value}` payload on the stack, allocates the message with
- * descriptor `.rdata 0x0063e264`, calls slot 2 and posts.
- * Parameters: this (ECX): the C_car; param_2: the value carried alongside the GUID.
+ * What it does: builds a `{guid, wheel}` payload on the stack (the car's actor+0x18, then
+ *   param_2), allocates the 0x18-byte message with type 0x2c, addressee
+ *   g_net_session+0x274 and descriptor g_event_msg_vt_tyre_burst, calls slot 2 and posts it
+ *   with net_session_post_event_msg. The receiver, car_apply_net_event_msg's type-0x2c arm,
+ *   sets the wheel's burst bit 0x80000000 and calls vehicle_play_tyre_burst_sound.
+ * Parameters: param_1 (this, ECX): the C_car; param_2: the index of the burst wheel.
  * Returns: void.
- * Evidence: VA 0x0059d3a0. Callers `car_hit` and `car_post_break_glass_net_event_msg`.
- * PS2 twin: none — the whole subsystem is PC-only.
+ * Evidence: VA 0x0059d3a0. One caller, car_hit: when a shot hits a wheel that
+ *   car_detect_wheel reports and that is not burst yet, it posts the wheel index while the
+ *   session runs (state 7), then sets the wheel's +0x120 bit 0x80000000 and plays the burst
+ *   sound itself (structs/net_event_msg.md section 7).
+ * PS2 twin: none, the whole subsystem is PC-only.
  * Renamed from `FUN_0059d3a0`.
  */
-void __thiscall car_post_hit_net_event_msg(int param_1,undefined4 param_2)
+
+void __thiscall car_post_tyre_burst_net_event_msg(int param_1,undefined4 param_2)
 
 {
   int iVar1;
@@ -321577,7 +321740,7 @@ void __thiscall car_post_hit_net_event_msg(int param_1,undefined4 param_2)
     piVar2[1] = 0;
     piVar2[4] = iVar1;
     *(undefined1 *)(piVar2 + 5) = 0;
-    *piVar2 = (int)&g_event_msg_vt_car_hit;
+    *piVar2 = (int)&g_event_msg_vt_tyre_burst;
   }
   (**(code **)(*piVar2 + 8))(&local_8);
   net_session_post_event_msg(piVar2);
@@ -323888,7 +324051,7 @@ LAB_0059f9d4:
     ExceptionList = local_c;
     return iVar5;
   case 0x2b:
-    event_msg_car_hit_ctor(0xffffffff,0);
+    event_msg_tyre_burst_ctor(0xffffffff,0);
     local_4 = 0x36;
     identity_thunk();
     iVar5 = event_msg_dword_pair_deserialize(&local_24c,param_2);
@@ -323903,7 +324066,7 @@ LAB_0059f9d4:
       uStack_26e = (undefined2)((uint)pvVar12 >> 0x10);
       local_4._0_1_ = 0x37;
       if (pvVar12 != (void *)0x0) {
-        piVar16 = (int *)event_msg_car_hit_ctor(param_3,1);
+        piVar16 = (int *)event_msg_tyre_burst_ctor(param_3,1);
       }
       local_4 = CONCAT31(local_4._1_3_,0x36);
       uVar4 = std_vector_begin();
@@ -324498,7 +324661,7 @@ switchD_0059e167_caseD_1:
  * What it does: returns the byte at `this+0x200`.
  * Parameters: param_1 (int, ECX): `g_net_session`.
  * Returns: undefined1 - non-zero when this machine hosts the session.
- * Evidence: VA 0x005a14b0. `structs/net_session.md` §2 already documents `+0x200` as the is-host
+ * Evidence: VA 0x005a14b0. `structs/net_session.md` §1d already documents `+0x200` as the is-host
  *  byte that gates every relay arm. Its one callsite is `case 0x25:` of
  *  `net_session_handle_event_msg`, which passes the result straight to
  *  `net_session_transfer_actor_ownership`.
@@ -324521,7 +324684,7 @@ undefined1 __fastcall net_session_is_host(int param_1)
  *  immediately after `net_session_partition_peers_by_relevance`, and the returned pointer is
  *  handed to `vec_count_stride_0x4`, which reads `obj+4`/`obj+8`. That is what proves the
  *  address is the CONTAINER base (the same argument that settled `game_get_telephone_list`).
- *  `structs/net_session.md` §1 already recorded `+0xb4` as the vector
+ *  `structs/net_session.md` §1a already recorded `+0xb4` as the vector
  *  `physical_object_broadcast_state_net_event_msg` walks.
  * Renamed from `FUN_005a14c0`.
  */
@@ -325067,18 +325230,22 @@ void __thiscall event_msg_car_collision_damage_ctor(undefined4 *param_1,undefine
 }
 
 /*
- * event_msg_car_hit_ctor - construct a car-hit message (type 0x2c).
+ * event_msg_tyre_burst_ctor - constructs a tyre-burst message (type 0x2c).
  *
- * What it does: the base field set with the type hard-coded to 0x2c, plus `*this =
- * &g_event_msg_vt_car_hit`.
- * Parameters: this (ECX): the message; param_2: the sender id; param_3: the relay flag.
+ * What it does: the base field set with the type hard-coded to 0x2c, plus
+ *   `*this = &g_event_msg_vt_tyre_burst`.
+ * Parameters: param_1 (this, ECX): the message; param_2: the addressee's peer id (+0x10);
+ *   param_3: the relay flag (+0x14).
  * Returns: void.
- * Evidence: VA 0x005a19b0. The hard-coded type is what identifies descriptor `0x0063e264` as
- * the car-hit class even though its serialize/deserialize pair is shared.
- * PS2 twin: none — the whole subsystem is PC-only.
+ * Evidence: VA 0x005a19b0. Both callers sit in the type-0x2c arm of
+ *   net_session_handle_event_msg: the stack message it deserializes into, and the host's
+ *   relay copy. The hard-coded type identifies descriptor 0x0063e264 as the tyre-burst
+ *   class although its serialize / deserialize pair is shared.
+ * PS2 twin: none, the whole subsystem is PC-only.
  * Renamed from `FUN_005a19b0`.
  */
-void __thiscall event_msg_car_hit_ctor(undefined4 *param_1,undefined4 param_2,undefined1 param_3)
+
+void __thiscall event_msg_tyre_burst_ctor(undefined4 *param_1,undefined4 param_2,undefined1 param_3)
 
 {
   param_1[3] = 0;
@@ -325086,7 +325253,7 @@ void __thiscall event_msg_car_hit_ctor(undefined4 *param_1,undefined4 param_2,un
   param_1[2] = 0x2c;
   param_1[4] = param_2;
   *(undefined1 *)(param_1 + 5) = param_3;
-  *param_1 = &g_event_msg_vt_car_hit;
+  *param_1 = &g_event_msg_vt_tyre_burst;
   return;
 }
 
@@ -327402,8 +327569,8 @@ void __fastcall particle_manager_load_data(int param_1)
       local_4c = iVar2 + -6 + local_32;
       chunk_open_stack_insert_n(local_24,1,&local_4c);
       if (local_34 != 100) break;
-      // ===== PC INLINING: __ct__15C_PData_EmitterFv =====
-      // PS2 has a separate constructor symbol for the 0x3c effect-definition object; MSVC
+      // ===== PC INLINING: the C_PData_Emitter constructor =====
+      // The 0x3c effect-definition object's constructor has no PS2 symbol either; MSVC
       // spliced it in here. The base-then-derived sequence that follows - install
       // `g_particle_data_vt` + kind 0, then `g_particle_data_emitter_vt` + kind 1 - is what
       // byte-proves which of the four vtables at 0x0063e33c..0x0063e348 belongs to which
@@ -329580,7 +329747,7 @@ void __thiscall particle_data_type_load_data(int param_1,int param_2)
       chunk_open_stack_insert_at(*(undefined4 *)(param_2 + 8),local_410);
       switch(local_420) {
       case 0x66:
-        // ===== PC INLINING: __ct__13C_PData_PhaseFv =====
+        // ===== PC INLINING: the C_PData_Phase constructor =====
         // Same shape one level down: the 0x68 phase-definition object's constructor, spliced
         // into its only caller. Installs the base vtable + kind 0, then
         // `g_particle_data_phase_vt` + kind 3.
@@ -330893,7 +331060,7 @@ void cache_base_block_prepare_scene(void)
  *  remembering it in the scratch dword; every later match is re-parented onto that first frame
  *  instead. The frames are invisible collision geometry: the mission's scene2.bin already
  *  switches them off, and their names are in its tree.klz
- *  (exe-re/structs/cache_base_block.md §4a).
+ *  (exe-re/structs/cache_base_block.md §5a).
  * Parameters: param_1 (int *): the `I3D_frame`. param_2 (int *): the scratch dword holding the
  *  first match.
  * Returns: undefined4: always 0 (continue the walk).
@@ -333883,7 +334050,7 @@ void anim_track_table_static_dtor(void)
   
   iVar1 = g_anim_track_table_end;
   // The static track vector's destructor: destroy every 100-byte record, then free the buffer.
-  // The PS2 has no exit-time destructor for the table (structs/anim_machine.md §4a).
+  // The PS2 has no exit-time destructor for the table (structs/anim_machine.md §5).
   if ((g_anim_track_table_dtor_guard & 1) == 0) {
     g_anim_track_table_dtor_guard = g_anim_track_table_dtor_guard | 1;
     iVar2 = g_anim_track_table_begin;
@@ -333913,7 +334080,7 @@ void anim_track_table_static_dtor(void)
  * constructor. 🔑 The callsite census is what makes the class prefix safe rather than
  * mechanical: 5 distinct callers — `dog_ctor`, `human_ctor`,
  * `pedestrian_manager_add_pedestrian` (building a `C_traffic_element`), `pumper_ctor` and
- * `railway_game_init` — which is EXACTLY the five-owner set `structs/anim_machine.md` §1
+ * `railway_game_init` — which is EXACTLY the five-owner set `structs/anim_machine.md` §4
  * established by ECX back-trace (C_human +0xbc, C_dog +0xe8, C_pumper +0xe0,
  * C_traffic_element pointer +0x8, one unidentified pointer +0x2c). A shared symbol whose
  * sharers are all instances of one class is that class's method. Renamed from
@@ -334211,7 +334378,7 @@ void anim_machine_clear_non_base_tracks(void)
   // ===== PC-ONLY ARM: no base set =====
   // With a base count of 0 or less every record is destroyed and the buffer is kept (end = begin).
   // The PS2 ClearNoBaseTracks has only the pop-to-base loop of the else arm; the table-level
-  // ClearTracks is inlined into engine_shutdown (structs/anim_machine.md §4a).
+  // ClearTracks is inlined into engine_shutdown (structs/anim_machine.md §5).
   if ((int)g_anim_base_track_count < 1) {
     iVar3 = g_anim_track_table_begin;
     if (g_anim_track_table_begin != g_anim_track_table_end) {
@@ -334929,7 +335096,7 @@ LAB_005abbf3:
  *   live track, i.e. whether it is worth ticking this frame. Used as the guard immediately before
  *   `anim_machine_tick`.
  * Parameters: this (ECX) = the C_animations_machine_de_luxe (embedded in C_human at +0xbc; see
- *   structs/anim_machine.md §1 for all six owners).
+ *   structs/anim_machine.md §4 for all six owners).
  * Returns: bool — non-zero if the machine is active.
  *
  * Evidence: VA 0x005abc80. Identified during the `human_extern_ai_update` body-diff: PS2
@@ -337260,9 +337427,11 @@ void __fastcall force_feedback_manager_ctor(undefined1 *param_1)
  *  three E9 referrers (the static dtor with 0x6f91e0, two unwind funclets with
  *  this+0x2b18). The C_sledovacka role matches PS2 __dt__12C_sledovackaFv, which frees
  *  the S_ELEMENT vector and then the S_BRIDGE vector; the PS2 force-feedback manager is
- *  a different implementation. No PS2 twin is stamped on a folded symbol.
+ *  a different implementation (it frees one vector), so only the C_sledovacka twin is
+ *  stamped.
+ * PS2 twin: `__dt__12C_sledovackaFv` [STRUCTURAL]
  *  Renamed from `FUN_005ae6f0`.
- * Class layout: exe-re/structs/force_feedback.md, exe-re/structs/pursuit-event-manager.md
+ * Class layout: exe-re/structs/force_feedback.md, exe-re/structs/pursuit_event.md
  */
 
 void __fastcall folded_vector_pair_free_at_0x04_0x14(int param_1)
@@ -350374,10 +350543,16 @@ LAB_005c7541:
      *  checked against actor_reg_count (+0x5c).
      *
      *  Two forms, the same empty-string idiom `findframe` uses:
-     *    * NON-EMPTY -> walks the mission actor list (mission_get_actor_list) BACKWARDS,
-     *      skipping actors with no frame, and compares each actor's i3d_frame_get_name
-     *      against the argument with an inlined byte-wise strcmp (two bytes per
-     *      iteration). First match wins and is stored.
+     *    * NON-EMPTY -> the name is compared with i3d_frame_get_name of an actor's frame
+     *      (an inlined byte-wise strcmp, two bytes per iteration) in THREE places:
+     *        1. the mission actor list (mission_get_actor_list), BACKWARDS, skipping
+     *           actors with no frame; a match is stored and the search ends;
+     *        2. when that list has no match, the two actors change_mission (case 0x33)
+     *           carries over, g_new_mission_actors[0..1], skipping null entries; a match
+     *           is stored and the search goes on;
+     *        3. the global actor list (actor_get_global_list), BACKWARDS, skipping null
+     *           entries and actors with no frame; a match overwrites the register.
+     *      With no match in any of them act[xx] is not written and keeps its old value.
      *    * EMPTY -> stores act_state_owner (+0x44), i.e. the script's own actor.
      *
      *  The block at the top is a developer easter egg, not logic: if the owning actor's
@@ -351378,7 +351553,7 @@ LAB_005bf5cd:
      *    6. human_set_idle_anims_enabled(1) on the player;
      *    7. the frame-skip count raised to 2 if lower;
      *    8. sound_arena_init() on the game's soundArena - the hearing ring is emptied so
-     *       nothing the recording played is still audible (structs/soundArena.md);
+     *       nothing the recording played is still audible (structs/sound_arena.md);
      *    9. cutscene_set_active() and game_clear_film_music().
      */
     act_mission_get_game();
@@ -352772,6 +352947,8 @@ script_flt_write:
       puVar8[5] = 3;
       puVar8[6] = piVar22;
       puVar8[7] = 0;
+      // S_using_object: radius_sq 0.5, flags 3, owner 0. save_excluded = 1: the savegame filter
+      // skips this record (structs/using_object.md, section 2a).
       *(undefined1 *)(puVar8 + 9) = 1;
       piVar22 = (int *)i3d_frame_get_parent_ptr();
       script_scratch_i0 = *piVar22;
@@ -354405,11 +354582,12 @@ LAB_005bfc05:
      *  Enables the police system.  Both parameters are optional — many
      *  missions call this with no arguments at all.
      *
-     *      *script_argv         = arg0  xx   UNUSED / vestigial
-     *                                        Stored at police_manager+0x34 but
-     *                                        never read by any runtime code.
-     *                                        Always 980000 when supplied;
-     *                                        defaults to 0 when omitted.
+     *      *script_argv         = arg0  xx   arrest end-screen text id
+     *                                        Stored at police_manager+0x34;
+     *                                        police_manager_tick passes it to
+     *                                        gui_game_over_ctor. Always 980000
+     *                                        when supplied ("You've been
+     *                                        arrested"); 0 when omitted.
      *
      *      script_argv[1]       = arg1  yy   WANTED-BACKUP vehicle severity tier
      *                                        Booleanized: (yy != 0).
@@ -359728,7 +359906,7 @@ LAB_005c52cd:
      *  -----------------------------------------------------------------
      *  Sets the volume of sound frame xx to yy. 22 shipped call sites.
      *
-     *  The frame must have visual type 4 (a sound - see structs/i3d_frame.md §3a). yy takes the
+     *  The frame must have visual type 4 (a sound - see structs/i3d_frame.md §5b). yy takes the
      *  shared -1 immediate sentinel: payload slot 2 holds -1 when the volume is a literal (read
      *  from slot 0), otherwise slot 2 is the flt[] index to read it from.
      *
@@ -360397,7 +360575,7 @@ LAB_005c5c39:
      *  🔑 TWO GATES, NOT ONE. The frame's visual type must be 1 (a model) AND its FourCC tag at
      *  +0x1d4 must be one of seven: 'OBJ_', 'LMAP', 'BBRD', 'MRPH', 'SNGM', 'SMMR', 'LENS'. The
      *  case tests them as a split comparison around 0x50414d4d for speed, but the set is exactly
-     *  the seven tags structs/i3d_frame.md §3 lists. A frame of any other tag is silently
+     *  the seven tags structs/i3d_frame.md §5a lists. A frame of any other tag is silently
      *  skipped.
      *
      *  The value is clamped to 0..1 - and unlike sound_setvolume (case 0x140) the clamp here is
@@ -360804,7 +360982,7 @@ LAB_005c5e7d:
      *  trip, and both speak degrees to the script.
      *
      *  The value comes from i3d_camera_get_fov_ptr, whose receiver is an I3D_camera reached
-     *  through the frame base (structs/i3d_frame.md §4).
+     *  through the frame base (structs/i3d_frame.md §3).
      */
     script_scratch_i0 = vec_index_addr_stride_0x8(param_1[7]);
     script_scratch_i0 = **(int **)(script_scratch_i0 + 4);
@@ -360824,7 +361002,7 @@ LAB_005c5e7d:
      *
      *  🔑 the Mafia Script Data Reference's 0 OPEN / 1 CLOSED IS INCOMPLETE - THERE ARE FOUR
      *  STATES. The value read is
-     *  C_door+0x70, which structs/door.md §4a establishes as 0 resting open, 1 resting closed,
+     *  C_door+0x70, which structs/door.md §7a establishes as 0 resting open, 1 resting closed,
      *  2 opening, 3 closing. A script polling this command during an animation will see 2 or 3,
      *  and the Mafia Script Data Reference's two-value table does not cover that.
      *
@@ -361070,7 +361248,7 @@ LAB_005c69b9:
      *            writer is the engine-wide `police_manager_npc_list_push` (the
      *            inverse `program_process_command` case 0x171 is the
      *            ADD counterpart, with the same receiver chain).
-     *            See exe-re/structs/police_manager.md §3.3 for the
+     *            See exe-re/structs/police_manager.md §6 for the
      *            full evidence trail.
      *        - game_remove_temporary_actor(player_actor, slot_obj)
      *          → unique-append to player_actor's vector at +0x134
@@ -363818,7 +363996,7 @@ void __thiscall vehicle_set_angular_velocity(int param_1,undefined4 *param_2)
  * `DoLights__9C_VehicleFf` the bit-`0x8` block computes
  * `fabs(steer) > threshold` and lights the side matching the steering SIGN,
  * clearing both lamps below the threshold. Renamed from `FUN_005c8880`.
- * Layout and the full light-flag bit map: exe-re/structs/vehicle.md §1b.
+ * Layout and the full light-flag bit map: exe-re/structs/vehicle.md §2a.
  */
 void __thiscall vehicle_set_auto_indicators_from_steering(int param_1,char param_2)
 
@@ -363900,7 +364078,7 @@ void __thiscall vehicle_set_emergency_lights(int param_1,char param_2)
  * case 0xc2), documented in the Mafia Script Data Reference as the LEFT indicator
  * and verified in-game by the user. PS2 `DoLights__9C_VehicleFf` corroborates the
  * side: in its bit-`0x8` block a NEGATIVE steering value lights this same bit. Renamed from `FUN_005c88e0`.
- * Layout and the full light-flag bit map: exe-re/structs/vehicle.md §1b.
+ * Layout and the full light-flag bit map: exe-re/structs/vehicle.md §2a.
  */
 void __thiscall vehicle_set_left_indicator(int param_1,char param_2)
 
@@ -363950,7 +364128,7 @@ void __thiscall vehicle_set_left_indicator(int param_1,char param_2)
  * Reference documents `carlight_indic_r` as the RIGHT indicator and the user verified
  * it in-game. PS2 `DoLights__9C_VehicleFf` agrees: a POSITIVE steering value lights
  * this bit. Renamed from `FUN_005c8920`.
- * Layout and the full light-flag bit map: exe-re/structs/vehicle.md §1b.
+ * Layout and the full light-flag bit map: exe-re/structs/vehicle.md §2a.
  */
 void __thiscall vehicle_set_right_indicator(int param_1,char param_2)
 
@@ -364000,7 +364178,7 @@ void __thiscall vehicle_set_right_indicator(int param_1,char param_2)
  * in-game by the user. The Mafia Script Data Reference notes the command requires
  * `game_nightmission 1` first - which matches the decompiled gate exactly, since
  * `car_update` only drives this bit while `C_game+0x2d44` is set. Renamed from `FUN_005c8960`.
- * Layout and the full light-flag bit map: exe-re/structs/vehicle.md §1b.
+ * Layout and the full light-flag bit map: exe-re/structs/vehicle.md §2a.
  */
 void __thiscall vehicle_set_headlights(int param_1,char param_2)
 
@@ -364323,7 +364501,7 @@ void __thiscall car_set_remove_at_game_done(int param_1,undefined1 param_2)
  * carries an `add ecx`, unlike the `vehicle_set_*` light setters in the same
  * dispatcher case. The offset confirms it independently - `car_update` reads the
  * very same byte as `car+0x20bc`. Renamed from `FUN_005c8aa0`.
- * Layout and the full light-flag bit map: exe-re/structs/car.md §1.
+ * Layout and the full light-flag bit map: exe-re/structs/car.md §4a.
  */
 void __thiscall car_set_auto_headlights_suppressed(int param_1,undefined1 param_2)
 
@@ -364550,13 +364728,13 @@ void __fastcall game_request_clear_differences(int param_1)
  * Parameters: param_1 (this, ECX): the C_game singleton.
  * Returns: int: the address of the embedded `pursuit_event_manager` (PS2 `C_sledovacka`).
  * Evidence: VA 0x005c8b40. The constant `0x2b18` appears in exactly one place in the entire annotated
- * decomp - this function - and `structs/pursuit-event-manager.md` §1 documents the
+ * decomp - this function - and `structs/pursuit_event.md` §1 documents the
  * live instance at `[[0x0065115C]+0x24]+0x2B18`, derived independently from the
  * `AddCarHunt`/`RemoveCar` callsites. Consumer corroboration: the caller in the
  * script dispatcher uses the result one statement later as the receiver of
  * `pursuit_event_record_set_action_status_by_vehicle`. NO PS2 TWIN: an accessor
  * this small is inlined on the PS2 side. Renamed from `FUN_005c8b40`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/pursuit-event-manager.md §1.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/pursuit_event.md §1.
  */
 int __fastcall game_get_pursuit_event_manager(int param_1)
 
@@ -364615,7 +364793,8 @@ undefined4 __fastcall game_get_frame_count(int param_1)
  * `mov ecx, eax` -> this call. A receiver census alone reports only
  * `mov ecx, eax` and cannot name the class. The field offset corroborates it:
  * `car_update` reads `*(char *)(*(int *)(g_act_mission + 0x24) + 0x2d44)`. Renamed from `FUN_005c8b60`.
- * Layout and the full light-flag bit map: exe-re/structs/game.md §1.
+ * Field: `night_mission`, exe-re/structs/game.md §2.
+ * The full light-flag bit map: exe-re/structs/vehicle.md §2a.
  */
 void __thiscall game_set_night_mission(int param_1,undefined1 param_2)
 
@@ -365455,7 +365634,7 @@ void __thiscall ai_groups_add_tracked_actor(int param_1,undefined4 param_2)
  * value in ECX is the return of `entity_get_ai_logs` from the immediately preceding
  * statement. NO PS2 TWIN: GCC inlines the assignment, which is why `ai_logs`
  * remains 14/14 accounted rather than 15. Renamed from `FUN_005c8f70`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/ai_logs.md §1.
+ * Layout and the full PC<->PS2 method table: exe-re/structs/ai_logs.md §1a.
  */
 void __fastcall ai_logs_clear_all_logs(int param_1)
 
@@ -365481,7 +365660,8 @@ void __fastcall ai_logs_clear_all_logs(int param_1)
  * of the two biases is open. Single callsite, inside the script command dispatcher,
  * where the receiver is an entity read out of a pointer array. NO PS2 TWIN: an
  * accessor this small is inlined on the PS2 side. Renamed from `FUN_005c8fa0`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/entity.md §6 (`+0xf40` AI state).
+ * Layout and the full PC<->PS2 method table: exe-re/structs/entity.md §1, §3
+ *   (`+0xf40` AI state).
  */
 uint __fastcall entity_get_ai_state_base_code(int param_1)
 
@@ -365555,7 +365735,8 @@ void __thiscall entity_set_ai_state_resettable(int param_1,char param_2)
  * script-command body, one passing 1 on the failure path and one passing 0 on the
  * reset path, which matches suspend/resume. NO PS2 TWIN: a two-line flag setter is
  * inlined on the PS2 side. Renamed from `FUN_005c9010`.
- * Layout and the full PC<->PS2 method table: exe-re/structs/entity.md §6 (`+0xf50` ai_flags).
+ * Layout and the full PC<->PS2 method table: exe-re/structs/entity.md §1, §3
+ *   (`+0xf50` ai_flags).
  */
 void __thiscall entity_set_state_switcher_suspended(int param_1,char param_2)
 
@@ -365951,7 +366132,7 @@ void __fastcall program_return_stack_pop(int param_1)
  *   the binary; 3 of them are in `police_manager_apply_state` (now lines
  *   242000 / 242060 / 242141) inserting into police_manager's vec2 (police
  *   vehicles), vec3 (spike strips), and vec4 (pedestrian foot
- *   cops) — see `exe-re/structs/police_manager.md` §3.6 for the full
+ *   cops) — see `exe-re/structs/police_manager.md` §6 for the full
  *   wanted-state spawn-pipeline analysis. Other call sites span entity
  *   manipulation, audio queues, and various script-VM helpers. Polymorphic
  *   on receiver layout — the name omits any specific element type because
@@ -367826,10 +368007,10 @@ void crt_atexit_register_005cad60(void)
  *       these cold defaults differ from the OPERATIONAL defaults
  *       (330 / 913 / 217 / 4013) installed later by
  *       `police_manager_game_init`; see
- *       `exe-re/structs/police_manager.md` §3 for the field layout)
+ *       `exe-re/structs/police_manager.md` §1 for the field layout)
  *     - All 7 std::vector<T*> triples zeroed (records at +0x40, vec2
  *       at +0x50, vec3 at +0x60, vec4 at +0x70, npc_list at +0x80,
- *       tracked_police_cars at +0x90, rndr_arr_b at +0xA0) — each triple
+ *       tracked_police_cars at +0x90, visibility_cells at +0xA0) — each triple
  *       gets begin = end = cap = 0 (no buffers allocated yet)
  *
  *   Ghidra renders byte-writes at +0xNC offsets (3C, 4C, 5C, 6C, 7C,
@@ -367919,12 +368100,12 @@ void __fastcall police_manager_ctor(int param_1)
  *   destructor), THEN `operator_delete_wrapper(begin)` frees the
  *   pointer array, then begin/end/cap are zeroed. All other triples
  *   (vec2 at +0x50, vec3 at +0x60, vec4 at +0x70, npc_list at +0x80,
- *   tracked_police_cars at +0x90, rndr_arr_b at +0xA0) are freed WITHOUT
+ *   tracked_police_cars at +0x90, visibility_cells at +0xA0) are freed WITHOUT
  *   per-element destruction — i.e. their elements are non-owning
  *   pointers / POD owned elsewhere.
  *
  *   Order of freeing (reverse offset):
- *     +0xA0 rndr_arr_b → +0x90 tracked_police_cars → +0x80 npc_list →
+ *     +0xA0 visibility_cells → +0x90 tracked_police_cars → +0x80 npc_list →
  *     +0x70 vec4 → +0x60 vec3 → +0x50 vec2 → +0x40 records.
  *
  * Parameters:
@@ -367947,7 +368128,7 @@ void __fastcall police_manager_ctor(int param_1)
  *   cleanup. The Unwind handler path also confirms this is a proper
  *   C++ destructor, not a manual cleanup function — so the actor's
  *   police_manager sub-object is destroyed via standard C++ scoped
- *   destructor sequencing. See `exe-re/structs/police_manager.md` §3.4
+ *   destructor sequencing. See `exe-re/structs/police_manager.md` §6
  *   for the full body decode + caller analysis. The body also locks
  *   in the std::vector::_cap slots at +0x58, +0x68,
  *   +0x78, +0x98 and +0xA8, making every "vec" / "rndr_arr" pair a
@@ -368017,7 +368198,7 @@ void __fastcall police_manager_dtor(int param_1)
  *      hierarchy — (+0x14, +0x18=913): outer ~1.1Hz NPC-list state
  *      scan via `police_manager_npc_list_tick(0)`; (+0x1c, +0x20=217):
  *      middle ~4.6Hz visibility/LOS refresh that populates
- *      rndr_arr_b; (+0x04, +0x08=330): inner ~3.0Hz per-record state
+ *      visibility_cells; (+0x04, +0x08=330): inner ~3.0Hz per-record state
  *      machine tick (which also reuses +0x08 as the canonical step
  *      value when decrementing 9 per-record timer fields). The
  *      remaining pair (+0x24, +0x28=4013) and the all-zero pair
@@ -368037,7 +368218,7 @@ void __fastcall police_manager_dtor(int param_1)
  *      `end = begin`. Backing buffers preserved.
  *
  *   Does NOT touch: vec4 (+0x70/+0x74/+0x78), tracked_police_cars
- *   (+0x90/+0x94/+0x98), rndr_arr_b (+0xA0/+0xA4/+0xA8). These three
+ *   (+0x90/+0x94/+0x98), visibility_cells (+0xA0/+0xA4/+0xA8). These three
  *   triples survive soft scene resets — a lifecycle asymmetry.
  *
  * Parameters:
@@ -368057,7 +368238,7 @@ void __fastcall police_manager_dtor(int param_1)
  *   `police_manager_dtor` (full free) and
  *   `police_manager_ctor` (cold construction) — together
  *   the three functions form the police_manager lifecycle trio. See
- *   `exe-re/structs/police_manager.md` §3 / §3.4 for the full body
+ *   `exe-re/structs/police_manager.md` §1 / §6 for the full body
  *   decode. Renamed from `FUN_005caf00`.
  * PS2 twin: `GameInit__10C_shvestkyFv`  [CONFIRMED]
  *  Body-diffed statement for statement including the shared seeds `0x14a`, `0xd9`, `0xfad` and
@@ -368261,7 +368442,7 @@ void __fastcall police_manager_game_done(int param_1)
  *     frees the pursuit_record's officer std::vector backing array and zeros the
  *     triple. operator_delete_wrapper(record+0x74) then record+0x74 = +0x78 =
  *     +0x7c = 0 (the begin/end/cap of the officers vector documented at
- *     pursuit_record +0x74/+0x78/+0x7c in structs/police_manager.md §4).
+ *     pursuit_record +0x74/+0x78/+0x7c in structs/police_manager.md §1b).
  *
  *   A destructor sub-step: called by police_manager_game_done on
  *   each record before operator_delete_wrapper frees the record itself.
@@ -368415,7 +368596,7 @@ void __thiscall police_manager_add_tracked_police_car(int param_1,int param_2)
  *         sight checks (world position, view-direction normalisation,
  *         frustum/cell check via `roads_get_near_node`,
  *         sighting bit set on
- *         `record+9`). Populates rndr_arr_b at +0xA0 with visible-
+ *         `record+9`). Populates visibility_cells at +0xA0 with visible-
  *         record entries. ~4.6 Hz overflow rate.
  *
  *      c. **Active branch — inner-tier per-record state machine**
@@ -368462,7 +368643,7 @@ void __thiscall police_manager_add_tracked_police_car(int param_1,int param_2)
  *     police_manager (at `C_game + 0x2da0`). Receiver
  *     discipline is confirmed by every offset access in the body —
  *     `+0x40` (records vector), `+0x80/+0x84` (npc_list), `+0x90`
- *     (tracked_police_cars), `+0xa0` (rndr_arr_b), `+0x14/+0x18/+0x1c/+0x20/
+ *     (tracked_police_cars), `+0xa0` (visibility_cells), `+0x14/+0x18/+0x1c/+0x20/
  *     +0x04/+0x08` (the three active timer pairs). The declared
  *     `char *` type is a Ghidra rendering artefact, not a semantic
  *     claim.
@@ -368479,7 +368660,7 @@ void __thiscall police_manager_add_tracked_police_car(int param_1,int param_2)
  * Evidence: a large function (~850 lines). Sole call site = the global
  *   per-frame tick driver (one call in the binary). For the
  *   full reader analysis of the three timer pairs see
- *   `exe-re/structs/police_manager.md` §3.5; for the wanted_state
+ *   `exe-re/structs/police_manager.md` §5; for the wanted_state
  *   commit step see §3.2 #5 of the same doc; for the npc_list state-
  *   sync see `police_manager_npc_list_tick`'s docblock; for the
  *   spawn-side asset population (vec2/3/4) see §3.6 of police_manager.md
@@ -368768,9 +368949,9 @@ tick_main_body:                                       // (was LAB_005cb6cd) star
                           pbVar2 = (byte *)(*(int *)(*(int *)(param_1 + 0x40) + iVar13 * 4) + 9);
                           *pbVar2 = *pbVar2 | 4;          // offense_bits_a high byte(record+0x09): set 0x04 = 0000_0100b = "ran a red light" (high-byte bit 2 = overall bit 10; cleared later when running_red_or_sign_damage_timer below expires)
                           iVar19 = *(int *)(*(int *)(param_1 + 0x40) + iVar13 * 4);
-                          *(int *)(iVar19 + 0x24) = *(int *)(iVar19 + 0x24) + 4000;  // running_red_or_sign_damage_timer(record+0x24, ms): extend by 4000 ms. This is the SAME pursuit_record field the script registrar police_manager_register_traffic_sign_offence_for_target bumps - see structs/police_manager.md §4 / offences.md. Holds the red-light/traffic-sign bits up while it counts down.
+                          *(int *)(iVar19 + 0x24) = *(int *)(iVar19 + 0x24) + 4000;  // running_red_or_sign_damage_timer(record+0x24, ms): extend by 4000 ms. This is the SAME pursuit_record field the script registrar police_manager_register_traffic_sign_offence_for_target bumps - see structs/police_manager.md §1b / offences.md. Holds the red-light/traffic-sign bits up while it counts down.
                           iVar19 = *(int *)(*(int *)(param_1 + 0x40) + iVar13 * 4);
-                          if (10000 < *(int *)(iVar19 + 0x24)) {  // IF running_red_or_sign_damage_timer exceeds 10000 ms: clamp to 10000 ms (note: the script-side registrar police_manager_register_traffic_sign_offence_for_target - the offence-VM-callable twin that bumps this SAME record+0x24 field - uses a higher 20000 ms clamp; structs/police_manager.md §4)
+                          if (10000 < *(int *)(iVar19 + 0x24)) {  // IF running_red_or_sign_damage_timer exceeds 10000 ms: clamp to 10000 ms (note: the script-side registrar police_manager_register_traffic_sign_offence_for_target - the offence-VM-callable twin that bumps this SAME record+0x24 field - uses a higher 20000 ms clamp; structs/police_manager.md §1b)
                             *(undefined4 *)(iVar19 + 0x24) = 10000;
                           }
                           iVar19 = *(int *)(*(int *)(param_1 + 0x40) + iVar13 * 4);
@@ -368787,7 +368968,7 @@ tick_main_body:                                       // (was LAB_005cb6cd) star
               }
 store_record_last_seen_pos:                           // (was LAB_005cbc59) per-suspect tail: remember where this suspect was this refresh
               iVar19 = *(int *)(*(int *)(param_1 + 0x40) + iVar13 * 4);
-              *(undefined4 *)(iVar19 + 0x34) = local_68[0];  // store the SUSPECT's current world position (local_68) as this record's last-seen position(record+0x34/+0x38 = linked_vehicle_pos_x/y per structs/police_manager.md §4)
+              *(undefined4 *)(iVar19 + 0x34) = local_68[0];  // store the SUSPECT's current world position (local_68) as this record's last-seen position(record+0x34/+0x38 = last_seen_x/z per structs/police_manager.md §1b)
               *(undefined4 *)(iVar19 + 0x38) = local_60;
             }
           }
@@ -368911,7 +369092,7 @@ store_record_last_seen_pos:                           // (was LAB_005cbc59) per-
               }
               //RUNNING-RED-SIGN-DAMAGE-TIMER
               iVar19 = *(int *)(*(int *)(param_1 + 0x40) + iVar13 * 4);
-              iVar14 = *(int *)(iVar19 + 0x24);                  // running_red_or_sign_damage_timer(record+0x24, ms) - the same field the red-light detector above bumps (structs/police_manager.md §4); counts down each inner tick
+              iVar14 = *(int *)(iVar19 + 0x24);                  // running_red_or_sign_damage_timer(record+0x24, ms) - the same field the red-light detector above bumps (structs/police_manager.md §1b); counts down each inner tick
               if (0 < iVar14) {                                  // IF it is running: count it down
                 *(int *)(iVar19 + 0x24) = iVar14 - *(int *)(param_1 + 8);
                 iVar19 = *(int *)(*(int *)(param_1 + 0x40) + iVar13 * 4);
@@ -369095,7 +369276,7 @@ store_record_last_seen_pos:                           // (was LAB_005cbc59) per-
                     local_84 = (float)((int)fVar23 + -1);
                     iVar17 = *(int *)(*(int *)(param_1 + 0x40) + (int)local_84 * 4);
                     fVar23 = local_84;
-                  } while (((*(int *)(iVar17 + 4) == 0) || (*(char *)(iVar17 + 0x2c) == '\0')) ||  // WHILE this record has no live target, OR its roadblock_eligible_flag(record+0x2c) is clear, OR its identity is still UNKNOWN/pending(+0x51 set; 0 = identity known): skip it. (roadblock_eligible_flag = "committed police_state >= gun AND wanted, roadblock-eligible": set by police_manager_enable_roadblock_flag_for_target when the suspect is wanted AND police_state >= gun; see structs/police_manager.md §4.2)
+                  } while (((*(int *)(iVar17 + 4) == 0) || (*(char *)(iVar17 + 0x2c) == '\0')) ||  // WHILE this record has no live target, OR its roadblock_eligible_flag(record+0x2c) is clear, OR its identity is still UNKNOWN/pending(+0x51 set; 0 = identity known): skip it. (roadblock_eligible_flag = "committed police_state >= gun AND wanted, roadblock-eligible": set by police_manager_enable_roadblock_flag_for_target when the suspect is wanted AND police_state >= gun; see structs/police_manager.md §2b)
                           (*(char *)(iVar17 + 0x51) != '\0'));
                   local_8c = *(float *)(iVar13 + 0x1b8);
                   pIVar6 = *(I3D_frame **)(*(int *)(iVar17 + 4) + 0x68);  // the perp's render frame
@@ -369242,9 +369423,9 @@ weapon_seen_set_handcuffs:                                    // (was LAB_005cc3
                  ) {
                 *(undefined2 *)(iVar19 + 0x3e) = 0;
               }
-              // counter(+0x28) escalation
+              // capture_count(record+0x28) escalation
               iVar19 = *(int *)(*(int *)(param_1 + 0x40) + iVar13 * 4);
-              if ((*(short *)(iVar19 + 0x3e) == 1) && (2 < *(int *)(iVar19 + 0x28))) {  // IF pending FINE(1) AND counter(+0x28) > 2: escalate to HANDCUFFS(2). (Dead gate in practice: +0x28 is never written, so it stays 0)
+              if ((*(short *)(iVar19 + 0x3e) == 1) && (2 < *(int *)(iVar19 + 0x28))) {  // pending FINE(1) and more than 2 captures: escalate to HANDCUFFS(2)
                 *(undefined2 *)(iVar19 + 0x3e) = 2;
               }
               // ===== COMMIT pending -> committed police-state =====
@@ -369530,8 +369711,8 @@ undefined4 __fastcall vec3_is_near_zero(float *param_1)
  * police_manager_apply_state — wanted-state asset-spawn orchestrator for a
  *     `police_manager`. Toggle-and-commit entry point: writes the enable flag
  *     and the two control bytes into the header, rebuilds the renderer
- *     arrays (`tracked_police_cars` / `rndr_arr_b` at +0x90/+0xA0), scans active actors for
- *     type-0x14 entities to push into `rndr_arr_b`, then — if the spawn
+ *     arrays (`tracked_police_cars` / `visibility_cells` at +0x90/+0xA0), scans active actors for
+ *     type-0x14 entities to push into `visibility_cells`, then — if the spawn
  *     gate is set — runs the three-bucket wanted-asset spawn pipeline
  *     (police_vehicles vec2 at +0x50 ≤16 iterations, spike_strips vec3
  *     at +0x60 ×8, foot_cops vec4 at +0x70 ×36).
@@ -369567,7 +369748,7 @@ undefined4 __fastcall vec3_is_near_zero(float *param_1)
  *     opaque snapshot), `this+0x38` (always 0 here), `this+0x39` (vehicle
  *     tier). Reads vector heads `+0x50/+0x54` (vec2 police_vehicles),
  *     `+0x60/+0x64` (vec3 spike_strips), `+0x70/+0x74` (vec4 foot_cops),
- *     `+0x90/+0x94` (tracked_police_cars), `+0xA0/+0xA4` (rndr_arr_b).
+ *     `+0x90/+0x94` (tracked_police_cars), `+0xA0/+0xA4` (visibility_cells).
  *   param_2 (`char`): enable flag. `0` = disable (early-out if already
  *     disabled; no spawn work runs). Non-zero = enable.
  *   param_3 (`undefined4`): opaque u32 captured at `*this+0x34`. Comes
@@ -371397,7 +371578,7 @@ ushort __thiscall police_manager_get_offense_bits_for_target(int param_1,int par
  *     0 none / 1 fine / 2 handcuffs / 3 gun; 0 if no matching record.
  *
  * Evidence: VA 0x005ce510. Reads record+0x3c (police_state; see
- *   structs/police_manager.md §4). Consumer: program_process_command case 0xb2
+ *   structs/police_manager.md §1b). Consumer: program_process_command case 0xb2
  *   (get_pm_humanstate). Renamed from `FUN_005ce510`.
  * PS2 twin: JakPicusNaTomJest__10C_shvestkyFP7C_human  [CONFIRMED]
  */
@@ -371687,24 +371868,25 @@ int __thiscall police_manager_count_officers_alive_for_target(int param_1,int pa
 }
 
 /*
- * police_manager_get_num_of_offences — sibling getter; finds the
- * pursuit_record matching `param_2` (target actor) and returns the u32 at
- * record+0x28 (num_of_offences per police_manager.md, PS2 field "PocetPrestupku").
- * Returns 0 if no match.
- *
- *   ROLE: the number/severity-tier of offences on the target's record. The PS2
- *   twin `PocetPrestupku` ("number of offences", přestupků) returns this same
- *   rec+0x28 as a 1/2/3 severity tier that drives police voice-line selection.
- *   On PC the field is effectively VESTIGIAL — only init-written (in
- *   police_manager_register_actor) plus a rarely-hit gated bump in
- *   police_manager_record_clear_pursuit_state, so it reads ~always 0 and its
- *   readers are dead. The name mirrors the (unused) original source field, which
- *   almost certainly carried this name in the PC sources too (see
- *   structs/police_manager.md §5).
+ * police_manager_get_capture_count - finds the pursuit_record whose target
+ * is `param_2` and returns its capture_count (record+0x28); 0 when the
+ * actor has no record.
+ * What it counts: police_manager_record_clear_pursuit_state increments
+ * record+0x28 when its flag is set and the record is not the player's or
+ * busted_cutscene_lock is set, so the player's record counts every capture
+ * (arrest or fine, entity_action_tick case 0x21) and an NPC record every
+ * flagged wipe. police_manager_tick reads the same field: a pending fine
+ * becomes handcuffs above 2 (structs/police_manager.md, capture_count).
+ * Parameters: param_1 (police_manager *): the manager (C_game+0x2da0).
+ *   param_2 (C_actor *): the tracked actor.
+ * Returns: uint32: the capture count, 0 when no record matches.
+ * Callers: human_notify_callback, animation events 0x5f / 0x60 / 0x61,
+ *   which pick a human_new_scream line by the value 1 / 2 / 3.
  * PS2 twin: PocetPrestupku__10C_shvestkyFP7C_human  [CONFIRMED]
- * Evidence: renamed from `FUN_005ce6a0` (original Ghidra id).
+ * Evidence: Renamed from `FUN_005ce6a0` (original Ghidra id).
  */
-undefined4 __thiscall police_manager_get_num_of_offences(int param_1,int param_2)
+
+undefined4 __thiscall police_manager_get_capture_count(int param_1,int param_2)
 
 {
   undefined4 *puVar1;
@@ -372543,7 +372725,7 @@ LAB_005cf1ee:
  *     matches `name` (`crt_stricmp`): marks the slot taken, re-enables the
  *     object (frame vtable +0x24, flag fixups at obj+0x20c), sets its radar
  *     blip RED (`hud_radar_add_car_with_color(obj, 0xffff0000)`),
- *     re-registers it (`game_add_temporary_actor_intern`, game_clear_frame_from_fire/
+ *     re-registers it (`game_add_temporary_actor_intern`, game_clear_frame_from_bullet_holes/
  *     entity, scene-dirty), and returns the object. Returns 0 if no match.
  *
  *     Sibling of `police_manager_vehicle_pool_pop_random` over the same `+0x50` pool;
@@ -372602,7 +372784,7 @@ undefined4 __thiscall police_manager_acquire_from_pool_by_name(int param_1,char 
         hud_radar_add_car_with_color(*(undefined4 *)(*(int *)(param_1 + 0x50) + iVar3 * 8),0xffff0000); // red color
         actor_rebirth();
         game_add_temporary_actor_intern(*(undefined4 *)(*(int *)(param_1 + 0x50) + iVar3 * 8));
-        game_clear_frame_from_fire(*(undefined4 *)(*(int *)(*(int *)(param_1 + 0x50) + iVar3 * 8) + 0x68));
+        game_clear_frame_from_bullet_holes(*(undefined4 *)(*(int *)(*(int *)(param_1 + 0x50) + iVar3 * 8) + 0x68));
         game_scratch_delete_from_car(*(undefined4 *)(*(int *)(param_1 + 0x50) + iVar3 * 8));
         return *(undefined4 *)(*(int *)(param_1 + 0x50) + iVar3 * 8);
       }
@@ -372626,8 +372808,8 @@ undefined4 __thiscall police_manager_acquire_from_pool_by_name(int param_1,char 
  *       3. Second pass: walk to the i-th claimed entry. Clear its `+4`
  *          claim flag.
  *       4. Post-pop cleanup for the recycled vehicle:
- *            - `game_clear_frame_from_fire(entity->frame)` — detach the vehicle's I3D_frame from
- *              the +0x5b8 frame-listener registry.
+ *            - `game_clear_frame_from_bullet_holes(entity->frame)` — detach every bullet hole
+ *              parented under the vehicle's frame.
  *            - `game_scratch_delete_from_car(vehicle)` — remove the car's scratch/decal marks from
  *              the C_game scratch pool (`C_game::ScratchDeleteFromCar`). The argument is the popped
  *              car, NOT an entity-registry key.
@@ -372690,7 +372872,7 @@ undefined4 __thiscall police_manager_vehicle_pool_pop_random(int param_1,char pa
           if ((*pcVar1 != '\0') && ((param_2 == '\0' || (*pcVar5 != '\0')))) {
             if (iVar4 == 0) {
               *(undefined1 *)(iVar2 + 4 + iVar3 * 8) = 0;
-              game_clear_frame_from_fire(*(undefined4 *)(*(int *)(*(int *)(param_1 + 0x50) + iVar3 * 8) + 0x68));
+              game_clear_frame_from_bullet_holes(*(undefined4 *)(*(int *)(*(int *)(param_1 + 0x50) + iVar3 * 8) + 0x68));
               game_scratch_delete_from_car(*(undefined4 *)(*(int *)(param_1 + 0x50) + iVar3 * 8));
               *(undefined1 *)(*(int *)(*(int *)(param_1 + 0x50) + iVar3 * 8) + 0x65) = 1;
               return *(undefined4 *)(*(int *)(param_1 + 0x50) + iVar3 * 8);
@@ -372993,7 +373175,7 @@ undefined4 __fastcall police_manager_spike_strip_pool_pop(int param_1)
  *   vec offset; (ii) post-init hook simplicity. This three-way dispatch
  *   tree (vec2 police_vehicles / vec3 spike_strips / npc_list NPCs) mirrors the
  *   three categories spawned by `police_manager_apply_state`'s wanted-
- *   state spawn pipeline (see `police_manager.md` §3.6).
+ *   state spawn pipeline (see `police_manager.md` §6).
  *
  *   Renamed from `FUN_005cf720`.
  * PS2 twin: `FreeTempIris__10C_shvestkyFP8C_irenka` — CONFIRMED (body-exact:
@@ -373406,7 +373588,7 @@ void __thiscall police_manager_npc_list_push(int param_1,int param_2)
  *  (kind 4) and `C_entity` NPCs (kind 0x1b), deleted once out of range
  *  (structs/police_manager.md section 2.3). The PS2 twin is DelDoRiciActor (the "DoRici"
  *  list). The kind==4 && cop-car-flag (+0x2044) branch decrements a global cop-car
- *  counter; see exe-re/structs/police_manager.md §3.3.
+ *  counter; see exe-re/structs/police_manager.md §6.
  *
  *  Calling convention: __thiscall.
  *  Parameter 1 (this): police_manager — the single instance embedded in the C_game
@@ -373529,7 +373711,7 @@ void __thiscall police_manager_npc_list_erase(int param_1,int param_2)
  *   (regular vs cleanup) is captured by the `param_2` parameter, not
  *   in the name itself. Renamed from `FUN_005cfc00`.
  *
- *   See `exe-re/structs/police_manager.md` §3.5 for the full
+ *   See `exe-re/structs/police_manager.md` §5 for the full
  *   police_manager_tick per-frame tick hierarchy (3 accumulator+period
  *   pairs gating 3 distinct rate-divided tick handlers).
  * PS2 twin: `TickDoRiciActors__10C_shvestkyFb`  [CONFIRMED]
@@ -374341,19 +374523,19 @@ void __thiscall police_manager_record_delete_officer(int param_1,int param_2)
  * police_manager_record_raise_police_state(this=threat_obj, target_npc, level_flag) —
  *     Commit half of the loud-alarm bridge: finds the pursuit_record for
  *     `target_npc` and monotonically raises its committed police-state
- *     (`pursuit_record+0x3c`, see structs/police_manager.md §4) to the
+ *     (`pursuit_record+0x3c`, see structs/police_manager.md §1b) to the
  *     requested escalation tier — but only when the record already has
  *     officers assigned.
  *
  *   Walk: the pursuit_record vector at `threat_obj+0x40 (begin) / +0x44
  *   (end)` (4-byte stride, vector of `pursuit_record*` — the same
  *   records vector documented on `police_manager+0x40` in
- *   structs/police_manager.md §3). Scanned back-to-front; the match key
+ *   structs/police_manager.md §1). Scanned back-to-front; the match key
  *   is `record+0x00 == target_npc`.
  *
  *   On match, two gates before the write:
  *     1. The record's officer list (`record+0x74 begin / +0x78 end`,
- *        structs/police_manager.md §4) must be NON-EMPTY — no committed
+ *        structs/police_manager.md §1b) must be NON-EMPTY — no committed
  *        escalation without assigned officers.
  *     2. Monotonic: the new tier must EXCEED the current `+0x3c`.
  *
@@ -374429,7 +374611,7 @@ void __thiscall police_manager_record_raise_police_state(int param_1,int param_2
  *
  * What it does:
  *   Receiver is a `police_manager` (`+0x40 / +0x44` = records vector
- *   begin/end per `exe-re/structs/police_manager.md` §3 — same layout
+ *   begin/end per `exe-re/structs/police_manager.md` §1 — same layout
  *   as `police_manager_record_begin_wanted_substate`, `police_manager_register_collision_offence_for_target`,
  *   and the rest of the `police_manager_*` family).
  *
@@ -374471,7 +374653,7 @@ void __thiscall police_manager_record_raise_police_state(int param_1,int param_2
  *   ESCALATES this record's wanted state and offence bits;
  *   `police_manager_record_clear_pursuit_state` WIPES the same fields.
  *   Together they form the canonical raise ↔ clear round-trip on a
- *   `pursuit_record`. See `exe-re/structs/police_manager.md` §3 for
+ *   `pursuit_record`. See `exe-re/structs/police_manager.md` §1 for
  *   the full field map this function operates on.
  *
  * Parameters:
@@ -374492,10 +374674,10 @@ void __thiscall police_manager_record_raise_police_state(int param_1,int param_2
  * 2 callers:
  *   `police_manager_tick` and `entity_action_tick`. Field map
  *   verified against `pursuit_record` schema in
- *   `exe-re/structs/police_manager.md` §3 — every offset touched
+ *   `exe-re/structs/police_manager.md` §1 — every offset touched
  *   by this function has a documented role (offense bits, timers,
  *   wanted-state pair, roadblock-eligible flag, counters). The inverse-of-
- *   register_offense relationship is recorded in police_manager.md §3.
+ *   register_offense relationship is recorded in police_manager.md §9.
  * PS2 twin: DobreMiPokuril_MuzeJitDom__10C_shvestkyFP7C_humanb  [CONFIRMED]
  */
 void __thiscall police_manager_record_clear_pursuit_state(int param_1,int param_2,char param_3)
@@ -374615,7 +374797,7 @@ void __thiscall police_manager_record_clear_pursuit_state(int param_1,int param_
  *      police car at `record->+0x60` (forwarded to the vehicle
  *      deploy). NB this bit is loosely called "alert pending" in
  *      some inline comments, but it is the Assault-on-Police-Car
- *      offence bit (offences.md §2.3 / structs/police_manager.md §4).
+ *      offence bit (offences.md §2.3 / structs/police_manager.md §1b).
  *
  *   10. If at least 2 officers are free in the +0x70 pool
  *       (`police_manager_get_free_officers_count() > 1`), ALSO deploys
@@ -374715,7 +374897,7 @@ police_manager_try_dispatch_pursuit_for_target(int param_1,float param_2,undefin
   local_4 = 0xffffffff;  // --- SEH frame setup
   puStack_8 = &EHHandler_00638b88;
   local_c = ExceptionList;
-  iVar9 = *(int *)(param_1 + 0x40);  // records vector begin (police_manager+0x40 = std::vector<pursuit_record*>, see structs/police_manager.md §4)
+  iVar9 = *(int *)(param_1 + 0x40);  // records vector begin (police_manager+0x40 = std::vector<pursuit_record*>, see structs/police_manager.md §1b)
   if (iVar9 != 0) {  // IF the records vector is allocated: search it for this target's record
     iVar7 = *(int *)(param_1 + 0x44) - iVar9 >> 2;  // record count = (end - begin) / 4
     do {  // back-to-front scan for the record whose target (record+0x00) == param_2
@@ -374731,7 +374913,7 @@ police_manager_try_dispatch_pursuit_for_target(int param_1,float param_2,undefin
          (**(int **)(iVar9 + iVar7 * 4) != *(int *)(*(int *)(g_act_mission + 0x24) + 0xe4))) {  // ...OR CLAUSE B: this record's target is NOT the player. Pointer chain LHS: iVar9 + iVar7*4 = address of this record's slot in the records vector -> *(int**) = the pursuit_record* -> **(int**) = *record = record+0x00 = the target actor. RHS: g_act_mission+0x24 = world; world+0xe4 = the player actor pointer; *(...) = that player actor. So clause B = "target actor != player actor". Net gate: SKIP dispatch only when (override set AND target IS the player) - which never occurs, so dispatch always proceeds.
         // ===== pick spawn radius + action/message code from the committed police state =====
         param_2 = 50.0;  // default spawn radius = 50 m (overwritten below per state)
-        sVar3 = *(short *)(*(int *)(iVar9 + iVar7 * 4) + 0x3c);  // record+0x3c = police_state (1 fine / 2 handcuffs / 3 gun; structs/police_manager.md §4)
+        sVar3 = *(short *)(*(int *)(iVar9 + iVar7 * 4) + 0x3c);  // record+0x3c = police_state (1 fine / 2 handcuffs / 3 gun; structs/police_manager.md §1b)
         local_64 = 2;  // default action/message code = 2 (also the FINE-tier code; see police_board_create_and_engage mode map)
         if (sVar3 == 1) {  // IF fine: 25 m radius, code 2
           local_64 = 2;
@@ -374930,7 +375112,7 @@ police_manager_try_dispatch_pursuit_for_target(int param_1,float param_2,undefin
  *
  * What it does:
  *   Receiver is a `police_manager` (this; `+0x40`/`+0x44` = records vector
- *   begin/end per `exe-re/structs/police_manager.md` §4). Backwards-walks the
+ *   begin/end per `exe-re/structs/police_manager.md` §1b). Backwards-walks the
  *   records vector for the entry whose first dword (target NPC pointer)
  *   equals `param_2`; on miss returns silently.
  *
@@ -375828,7 +376010,7 @@ void __fastcall input_clear_bindings(int param_1)
  * Evidence: 13 callsites, every one `mov ecx,0x6f92e0` — `engine_game_loop`, `player_ai`,
  *  `program_process_command`, `race_game_loop`, `race_game_loop_net`,
  *  `gui_menu_execute_modal` — and each caller takes BOTH tables, one call per selector.
- *  Two consumers decode the action slots against `structs/loadsave.md` §7a: `player_ai`
+ *  Two consumers decode the action slots against `structs/loadsave.md` §9a: `player_ai`
  *  reads table 0 at `+0x78` (slot 0x1e = textdb 325 "Objectives") with a `> 0.25` gate
  *  and calls `loadsave_objectives_display`, and reads table 1 at `+0xe8` (slot 0x3a =
  *  textdb 310 "Change camera") and calls `camera_set_mode(-1, 1)`.
@@ -375875,7 +376057,7 @@ int __thiscall input_get_action_values(int param_1,undefined4 *param_2,byte para
  * Returns: float10: the action value, 0.0 on any miss.
  * Evidence: VA 0x005d1bc0. All four callsites were disassembled and push action indices 0x12 and
  *  0x13 with the selector 0 - the primary and secondary bindings of textdb 312 "Aiming"
- *  (`structs/loadsave.md` §7a). A camera function reading the aim action is exactly what those
+ *  (`structs/loadsave.md` §9a). A camera function reading the aim action is exactly what those
  *  two `G_Camera` callers are for.
  * Renamed from `FUN_005d1bc0`.
  */
@@ -375911,7 +376093,7 @@ float10 __thiscall input_get_action_value(int param_1,uint param_2,byte param_3)
  *  `S_input_binding` to install, or NULL to clear. param_3 (uint): the action index.
  * Returns: uint: non-zero on success, 0 when the index is negative or unusable.
  * Evidence: VA 0x005d1c30. Called 60 times from `loadsave_apply_key_bindings` as (profile +
- *  0x1f4 + i*0xc, i), and `structs/loadsave.md` §7 already documents that block as the 60-entry
+ *  0x1f4 + i*0xc, i), and `structs/loadsave.md` §9 already documents that block as the 60-entry
  *  key-binding table.
  * Renamed from `FUN_005d1c30`.
  */
@@ -378877,7 +379059,7 @@ int __fastcall camera_ctor(int param_1)
   // `reserve__Q23std38__vector_pod<>FUi(this+0x8c, 15)`. MSVC inlined the two ctors to
   // the eight zero stores above and emitted NO reserve at all, so the PC starts both
   // vectors empty and grows them on first use. Same two members, different policy.
-  // See `exe-re/structs/camera.md` §6.
+  // See `exe-re/structs/camera.md` §7.
   local_4 = 1;
   camera_reset();
   ExceptionList = local_c;
@@ -378903,7 +379085,7 @@ void __fastcall camera_dtor(int param_1)
   // frees - `__dt__Q23std38__vector_pod<>Fv` on this+0x8c and
   // `__dt__Q23std72__vector_deleter<15G_CameraPushPop,...>Fv` (0x00299840) on this+0x80.
   // MSVC inlined both. Same two members in the same order; PC +0x7c/+0x6c map onto PS2
-  // +0x8c/+0x80. See `exe-re/structs/camera.md` §6.
+  // +0x8c/+0x80. See `exe-re/structs/camera.md` §7.
   operator_delete_wrapper(*(undefined4 *)(param_1 + 0x7c));
   *(undefined4 *)(param_1 + 0x7c) = 0;
   *(undefined4 *)(param_1 + 0x80) = 0;
@@ -382272,7 +382454,7 @@ void __thiscall camera_lock_at_human_pair(int param_1,undefined4 param_2)
     // own FOV slot 0x50 with the identical pi/4 constant. The same substitution appears
     // in `camera_set_sniper_fov`, and the third PS2 caller's twin, `carcyclopedia_ctor`,
     // calls the same slot directly, so ParheliaSetFov has no PC counterpart.
-    // See `exe-re/structs/camera.md` §6d.
+    // See `exe-re/structs/camera.md` §7d.
     (**(code **)(**(int **)(param_1 + 4) + 0x50))(*(int **)(param_1 + 4),0x3f490fdb);
     (**(code **)(**(int **)(param_1 + 4) + 0x18))(*(int **)(param_1 + 4));
   }
@@ -382368,7 +382550,7 @@ void __fastcall camera_push_mode(int param_1)
       // grow-copy-fill-free path instead, which is the 549 B against 104 B size difference.
       // The element type G_CameraPushPop is the PS2 template argument (the container lever);
       // the record is {mode, frame+0x140, frame+0x144, frame+0x148}, stride 0x10.
-      // See `exe-re/structs/camera.md` §6.
+      // See `exe-re/structs/camera.md` §7.
       pvVar3 = operator_new(iVar2 << 4);
       pvVar6 = pvVar3;
       for (puVar4 = *(undefined4 **)(param_1 + 0x6c); puVar4 != puVar7; puVar4 = puVar4 + 4) {
@@ -382578,7 +382760,7 @@ void __thiscall camera_dialog_start(int param_1,int param_2,uint param_3)
           // and the fill_n below are all one PS2 call. Those three helpers are NOT inlinings:
           // they are genuinely shared STL primitives (copy_range_stride_0x14 has 22 callers in
           // at least six unrelated families), which is why they keep mechanical names.
-          // See `exe-re/structs/camera.md` §6.
+          // See `exe-re/structs/camera.md` §7.
           piVar3 = (int *)operator_new(iVar2 * 0x14);
           iVar2 = copy_range_stride_0x14(g_camera_dialog_actors_begin,piVar5,piVar3);
           fill_n_stride_0x14(iVar2,1,local_14);
@@ -382707,7 +382889,7 @@ void __thiscall camera_add_race_camera(int param_1,int param_2)
       // `insert__Q23std38__vector_pod<>FPUiUiRCUi` - to append to the race-camera vector.
       // MSVC inlined both, which is the 462 B against 136 B size difference; the duplicate
       // scan above it is present on both builds and is not part of the inlining.
-      // See `exe-re/structs/camera.md` §6.
+      // See `exe-re/structs/camera.md` §7.
       pvVar3 = operator_new(iVar2 * 4);
       pvVar5 = pvVar3;
       for (piVar6 = *(int **)(param_1 + 0x7c); piVar6 != piVar7; piVar6 = piVar6 + 1) {
@@ -382926,7 +383108,7 @@ void __thiscall camera_set_sniper_fov(int param_1,undefined4 param_2)
     // has no such wrapper - it calls the I3D_camera's own FOV slot 0x50 directly, here and
     // in `camera_lock_at_human_pair`, and the third PS2 caller's twin, `carcyclopedia_ctor`,
     // calls the same slot directly, so ParheliaSetFov has no PC counterpart.
-    // See `exe-re/structs/camera.md` §6d.
+    // See `exe-re/structs/camera.md` §7d.
     (**(code **)(**(int **)(param_1 + 4) + 0x50))(*(int **)(param_1 + 4),param_2);
     (**(code **)(**(int **)(param_1 + 4) + 0x18))(*(int **)(param_1 + 4));
     return;
@@ -384057,7 +384239,7 @@ LAB_005dd5ee:
   }
   // ===== INLINED SetActiveTrafficP__6C_gameFUi with the period plus one =====
   // Seeds the traffic-generator pick period +0x190 = 6000 ms and runs the pick at once, as the
-  // PS2 Init does with SetActiveTrafficP(period + 1) (structs/game.md §6a).
+  // PS2 Init does with SetActiveTrafficP(period + 1) (structs/game.md §8a).
   *(undefined4 *)(param_1 + 0x18c) = 0;
   *(undefined4 *)(param_1 + 400) = 6000;
   uVar17 = *(int *)(param_1 + 400) + 1;
@@ -384116,7 +384298,7 @@ LAB_005dd5ee:
     // ===== PC INLINING: PreloadAnims__6C_gameFv =====
     // Load the track of every g_anim_info_table clip (a '?' in the name loads an 'L' and an 'R'
     // variant), ticking an active network session whenever 500 ms have passed, then seed
-    // g_anim_base_track_count once (structs/anim_machine.md §4b).
+    // g_anim_base_track_count once (structs/anim_machine.md §6).
     pIVar24 = (I3D_frame *)timeGetTime();
     if (g_anim_info_table_id0 != 0xffff) {
       ppuStack_e4 = &g_anim_info_table;
@@ -386145,21 +386327,23 @@ void __fastcall game_change_act_state(int param_1)
 /*
  * game_tick(game, delta_ms) — the per-frame C_game world tick.
  * What it does: advances every game-world subsystem for the frame. After some prologue work it
- *   dispatches, in order: TickShoot (via the indirect call through game+0x2bc — the projectile tick),
+ *   dispatches, in order: `random_morph_tick` (slot 0 of the C_rmorf module at game+0x2bc),
  *   `pursuit_event_tick` (C_sledovacka::Tick), `particle_manager_tick`, `blood_manager_tick`,
  *   `force_feedback_manager_tick`, `police_manager_tick` (C_shvestky::Tick), and the police/AI ticks.
  *   This is the PC realisation of PS2 `Tick__6C_game`, which calls its per-frame helpers as separate
  *   functions; on PC MSVC INLINED several of those C_game helper methods directly into this body
  *   (each bracketed below with a `// ===== INLINED ... =====` banner):
- *     - `ShootLightTick` — the 2 muzzle-flash-light slots at game+0x2ac0 (byte-verified inline).
+ *     - `ShootLightTick` — the 10 shoot-light slots ending at game+0x2ac0 (byte-verified inline).
+ *     - `LightCacheTick` — the distance pass over the light cache at game+0x16c, on the countdown
+ *       at game+0x178 (structs/lightness.md §8d).
  *     - the per-frame sound-play list update at game+0x2f8 (≈ `TickEffects`; not yet byte-diffed).
  *     - not a PS2 helper: the fake-shadow LOD pass at game+0x290/+0x2a0 is this function's own
- *       logic, because no PS2 method sorts the shadow items (structs/fake_shadow.md §7).
+ *       logic, because no PS2 method sorts the shadow items (structs/fake_shadow.md §8).
  *   Beyond those named helpers it also runs many small inline per-frame blocks that are Tick's own
  *   logic, not separate methods: mission-end menu/fade, frame counters (+0x2b0c/+0x2b10/+0x2b14),
  *   player-move speed (+0x2a0c), an actor-visibility pass (+0x180), the first-7-frames camera init,
- *   temp-actor drain (+0x134), a traffic-generator distance pick (+0x18c), a +0x16c periodic
- *   distance-cull, and a zone-visibility cull (+0x2c8).
+ *   temp-actor drain (+0x134), a traffic-generator distance pick (+0x18c), and a zone-visibility
+ *   cull (+0x2c8).
  * Parameters: param_1 (this, ECX) = the C_game singleton (`*(g_act_mission+0x24)`); param_2 = the frame
  *   delta in milliseconds.
  * Returns: void.
@@ -386503,7 +386687,7 @@ LAB_005e0e80:
   // Every +0x190 ms (6000, set by game_init) pick one kind-0x12 traffic generator: the first
   // whose in-range byte +0x70 is clear and whose radius +0x74 holds the player frame, else the
   // nearest one; clear +0x78 on all of them, then set +0x78 and act-state 0 on the pick.
-  // Statement for statement the PS2 method (structs/game.md §6a).
+  // Statement for statement the PS2 method (structs/game.md §8a).
   idx = *(int *)(game_obj + 0x18c) + (int)delta_ms;
   *(uint *)(game_obj + 0x18c) = idx;
   if (*(uint *)(game_obj + 400) < idx) {
@@ -386648,7 +386832,7 @@ LAB_005e1622:
     }
   }
   // ===== per-frame FAKE-SHADOW LOD pass - the PC's own logic; no PS2 method sorts the shadow =====
-  // items (structs/fake_shadow.md §7).
+  // items (structs/fake_shadow.md §8).
   // Timer-gated on +0x2b0 (accum) / +0x2b4 (period). Picks the shadow-item vector +0x290 or +0x2a0
   // (toggled each cycle via the +0x2b8 flag), recomputes each item's distance-to-camera
   // (+0x18 in the 0x1c-byte record, whose type name C_game::S_shadow_item is the PS2
@@ -386756,7 +386940,7 @@ LAB_005e1622:
     }
   }
   // Per-frame subsystem tick dispatch (mirrors PS2 Tick__6C_game's call list):
-  (*(code *)**(undefined4 **)(game_obj + 700))(dt_ms);  // indirect call via game+0x2bc = PS2 TickShoot__6C_game (projectile tick)
+  (*(code *)**(undefined4 **)(game_obj + 700))(dt_ms);  // slot 0 of the C_rmorf at game+0x2bc: random_morph_tick (structs/random_morph.md)
   pursuit_event_tick(dt_ms);                            // C_sledovacka::Tick
   particle_manager_tick(dt_ms);
   blood_manager_tick(dt_ms);
@@ -386798,6 +386982,8 @@ LAB_005e1622:
     obj = entry;
   } while (scratch_f != 0.0);
   // ===== end inlined ShootLightTick =====
+  // ===== INLINED LightCacheTick__6C_gameFUi (the light cache's distance pass) =====
+  // Statement for statement the PS2 method; game_recompute_light_cache holds the other copy.
   if ((*(int *)(game_obj + 0x16c) != 0) &&
      (tmp_ptr = (void *)(*(int *)(game_obj + 0x170) - *(int *)(game_obj + 0x16c) >> 2),
      tmp_ptr != (void *)0x0)) {
@@ -386835,6 +387021,7 @@ LAB_005e1622:
       *(int *)(game_obj + 0x178) = *(int *)(game_obj + 0x178) - dt_ms;
     }
   }
+  // ===== end inlined LightCacheTick =====
   police_board_tick(dt_ms);
   ai_groups_tick();
   ai_follow_manager_update();
@@ -387203,7 +387390,7 @@ LAB_005e2420:
   // `+0x4d`, drops the growing count `+0x29e8` and calls SetProjectorLock(3) (vtable
   // `+0x8c`). That call indexes the record at the RING CURSOR `+0x29e4`, not the record
   // that finished growing: the grown decal is never locked and the next slot to be reused
-  // is locked instead (structs/blood.md §5).
+  // is locked instead (structs/blood.md §7).
   if (*(int *)(game_obj + 0x29e8) != 0) {
     tmp_ptr = (void *)0x64;
     fade_entry = (float *)(game_obj + 0x2a0c);
@@ -387266,7 +387453,7 @@ LAB_005e2420:
     tmp_ptr = (void *)((int)tmp_ptr + -1);
     obj = obj + -2;
   } while (tmp_ptr != (void *)0x0);
-  game_vehicle_track_tick(delta_ms);
+  game_car_gun_tick(delta_ms);
   collision_dyn_optimize_tick();
   console_tick(delta_ms);
   // ===== PS2-ONLY DEBUG BLOCK — the PC emits nothing here =====
@@ -387279,28 +387466,33 @@ LAB_005e2420:
   // in Game.exe ever writes a console LINE. Consistent with the console being
   // unreachable in retail (no input bound; MafiaCon.exe is the launcher that exposes
   // it — user, Tier-1). ⚠️ NOT tagged inlined: the two PS2 methods are
-  // `not located` on PC, not proven spliced. See structs/console.md §5.
+  // `not located` on PC, not proven spliced. See structs/console.md §7.
   ExceptionList = local_c;
   return;
 }
 
 /*
- * game_vehicle_track_tick(this, float dt) -> void
- * What it does: C_game per-frame update of a single frame (`+0x2f50`) that is attached to / tracks the
- *   PLAYER's car. Gated on the enable flag `+0x2f14 & 8` (when clear it detaches the frame and clears
- *   `+0x2f6c`/`+0x2f70`). Otherwise: if the player (`+0xe4`) is in a car (`player+0x98` linked vehicle,
- *   kind==4) it attaches/positions the frame at the car (offset from `vehicle_get_size`/`vehicle_get_pivot_pos`),
- *   caching the car in `+0x2f6c`; if the player leaves the car it detaches. Distance gates 2500 (50²) /
- *   1600 (40²) apply to the tracking further in.
- * Parameters: param_1 (this, ECX) = C_game (*(g_act_mission+0x24)); param_2 (float) = the frame delta.
+ * game_car_gun_tick - per-frame tick of a twin gun mounted on the player's car.
+ * What it does: returns at once unless cheat_flags (+0x2f14) has bit 0x8, which no
+ *   code sets; with the bit clear it unlinks car_gun_frame (+0x2f50) and clears
+ *   car_gun_car (+0x2f6c) and car_gun_target (+0x2f70). Past the gate, when the
+ *   player actor (+0xe4) is a car (kind 4): links the frame under the car at the
+ *   height size.y - pivot.y, scans every 20 / 250 ms for the nearest car or active
+ *   human (squared distance between 25 and 1600, the car distance times 1.2; the
+ *   target is dropped past 2500), turns the frame toward it (a human is aimed at
+ *   1.3 above its position), and every 330 ms runs two passes over the frame slots
+ *   +0x2f5c..+0x2f68: game_new_shoot from a muzzle frame, game_new_cartridge at an
+ *   eject frame, then an impulse of -50 along the frame on the car.
+ *   No code creates the frame or stores the four slots (structs/game.md section 2).
+ * Parameters: param_1 (this, ECX): the C_game (*(g_act_mission+0x24)).
+ *   param_2 (float): the frame time.
  * Returns: void.
  * PS2 twin: `DoubleKiss__6C_gameFUi`  [CONFIRMED]
- *   Located by a shared-constant fingerprint scan (5 distinctive floats 2500/1600/1.3/1.2/25),
- *   then body-diffed. The PS2 `DoubleKiss` is a developer-joke symbol — named here from behaviour (§3b),
- *   not transliterated. Fields `+0x2f50` (tracked frame) / `+0x2f6c` (cached car) / `+0x2f70` / `+0x2f14` gate.
+ *   Both bodies read whole and matched statement for statement.
  * Evidence: VA 0x005e27e0. Renamed from `FUN_005e27e0`.
  */
-void __thiscall game_vehicle_track_tick(int param_1,float param_2)
+
+void __thiscall game_car_gun_tick(int param_1,float param_2)
 
 {
   float fVar1;
@@ -388427,8 +388619,9 @@ void game_set_traffic_visible(char param_1)
 /*
  * game_new_shoot(...) -> int  (C_game::NewShoot)
  * What it does: fires a weapon shot. (1) Normalizes the shot direction. (2) If detail
- *   level (g_act_mission+0xa0) > 1 and a nearby tracer target exists, spawns a bullet-tracer
- *   effect actor from the pool at this+0x2ad8 (12.0-unit min distance, 100.0 proximity gate).
+ *   level (g_act_mission+0xa0) > 1 and the shot line passes near the scene camera, starts the
+ *   first idle fly-by sound of `flyby_sounds`, walking down from this+0x2ad8 (more than 12.0
+ *   along the shot, squared distance under 100.0), after a delay from the travel time.
  *   (3) Casts the shot ray(s): a single collision_test_line_horizontal_static when the pellet count is
  *   < 2, else a spread of `count` pellets built on an orthonormal basis with a 0.05 jitter and
  *   rand_float x2 per pellet. Each hit records the struck material (g_surface_material_table table, stride
@@ -388442,7 +388635,7 @@ void game_set_traffic_visible(char param_1)
  *   param_12 = pellet/shot count (>=2 => spread). The C_game `this` is param_1's base.
  * Returns: int (1).
  * PS2 twin: `NewShoot__6C_gameFP7C_actorRC8S_vectorRC8S_vectorfiP9I3D_framei`  [CONFIRMED]
- *   Body-diff: tail matches marker-for-marker - 12.0 tracer gate, 100.0 proximity, 0.05 pellet
+ *   Body-diff: tail matches marker-for-marker - 12.0 fly-by gate, 100.0 proximity, 0.05 pellet
  *   spread, rand x2/pellet, TestLineHStatic/collision_test_line_horizontal_static with 0x600000 mask,
  *   materialList +0x24 +m*0x170 lookup, SoundEmit(50.0,1.0,...,2,shooter), return 1. Located
  *   by a shared-constant fingerprint scan (floats 12/50/0.05).
@@ -391496,7 +391689,7 @@ void __fastcall game_add_fake_shadow_buffer(int param_1)
  * `S_shadow_item` record.
  * Returns: void.
  * PS2 twin: none - the PS2 has no shadow-item LOD pass; its `TickFakeShadows` drives the
- * PS2-only person shadows (structs/fake_shadow.md §7).
+ * PS2-only person shadows (structs/fake_shadow.md §8).
  * Evidence: VA 0x005e8da0. Both callsites resolve their receiver to the `C_game`:
  * `game_init` and the inlined fake-shadow LOD pass inside `game_tick`, which
  * activates the nearest `mission_settings_get_shadow_quality_idx` items and deactivates the
@@ -392570,43 +392763,27 @@ void __fastcall game_clear_film_music(int param_1)
 }
 
 /*
- * game_clear_frame_from_fire — scan the 100 fire-hole slots and
- * dispatch a vtable detach callback on the slot whose linked list
- * contains a node matching the given frame address.
+ * game_clear_frame_from_bullet_holes - detaches every bullet-hole frame parented under a frame.
  *
- * Behaviour: walks bucket array at `this+0x5b8` (100 entries); for
- * each non-null bucket, traverses a per-node linked list (head at
- * `bucket+0x120` = bucket[0x48]; next-pointer at `node+0x120`); on
- * `node == frame` match, dispatches `bucket->vt[+0x2c](bucket, 0, 0)`
- * and breaks out of the inner loop. Continues scanning remaining
- * buckets after a match (does NOT short-circuit the outer loop).
- *
- * @param this   the `C_game` (passed via ECX under __thiscall ABI).
- *               The 100 fire-hole slots live at `this+0x5b8`.
- * @param frame  the I3D_frame* to detach (typically `entity->frame` =
- *               `entity+0x68` per engine convention).
- *
- * Evidence: definition at VA 0x005ea070. Renamed from `FUN_005ea070`.
- * Body-read confirmed the canonical "walk-and-detach-by-address"
- * pattern with a single vtable callback. Callsite-volume: 4 total
- * occurrences in the binary (2 real callsites in
- * police_vehicle_pool_pop_first + _pop_random; 1 docblock mention;
- * 1 def) — narrow consumer base.
- *
- * See also: game_scratch_delete_from_car (VA 0x005f48a0 = `C_game::ScratchDeleteFromCar`):
- * a similar "walk-and-detach" loop, but over the C_game car-scratch DECAL POOL (100 records at
- * game+0x2fd8, spanning +0x3618), keyed on the CAR field, dispatching TWO frame vtable callbacks.
- * It is a DIFFERENT subsystem (car scratch decals) — not a sibling of this +0x5b8 fire-hole
- * pool; grouped here only by the shared loop shape.
- *
+ * What it does: Walks the 100 slots of `bullet_holes` at `this+0x5b8`. For each non-null hole
+ *   frame it follows the parent chain (head at `hole+0x120` = hole[0x48], next at `node+0x120`);
+ *   when a node is the argument frame it calls the hole's vtable `+0x2c` with (0, 0), which
+ *   unparents it, and moves on to the next slot. The outer loop never stops early.
+ * Parameters: param_1 (this): the `C_game`, in ECX.
+ *   param_2 (I3D_frame *): the frame going away, typically an actor's frame `+0x68`.
+ * Returns: void: nothing.
  * PS2 twin: `ClearFrameFromFireHole__6C_gameFP9I3D_frame`  [STRUCTURAL]
- *  A `C_game` method that walks the 100 slots at `+0x5b8`, finds the object whose frame chain
- *  (`obj+0x48`, linked on `+0x120`) holds the given frame, and resets it through vtable slot
- *  0x2c. ⚠️ The grade can NEVER exceed STRUCTURAL: the PS2 body is an EMPTY 8-byte stub, so a
- *  body diff is impossible rather than merely unperformed. The positional evidence is its slot
- *  in the fully-diffed `MasVolnouPlecku` pair.
+ *  A `C_game` method at the same position in the fully-diffed `MasVolnouPlecku` pair. The grade
+ *  can NEVER exceed STRUCTURAL: the PS2 body is an EMPTY 8-byte stub, so a body diff is impossible
+ *  rather than merely unperformed.
+ * Evidence: VA 0x005ea070. Renamed from `FUN_005ea070`. Three callers: `car_clear_damage_decals`,
+ *   `police_manager_acquire_from_pool_by_name`, `police_manager_vehicle_pool_pop_random`.
+ *   See also `game_scratch_delete_from_car`: the same loop shape over the car scratch pool at
+ *   `this+0x2fd8`, keyed on the car field, a different subsystem.
+ * Class layout: exe-re/structs/game.md §2, §4a.
  */
-void __thiscall game_clear_frame_from_fire(int param_1,int param_2)
+
+void __thiscall game_clear_frame_from_bullet_holes(int param_1,int param_2)
 
 {
   int *piVar1;
@@ -398252,7 +398429,7 @@ uint game_savegame_load_before(undefined4 *param_1)
  *
  * What it does: registers a frame for per-object ambient-light sampling. Returns early if the
  *  frame is already in the `+0x154` vector. Unless bit 0 of `flags` is set the frame must be
- *  visual type 1 and carry one of the tags `LMAP MMAP MRPH PRTB PRTE SNGM LENS LNDP SMMR OBJ_`
+ *  visual type 1 and carry one of the tags `LMAP MRPH PRTB PRTE SNGM LENS LNDP SMMR OBJ_`
  *  at `I3D_frame+0x1d4`. Then `operator_new(0x24)` builds the record `{owner, frame, u16 flags,
  *  offset.xyz, 1.0f current, 1.0f target, 0 last-sample-ms}` and push_backs it.
  * Parameters: owner (C_actor *): the actor the frame belongs to. frame (I3D_frame *): the frame
@@ -398453,10 +398630,12 @@ void __fastcall game_lightness_clear(int param_1)
  *
  * What it does: walks the lightness record vector at `C_game+0x154` in TWO passes.
  * Pass 1 samples ONE record per frame through the round-robin cursor at `+0x160`: if
- * that record was last sampled more than 250 ms ago and its frame is within 40 units
- * of the scene camera (`1600.0` = 40 squared), it asks the scene for the ambient
- * lightness at the record's world position through the `I3D_scene` virtual `+0x68`
- * (`GetLightness`) and stores the answer as the record's TARGET at `+0x1c`. Pass 2
+ * that record was last sampled more than 250 ms ago, its frame is within 40 units of
+ * the scene camera (`1600.0` = 40 squared), its owner has `in_camera_sector` (`+0x5f`)
+ * set and `act_state` (`+0x1c`) 0, and flag bit 0 is clear, it switches the owner's frame
+ * off, asks the scene for the ambient lightness at `offset` plus the owner frame's
+ * position through the `I3D_scene` virtual `+0x68` (`GetLightness`), stores the answer
+ * as the record's TARGET at `+0x1c` and restores the frame's on bit. Pass 2
  * runs over every record and eases the CURRENT value at `+0x18` toward that target at
  * `ms * 0.004` per millisecond, then applies it - through the frame's
  * `SetHRLightness` virtual at `+0x80` for a plain record, or through
@@ -398595,7 +398774,7 @@ LAB_005f1667:
  * game_lightness_apply_recursive(I3D_frame *frame, float lightness) -> void
  *
  * What it does: applies an HR lightness value down a frame subtree. For a frame of visual type 1
- *  carrying one of the tags `MMAP LMAP MRPH SNGM SMMR OBJ_` it calls the frame's vtable `+0x80`
+ *  carrying one of the tags `LMAP MRPH SNGM SMMR OBJ_` it calls the frame's vtable `+0x80`
  *  (`SetHRLightness`) with the value, then recurses over every child through the child-count
  *  `+0x11c` and the `GetChild` virtual.
  * Parameters: frame (I3D_frame *, in ECX): the subtree root. lightness (float): the value to
@@ -398784,9 +398963,10 @@ void __fastcall game_light_cache_collect_recursive(int param_1,int param_2)
  * Parameters: none.
  * Returns: void.
  * Evidence: VA 0x005f19c0. Reached from a `program_process_command` script arm.
- * Cross-build: a 2 -> 1 FOLD. PS2 `RecomputeLightCache` is only `-1; LightCacheTick(1); -1;`,
- *  and the PC body IS that with the 388-byte tick spliced in - same `0x7e7` marker, same `+
- *  15.0` term, same per-light enable/disable virtual. 336 B against 56+388.
+ * Cross-build: PS2 `RecomputeLightCache` is only `-1; LightCacheTick(1); -1;`, and the PC
+ *  body IS that with the 388-byte tick spliced in - same `0x7e7` reload, same `+ 15.0` term,
+ *  same per-light enable/disable virtual. 336 B against 56+388. `game_tick` holds the other
+ *  inlined copy of `LightCacheTick`, the one that throttles on the countdown.
  * Renamed from `FUN_005f19c0`. Class layout: `exe-re/structs/game.md`
  */
 void __fastcall game_recompute_light_cache(int param_1)
@@ -398808,7 +398988,7 @@ void __fastcall game_recompute_light_cache(int param_1)
     // PS2 RecomputeLightCache__6C_gameFv is only three statements:
     //   +0x1c4 = -1;  LightCacheTick__6C_gameFUi(1);  +0x1c4 = -1;
     // MSVC spliced the 388-byte LightCacheTick body in between, so the PC has NO
-    // separate tick function - a 2 -> 1 fold. Everything from this
+    // separate tick function; `game_tick` holds the other copy. Everything from this
     // marker word down to the second -1 store is that absorbed body: the 0x7e7 re-test
     // countdown, the camera pose, and the per-light enable/disable by squared distance
     // against `light_radius + camera_range + 15.0`.
@@ -404794,7 +404974,8 @@ void thunk_ls3d_setup_static_init(void)
  *
  * What it does: the `.CRT$XCU` dynamic initializer for `g_ls3d_setup` at `0x006f952c` - the
  *  0x3f-byte engine settings block the game persists to the registry. Writes every default in
- *  place: `+0x00 = 0x14` (the version tag the loader checks), `+0x02 = 800`, `+0x06 = 600`,
+ *  place: `+0x00 = 0x14` (the version tag `engine_main`'s test reads here), `+0x02 = 800`,
+ *  `+0x06 = 600`,
  *  `+0x0a = 32`, the mode flag bytes, `+0x27 = +0x2b = 1.0f` and `+0x2f = +0x33 = 2`, `+0x37 =
  *  3`, `+0x3b = 2`.
  * Parameters: none.
@@ -405021,7 +405202,7 @@ void i3d_model_cache_static_dtor(void)
  * PS2 twin: `__dt__17C_I3D_model_cacheFv` [CONFIRMED] - the DERIVED destructor: reached
  *  from derived slot 5 and the global's exit destructor. The PS2 body stores the derived
  *  vtable (a dead store) and then runs the template destructor inline; this body is that
- *  sequence without the dead store (structs/i3d_cache.md §6).
+ *  sequence without the dead store (structs/i3d_cache.md §7a).
  * Renamed from `FUN_005f7d50`. TU: `Main.cpp`. See
  *  `exe-re/structs/app_bootstrap.md`.
  */
@@ -405248,7 +405429,7 @@ void i3d_sound_cache_static_dtor(void)
  * PS2 twin: `__dt__17C_I3D_sound_cacheFv` [CONFIRMED] - the DERIVED destructor: reached
  *  from derived slot 5 and the global's exit destructor. The PS2 body stores the derived
  *  vtable (a dead store) and then runs the template destructor inline; this body is that
- *  sequence without the dead store (structs/i3d_cache.md §6).
+ *  sequence without the dead store (structs/i3d_cache.md §7a).
  * Renamed from `FUN_005f7f10`. TU: `Main.cpp`. See
  *  `exe-re/structs/app_bootstrap.md`.
  */
@@ -405471,7 +405652,7 @@ void i3d_anim_cache_static_dtor(void)
  * PS2 twin: `__dt__16C_I3D_anim_cacheFv` [CONFIRMED] - the DERIVED destructor: reached
  *  from derived slot 5 and the global's exit destructor. The PS2 body stores the derived
  *  vtable (a dead store) and then runs the template destructor inline; this body is that
- *  sequence without the dead store (structs/i3d_cache.md §6).
+ *  sequence without the dead store (structs/i3d_cache.md §7a).
  * Renamed from `FUN_005f80c0`. TU: `Main.cpp`. See
  *  `exe-re/structs/app_bootstrap.md`.
  */
@@ -407105,8 +407286,9 @@ void engine_igraph_error_callback(HKEY param_1)
  * What it does: the application's real main. Takes the single-instance mutex
  * `Mafia Launcher Super Mutex Shit`, runs the `Main program` TEV check and the
  * CD check, installs the exception handlers, reads `LS3D_setup` back out of the
- * registry over the defaults (rejecting a blob whose version tag is not 0x14,
- * which starts `setup.exe` without waiting and returns), calls `engine_init`, pushes the six
+ * registry over the defaults (a missing value or a size other than 0x3f starts `setup.exe`
+ * without waiting and returns; the 0x14 test at 0x005f9aa5 reads the global, not the value),
+ * calls `engine_init`, pushes the six
  * persisted quality settings into `C_mission + 0x90`, then runs the main-menu
  * loop: build `GM_MainMenu`, execute it modally, and switch on its result -
  * 0x11 tutorial, 0x12 intro then mise01, 0x13 load game, 0x14 multiplayer,
@@ -407441,7 +407623,7 @@ LAB_005fa243:
  * ls3d_setup_set_defaults(S_ls3d_setup *dst) -> void
  *
  * What it does: writes the factory defaults of the 0x3f-byte engine settings
- * block into `dst`: `+0x00 = 0x14` (the version tag the registry loader checks),
+ * block into `dst`: `+0x00 = 0x14` (the version tag; the registry value then overwrites `dst`),
  * `+0x02 = 800`, `+0x06 = 600`, `+0x0a = 32`, the mode flag bytes, the two 1.0f
  * scales at `+0x27` / `+0x2b`, and the four quality levels 2 / 2 / 3 / 2 at
  * `+0x2f` / `+0x33` / `+0x37` / `+0x3b`.
@@ -410102,6 +410284,8 @@ void __fastcall i3d_cache_base_sound_dtor(undefined4 *param_1)
  *  instantiations onto one address. That is why it takes the template-level prefix and not a
  *  per-resource one. PS2 writes `this + 0x1c`.
  * PS2 twin: `SetCacheSize__23C_I3D_cache<9I3D_model>Fi` [CONFIRMED]
+ * PS2 twin: `SetCacheSize__23C_I3D_cache<9I3D_sound>Fi` [CONFIRMED]
+ * PS2 twin: `SetCacheSize__32C_I3D_cache<17I3D_animation_set>Fi` [CONFIRMED]
  * Renamed from `FUN_005fcd40`. TU: `Main.cpp`. See
  *  `exe-re/structs/i3d_cache.md` and `exe-re/structs/app_bootstrap.md`.
  */
@@ -410381,9 +410565,12 @@ LAB_005fd046:
  * Parameters: none beyond `this`.
  * Returns: void.
  * Evidence: VA 0x005fd180. 6 vtable slots (ICF-folded across the three instantiations). PS2 136
- *  B against PC 134 B. ⚠️ `structs/i3d_cache.md` said "slot 6 = Clear" - that is the PS2 slot;
- *  the PC slot is 4.
+ *  B against PC 134 B. PS2 slot 6 is this PC slot 4 (`structs/i3d_cache.md` §7d).
+ *  The anim instantiation's PS2 body calls `Release` directly; the PC calls the
+ *  element's virtual for all three.
  * PS2 twin: `Clear__23C_I3D_cache<9I3D_model>Fv` [CONFIRMED]
+ * PS2 twin: `Clear__23C_I3D_cache<9I3D_sound>Fv` [CONFIRMED]
+ * PS2 twin: `Clear__32C_I3D_cache<17I3D_animation_set>Fv` [CONFIRMED]
  * Renamed from `FUN_005fd180`. TU: `Main.cpp`. See
  *  `exe-re/structs/i3d_cache.md` and `exe-re/structs/app_bootstrap.md`.
  */
@@ -410708,6 +410895,8 @@ LAB_005fd550:
  * Returns: void.
  * Evidence: VA 0x005fd5d0. 6 vtable slots. PS2 96 B against PC 109 B.
  * PS2 twin: `ClearDirs__23C_I3D_cache<9I3D_model>Fv` [CONFIRMED]
+ * PS2 twin: `ClearDirs__23C_I3D_cache<9I3D_sound>Fv` [CONFIRMED]
+ * PS2 twin: `ClearDirs__32C_I3D_cache<17I3D_animation_set>Fv` [CONFIRMED]
  * Renamed from `FUN_005fd5d0`. TU: `Main.cpp`. See
  *  `exe-re/structs/i3d_cache.md` and `exe-re/structs/app_bootstrap.md`.
  */
@@ -410743,6 +410932,8 @@ void __fastcall i3d_cache_clear_dirs(int param_1)
  * Returns: int: `(dirs_end - dirs_begin) >> 2`.
  * Evidence: VA 0x005fd640. 6 vtable slots. True size 22 B.
  * PS2 twin: `NumDirs__23C_I3D_cache<9I3D_model>CFv` [CONFIRMED]
+ * PS2 twin: `NumDirs__23C_I3D_cache<9I3D_sound>CFv` [CONFIRMED]
+ * PS2 twin: `NumDirs__32C_I3D_cache<17I3D_animation_set>CFv` [CONFIRMED]
  * Renamed from `FUN_005fd640`. TU: `Main.cpp`. See
  *  `exe-re/structs/i3d_cache.md` and `exe-re/structs/app_bootstrap.md`.
  */
@@ -410767,6 +410958,8 @@ int __fastcall i3d_cache_num_dirs(int param_1)
  * Evidence: VA 0x005fd660. 6 vtable slots. PS2 returns a raw `char *` at 20 B; the PC adds 8 to
  *  skip its refcounted string header, at 22 B.
  * PS2 twin: `GetDir__23C_I3D_cache<9I3D_model>CFi` [CONFIRMED]
+ * PS2 twin: `GetDir__23C_I3D_cache<9I3D_sound>CFi` [CONFIRMED]
+ * PS2 twin: `GetDir__32C_I3D_cache<17I3D_animation_set>CFi` [CONFIRMED]
  * Renamed from `FUN_005fd660`. TU: `Main.cpp`. See
  *  `exe-re/structs/i3d_cache.md` and `exe-re/structs/app_bootstrap.md`.
  */
@@ -413806,6 +413999,7 @@ void __thiscall mission_tick(int param_1,undefined4 param_2)
  * Returns: void.
  * Evidence: VA 0x005ffeb0. Sits between `mission_close` and `mission_open`, so the `scene_` prefix
  *  is the established one for this TU.
+ * PS2 twin: `ShowProgress__FP7C_chunk` [CONFIRMED]
  * Renamed from `FUN_005ffeb0`. TU: `Mission.cpp`. See
  *  `exe-re/structs/mission.md`.
  */
@@ -414089,8 +414283,9 @@ mission_open(int scene_mgr,char *scene_name,char reload_flag,undefined4 param_4,
  *  at `0x00600050` - a `push imm32`, which is neither an `E8` call nor a dataref, so every
  *  reference probe reports this function as an orphan. Found by a
  *  byte-scan.
- * Cross-build: the PS2 keeps the `msg != 0x10` filter INSIDE `cbLoadScene`; the PC splits it
- *  into this wrapper plus the body.
+ * Cross-build: the PS2 has the same wrapper in front of `cbLoadScene`, with the same two
+ *  filtered message ids.
+ * PS2 twin: `__SceneErrFnc__F21LS3D_CALLBACK_MESSAGEUiUiPv` [CONFIRMED]
  * Renamed from `FUN_00600540`. TU: `Mission.cpp`. See
  *  `exe-re/structs/mission.md`.
  */
@@ -418659,13 +418854,16 @@ int __fastcall vec_count_stride_0xc(int param_1)
 /*
  * roads_nodes_clear - empty the road-node table.
  *
- * What it does: resets the end pointer of the vector at `C_roads + 0x18` to its begin. The
- *  element-destroy loop MSVC emitted is provably dead (`mov eax,ebx; cmp eax,ebx; je`), because
- *  the element is POD.
+ * What it does: resets the end pointer of the vector at `C_roads + 0x18` to its begin. MSVC
+ *  builds `clear` as `erase(begin, end)`; its move-down loop (six dwords per record) is dead
+ *  (`mov eax,ebx; cmp eax,ebx; je`) because the source starts at the end.
  * Parameters: param_1 (C_roads + 0x14): the vector header.
  * Returns: void.
  * Evidence: VA 0x00606590. One callsite, in `mission_close`, receiver `lea ecx,[edi+0x14]` where
  *  `edi` is `C_mission+0x30` - the stride-`0x18` node table of `structs/roads.md`.
+ * PS2 twin: `clear__Q23std68__vector_deleter<>Fv` (0x003ad440, the `S_road_node_1`
+ *  instantiation)  [STRUCTURAL]: the same dead per-record loop and empty result; the PS2
+ *  calls it from the vector's destructor, a call position the PC does not have.
  * Renamed from `FUN_00606590`. TU: `Mission.cpp`. See
  *  `exe-re/structs/mission.md`.
  */
@@ -418714,7 +418912,7 @@ void __fastcall actor_mark_scene_placed(int param_1)
  *     * FIELD OFFSET: it indexes the vector's OWN +0x04, never an offset inside an owner.
  *       Every caller passes a vector header and NEVER a class instance — `program_process_command`
  *       opens with `lea esi, [ebp + 0xc]`, so even the script VM hands it `C_program+0x0c`,
- *       whose begin/end are program+0x10/+0x14, the instruction vector (structs/entity.md §4c).
+ *       whose begin/end are program+0x10/+0x14, the instruction vector (structs/entity.md §4).
  *     * RECEIVER CENSUS, 377 E8 callsites, hand-disassembled: `program_process_command` 353
  *       (elements are `{int opcode, int *args}`), `mission_open_bin` 13 on TWO STACK LOCALS
  *       (`[esp+0x60]` and `[esp+0x84]`, elements are `{I3D_frame *, int}` deferred frame-fixup
@@ -418823,7 +419021,10 @@ void __fastcall i3d_cache_items_clear(int param_1)
  * Evidence: VA 0x00606700. Four callsites and all four are `C_roads`: `roads_load_data` twice,
  *  `mission_close` once with receiver `lea ecx,[edi+4]` where `edi` is `C_mission+0x30`, and
  *  one site inside the roads cluster. Stride `0xec` is the crossing record of
- *  `structs/roads.md`.
+ *  `structs/roads.md`. `roads_load_data` calls it at the statement where the PS2 crossing
+ *  `resize` calls its `erase` (the shrink branch), with the same range.
+ * PS2 twin: `erase__Q23std74__vector_imp<>FP17S_road_crossing_1P17S_road_crossing_1`
+ *  (0x003ac5a0)  [CONFIRMED]
  * Renamed from `FUN_00606700`. TU: `Mission.cpp`. See
  *  `exe-re/structs/mission.md`.
  */
@@ -420791,7 +420992,7 @@ void crt_register_atexit_stub(void)
  *   connection array.
  * Parameters: param_1 (C_web_node*): the node being destroyed (this, ECX).
  * Returns: void.
- * PS2 twin: `{dtor}__10C_web_node` (0x003905f0)  [CONFIRMED]
+ * PS2 twin: `__dt__10C_web_nodeFv` (0x003905f0)  [CONFIRMED]
  *   Independently pinned without a rank argument: this exact function pointer is what
  *   `web_path_load_nodes` and `web_path_dtor` pass to the array-destroy helper as the
  *   per-element destructor for a stride-0x1e array. Size ratio 68/48 = 1.42.
@@ -421009,7 +421210,7 @@ uint __thiscall web_node_find_connection_index(int param_1,short param_2)
  *   then frees the search-scratch/helper block at `this+0x14`.
  * Parameters: param_1 (C_web_path*): the graph (this).
  * Returns: void.
- * PS2 twin: `{dtor}__10C_web_path` (0x00390dd0)  [CONFIRMED]
+ * PS2 twin: `__dt__10C_web_pathFv` (0x00390dd0)  [CONFIRMED]
  *   Ratio 96/64 = 1.50.
  * 🔑 Its free of `this+0x14` is the lead for the still-unlocated `AllocHelpMem` /
  *   `FreeHelpMem` / `GetNextHlpMemBlock` trio: whoever ALLOCATES that block is the
@@ -421145,7 +421346,7 @@ void __thiscall web_path_resize_node_array(int param_1,uint param_2)
  *   multiset agrees (`Resize__10C_web_path` x1 on both builds).
  *   ⚠️ Size ratio 164/96 = 1.71, ABOVE the usual band - recorded rather than smoothed
  *   over; the signature and multiset evidence is what carries the row.
- * 🔑 Corroborates that `node+0x0c` is the CATEGORY word (structs/web_node.md §1a): it
+ * 🔑 Corroborates that `node+0x0c` is the CATEGORY word (structs/web_node.md §2a): it
  *   is the one field this function takes as an explicit `Us` construction parameter.
  * Evidence: VA 0x006087e0.
  * Renamed from `FUN_006087e0` (original Ghidra id).
@@ -421860,7 +422061,7 @@ void __thiscall web_path_recompute_connection_costs(int param_1,int param_2)
  *   `0xffbf` on the ushort; identical bit. Ratio 112/80 = 1.40.
  * ⚠️ This is the CONNECTION-level selected bit (`conn+0x02` bit 0x40), NOT the
  *   node-level one (`node+0x0c` bit 0x4000) that the ai_wayfind endpoint resolvers
- *   use as a visited marker. See structs/web_node.md §1a.
+ *   use as a visited marker. See structs/web_node.md §2a.
  * Evidence: VA 0x00609340. Renamed from `FUN_00609340`.
  */
 void __fastcall web_path_clear_all_selections(int param_1)
@@ -423774,7 +423975,7 @@ undefined2 __fastcall web_path_is_sorted_by_x(int param_1)
  *   for statement.
  * 🔑 Bit `0x4000` is the search marker `web_graph_dfs_expand` skips on
  *   (`conn->flags & 0x4080`) and the endpoint resolvers set as a visited flag; this is
- *   the bulk reset for it. See structs/web_node.md §1a.
+ *   the bulk reset for it. See structs/web_node.md §2a.
  * Evidence: VA 0x0060b150. Renamed from `FUN_0060b150`.
  */
 void __fastcall web_path_clear_marker_bits(int param_1)
@@ -425838,7 +426039,7 @@ void __fastcall opponent_game_done(int param_1)
  * Parameters: param_1 (this): the `C_opponent` being placed on the grid. param_2: the `I3D_animation_set` used for the driver rig, or 0. param_3: the grid slot index, substituted into `"start%i"` / `"racing_car%u"` / `"racing_driver%u"`.
  * Returns: void: nothing.
  * PS2 twin: `GameInit__10C_opponentFP17I3D_animation_setUi` (0x00396800, 5984 B)  [CONFIRMED]
- * Evidence: VA 0x0060cfa0. Ratio 0.70. The whole spine is statement-for-statement: the `"start%i"` frame lookup stored to the same slot, `operator_new(0x21f4)`+`car_ctor` <-> `__nw__(0x2490)`+`__ct__5C_car`, `EnableSounds(1)`, `SetTrafficCar(0)`, the `g_racing+0x2b7` damage gate writing the same `0x4000` (the field pair PC `+0x2b7` <-> PS2 `+0xb07` that `structs/racing.md` §2a already documents), `AddTemporaryActor`, `SetActState(0)`, `SetActualLevel`, `SetEngineOn(1,0)`, then the identical player-vs-AI split through `Intern_UseCar` / `AddDriverMan` / `CreateDriver`. ⚠️ **Two revision differences, both recorded:** the PC adds a car-colour/skin block driven by `+0x50`/`+0x54` that PS2 has no trace of, and PS2 opens with a `PrusecikPrimek` line-intersection that derives a lateral grid offset the PC does not compute at all. Renamed from `FUN_0060cfa0`.
+ * Evidence: VA 0x0060cfa0. Ratio 0.70. The whole spine is statement-for-statement: the `"start%i"` frame lookup stored to the same slot, `operator_new(0x21f4)`+`car_ctor` <-> `__nw__(0x2490)`+`__ct__5C_car`, `EnableSounds(1)`, `SetTrafficCar(0)`, the `g_racing+0x2b7` damage gate writing the same `0x4000` (the field pair PC `+0x2b7` <-> PS2 `+0xb07` that `structs/racing.md` §1a already documents), `AddTemporaryActor`, `SetActState(0)`, `SetActualLevel`, `SetEngineOn(1,0)`, then the identical player-vs-AI split through `Intern_UseCar` / `AddDriverMan` / `CreateDriver`. ⚠️ **Two revision differences, both recorded:** the PC adds a car-colour/skin block driven by `+0x50`/`+0x54` that PS2 has no trace of, and PS2 opens with a `PrusecikPrimek` line-intersection that derives a lateral grid offset the PC does not compute at all. Renamed from `FUN_0060cfa0`.
  * Class layout: exe-re/structs/racing.md
  */
 void __thiscall opponent_game_init(int param_1,undefined4 param_2,undefined4 param_3)
@@ -427320,7 +427521,7 @@ void __thiscall racing_set_race_camera_index(int param_1,uint param_2)
  * Parameters: param_1 (this): the `C_opponent` — one racer (the player included).
  * Returns: uint: the points earned, 0 if retired or outside places 1-8.
  * PS2 twin: `GetRacePoints__10C_opponentFv` (0x0039a000)  [CONFIRMED]
- * Evidence: VA 0x0060f750. Same retired gate and same ladder; field bridges PC `+0x80` <-> PS2 `+0x1e4` (retired) and PC `+0x68` <-> PS2 `+0x198` (finishing place), both already documented in `structs/racing.md` §5. Ratio 0.78. Renamed from `FUN_0060f750`.
+ * Evidence: VA 0x0060f750. Same retired gate and same ladder; field bridges PC `+0x80` <-> PS2 `+0x1e4` (retired) and PC `+0x68` <-> PS2 `+0x198` (finishing place), both already documented in `structs/racing.md` §8. Ratio 0.78. Renamed from `FUN_0060f750`.
  * Class layout: exe-re/structs/racing.md
 */
 undefined4 __fastcall opponent_get_race_points(int param_1)
@@ -427557,7 +427758,7 @@ int __fastcall racing_ctor(int param_1)
  *   container, not a member of a wrapper. Census: **0 callsites and 2 datarefs, with two
  *   different owners** — it is handed to `crt_ehvec_ctor` with element size 0x10 by
  *   `racing_ctor` (seven containers at `C_racing+0x2c4`, element dtor `vector_dispose_at_0x04`)
- *   and by `railway_game_init`, a foreign class (element dtor `FUN_00566200`). Two owners and
+ *   and by `railway_game_init` (element dtor `vector_dispose_at_0x04`). Two owners and
  *   two element destructors for one ctor symbol is the textbook confirmation that it belongs to
  *   no class. Both references take it by address (`&gif_vector_ctor`).
  *   The disassembly settles the byte: `push ecx; mov al,[esp+3]` is the
@@ -431673,7 +431874,7 @@ void __thiscall racing_set_current_circuit(int param_1,undefined4 param_2)
  * Parameters: param_1 (this): the `C_racing` singleton (`g_racing`).
  * Returns: void: nothing.
  * PS2 twin: `GenerateQualification__8C_racingFv` (0x003a2b20, 412 B)  [CONFIRMED]
- * Evidence: VA 0x00614dd0. Ratio 0.66. Same open/close `G_CarDatabase` pair bracketing the loop, same entrant array (PC `+0x1d8`/`+0x284` ↔ PS2 `+0xa28`/`+0xac0`), same double store of the result (PC `+0x38` and `+0x7c` ↔ PS2 `+0x188` and `+0x1a4`), and the best-lap test at the identical position. ⚠️ **The randomisation SOURCE differs between builds**: PS2 scales `GetSegmentTotalTime(segId, 0)` by a difficulty term, the PC interpolates between the two per-class tables that `circuits.def` carries. The PC has no segment subsystem at all — see `structs/racing.md` §7. Renamed from `FUN_00614dd0`.
+ * Evidence: VA 0x00614dd0. Ratio 0.66. Same open/close `G_CarDatabase` pair bracketing the loop, same entrant array (PC `+0x1d8`/`+0x284` ↔ PS2 `+0xa28`/`+0xac0`), same double store of the result (PC `+0x38` and `+0x7c` ↔ PS2 `+0x188` and `+0x1a4`), and the best-lap test at the identical position. ⚠️ **The randomisation SOURCE differs between builds**: PS2 scales `GetSegmentTotalTime(segId, 0)` by a difficulty term, the PC interpolates between the two per-class tables that `circuits.def` carries. The PC has no segment subsystem at all — see `structs/racing.md` §13. Renamed from `FUN_00614dd0`.
  * Class layout: exe-re/structs/racing.md
  */
 void __fastcall racing_generate_qualification(int param_1)
@@ -440122,7 +440323,7 @@ void __fastcall sound_table_clear_invisible_flag(int param_1)
  *        position, +0x0c type (0 = free), +0x10 time, +0x14 intensity, +0x18 range,
  *        +0x1c source.
  *   The clock is the mission object's field at +0x2b0c — the SAME mission object that owns
- *   the arena at +0x2b3c. See exe-re/structs/ai_sensors.md §3 for the full chain.
+ *   the arena at +0x2b3c. See exe-re/structs/ai_sensors.md §5 for the full chain.
  * Parameters: param_1 (this, ECX): the soundArena (mission+0x2b3c);
  *             param_2 (pos): emission position; param_3 (range) and param_4 (base
  *             intensity): floats - gunfire passes 50.0 / 1.0, footsteps step x 10.0 / 0.5;
@@ -440321,7 +440522,7 @@ void __thiscall sound_arena_update_entity_sound_contacts(int param_1,float param
  *   — exactly the **16 slots x 0x20** of the sound ring (base +0x00) — then clears the
  *   write cursor at +0x200 and the next-GC stamp at +0x204. **+0x204 is the next-GC stamp that
  *   sound_arena_emit_sound reads**, which is what pins this as the arena's init.
- *   See exe-re/structs/ai_sensors.md §3.
+ *   See exe-re/structs/ai_sensors.md §5.
  * Parameters: param_1 (this, ECX): the soundArena (mission+0x2b3c).
  * Returns: void.
  * PS2 twin: `Init__10soundArenaFv`  [CONFIRMED]
@@ -440352,7 +440553,7 @@ void __fastcall sound_arena_init(undefined4 *param_1)
  *   Walks all **16** ring slots (base +0x00, stride 0x20) and, for each slot whose source
  *   field (+0x1c) equals `actor`, zeroes that field and the slot's type field (+0x0c).
  *   Called when an actor is destroyed, so its already-emitted sounds cannot outlive it and
- *   be attributed to freed memory. See exe-re/structs/ai_sensors.md §3.
+ *   be attributed to freed memory. See exe-re/structs/ai_sensors.md §5.
  * Parameters: param_1 (this, ECX): the soundArena (mission+0x2b3c);
  *             param_2 (actor): the actor being invalidated.
  * Returns: void.
@@ -440870,8 +441071,10 @@ LAB_0061dfd6:
  *  `mission_init`'s `operator_new(0x10)` result (the `C_tshift` at `C_mission + 0x28`) and `lea
  *  ecx,[esi+0x2d90]` inside `game_ctor` (the `C_blood_manager`). It is also not byte-unique: a
  *  second copy sits at `0x0044a120`. No class-qualified name can be correct.
- * Renamed from `FUN_0061e010`. TU: `Mission.cpp`. See
- *  `exe-re/structs/mission.md`.
+ * PS2 twin: `__ct__8C_tshiftFv` [STRUCTURAL] (the C_tshift owner)
+ * PS2 twin: `__ct__15C_blood_managerFv` [STRUCTURAL] (the C_blood_manager owner)
+ * Renamed from `FUN_0061e010`. TU: `tshift.cpp` [0x0061df00, 0x0061e0d0). See
+ *  `exe-re/structs/uv_scroll.md` and `exe-re/structs/blood.md`.
  */
 void __fastcall folded_vector_ctor_at_0x04(undefined1 *param_1)
 
@@ -440903,8 +441106,10 @@ void __fastcall folded_vector_ctor_at_0x04(undefined1 *param_1)
  * Evidence: VA 0x0061e030. The destructor half of the same PROVEN two-owner fold: two callsites
  *  with disagreeing receivers - `mission_uninit` on `C_mission + 0x28` and `game_dtor` on
  *  `C_game + 0x2d90`.
- * Renamed from `FUN_0061e030`. TU: `Mission.cpp`. See
- *  `exe-re/structs/mission.md`.
+ * PS2 twin: `__dt__8C_tshiftFv` [STRUCTURAL] (the C_tshift owner)
+ * PS2 twin: `__dt__15C_blood_managerFv` [STRUCTURAL] (the C_blood_manager owner)
+ * Renamed from `FUN_0061e030`. TU: `tshift.cpp` [0x0061df00, 0x0061e0d0). See
+ *  `exe-re/structs/uv_scroll.md` and `exe-re/structs/blood.md`.
  */
 void __fastcall folded_vector_free_at_0x04(int param_1)
 
@@ -442277,7 +442482,7 @@ int __thiscall glass_shatter_pane_copy_assign(int param_1,int param_2)
  * glass_shatter_break_frame - shatter one pane frame into falling shards
  *
  * What it does: The public entry point. Rejects anything that is not a real model (`frame+0x110
- *  == 1 && frame+0x1d4 == 'OBJ_'`, the gate `structs/i3d_frame.md` §3 documents). Optionally
+ *  == 1 && frame+0x1d4 == 'OBJ_'`, the gate `structs/i3d_frame.md` §5a documents). Optionally
  *  keeps the original frame in a restore list, hides it, then calls `glass_shatter_cut_mesh` to
  *  triangulate the pane into shards. Allocates the pane's `S_DICE_OBJ` array, and per shard:
  *  asks the driver for an `'OBJ_'` frame, builds its geometry through
@@ -445556,14 +445761,14 @@ undefined4 __fastcall cd_find_game_file(char *param_1,LPCSTR param_2)
  *
  * What it does: Loops on `cd_scan_drives_for_disc`. On success returns 1 immediately.
  * On failure it presents a frame through `g_engine` slot `+0x3c` (the IGraph Present, see
- * `structs/app_bootstrap.md` §3a; skipped when `g_engine` is null), then shows
+ * `structs/app_bootstrap.md` §6a; skipped when `g_engine` is null), then shows
  * `MessageBoxA(NULL, "Please insert MAFIA CD 1", NULL, 0x15)` where
  * 0x15 = MB_RETRYCANCEL|MB_ICONHAND, and retries. IDCANCEL (2) breaks the loop.
  * Parameters: none.
  * Returns: undefined4: 1 once a drive holding the disc was found, 0 if the user
  * cancelled.
  * PS2 twin: - PC-only. The PS2 has no drive letters and no Win32 message box; see
- * `structs/app_bootstrap.md` §6, which measures that rather than assuming it.
+ * `structs/app_bootstrap.md` §11, which measures that rather than assuming it.
  * Evidence: VA 0x00624070. Two callers, and BOTH use the return value as a hard gate:
  * `engine_main` refuses to start the engine on 0, and `mission_open` returns error code
  * 4. Its callee is the function the GiMP crack stubbed to `return 1`, which is what
@@ -447076,7 +447281,7 @@ void crt_fp_init(void)
  *   reader in this image, because the multithreaded CRT that calls them is not linked.
  *   The shipped `LS3DF.dll` and `IJoy.dll` carry the same unread triple.
  *   Renamed from `FUN_006248fb`.
- * Class layout: - (MSVC runtime; exe-re/structs/crt_runtime_tail.md §5a)
+ * Class layout: - (MSVC runtime; exe-re/structs/crt_runtime_tail.md §9a)
  */
 
 void crt_fpclear(void)
@@ -448098,12 +448303,12 @@ undefined4 crt_sprintf(undefined1 *param_1,undefined4 param_2)
  *   param_2 (int): buffer size in bytes. param_3: the format string.
  *   param_4: the `va_list` — a POINTER to the caller's argument block, not varargs.
  * Returns: undefined4: `_output`'s character count.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00625021. Distinguished from `crt_sprintf` (0x00624fcf) by the
  *   presence of a real `_cnt` argument, and from `crt_vsprintf` (0x006268a4), whose
  *   `_cnt` is the fixed 0x7fffffff. Its ONE caller `string_format` passes
  *   `(buf, 0x400, fmt, &stack[0x0c])`, so the fourth argument is a `va_list`.
- *   `structs/string.md` §2 already described that call as "vsnprintf into a 1024-byte
+ *   `structs/string.md` §3 already described that call as "vsnprintf into a 1024-byte
  *   stack buffer" — this is the function it meant.
  *   Renamed from `FUN_00625021`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -448429,7 +448634,7 @@ LAB_006252df:
  * Parameters: param_1: filename. param_2: mode string.
  *   param_3: the share flag (`_SH_*`).
  * Returns: void as rendered; the stream is produced by the callee.
- * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §15).
  * Evidence: VA 0x00625331. Its ONE caller is `crt_fopen`, which passes the constant
  *   0x40 = `_SH_DENYNO` — exactly MSVC's `fopen` -> `_tfsopen(name, mode, _SH_DENYNO)`
  *   shape, which is what separates this from `fopen` itself.
@@ -448540,7 +448745,7 @@ void crt_srand(undefined4 param_1)
  * Evidence: VA 0x006253a1, the exact MSVC `rand()` body. `crt_srand` sets the same
  *   seed; `rand_range` / `rand_float` are wrappers over this primitive.
  *   Renamed from `FUN_006253a1`.
- * Class layout: - (MSVC runtime; exe-re/structs/crt_runtime_tail.md §5a)
+ * Class layout: - (MSVC runtime; exe-re/structs/crt_runtime_tail.md §9a)
  */
 uint crt_rand(void)
 
@@ -448884,7 +449089,7 @@ int __cdecl _strncmp(char *_Str1,char *_Str2,size_t _MaxCount)
  *   `_ALPHA` (`_UPPER | _LOWER | 0x0100`).
  * Parameters: param_1 (int): the character.
  * Returns: uint: the masked class bits — non-zero for a letter, 0 otherwise.
- * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §15).
  * Evidence: VA 0x00625698. The mask is the whole identification: `_ALPHA` appears in
  *   this exact form in the digit loop of `crt_strtoxl` too, where it gates the
  *   hex-letter branch. 2 callers, `car_prepare_showroom_model` and `vehicle_init`.
@@ -448910,7 +449115,7 @@ uint crt_isalpha(int param_1)
  *   Single-byte table lookup while `g_crt_mb_cur_max` is 1, `_isctype(c, 8)` otherwise.
  * Parameters: param_1 (int): the character.
  * Returns: uint: the masked class bit — non-zero for whitespace.
- * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §15).
  * Evidence: VA 0x006256c6. All 3 callers are CRT input parsers (the scanf engine twice),
  *   which is exactly where `isspace` is used and where `isalpha` is not.
  *   Renamed from `FUN_006256c6`.
@@ -449440,7 +449645,7 @@ switchD_00625875_caseD_0:
  *   format and varargs, unlocks, and returns `_output`'s character count.
  * Parameters: param_1: the `FILE *`. param_2: the format string; varargs follow.
  * Returns: undefined4: the number of characters written.
- * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §15).
  * Evidence: VA 0x00625b75. Variadic, not `vfprintf`: the argument pointer it passes is
  *   `&stack[0x0c]`, the slot after `format`, which is the same test that separated
  *   `crt_sprintf` from `crt_vsprintf`. All 3 callers are `human_track_dump_keys`.
@@ -449834,7 +450039,7 @@ void math_pow_x87_entry(void)
  * Parameters: param_1, param_2 (int, uint): the base, as its two raw dwords.
  *   param_3, param_4 (int, uint): the exponent, as its two raw dwords.
  * Returns: undefined4: 0 on success, else a small status (1, 2, 7) naming the case.
- * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §15).
  * Evidence: VA 0x00625f82. Sole caller `math_pow_x87_entry`, which is what fixes the
  *   operand roles. ⚠️ Shape note: the registry's other `_continuation` pair is reached
  *   by a `jz` into the body while this one is reached by a `call`; the noun still means
@@ -450525,7 +450730,7 @@ LAB_00626784:
  *   `HeapFree(g_crt_heap_handle, 0, p)`.
  * Parameters: param_1 (LPVOID): the block, or NULL.
  * Returns: void.
- * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §15).
  * Evidence: VA 0x00626795. 32 direct callers, and the identifying set is the CRT's own:
  *   `crt_fclose` releasing `_tmpfname`, `crt_realloc` on a zero-size request, and
  *   `crt_strupr` releasing its locale scratch buffer — each of which is a documented
@@ -450633,7 +450838,7 @@ longlong __allmul(uint param_1,int param_2,uint param_3,int param_4)
  * Parameters: param_1 (undefined1 *): destination buffer.
  *   param_2: the format string. param_3: the `va_list`.
  * Returns: undefined4: `_output`'s character count.
- * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §15).
  * Evidence: VA 0x006268a4. It is `vsprintf` and not `sprintf` because its third
  *   argument is passed straight through as the argument pointer, where `crt_sprintf`
  *   takes the address of its own stack slot. Its ONE caller
@@ -450791,7 +450996,7 @@ LAB_006269cc:
  *   non-NULL, stores the result through it as well as returning it.
  * Parameters: param_1 (undefined4 *): optional destination, may be NULL.
  * Returns: the `time_t`.
- * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart; crt_runtime_tail.md §15).
  * Evidence: VA 0x006269eb. Its ONE caller is `game_init`, which passes 0 and feeds the
  *   result straight to `crt_srand` — the `srand(time(NULL))` pair that seeds every
  *   `rand_range` / `rand_float` draw in the game.
@@ -451296,7 +451501,7 @@ undefined4 crt_drive_is_valid(uint param_1)
  * Returns: does not return.
  * PS2 twin: - (MSVC runtime).
  * Evidence: VA 0x00626f1a, the PE AddressOfEntryPoint. Ghidra's own name for it is `entry`.
- * Class layout: - (MSVC runtime; exe-re/structs/crt_runtime_tail.md §5g)
+ * Class layout: - (MSVC runtime; exe-re/structs/crt_runtime_tail.md §9g)
  */
 void crt_startup(void)
 
@@ -451416,7 +451621,7 @@ void crt_fast_error_exit(undefined4 param_1)
  * PS2 twin: `__dt__Q23std9exceptionFv` — STRUCTURAL. GCC folds
  *   the plain and deleting destructors into ONE flagged destructor, so the PS2 body is
  *   `*this = __vt__Q23std9exception; if (0 < flag) __dl__FPv()` — the same flagged-delete
- *   contract in one function instead of two. This is the pairing crt_runtime_tail.md §2d
+ *   contract in one function instead of two. This is the pairing crt_runtime_tail.md §6d
  *   already established for the three `<stdexcept>` classes. Capped at STRUCTURAL because
  *   the two builds ship different Standard Library implementations, which is the same cap
  *   `std_logic_error_scalar_deleting_dtor` carries.
@@ -452034,7 +452239,7 @@ switchD_00627265_caseD_0:
  * PS2 twin: — (x87-specific).
  * Evidence: VA 0x00627565. The two constants are the identification, and its ONE caller
  *   is `crt_fp_init`, the startup FP hook that `crt_call_init_fns` runs before either
- *   initializer table (crt_runtime_tail.md §4).
+ *   initializer table (crt_runtime_tail.md §9a).
  *   Renamed from `FUN_00627565`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -452117,7 +452322,7 @@ void crt_detect_fdiv_erratum(void)
  *   flag's "always show the point" rule.
  * Parameters: param_1 (char *): the buffer, edited in place.
  * Returns: void.
- * PS2 twin: — (C-library internal; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library internal; crt_runtime_tail.md §15).
  * Evidence: VA 0x006275de. ZERO `E8` callers and ZERO datarefs, yet live: a
  *   little-endian scan of the whole image finds exactly ONE reference to this address
  *   and it is an immediate operand inside `crt_cfltcvt_init` — the fourth reference
@@ -452553,7 +452758,7 @@ void crt_cvt_shift_string(char *param_1,int param_2)
  *   otherwise it falls through to `HeapSize(g_crt_heap_handle, 0, p)`.
  * Parameters: param_1 (LPCVOID): the block returned by malloc/realloc.
  * Returns: SIZE_T: the block's usable size in bytes.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00627a19. The mode dispatch is byte-for-byte the one the registry
  *   already documents on `g_crt_heap_mode`. 2 callers, both `crt_onexit` growing the
  *   atexit table. Renamed from `FUN_00627a19`.
@@ -453445,7 +453650,7 @@ void crt_unexpected(void)
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x00628380. Ghidra cannot enumerate the `jmp [ebx]` because the table comes
  *   from the caller. The only descriptor in the image is the `exp` one at 0x006521c0
- *   (structs/crt_runtime_tail.md §5i).
+ *   (structs/crt_runtime_tail.md §9i).
  *   0 references on all four channels (E8, E9, dataref, .CRT table): dead library code.
  *   Renamed from `FUN_00628380`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -454039,7 +454244,7 @@ void __fastcall math_x87_check_result_range(undefined4 param_1,int param_2)
  * Parameters: param_1 (int): the string. (The scanner takes the length and two scale
  *   parameters, which `crt_atof` passes as 0.)
  * Returns: undefined *: `g_crt_fltin_result`.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062873c. Sole caller `crt_atof`, which reads exactly `+0x10` off the
  *   returned pointer — that read is what fixes the record layout.
  *   Renamed from `FUN_0062873c`.
@@ -454087,7 +454292,7 @@ undefined * crt_string_to_double(int param_1)
  * Parameters: param_2 (int): the character. param_3 (uint): the `_CTYPE` mask —
  *   4 = digit, 8 = space, 0x80 = hex digit, at the callsites in this range.
  * Returns: uint: the masked class bits, 0 when the character does not match.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x006287cd. **26 callers**, and every one is the `g_crt_mb_cur_max < 2`
  *   ELSE-arm of an inlined `g_crt_pctype` test — the same shape the already-named
  *   `crt_isspace` and `crt_isalpha` sit in. Renamed from `FUN_006287cd`.
@@ -454131,7 +454336,7 @@ uint __thiscall crt_isctype(undefined4 param_1,int param_2,uint param_3)
  *   out with `crt_write`, resets `_ptr`/`_cnt`, and stores the pending character.
  * Parameters: param_1 (uint): the character to store. param_2 (int *): the `FILE`.
  * Returns: uint: the character on success, 0xffffffff (EOF) on failure.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00628842. 5 callers: `crt_sprintf`, `crt_vsnprintf`, `crt_fwrite`,
  *   `crt_vsprintf` and `crt_output_write_char`. Renamed from `FUN_00628842`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -454219,7 +454424,7 @@ LAB_0062894b:
  *   `sprintf` family builds). param_2 (byte *): the format string.
  *   param_3 (undefined4 *): the argument pointer.
  * Returns: int: characters written, or -1.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00628957. 4 callers, and they are exactly the closed set the registry
  *   already names as the printf family: `crt_sprintf` (261 callers of its own),
  *   `crt_vsnprintf`, `crt_fprintf` and `crt_vsprintf`. Its `g_crt_cfltcvt_tab` slot use
@@ -454659,7 +454864,7 @@ LAB_00628f99:
  * Parameters: param_1 (uint): the character. param_2 (int *): the `FILE`.
  *   param_3 (int *): the caller's written-count, updated in place.
  * Returns: void.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00629098. 4 callers, all inside the `output.c` group.
  *   Renamed from `FUN_00629098`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -454695,7 +454900,7 @@ void crt_output_write_char(uint param_1,int *param_2,int *param_3)
  * Parameters: param_1 (undefined4): the character. param_2 (int): the repeat count;
  *   0 or negative is a no-op. param_3: the `FILE`. param_4 (int *): the written-count.
  * Returns: void.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x006290cd. 3 callers, all `crt_output` — the two space-padding sites and
  *   the zero-fill site. It is separated from `crt_output_write_string` by taking a
  *   character rather than a buffer. Renamed from `FUN_006290cd`.
@@ -454724,7 +454929,7 @@ void crt_output_write_multi_char(undefined4 param_1,int param_2,undefined4 param
  * Parameters: param_1 (char *): the buffer. param_2 (int): the length.
  *   param_3: the `FILE`. param_4 (int *): the written-count.
  * Returns: void.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x006290fe. 3 callers, all `crt_output` — the sign/prefix, the converted
  *   body and the multi-byte arm. Renamed from `FUN_006290fe`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -454755,7 +454960,7 @@ void crt_output_write_string(char *param_1,int param_2,undefined4 param_3,int *p
  * What it does: `*ap += 4; return ((int *)*ap)[-1];`.
  * Parameters: param_1 (int *): the argument pointer, advanced in place.
  * Returns: undefined4: the argument.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00629136. **10** callers, all `crt_output` — every conversion that
  *   takes a plain int, pointer or `*` width/precision.
  *   Renamed from `FUN_00629136`.
@@ -454774,7 +454979,7 @@ undefined4 crt_output_get_int_arg(int *param_1)
  * What it does: `*ap += 8; return ((__int64 *)*ap)[-1];`.
  * Parameters: param_1 (int *): the argument pointer, advanced in place.
  * Returns: undefined8: the 64-bit argument.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00629143. 1 caller — `crt_output`'s `flags & 0x8000` arm, the flag the
  *   format parser sets when it reads the literal `I64` size modifier.
  *   Renamed from `FUN_00629143`.
@@ -454795,7 +455000,7 @@ undefined8 crt_output_get_int64_arg(int *param_1)
  *   a full slot but only two bytes are meaningful.
  * Parameters: param_1 (int *): the argument pointer, advanced in place.
  * Returns: undefined4: the 16-bit argument in the low half.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00629153. 1 caller, `crt_output`'s `%C` / wide-character arm.
  *   Renamed from `FUN_00629153`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -454853,7 +455058,7 @@ void __seh_longjmp_unwind_4(int param_1)
  *   its flags; a Win32 failure is translated into `errno`/`_doserrno`.
  * Parameters: param_1 (uint): the file descriptor.
  * Returns: undefined4: 0 on success, 0xffffffff on failure.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00629244. 3 callers, including `crt_fclose` and the `_sopen` failure
  *   path. Renamed from `FUN_00629244`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -454944,7 +455149,7 @@ void __cdecl __freebuf(FILE *_File)
  *   stream carries `_IOCOMMIT` (0x40), also commits it to disk through `_commit`.
  * Parameters: param_1 (int): the `FILE`, or 0 for all streams.
  * Returns: int: 0 on success, -1 on failure.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00629322. 2 callers, both `flsall` — the all-streams walk re-enters
  *   this per stream. Renamed from `FUN_00629322`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -454978,7 +455183,7 @@ int crt_fflush(int param_1)
  *   whatever happened.
  * Parameters: param_1 (int *): the `FILE`.
  * Returns: undefined4: 0 on success, 0xffffffff on a write failure.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062935d. 5 callers: `crt_fclose`, `crt_fwrite`, `crt_fflush` and
  *   `crt_flush_temp_buffer` (twice). Renamed from `FUN_0062935d`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -455019,7 +455224,7 @@ undefined4 crt_flush_stream(int *param_1)
  * What it does: nine bytes — `flsall(1)`.
  * Parameters: none.
  * Returns: void (the count `flsall` returns is discarded by its one caller).
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x006293b9. 1 caller, the exit-time stream teardown at 0x0062e476 —
  *   which is what makes this the "flush on exit" path rather than a user-facing call.
  *   Renamed from `FUN_006293b9`.
@@ -455102,7 +455307,7 @@ int __cdecl flsall(int param_1)
  * Parameters: param_1 (DWORD): the file descriptor. param_2 (char *): the data.
  *   param_3 (uint): the byte count.
  * Returns: int: bytes written (excluding inserted CRs), or -1.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062942f. 7 callers spanning stdio and the direct-write paths.
  *   Renamed from `FUN_0062942f`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -455215,7 +455420,7 @@ LAB_00629528:
  * Parameters: param_1: the path. param_2 (char *): the mode string.
  *   param_3: the share flags. param_4 (undefined4 *): the `FILE` to fill in.
  * Returns: undefined4 *: the `FILE`, or NULL if the mode is invalid or the open failed.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x006295dc. Sole caller `crt_fsopen`.
  *   Renamed from `FUN_006295dc`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -455341,7 +455546,7 @@ LAB_00629700:
  *   descriptor set to -1. Returns NULL when every slot is busy.
  * Parameters: none.
  * Returns: undefined4 *: the `FILE`, or NULL.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062974c. Sole caller `crt_fsopen`, which pairs it with
  *   `crt_openfile`. Renamed from `FUN_0062974c`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -455398,7 +455603,7 @@ LAB_006297a7:
  *   byte by byte.
  * Parameters: param_1 (uint *): destination. param_2 (uint *): source.
  * Returns: uint *: the destination.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x006297d0. 16-byte aligned and NOP-padded, with **19 `E8` callers** —
  *   the sites where MSVC emitted a call rather than the `/Oi` intrinsic, which is why a
  *   caller count here is not a measure of how often the game copies a string
@@ -455461,7 +455666,7 @@ LAB_006298b8:
  *   loop, two entry points.
  * Parameters: param_1 (uint *): destination. param_2 (uint *): source.
  * Returns: uint *: the destination.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x006297e0. 4 `E8` callers.
  *   Renamed from `FUN_006297e0`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -455557,7 +455762,7 @@ LAB_006298b8:
  *   code page (0 means `g_crt_lc_codepage`), param_8 (int) selects the
  *   `MB_PRECOMPOSED`/`MB_USEGLYPHCHARS` conversion flag.
  * Returns: int: the mapped length, or 0 on failure.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x006298c0. 7 callers, all locale/case-mapping work. Its scope table at
  *   `.rdata:0x0063f190` was byte-decoded as two `{prev, filter, handler}` triples —
  *   `{-1, 0x006299d0, 0x006299d4}` and `{-1, 0x00629a84, 0x00629a88}`.
@@ -455777,7 +455982,7 @@ undefined4 crt_lcmapstring_ansi_except_filter(void)
  *   `crt_sscanf` builds). param_2 (byte *): the format. param_3 (undefined4 *): the
  *   pointer to the argument list.
  * Returns: int: the number of successfully assigned fields, or -1 for an early EOF.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x00629ae4. Sole caller `crt_sscanf`.
  *   Renamed from `FUN_00629ae4`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -456416,7 +456621,7 @@ LAB_0062a44b:
  *   afterwards); a letter is upper-cased and reduced by 7, so 'a'/'A' land 10 above '9'.
  * Parameters: param_1 (uint): the character.
  * Returns: uint: the character, adjusted so that `c - '0'` yields the digit value.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062a509. 2 callers, both the `%x` accumulation arms of `crt_input`
  *   (the 32-bit and the 64-bit one). Renamed from `FUN_0062a509`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -456445,7 +456650,7 @@ uint crt_input_hex_digit_value(uint param_1)
  *   `getc` fast path with the buffer-refill call as its slow path.
  * Parameters: param_1 (undefined4 *): the `FILE`.
  * Returns: uint: the character, or EOF from the refill.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062a540. **18** callers — 17 in `crt_input` and one in
  *   `crt_input_skip_whitespace`. Renamed from `FUN_0062a540`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -456475,7 +456680,7 @@ uint crt_input_getc(undefined4 *param_1)
  *   scanf conversion that stops on EOF must not push it back.
  * Parameters: param_1 (int): the character. param_2: the `FILE`.
  * Returns: void.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062a55a. 10 callers, all `crt_input` — one per conversion that reads
  *   one character too many. Renamed from `FUN_0062a55a`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -456497,7 +456702,7 @@ void crt_input_ungetc(int param_1,undefined4 param_2)
  * Parameters: param_1 (int *): the caller's consumed-character count, bumped in place.
  *   param_2: the `FILE`.
  * Returns: undefined4: the first non-whitespace character.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062a571. 2 callers, both `crt_input` — the literal-whitespace-in-format
  *   rule and the leading-whitespace skip every numeric conversion performs.
  *   Renamed from `FUN_0062a571`.
@@ -456529,7 +456734,7 @@ undefined4 crt_input_skip_whitespace(int *param_1,undefined4 param_2)
  * Parameters: param_1 (undefined4 *): the `FILE`.
  * Returns: undefined4: 1 when a buffer was installed (the caller must call the
  *   `crt_flush_temp_buffer` partner), 0 when it was not.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062a595. Sole caller `crt_fprintf`, which pairs it with
  *   `crt_flush_temp_buffer` around the `crt_output` call.
  *   Renamed from `FUN_0062a595`.
@@ -456591,7 +456796,7 @@ LAB_0062a611:
  * Parameters: param_1 (int): non-zero to tear the buffer down as well as flush it —
  *   `crt_setup_temp_buffer`'s return value. param_2 (undefined4 *): the `FILE`.
  * Returns: void.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062a622. Sole caller `crt_fprintf`.
  *   Renamed from `FUN_0062a622`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -457479,7 +457684,7 @@ uint crt_filbuf(undefined4 *param_1)
  *   *): byte count, carried as a pointer type by Ghidra.
  * Returns: int: bytes delivered, 0 at end of file, -1 on error with `g_crt_errno` set.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062afd9. 5 `E8` callers including `crt_fread`, `crt_filbuf` and `crt_sopen`'s
  *   Ctrl-Z probe. Renamed from `FUN_0062afd9`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -457831,7 +458036,7 @@ undefined5 __fastcall math_exp_fraction_core(undefined4 param_1,undefined1 param
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x0062b3e1. 2 `E8` callers, 0x0062b296 and 0x0062b30d, both inside arm 0
  *   (0x0062b251) of the `exp` operand-class descriptor, which has no references
- *   (structs/crt_runtime_tail.md §5i), so it is unreachable with it. The x87-stack sibling of `math_double_integer_parity`, which
+ *   (structs/crt_runtime_tail.md §9i), so it is unreachable with it. The x87-stack sibling of `math_double_integer_parity`, which
  *   answers the same question for a double in memory with the same 0/1/2 encoding.
  *   Renamed from `FUN_0062b3e1`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -460338,8 +460543,8 @@ void crt_write_runtime_error_message(DWORD param_1)
  * Parameters: _Str1 (char *): the first string. _Str2 (char *): the second.
  * Returns: int: -1, 0 or +1.
  * PS2 twin: - (the PS2 links newlib's own `strcmp`; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
- * Evidence: VA 0x0062d3f0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §7.
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
+ * Evidence: VA 0x0062d3f0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §10.
  */
 int __cdecl _strcmp(char *_Str1,char *_Str2)
 
@@ -460460,7 +460665,7 @@ undefined4 crt_cxx_unhandled_exception_filter(int *param_1)
  * Evidence: VA 0x0062d4ba. 0 `E8` callers and exactly one dataref: the `.CRT$XI` slot
  *   `0x00646320`, which makes it a C initializer run by `_cinit`. 🔴 Its `.CRT$XT` counterpart -
  *   the un-installer at `0x0062d4cb`, 13 bytes - has NO Ghidra function start and therefore no
- *   def; it is documented in `structs/crt_runtime_tail.md` §21. Renamed from `FUN_0062d4ba`.
+ *   def; it is documented in `structs/crt_runtime_tail.md` §12. Renamed from `FUN_0062d4ba`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
 void crt_cxx_install_unhandled_exception_filter(void)
@@ -461031,9 +461236,9 @@ void crt_ld12_to_float(undefined4 param_1,undefined4 param_2)
  *   string.
  * Returns: void.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062d9d0. 🥇 sole caller is `__fassign` (`0x0062769e`) - the `g_crt_cfltcvt_tab`
- *   slot 2 identified in `crt_runtime_tail.md` §14b - which selects between this and `crt_atoflt`
+ *   slot 2 identified in `crt_runtime_tail.md` §9e - which selects between this and `crt_atoflt`
  *   on its flag argument, closing that slot from the other end. Renamed from `FUN_0062d9d0`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -461055,7 +461260,7 @@ void crt_atodbl(undefined4 param_1,undefined4 param_2)
  *   string.
  * Returns: void.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062d9fd. the other `__fassign` arm. Renamed from `FUN_0062d9fd`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -461228,8 +461433,8 @@ void crt_double_to_ld10(uint *param_1,uint *param_2)
  *   whole dwords, and finishes the tail as bytes.
  * Parameters: _Dst (void *): destination. _Val (int): the fill byte. _Size (size_t): byte count.
  * Returns: void *: _Dst.
- * PS2 twin: - (the PS2 links newlib's own `memset`; crt_runtime_tail.md §6).
- * Evidence: VA 0x0062dbc0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §7. 8 direct
+ * PS2 twin: - (the PS2 links newlib's own `memset`; crt_runtime_tail.md §15).
+ * Evidence: VA 0x0062dbc0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §10. 8 direct
  *   `E8` callers plus the compiler's own inline expansions elsewhere.
  */
 void * __cdecl _memset(void *_Dst,int _Val,size_t _Size)
@@ -461366,7 +461571,7 @@ bool crt_is_executable_pointer(FARPROC param_1)
  * Parameters: none.
  * Returns: does not return.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062dc71. Its ONLY reference is the tail `jmp` at `0x0062831d` inside
  *   `crt_terminate`, whose own registry cell already read "calls `g_crt_terminate_handler` then
  *   abort". Renamed from `FUN_0062dc71`.
@@ -461987,7 +462192,7 @@ BOOL crt_getstringtype_ansi
  *   the origin.
  * Returns: DWORD: the new absolute position, or 0xffffffff on error.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062e372. 11 `E8` callers across stdio and the game's own file layer. Renamed
  *   from `FUN_0062e372`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -462073,7 +462278,7 @@ void crt_getbuf(undefined4 *param_1)
  * Parameters: param_1 (uint): the file descriptor.
  * Returns: byte: non-zero for a character device.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062e450. 2 `E8` callers, `crt_flsbuf` and `crt_setup_temp_buffer`, which both
  *   use it to decide whether stdout may be buffered. Renamed from `FUN_0062e450`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -462103,7 +462308,7 @@ byte crt_isatty(uint param_1)
  *   `0x00646318`, which makes it a C initializer. 🔴 It is NOT the teardown: the `_flushall`
  *   teardown is the SEPARATE start-less
  *   `__endstdio` at `0x0062e51b`, reached from the `.CRT$XP` slot `0x0064632c`
- *   (`structs/crt_runtime_tail.md` §21). Renamed from `FUN_0062e476`.
+ *   (`structs/crt_runtime_tail.md` §12). Renamed from `FUN_0062e476`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
 void crt_initstdio(void)
@@ -462160,7 +462365,7 @@ LAB_0062e495:
  * Returns: void.
  * PS2 twin: — (C-library internal).
  * Evidence: VA 0x0062e51b. 0 `E8` callers; exactly one dataref, the `.CRT$XP` pre-terminator
- *   slot 0x0064632c. It is the only caller of `crt_flushall` (structs/crt_runtime_tail.md §9).
+ *   slot 0x0064632c. It is the only caller of `crt_flushall` (structs/crt_runtime_tail.md §12).
  *   Renamed from `FUN_0062e51b`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -462185,7 +462390,7 @@ void crt_endstdio(void)
  *   character.
  * Returns: LPSTR used as an int: the byte count, 0 for a NUL destination, or -1 with EILSEQ.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062e52f. 2 `E8` callers, both inside `crt_output` - the `%C` and `%S`
  *   conversions. Renamed from `FUN_0062e52f`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -462233,7 +462438,7 @@ LPSTR crt_wctomb(LPSTR param_1,WCHAR param_2)
  *   helper calling convention.
  * Returns: undefined8: the 64-bit remainder.
  * PS2 twin: - (x86-specific: MIPS has a 64-bit divide and needs no helper).
- * Evidence: VA 0x0062e5a0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §7. Emitted by
+ * Evidence: VA 0x0062e5a0. Ghidra Function-ID name, KEPT per crt_runtime_tail.md §10. Emitted by
  *   the compiler for `%` on a `unsigned __int64`, so it is reached from generated code rather than
  *   from a named caller.
  */
@@ -462448,7 +462653,7 @@ LAB_0062e77a:
  * Parameters: param_1 (uint): the descriptor.
  * Returns: undefined4: the handle, or 0xffffffff.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062e79b. 7 `E8` callers, including `crt_close`, `crt_lseek` and `crt_commit`.
  *   Renamed from `FUN_0062e79b`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -462473,7 +462678,7 @@ undefined4 crt_get_osfhandle(uint param_1)
  * Parameters: param_1 (uint): the descriptor.
  * Returns: undefined4: 0 on success, 0xffffffff on failure.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062e7d8. sole caller `crt_fflush`, on the commit-mode path. Renamed from
  *   `FUN_0062e7d8`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -462700,7 +462905,7 @@ LAB_0062eabe:
  *   source. param_3 (uint): bytes available.
  * Returns: uint: bytes consumed, 0 for a NUL, or 0xffffffff with EILSEQ.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062eae8. sole caller `crt_input`, the scanf engine. Renamed from `FUN_0062eae8`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -462762,7 +462967,7 @@ uint crt_mbtowc(LPWSTR param_1,byte *param_2,uint param_3)
  * Parameters: param_1 (uint): the character. param_2 (int *): the `FILE`.
  * Returns: uint: the character, or 0xffffffff on failure.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062ebb0. sole caller `crt_input_ungetc`, the scanf engine's guarded wrapper.
  *   Renamed from `FUN_0062ebb0`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -462813,7 +463018,7 @@ uint crt_ungetc(uint param_1,int *param_2)
  *   double arg2; double retval; }` — the record the caller has already filled in. The
  *   hook may overwrite `retval` and return non-zero to substitute a result.
  * Returns: undefined4: always 0 — error not handled.
- * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §6).
+ * PS2 twin: — (C-library counterpart, not recorded as a twin; crt_runtime_tail.md §15).
  * Evidence: VA 0x0062ec1e. The name comes
  *   from the CALLERS: both of them pass the five-field `_exception` record above and
  *   branch on the result — `math_invoke_matherr` (0x0062ac14) builds the record from
@@ -463248,7 +463453,7 @@ undefined4 math_x87_fdiv_erratum_divide_by_double(undefined4 param_1,uint param_
  * Returns: void; the result replaces ST(0).
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x0062f2a4. Part of the stand-in set for the memory forms of the divide
- *   instructions (structs/crt_runtime_tail.md §5j, §9).
+ *   instructions (structs/crt_runtime_tail.md §9j, §12).
  *   0 references on all four channels (E8, E9, dataref, .CRT table): dead library code.
  *   Renamed from `FUN_0062f2a4`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -463279,7 +463484,7 @@ undefined4 math_x87_fdiv_erratum_divide_by_int16(void)
  * Returns: void; the result replaces ST(0).
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x0062f2d8. Part of the stand-in set for the memory forms of the divide
- *   instructions (structs/crt_runtime_tail.md §5j, §9).
+ *   instructions (structs/crt_runtime_tail.md §9j, §12).
  *   0 references on all four channels (E8, E9, dataref, .CRT table): dead library code.
  *   Renamed from `FUN_0062f2d8`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -463311,7 +463516,7 @@ undefined4 math_x87_fdiv_erratum_divide_by_int32(void)
  * Returns: void; the result replaces ST(0).
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x0062f30c. Part of the stand-in set for the memory forms of the divide
- *   instructions (structs/crt_runtime_tail.md §5j, §9).
+ *   instructions (structs/crt_runtime_tail.md §9j, §12).
  *   0 references on all four channels (E8, E9, dataref, .CRT table): dead library code.
  *   Renamed from `FUN_0062f30c`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -463346,7 +463551,7 @@ undefined4 math_x87_fdiv_erratum_reverse_divide_by_float(uint param_1)
  * Returns: void; the result replaces ST(0).
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x0062f358. Part of the stand-in set for the memory forms of the divide
- *   instructions (structs/crt_runtime_tail.md §5j, §9).
+ *   instructions (structs/crt_runtime_tail.md §9j, §12).
  *   0 references on all four channels (E8, E9, dataref, .CRT table): dead library code.
  *   Renamed from `FUN_0062f358`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -463380,7 +463585,7 @@ undefined4 math_x87_fdiv_erratum_reverse_divide_by_double(undefined4 param_1,uin
  * Returns: void; the result replaces ST(0).
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x0062f3a4. Part of the stand-in set for the memory forms of the divide
- *   instructions (structs/crt_runtime_tail.md §5j, §9).
+ *   instructions (structs/crt_runtime_tail.md §9j, §12).
  *   0 references on all four channels (E8, E9, dataref, .CRT table): dead library code.
  *   Renamed from `FUN_0062f3a4`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -463411,7 +463616,7 @@ undefined4 math_x87_fdiv_erratum_reverse_divide_by_int16(void)
  * Returns: void; the result replaces ST(0).
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x0062f3d8. Part of the stand-in set for the memory forms of the divide
- *   instructions (structs/crt_runtime_tail.md §5j, §9).
+ *   instructions (structs/crt_runtime_tail.md §9j, §12).
  *   0 references on all four channels (E8, E9, dataref, .CRT table): dead library code.
  *   Renamed from `FUN_0062f3d8`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -463472,7 +463677,7 @@ undefined4 math_x87_fdiv_erratum_fdivp(void)
  *   `g_crt_adjust_fdiv`'s only reader takes at 0x0062b279; the fall-through of that `je` is the
  *   plain `fdivrp st(1)` (`DE F1`) at 0x0062b27b, so this is the stand-in for that instruction.
  *   Byte-identical to `math_x87_fdiv_erratum_fdivp` except for the order of the two stores.
- *   Matrix of the four divide entries: structs/crt_runtime_tail.md §5j.
+ *   Matrix of the four divide entries: structs/crt_runtime_tail.md §9j.
  *   Renamed from `FUN_0062f421`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -463708,7 +463913,7 @@ float10 math_x87_fdiv_erratum_fprem1_scale_denormal(void)
  * Returns: void; the partial remainder is left on the x87 stack.
  * PS2 twin: — (x87-specific: MIPS has no 80-bit FPU stack).
  * Evidence: VA 0x0062f9a9, 6 bytes. One of the four `_adj_*` tail entries of the object
- *   (structs/crt_runtime_tail.md §5j).
+ *   (structs/crt_runtime_tail.md §9j).
  *   0 references on all four channels (E8, E9, dataref, .CRT table): dead library code.
  *   Renamed from `FUN_0062f9a9`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -463801,7 +464006,7 @@ float10 math_x87_fdiv_erratum_fptan(void)
  * Returns: int: one of the ten `_FPCLASS_*` values - 0x200 PINF, 0x100 PN, 0x80 PD, 0x40 PZ, 0x20
  *   NZ, 0x10 ND, 8 NN, 4 NINF, 2 QNAN, 1 SNAN.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062f9bb. 🥇 all TEN `_FPCLASS_*` constants match byte for byte - a complete enum
  *   match rather than a shape argument. Sole caller `math_double_integer_parity`.
  *   Renamed from `FUN_0062f9bb`.
@@ -463846,7 +464051,7 @@ int math_fpclass_double(int param_1,uint param_2)
  * Parameters: none.
  * Returns: void.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062fa4d. sole caller `crt_local_time_to_time_t`, whose own registry cell
  *   already names the four timezone globals this initialises. Renamed from `FUN_0062fa4d`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -463873,7 +464078,7 @@ void crt_tzset_once(void)
  * Returns: void; writes `g_crt_timezone`, `g_crt_daylight`, `g_crt_dstbias`, `g_crt_tzname_std`
  *   and `g_crt_tzname_dst`.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062fa62. sole caller `crt_tzset_once`. The three globals it writes were already
  *   named from the consumer side by `crt_local_time_to_time_t`, which is what makes this the
  *   writer half of an already-proven pair. Renamed from `FUN_0062fa62`.
@@ -463995,7 +464200,7 @@ void crt_tzset(void)
  *   year, `+0x1c` yday.
  * Returns: bool: true when daylight saving is in effect for that instant.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062fcc0. second caller of `crt_local_time_to_time_t`, whose registry cell
  *   already says it adds `g_crt_dstbias` "when daylight saving applies and `_isindst` agrees".
  *   Renamed from `FUN_0062fcc0`.
@@ -464088,7 +464293,7 @@ LAB_0062fe38:
  *   week. param_6: weekday. param_7: day. param_8..11: hour, minute, second, millisecond.
  * Returns: void.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062fe6c. eleven parameters and exactly two output records - the shape is the
  *   identification. 4 `E8` callers, all `crt_is_in_dst`. Both day tables were byte-decoded:
  *   successive differences give February 29 at 0x00654804 and February 28 at 0x00654838. Renamed
@@ -464169,7 +464374,7 @@ void crt_dst_rule_to_yearday(int param_1,int param_2,uint param_3,int param_4,in
  * Parameters: param_1 (undefined4): the byte to test.
  * Returns: int: non-zero when the byte can start a two-byte character.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062ffac. sole caller `crt_get_cmdline_args`, which must skip whole MBCS pairs
  *   while scanning past the program name. Renamed from `FUN_0062ffac`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -464226,7 +464431,7 @@ undefined4 crt_ismbbtype(byte param_1,uint param_2,byte param_3)
  * Returns: undefined4: 0 on success, 0xffffffff when an explicitly requested codepage is
  *   unavailable.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0062ffee. sole caller `crt_mbcs_init_once`. The codepage table was byte-decoded:
  *   932, 936, 949, 950 with their lead-byte ranges. Renamed from `FUN_0062ffee`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -464691,10 +464896,10 @@ undefined4 crt_ld12_add_dword_carry(uint param_1,uint param_2,uint *param_3)
  *   addend.
  * Returns: void; in place.
  * PS2 twin: - (C-library internal; the PS2 links newlib, which has no `_LDBL12` arithmetic at all
- *   - crt_runtime_tail.md §6).
+ *   - crt_runtime_tail.md §15).
  * Evidence: VA 0x00630478. 3 `E8` callers - `crt_ld12_from_decimal_digits` x2 and
  *   `crt_ld10_to_decimal_digits` x1 - which is the whole `_LDBL12` decimal-conversion chain.
- *   Ghidra Function-ID name, KEPT per crt_runtime_tail.md §7; an FID name is a real,
+ *   Ghidra Function-ID name, KEPT per crt_runtime_tail.md §10; an FID name is a real,
  *   checkable claim, and reading the body confirms it.
  */
 void ___add_12(undefined4 *param_1,undefined4 *param_2)
@@ -465040,7 +465245,7 @@ LAB_00630882:
  * Parameters: param_1 (int): the signal number.
  * Returns: undefined4: 0 on success, 0xffffffff for an unknown signal.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0063088b. sole caller `crt_abort`, whose own registry cell already read "calls
  *   `g_crt_terminate_handler` then abort". Renamed from `FUN_0063088b`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -465410,7 +465615,7 @@ void crt_ld12_multiply_by_power_of_ten(undefined2 *param_1,uint param_2,int para
  * Parameters: param_1 (int): element count. param_2 (int): element size.
  * Returns: void *: the zeroed block, or NULL.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00630c99. 3 `E8` callers, two of them `crt_initstdio` allocating the `FILE` and
  *   `ioinfo` arrays. Renamed from `FUN_00630c99`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -465478,7 +465683,7 @@ joined_r0x00630d02:
  * Parameters: none.
  * Returns: int: how many streams were closed.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00630d4a. 0 `E8` callers and ONE `E9`: the tail `jmp` at 0x0062e529 inside the
  *   start-less `__endstdio` that §73 located in the `.CRT$XP` table. It is a real
  *   function; the bytes at the VA are a prologue. Renamed from `FUN_00630d4a`.
@@ -465524,7 +465729,7 @@ int crt_fcloseall(void)
  * Parameters: param_1 (uint): the file descriptor. param_2 (int): the wanted length.
  * Returns: int: 0 on success, -1 with `g_crt_errno` set to EBADF or EACCES.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00630da2. sole caller `crt_sopen`, on the `_O_TRUNC` path. Renamed from
  *   `FUN_00630da2`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -465600,7 +465805,7 @@ int crt_chsize(uint param_1,int param_2)
  * Parameters: param_1 (uchar *): the variable name, without the `=`.
  * Returns: int: a pointer to the value inside the environment string, or 0.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00630ee8. sole caller `crt_tzset`, asking for `TZ`. Renamed from `FUN_00630ee8`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -465637,7 +465842,7 @@ int crt_getenv(uchar *param_1)
  * Parameters: param_1 (uint): the file descriptor. param_2 (int): `_O_TEXT` or `_O_BINARY`.
  * Returns: int: the previous mode, or -1 with `g_crt_errno` set.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00630f65. 2 `E8` callers, both `crt_chsize`, which brackets its zero-fill loop
  *   with a forced binary mode. Renamed from `FUN_00630f65`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -465686,10 +465891,10 @@ int crt_setmode(uint param_1,int param_2)
  *   the byte count, not a character count.
  * Returns: int: -1, 0, +1, or 0x7fffffff on failure.
  * PS2 twin: - (C-library counterpart; two independent implementations of one standard API cannot
- *   be body-diffed - crt_runtime_tail.md §6).
+ *   be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00630fdb. 2 `E8` callers - `crt_getenv` and `crt_environ_find_index`, which is
  *   why the environment lookup is case-insensitive and MBCS-safe. Ghidra Function-ID name, KEPT
- *   per crt_runtime_tail.md §7; the body agrees with it in every argument.
+ *   per crt_runtime_tail.md §10; the body agrees with it in every argument.
  */
 int __cdecl __mbsnbicoll(uchar *_Str1,uchar *_Str2,size_t _MaxCount)
 
@@ -466245,7 +466450,7 @@ undefined4 * crt_environ_duplicate(int *param_1)
  * Parameters: param_1 (byte *): the string. param_2 (uint): the character, one or two bytes.
  * Returns: byte *: the first occurrence, or NULL.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00631576. 2 `E8` callers, one of them `crt_setenv` splitting on `'='` - which is
  *   exactly why the CRT cannot use plain `strchr` there. Renamed from `FUN_00631576`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -466289,7 +466494,7 @@ byte * crt_mbschr(byte *param_1,uint param_2)
  * Parameters: param_1 (char *): the source.
  * Returns: undefined4: the copy, or 0.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x006315e9. sole caller `crt_environ_duplicate`. Renamed from `FUN_006315e9`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -468478,8 +468683,8 @@ LAB_0063353a:
  * Evidence: VA 0x00633560. 2 SAFE callsites, BOTH inside `crashreport_module_vector_insert_n` and
  *   both on the module record's own `+0x10` vector (`lea ecx,[edi+0x10]` / `lea ecx,[esi+8]`).
  *   One owner, measured - which is what earns the family name rather than a mechanical one
- *. ⚠️ The vector is constructed, copied and destroyed but never seen being
- *   POPULATED; what it holds is an open item in `structs/crash_report.md` §5. Renamed from
+ *. The vector is only constructed, copied, assigned and destroyed: nothing pushes into it,
+ *   a closed-set measurement in `structs/crash_report.md` §2. Renamed from
  *   `FUN_00633560`.
  * Class layout: — (free function of the crash-report translation unit)
  */
@@ -470626,7 +470831,7 @@ LAB_0063480d:
  * Parameters: param_1 (int): the value. param_2: the buffer. param_3 (int): the radix.
  * Returns: undefined4: the buffer.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0063481d. sole caller of `crt_xtoa`. Renamed from `FUN_0063481d`.
  * Class layout: — (MSVC runtime; belongs to no game class)
  */
@@ -470656,7 +470861,7 @@ undefined4 crt_itoa(int param_1,undefined4 param_2,int param_3)
  *   param_4 (int): non-zero to emit a leading '-'.
  * Returns: void.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x0063484a. 1 `E8` caller (`crt_itoa`). 🔑 Statement-identical to `safedisc_xtoa`
  *   (0x00701e30) and NOT a duplicate of it: different PE sections, so no fold is possible -
  *   SafeDisc statically linked the same MSVC helper. Renamed from `FUN_0063484a`.
@@ -470905,7 +471110,7 @@ undefined4 crt_spawnve(undefined4 param_1,undefined4 param_2,undefined4 param_3,
  * Parameters: param_1 (uint): the character, single byte or a packed lead/trail pair.
  * Returns: uint: the converted character, or the input unchanged when no mapping applies.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00634ade. 1 `E8` caller - `crt_chdir`, which uses it to upper-case the drive
  *   letter of the `=X:` environment variable it maintains. Renamed from `FUN_00634ade`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -470949,7 +471154,7 @@ uint crt_mbctoupper(uint param_1)
  * Parameters: param_1 (LPCSTR): the path. param_2 (byte): the mode; bit 1 = write access wanted.
  * Returns: undefined4: 0 when the access is allowed, 0xffffffff otherwise.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00634b59. 2 `E8` callers, both inside `crt_spawnvpe`'s extension search, where
  *   it is called with mode 0 - a pure existence test. Renamed from `FUN_00634b59`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -470984,7 +471189,7 @@ undefined4 crt_access(LPCSTR param_1,byte param_2)
  * Returns: the address of the last match, or NULL. ⚠️ Ghidra renders the return type as `void`;
  *   the callers use the pointer.
  * PS2 twin: — (C-library counterpart; two independent implementations of one
- *   standard API cannot be body-diffed - crt_runtime_tail.md §6).
+ *   standard API cannot be body-diffed - crt_runtime_tail.md §15).
  * Evidence: VA 0x00634b9d. 3 `E8` callers, all in `crt_spawnvpe`'s name resolution (looking for
  *   `\\`, `/` and `.`). Renamed from `FUN_00634b9d`.
  * Class layout: — (MSVC runtime; belongs to no game class)
@@ -477238,7 +477443,7 @@ void EHHandler_006369b0(void)
 void Unwind_006369c0(void)
 
 {
-  recorder_names_free_row_array();
+  recorder_tck_record_free_vectors();
   return;
 }
 
@@ -490852,7 +491057,8 @@ LAB_006ff0cf:
  *   parsed from the header. These five bytes are BYTE-IDENTICAL in retail
  *   `Game-uncracked.exe`, which proves they are SafeDisc's own and not a crack
  *   patch (`basic/artifacts/crack.md` §3a: `stxt371` differs by exactly the 36 §5e
- *   case bytes). 1 dataref, 0 `E8` callers. Renamed from `entry`.
+ *   case bytes). 1 dataref, 0 `E8` callers. Renamed from `entry`, the name Ghidra's
+ *   default analysis exported; its default thunk name is `thunk_FUN_00626f1a`.
  * Class layout: — (free function of the SafeDisc stub; the stub has no classes)
  */
 
@@ -490870,9 +491076,10 @@ void safedisc_jmp_oep(void)
  *
  * What it does: decodes `KERNEL32.dll` and `USER32.dll`, resolves both API tables
  *   (`safedisc_resolve_kernel32_imports` / `_user32_`), copies the PE headers into a
- *   `GlobalAlloc` page sized by `safedisc_pe_headers_size_paged`, restores the import data
- *   directories, drops the stub's own section header, extracts the payload under the mutex, loads
- *   the extracted DLL and finally calls into it.
+ *   `GlobalAlloc` block sized by `safedisc_pe_headers_size_paged`, extracts the payload and
+ *   starts the child process under the mutex, writes the import data directories into the heap
+ *   copy and drops the stub's section header from it, loads the extracted DLL and calls its export
+ *   with the copy in a context block, then frees the copy.
  * Parameters: param_1: the caller's argument in the non-zero mode, else 0. param_2 (int): the
  *   saved-header block at `g_safedisc_saved_data_directories`.
  * Returns: undefined4: 0 on success, 1 on any failure.
@@ -491379,13 +491586,13 @@ int safedisc_get_proc_address(undefined4 param_1,undefined4 param_2,int *param_3
 // FUN_006ffa20 @ VA 0x006ffa20 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * safedisc_restore_import_directory — write the game's real import data directories back into the
- *   PE header.
+ * safedisc_restore_import_directory — write the game's real import data directories into a PE
+ *   header; `safedisc_run` passes its heap copy.
  *
  * What it does: `safedisc_pe_get_headers`, then stores four dwords from the saved block:
  *   `nt+0x80`/`+0x84` = `DataDirectory[1]` (Import) RVA and size, `nt+0xd8`/`+0xdc` =
  *   `DataDirectory[12]` (IAT) RVA and size.
- * Parameters: param_1 (int): the image base. param_2 (undefined4 *): the saved-header block.
+ * Parameters: param_1 (int): the headers to edit. param_2 (undefined4 *): the saved-header block.
  * Returns: void.
  * PS2 twin: — (SafeDisc 2.70.030 protection code; `safedisc` and `dilla` return
  *   0 hits in the PS2 symbol table - the PS2 has no disc protection).
@@ -491656,17 +491863,17 @@ undefined4 safedisc_pe_get_headers(int param_1,int *param_2,int *param_3)
 // FUN_006ffc40 @ VA 0x006ffc40 — recovered by the Aggressive Instruction Finder pass.
 
 /*
- * safedisc_pe_drop_last_section — remove one section header from the in-memory PE image.
+ * safedisc_pe_drop_last_section — remove one section header from a copy of the PE headers.
  *
  * What it does: finds the section covering the context's `+0x14` RVA, decrements
- *   `NumberOfSections`, and zeroes the 0x28-byte section header. This is what orphans the stub's
- *   own section in the running image.
- * Parameters: param_1: the image base. param_2 (int): the stub context.
+ *   `NumberOfSections`, and zeroes the 0x28-byte section header. `safedisc_run` passes its heap
+ *   copy, so the header of the loaded image is untouched here.
+ * Parameters: param_1: the headers to edit. param_2 (int): the stub context.
  * Returns: void.
  * PS2 twin: — (SafeDisc 2.70.030 protection code; `safedisc` and `dilla` return
  *   0 hits in the PS2 symbol table - the PS2 has no disc protection).
  * Evidence: VA 0x006ffc40. 1 `E8` caller (`safedisc_run`), immediately after the import
- *   directories are restored - so the header the game's loader sees no longer mentions the stub.
+ *   directories are written into the same copy.
  *   Renamed from `FUN_006ffc40`.
  * Class layout: — (free function of the SafeDisc stub; the stub has no classes)
  */

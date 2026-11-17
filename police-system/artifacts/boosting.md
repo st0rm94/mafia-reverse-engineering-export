@@ -1,6 +1,6 @@
 # Car "Boosting" — the pursuit model-level / CARINIT swap
 
-**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-10-12 20:59 +0200
+**Created** 2026-07-09 20:19 +0200 · **Modified** 2026-11-08 22:21 +0100
 
 **Status:** static analysis complete, byte-verified against `Game.exe`. The in-game Cheat Engine
 confirmation is open (§10).
@@ -83,7 +83,7 @@ chase ends   → pursuit_event_remove_vehicle: back to level 0 → stock CARINIT
 
 The same CARINIT level swap is reachable from the script language: **`car_setactlevel xx, yy`**,
 dispatcher case `0x165`. It gates on the standard actor guard plus kind 4, accepts either a literal
-or an `flt[]` register for the level (the `-1` immediate sentinel, `structs/program.md` §1c-v), and
+or an `flt[]` register for the level (the `-1` immediate sentinel, `structs/program.md` §5e), and
 calls `car_set_model_level`, which bounds-checks against the record count and re-applies the
 selected record through `vehicle_apply_carinit_params(..., 2)`.
 
@@ -246,7 +246,7 @@ intrinsic per-actor "can boost" bit exists. (`pursuit_event_dispatch_pursuit_veh
 
 The pursuit-event manager itself is a sub-object of `C_game` at `[[0x0065115C] + 0x24] + 0x2B18`
 (its S_ELEMENT record vector lives at manager `+0x14`/`+0x18`). See
-`structs/pursuit-event-manager.md` for the full struct.
+`structs/pursuit_event.md` for the full struct.
 
 ## 5. Why boost turns off when the player leaves the car / on escalation
 
@@ -398,7 +398,7 @@ break `Game.exe+EC5F0`/`+2B016`.
 
 ## 9. Cross-references
 
-- `structs/pursuit-event-manager.md` — the pursuit-event manager + S_ELEMENT record struct.
+- `structs/pursuit_event.md` — the pursuit-event manager + S_ELEMENT record struct.
 - `structs/police-board.md` / `structs/police-action.md` — the police pursuit board/squad that drives most
   enable/disable calls.
 - `ghidra/Game-ghidra.exe.functions.md` — `pursuit_event_*`, `car_*_model_level`,

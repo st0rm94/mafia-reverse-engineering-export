@@ -1,6 +1,6 @@
-# `C_ShotSkeleton` — the per-limb hit locator (PC prefix `shot_skeleton_*`)
+# `C_ShotSkeleton` — the per-limb hit locator
 
-**Created** 2026-08-26 11:13 +0200 · **Modified** 2026-10-11 10:44 +0200
+**Created** 2026-08-26 11:13 +0200 · **Modified** 2026-11-01 10:31 +0100
 
 `C_ShotSkeleton` answers one question: *when a shot ray passes near a person, which body part
 did it hit?* It does that by wrapping the character's animated skeleton in **ten capsules**,
@@ -9,12 +9,93 @@ nearest capsule the ray intersects.
 
 | | |
 |---|---|
-| PC translation unit | `[0x005922c0, 0x005929c0)`, delimited at both ends by its own MSVC static-init pair |
-| PC methods | 2 (§4) |
-| Size | `0x130`, embedded in `C_human` at `+0x2dc` (§1) |
-| Destructor | none — the object holds raw `I3D_frame *` it does not own |
+| PC prefix | `shot_skeleton_` |
+| PC kind (`+0x10`) | - |
+| PC vtable | - |
+| PC base class | - |
+| PC instance size | `0x130`, embedded in `C_human` at `+0x2dc` (§4) |
+| PC constructor | -: the object holds raw `I3D_frame *` it does not own, and has no destructor either |
+| PC translation unit | `[0x005922c0, 0x005929c0)`, opened by the unit's own CRT pair and closed by the next unit's `crt_static_init_event_msg`: 4 starts, all named |
+| PS2 class | `C_ShotSkeleton`, 2 methods |
 
-## 1. Where the object lives
+**Confidence tags:** **[H]** body-read + writer + reader · **[M]** inferred · **[U]** not observed.
+
+## 1. Base field layout
+
+```c
+typedef struct C_ShotSkeleton {            /* 0x130 bytes */
+    /* +0x00 */ I3D_frame *joint[16];      // [H] the joints, resolved by name at Init (§5)
+    /* +0x40 */ S_bone     bone[10];       // [H] the capsules, a verbatim copy of the template (§5)
+} C_ShotSkeleton;
+```
+
+**Why these counts.** `joint` has one entry per name in the 16-entry table `g_shot_skeleton_joint_names`:
+each entry is the `I3D_frame *` the model's find-by-name virtual returns for that name. `bone` has one entry per
+capsule of the 10-entry table `g_shot_skeleton_template_bones`: arms and legs take two capsules a side, the
+torso and the head one each. Both loops in `shot_skeleton_init` run to exactly those counts. The bone table is
+copied into every instance rather than shared, so an instance could be retuned per character; nothing located
+does so.
+
+### 1a. `S_bone`
+
+```c
+typedef struct S_bone {                    /* 0x18 bytes */
+    /* +0x00 */ uint32_t joint_a;          // [H] index into joint[], the capsule axis's start
+    /* +0x04 */ uint32_t joint_b;          // [H] index into joint[], the capsule axis's end
+    /* +0x08 */ float    t_start;          // [H] parametric start along the a->b segment
+    /* +0x0c */ float    t_end;            // [H] parametric end along the a->b segment
+    /* +0x10 */ float    radius;           // [H] capsule radius, world units
+    /* +0x14 */ uint32_t body_part;        // [H] 1..6, the value shot_skeleton_test_collision returns
+} S_bone;
+```
+
+## 2. Field evidence
+
+Both methods walk the arrays with a moving pointer, so the cells come from reading the two bodies.
+
+| Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
+|---|---|---|---|---|---|
+| +0x0 | joint | H | `shot_skeleton_init` | `shot_skeleton_test_collision` | 16 handles |
+| +0x40 | bone | H | `shot_skeleton_init` | `shot_skeleton_test_collision` | 10 records of 0x18 |
+
+### 2a. `S_bone`
+
+| Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
+|---|---|---|---|---|---|
+| +0x0 | joint_a | H | `shot_skeleton_init` | `shot_skeleton_test_collision` | template value |
+| +0x4 | joint_b | H | `shot_skeleton_init` | `shot_skeleton_test_collision` | template value |
+| +0x8 | t_start | H | `shot_skeleton_init` | `shot_skeleton_test_collision` | may be negative: the capsule over-runs its bone |
+| +0xc | t_end | H | `shot_skeleton_init` | `shot_skeleton_test_collision` | may exceed 1 |
+| +0x10 | radius | H | `shot_skeleton_init` | `shot_skeleton_test_collision` | offsets the two side planes |
+| +0x14 | body_part | H | `shot_skeleton_init` | `shot_skeleton_test_collision` | the return value |
+
+## 3. Method family
+
+2 of 2 PS2 methods mapped; the class is closed. The unit's CRT pair has no PS2 counterpart.
+
+### 3a. Construction & destruction
+
+| PC VA | PC name | Object | PS2 twin | PS2 VA | Status | Role |
+|---|---|---|---|---|---|---|
+| 0x005922c0 | `crt_static_init_shot_skeleton` | the translation unit | - | - | - | the unit's `.CRT$XCU` initializer |
+| 0x005922e0 | `crt_atexit_register_shot_skeleton` | the translation unit | - | - | - | registers the unit's static destructor |
+
+### 3b. Accessors
+
+None.
+
+### 3c. Behaviour
+
+| PC VA | PC name | PS2 twin | PS2 VA | Status | Role |
+|---|---|---|---|---|---|
+| 0x005922f0 | `shot_skeleton_init` | `Init__14C_ShotSkeletonFP9I3D_frame` | 0x002e73e0 | CONFIRMED | resolve all 16 joints from the model, then copy the 10-capsule template in |
+| 0x00592350 | `shot_skeleton_test_collision` | `TestCollision__14C_ShotSkeletonFRC8S_vectorRC8S_vectorf` | 0x002e74c0 | CONFIRMED | test a ray against all 10 capsules; return the body part of the nearest hit, or 0 |
+
+### 3d. Free helpers
+
+None.
+
+## 4. Where the object lives
 
 🔑 **`C_human` EMBEDS one at `+0x2dc`.** There is no separate allocation and no pointer: the
 skeleton is part of every person.
@@ -35,42 +116,21 @@ six callsites of the two methods, read from the disassembly, settles it:
 10 × `0x18` (the capsule table) = **`0x130`** bytes, so it spans `+0x2dc..+0x40c` — and
 `+0x40c` is the documented `movement_mode` field. The size and the neighbour agree without
 either being derived from the other. This is the same shape of argument that pinned the
-`anim_machine` at `C_human+0xbc` (`structs/anim_machine.md` §1).
+`anim_machine` at `C_human+0xbc` (`structs/anim_machine.md` §4).
 
-## 2. Layout
-
-```c
-typedef struct C_ShotSkeleton {            /* 0x130 bytes */
-    /* +0x00 */ I3D_frame *joint[16];      // [H] resolved at Init from g_shot_skeleton_joint_names
-    /* +0x40 */ S_bone     bone[10];       // [H] a verbatim copy of g_shot_skeleton_template_bones
-} C_ShotSkeleton;
-
-typedef struct S_bone {                    /* 0x18 bytes */
-    /* +0x00 */ uint32_t joint_a;          // [H] index into joint[]
-    /* +0x04 */ uint32_t joint_b;          // [H] index into joint[]
-    /* +0x08 */ float    t_start;          // [H] parametric start along the a->b segment
-    /* +0x0c */ float    t_end;            // [H] parametric end
-    /* +0x10 */ float    radius;           // [H] capsule radius, world units
-    /* +0x14 */ uint32_t body_part;        // [H] 1..6, the value TestCollision returns
-} S_bone;
-```
-
-The bone table is COPIED into every instance rather than shared, so an instance could in
-principle be retuned per character; nothing located does so.
-
-## 3. The joint names and the capsule table (decoded from `Game.exe`)
+## 5. The joint names and the capsule table (decoded from `Game.exe`)
 
 `g_shot_skeleton_joint_names` (`0x0064dfc0`) is 16 `char *`, resolved at Init through the
 model's `I3D_frame` find-by-name virtual with a `0xffff` search mask:
 
-| # | name | | # | name | | # | name |
-|---|---|---|---|---|---|---|---|
-| 0 | `r_hand` | | 6 | `l_hand` | | 12 | `base` |
-| 1 | `r_elbow` | | 7 | `l_elbow` | | 13 | `back1` |
-| 2 | `r_arm` | | 8 | `l_arm` | | 14 | `back3` |
-| 3 | `r_foot` | | 9 | `l_foot` | | 15 | `neck` |
-| 4 | `r_shin` | | 10 | `l_shin` | | | |
-| 5 | `r_thigh` | | 11 | `l_thigh` | | | |
+| # | name | # | name | # | name |
+|---|---|---|---|---|---|
+| 0 | `r_hand` | 6 | `l_hand` | 12 | `base` |
+| 1 | `r_elbow` | 7 | `l_elbow` | 13 | `back1` |
+| 2 | `r_arm` | 8 | `l_arm` | 14 | `back3` |
+| 3 | `r_foot` | 9 | `l_foot` | 15 | `neck` |
+| 4 | `r_shin` | 10 | `l_shin` | - | - |
+| 5 | `r_thigh` | 11 | `l_thigh` | - | - |
 
 `g_shot_skeleton_template_bones` (`0x0064e000`) is the ten capsules:
 
@@ -94,14 +154,9 @@ bone and extends to **three times** its length — that is how a head with no he
 hit volume.
 
 The body-part ids are what the shooting code consumes; the class itself never interprets them
-(§4a).
+(§6a).
 
-## 4. The two methods
-
-| PC VA | PC name | what it does |
-|---|---|---|
-| `0x005922f0` | `shot_skeleton_init` | resolve all 16 joints from the model, then copy the 10-capsule template in |
-| `0x00592350` | `shot_skeleton_test_collision` | test a ray against all 10 capsules; return the body part of the nearest hit, or 0 |
+## 6. How the test works
 
 `shot_skeleton_test_collision(start, dir, best)` walks the capsules in order. For each it
 refreshes both joints' world matrices (behind the `I3D_frame` `& 0x20` dirty flag), builds the
@@ -115,7 +170,7 @@ The `+0.01 * i` term added to the hit parameter inside the loop is a tie-break b
 distance: it makes later capsules lose to earlier ones at equal range, which is what keeps a
 torso hit from stealing an arm hit.
 
-### 4a. What the body part decides
+### 6a. What the body part decides
 
 | caller | what it does with the result |
 |---|---|
@@ -123,7 +178,7 @@ torso hit from stealing an arm hit.
 | `human_ai` (a melee strike) | uses the test only as hit or miss: the part it then passes to the victim's `Hit` is `5 + rand_range(2)`, torso or head at random |
 | `pedestrian_crowd_hit` (a hit on an ambient pedestrian) | passes the part to `pedestrian_hit`, which picks the hit-reaction animation stored at `+0x164` from it, two clips per part chosen by the hit angle; the pedestrian's damage does not depend on the part |
 
-## 5. PC vs PS2
+## 7. PC vs PS2
 
 The class name, the two method names and both data-table names come from the PS2 symbol
 table; the PC decomp could not have supplied any of them. The PC prefix drops the `C_` and
@@ -151,7 +206,11 @@ name states that rather than transliterating.
 * PS2 does the vector normalise on the VU (`vrsqrt`/`vmulq` intrinsics) where PC uses x87.
   The degenerate ladder either side of it is identical.
 
-## 6. Related
+## 8. Related
 
-`structs/human.md` §4d (the embedding, from the `C_human` side) ·
-`structs/anim_machine.md` §1 · `ghidra/Game-ghidra.exe.functions.md` (the function registry).
+`structs/human.md` §6 (the embedding, from the `C_human` side) ·
+`structs/anim_machine.md` §4 · `ghidra/Game-ghidra.exe.functions.md` (the function registry).
+
+## 9. Open items
+
+Nothing is open.

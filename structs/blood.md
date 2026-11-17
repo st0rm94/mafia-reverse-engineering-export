@@ -1,19 +1,124 @@
 # `C_blood` / `C_blood_manager` — the blood-drop and decal system
 
-**Created** 2026-08-30 15:50 +0200 · **Modified** 2026-10-11 15:07 +0200
+**Created** 2026-08-30 15:50 +0200 · **Modified** 2026-11-01 10:31 +0100
 
-PC prefixes **`blood_`** and **`blood_manager_`**. This doc also owns the **decal pool** the drops
-write into (§5), which serves bullet marks, grenade scorches and bloody prints as well.
+A `C_blood` is an invisible falling drop; its only visible output is the decal it places where it lands. This doc also owns the
+**decal pool** the drops write into (§7), which serves bullet marks, grenade scorches and bloody prints as well.
 
 | | |
 |---|---|
-| PS2 classes | `C_blood` (tag `7C_blood`), `C_blood_manager` (tag `15C_blood_manager`) |
-| Manager location | **embedded in `C_game` at `+0x2d90`** — byte-proven on 12 of 12 callsites |
-| PC functions | 6, all with CONFIRMED PS2 twins (§6); the manager's ctor/dtor are shared folds (§2) |
-| PC translation unit | `[0x005adf80, 0x005ae480)` — 8 starts including the CRT guard pair |
-| Polymorphic | no — neither class has a vtable on either build (§6) |
+| PC prefix | `blood_manager_` for the manager, `blood_` for one drop |
+| PC kind (`+0x10`) | - |
+| PC vtable | - |
+| PC base class | - |
+| PC instance size | `C_blood` `0x24`; `C_blood_manager` `0x10`, embedded at `C_game + 0x2d90` |
+| PC constructor | `folded_return_this` for `C_blood`, `folded_vector_ctor_at_0x04` for the manager |
+| PC translation unit | `[0x005adf80, 0x005ae480)`, guard to guard, 8 starts |
+| PS2 class | `C_blood` (tag `7C_blood`), 4 methods; `C_blood_manager` (tag `15C_blood_manager`), 6 methods |
 
-## 1. What it is — and what it is not
+**Confidence tags:** **[H]** body-read + writer + reader · **[M]** inferred · **[U]** not observed.
+
+## 1. Base field layout
+
+### 1a. `C_blood`
+
+```c
+typedef struct C_blood {          // 0x24 bytes, heap, owned by the manager's vector
+    /* +0x00 */ float    pos[3];      // [H] current position, integrated by blood_tick
+    /* +0x0c */ float    vel[3];      // [H] velocity; vel.y takes gravity every tick
+    /* +0x18 */ float    size;        // [H] decal size scale
+    /* +0x1c */ int      texture;     // [H] index into C_game+0x29bc, the 10 decal textures
+    /* +0x20 */ uint8_t  grow_in;     // [H] placer argument 10: the decal grows in (§7c)
+} C_blood;
+```
+
+`pos` and `vel` are one world vector each, x y z.
+
+### 1b. `C_blood_manager`
+
+```c
+typedef struct C_blood_manager {  // 0x10 bytes, embedded at C_game + 0x2d90
+    /* +0x00 */ uint8_t  alloc;       // [H] MSVC's empty allocator member of the vector
+    /* +0x04 */ C_blood **begin;      // [H] the live drops, stride 4
+    /* +0x08 */ C_blood **end;        // [H] count = (end - begin) >> 2
+    /* +0x0c */ C_blood **cap;        // [H] one past the allocation
+} C_blood_manager;
+```
+
+The manager's location is byte-proven on 12 of 12 callsites.
+
+## 2. Field evidence
+
+Cells come from a census of each class's functions, read against the bodies.
+
+### 2a. `C_blood`
+
+| Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
+|---|---|---|---|---|---|
+| +0x0 | pos | H | `blood_init`, `blood_tick` | `blood_tick` | - |
+| +0xc | vel | H | `blood_init`, `blood_tick` | `blood_tick` | `blood_tick` writes only y |
+| +0x18 | size | H | `blood_init` | `blood_tick` | - |
+| +0x1c | texture | H | `blood_init` | `blood_tick` | - |
+| +0x20 | grow_in | H | `blood_init` | `blood_tick` | - |
+
+### 2b. `C_blood_manager`
+
+| Offset | Field | Conf | Writer(s) | Reader(s) | Notes |
+|---|---|---|---|---|---|
+| +0x0 | alloc | H | `folded_vector_ctor_at_0x04` | - | an empty class |
+| +0x4 | begin | H | `blood_manager_add_blood`, `folded_vector_ctor_at_0x04`, `folded_vector_free_at_0x04` | `blood_manager_add_blood`, `blood_manager_game_done`, `blood_manager_game_init`, `blood_manager_tick` | - |
+| +0x8 | end | H | `blood_manager_add_blood`, `blood_manager_game_done`, `blood_manager_game_init`, `blood_manager_tick`, `folded_vector_ctor_at_0x04`, `folded_vector_free_at_0x04` | `blood_manager_add_blood`, `blood_manager_game_done`, `blood_manager_game_init`, `blood_manager_tick` | - |
+| +0xc | cap | H | `blood_manager_add_blood`, `folded_vector_ctor_at_0x04`, `folded_vector_free_at_0x04` | `blood_manager_add_blood` | - |
+
+## 3. Method family
+
+All 10 PS2 methods are accounted for: 6 own PC functions, 3 folded, 1 inlined.
+
+### 3a. Construction & destruction
+
+#### `C_blood`
+
+| PC VA | PC name | Object | PS2 twin | PS2 VA | Status | Role |
+|---|---|---|---|---|---|---|
+| 0x005575f0 | `folded_return_this` | instance | - | - | - | The trivial `C_blood` constructor, one of three owners of this address (§4a) |
+
+#### `C_blood_manager`
+
+| PC VA | PC name | Object | PS2 twin | PS2 VA | Status | Role |
+|---|---|---|---|---|---|---|
+| 0x005adf80 | `crt_static_init_guard_005adf80` | - | - | - | - | The unit's opening guard |
+| 0x005adfa0 | `crt_atexit_register_005adfa0` | - | - | - | - | The guard's `atexit` helper |
+| 0x0061e010 | `folded_vector_ctor_at_0x04` | instance | `__ct__15C_blood_managerFv` | 0x00122c50 | STRUCTURAL | The manager's constructor, a fold with `C_tshift` (§4a) |
+| 0x0061e030 | `folded_vector_free_at_0x04` | instance | `__dt__15C_blood_managerFv` | 0x00122c90 | STRUCTURAL | The manager's destructor, the same two owners |
+
+### 3b. Accessors
+
+No function here is a single load or store of one field.
+
+### 3c. Behaviour
+
+#### `C_blood`
+
+| PC VA | PC name | PS2 twin | PS2 VA | Status | Role |
+|---|---|---|---|---|---|
+| 0x005adfb0 | `blood_tick` | `Tick__7C_bloodFf` | 0x00122a50 | CONFIRMED | One physics step (§5); false = the drop is done |
+| 0x005ae130 | `blood_init` | `Init__7C_bloodFR8S_vectorR8S_vectorfib` | 0x00122c30 | CONFIRMED | Copies position, direction, size, texture and the grow flag |
+
+#### `C_blood_manager`
+
+| PC VA | PC name | PS2 twin | PS2 VA | Status | Role |
+|---|---|---|---|---|---|
+| 0x005ae180 | `blood_manager_game_init` | `GameInit__15C_blood_managerFv` | 0x00122d00 | CONFIRMED | Empties the vector (`end = begin`) without deleting |
+| 0x005ae1b0 | `blood_manager_game_done` | `GameDone__15C_blood_managerFv` | 0x00122d10 | CONFIRMED | Deletes every drop and empties the vector |
+| 0x005ae200 | `blood_manager_tick` | `Tick__15C_blood_managerFUi` | 0x00122d70 | CONFIRMED | Swap-and-pop over every drop, from `game_tick` |
+| - | - | `__dt__7C_bloodFv` | 0x00122a00 | inlined | A bare `operator_delete_wrapper` in `blood_manager_tick` and `blood_manager_game_done` |
+| 0x005ae2a0 | `blood_manager_add_blood` | `AddBlood__15C_blood_managerFR8S_vectorR8S_vectorfib` | 0x00122e70 | CONFIRMED | Allocates a drop and appends it (§6) |
+
+### 3d. Free helpers
+
+The unit holds no free helper.
+
+## 4. What it is, and what it is not
 
 A `C_blood` is an **invisible ballistic marker**. The record is 0x24 bytes — a position, a
 velocity, a size scale, a decal texture index and a flag — and it holds **no `I3D_frame`
@@ -28,44 +133,23 @@ Each spawn call emits **one** drop from the body's current position; nothing in 
 a path of drops.
 
 In-game observation by the user:
-> * blood appears for a moment around the point where the enemy was hit — that is a
->   separate particle effect, **not** this system;
 > * a blood stain then appears **on the ground under the enemy's current position**, using
 >   `2blood3.bmp`;
 > * **there is no trail** of stains behind a wounded NPC that walks;
 > * there is no visible falling animation.
 
-## 2. Object layouts (PC)
+### 4a. The folded constructors
 
-```c
-typedef struct C_blood {          // 0x24 bytes, heap, owned by the manager's vector
-    /* +0x00 */ float    pos[3];      // [H] current position, integrated by blood_tick
-    /* +0x0c */ float    vel[3];      // [H] velocity; vel.y takes gravity every tick
-    /* +0x18 */ float    size;        // [H] decal size scale
-    /* +0x1c */ int      texture;     // [H] index into C_game+0x29bc, the 10 decal textures
-    /* +0x20 */ uint8_t  grow_in;     // [H] placer argument 10: the decal grows in (§5c)
-} C_blood;
+The `C_blood` constructor has no address of its own: `blood_manager_add_blood` calls `folded_return_this` (`0x005575f0`, body
+`mov eax,ecx; ret`) on the `operator_new(0x24)` result. That body is a three-owner fold: 9 callsites take the `G_LoadSaveClass`
+singleton, 1 is this `C_blood` constructor, and 1 takes a stack parameter in `recorder_set_clock`.
 
-typedef struct C_blood_manager {  // embedded at C_game + 0x2d90
-    /* +0x00 */ uint8_t  alloc;       // [H] STL allocator byte
-    /* +0x04 */ C_blood **begin;      // [H] vector<C_blood*> — the live drops
-    /* +0x08 */ C_blood **end;        // [H]
-    /* +0x0c */ C_blood **cap;        // [H]
-} C_blood_manager;                    // 0x10 bytes
-```
+The **manager's constructor and destructor** are the two-owner folds `folded_vector_ctor_at_0x04` and
+`folded_vector_free_at_0x04` (the other owner is the `C_tshift` at `C_mission + 0x28`). `game_ctor` calls the first with
+`lea ecx,[esi+0x2d90]` (`0x00606beb`), between the `+0x2d78` vector and `police_manager_ctor`; `game_dtor` calls the second with the
+same receiver (`0x006071a4`), at the mirror position.
 
-The `C_blood` constructor has no address of its own: `blood_manager_add_blood` calls
-`folded_return_this` (`0x005575f0`, body `mov eax,ecx; ret`) on the `operator_new(0x24)` result.
-That body is a three-owner fold — 9 callsites take the `G_LoadSaveClass` singleton, 1 is this
-`C_blood` constructor, and 1 takes a stack parameter in `recorder_set_clock`.
-
-The **manager's constructor and destructor** are the two-owner folds `folded_vector_ctor_at_0x04`
-and `folded_vector_free_at_0x04` (the other owner is the `C_tshift` at `C_mission + 0x28`).
-`game_ctor` calls the first with `lea ecx,[esi+0x2d90]` (`0x00606beb`), between the `+0x2d78`
-vector and `police_manager_ctor`; `game_dtor` calls the second with the same receiver
-(`0x006071a4`), at the mirror position.
-
-## 3. The physics
+## 5. The physics
 
 `blood_tick(drop, dt_seconds)`:
 
@@ -75,13 +159,13 @@ vector and `police_manager_ctor`; `game_dtor` calls the second with the same rec
 4. **Hit:** place a decal at the impact point, offset by half the surface normal, with a
    random size `0.5 + rand * drop.size * 0.3` and a random rotation `rand * 2π`, using the
    drop's texture index; the call registers the decal's collision sphere (argument 9 = 1) and
-   passes the drop's `grow_in` byte as argument 10 (§5b). Return false — the drop is done.
+   passes the drop's `grow_in` byte as argument 10 (§7b). Return false — the drop is done.
 5. **Miss:** `pos += vel*dt`, return true.
 
 `blood_manager_tick` runs the swap-and-pop loop over every live drop each frame from
 `game_tick`.
 
-## 4. Who spawns drops, and with which texture
+## 6. Who spawns drops, and with which texture
 
 `blood_manager_add_blood(pos, dir, size, texture, flag)` — 10 callsites, every one a wound,
 death or bleeding path, all reaching the manager as
@@ -100,21 +184,21 @@ death or bleeding path, all reaching the manager as
 
 Texture **0** is the hit/death spray and appears at full size; texture **7** is the stain that
 appears under a wounded body — which is what the in-game observation reports — and it grows in
-over 3000 ms (§5c).
+over 3000 ms (§7c).
 
-## 5. The decal pool — `C_game + 0x75c`
+## 7. The decal pool — `C_game + 0x75c`
 
 One ring of **100 records of 0x58 bytes** at `C_game + 0x75c .. +0x29bc` serves every decal the
 game places: blood, bullet marks, grenade scorches and bloody prints.
 
 | `C_game` offset | what |
 |---|---|
-| `+0x75c` | the 100 records (§5a) |
-| `+0x29bc` | the ten decal textures (§5d), loaded in `game_init`, released in `game_done` |
+| `+0x75c` | the 100 records (§7a) |
+| `+0x29bc` | the ten decal textures (§7d), loaded in `game_init`, released in `game_done` |
 | `+0x29e4` | the ring cursor; `game_projector_advance_ring_cursor` steps it and wraps it at 100 |
-| `+0x29e8` | the number of records still growing (§5c) |
+| `+0x29e8` | the number of records still growing (§7c) |
 
-### 5a. The record (`0x58` bytes)
+### 7a. The record (`0x58` bytes)
 
 | offset | field | writer / reader |
 |---|---|---|
@@ -125,7 +209,7 @@ game places: blood, bullet marks, grenade scorches and bloody prints.
 | `+0x50` | grow scale, 0.1 → 1.0 | the placer, the grow loop |
 | `+0x54` | owner frame (argument 11) | read by `game_clear_projectors_for_frame`, which hides every decal bound to a frame |
 
-### 5b. The placers
+### 7b. The placers
 
 `game_create_track_effect` (scalar size) and `game_create_track_effect_between` (four vectors)
 take the same eight stack arguments after their vectors; each slot was traced through the
@@ -137,12 +221,12 @@ disassembly. For the scalar form:
 | 2 | `S_vector *` | surface normal |
 | 3 | float | rotation angle |
 | 4 | `S_vector *` | size |
-| 5 | float | 0.3 blood, 0.002 shots, 0.2 grenade (§8) |
+| 5 | float | 0.3 blood, 0.002 shots, 0.2 grenade (§10) |
 | 6 | int | texture index 0..9; refused when out of range or not loaded |
 | 7 | bool | fit the orientation to the surface (`vec3_make_basis_from_direction` + four `vec3_dot_difference` probes) |
 | 8 | float | alpha |
-| 9 | bool | register the collision sphere of §5a |
-| 10 | bool | grow in (§5c) instead of appearing at full size |
+| 9 | bool | register the collision sphere of §7a |
+| 10 | bool | grow in (§7c) instead of appearing at full size |
 | 11 | `I3D_frame *` | owner frame, stored at `+0x54` |
 
 The projector calls resolve against the shipped `LS3DF.dll` (`I3D_projector` vtable
@@ -150,7 +234,7 @@ The projector calls resolve against the shipped `LS3DF.dll` (`I3D_projector` vta
 `+0x88` SetMode, `+0x8c` SetProjectorLock. The colour is a grey level from a scene query at the
 point. Without argument 10 the placer locks the projector at once with `SetProjectorLock(3)`.
 
-### 5c. Grow-in, and a PC defect in it
+### 7c. Grow-in, and a PC defect in it
 
 With argument 10 set the placer starts the decal at 10 % size (`+0x4d` = 1, `+0x50` = 0.1,
 `++C_game+0x29e8`). While `+0x29e8` is non-zero, `game_tick` walks all 100 records; each record
@@ -159,22 +243,22 @@ At 1.0 the loop clears `+0x4d`, decrements `+0x29e8` and calls `SetProjectorLock
 
 That call indexes the record at the **ring cursor** `+0x29e4`, not the record that finished
 growing (`0x005e26b6`): the grown decal is never locked, and the slot the next decal will reuse
-is locked instead. Only grow-in decals reach this path, i.e. the texture-7 stains of §4 (on-screen
-effect: §8).
+is locked instead. Only grow-in decals reach this path, i.e. the texture-7 stains of §6 (on-screen
+effect: §10).
 
-### 5d. The ten textures and who places them
+### 7d. The ten textures and who places them
 
 | index | asset | what it is | placed by |
 |---|---|---|---|
-| 0 | `2blood.bmp` | blood | `blood_tick` (§4) |
+| 0 | `2blood.bmp` | blood | `blood_tick` (§6) |
 | 1 | `2flek.bmp` | a stain (Czech *flek*) | `game_create_grenade_track_effect` |
 | 2 | `2dirbet.bmp` | bullet mark on concrete (*beton*) | `game_tick_shoot` |
-| 3 | `2dirdre.bmp` | bullet mark on wood (*dřevo*) | `game_tick_shoot` |
+| 3 | `2dirdre.bmp` | bullet mark on wood | `game_tick_shoot` |
 | 4 | `2dirple.bmp` | bullet mark on sheet metal (*plech*) | `game_tick_shoot` |
 | 5 | `2dirsklo.bmp` | bullet mark on glass (*sklo*) | `game_tick_shoot` |
-| 6 | `2bfootprint.bmp` | a bloody footprint | `human_notify_callback` (§5e) |
-| 7 | `2blood3.bmp` | blood, variant 3 | `blood_tick` (§4) |
-| 8 | `2dogfoot.bmp` | a bloody dog paw print | `dog_place_bloody_paw_print` (§5e) |
+| 6 | `2bfootprint.bmp` | a bloody footprint | `human_notify_callback` (§7e) |
+| 7 | `2blood3.bmp` | blood, variant 3 | `blood_tick` (§6) |
+| 8 | `2dogfoot.bmp` | a bloody dog paw print | `dog_place_bloody_paw_print` (§7e) |
 | 9 | `skrob.tga` | a scrape | nothing — loaded, never placed |
 
 `game_tick_shoot` takes the index from the hit surface's `materials.def` record `+0x3c`
@@ -182,37 +266,31 @@ effect: §8).
 foliage, water, body) get none. The producer list is a closed set: the two placers have five
 `E8` callsites between them and no `E9` or data reference. Index 9 therefore has no producer.
 
-### 5e. Bloody prints
+### 7e. Bloody prints
 
 1. Every blood decal (argument 9 = 1) carries a type-`0x48` collision sphere.
 2. `dog_snap_to_ground` (every 200 ms) and `human_movement_intern` (the foot ray) set
    `g_collision_next_query_actor` to themselves around their downward ray.
 3. `collision_line_in_dynamics` never reports a hit on type `0x48`; it calls the querying
-   actor's vtable `+0x90` with the object (`structs/collision.md` §1d).
+   actor's vtable `+0x90` with the object (`structs/collision.md` §5c).
 4. `human_arm_bloody_footprints` (effects quality `g_act_mission+0x9c` > 1 only) arms ten
    prints with texture 6; `dog_arm_bloody_paw_prints` arms ten prints and the print flag `+0x89`.
 5. On each footstep animation event, `human_notify_callback` and `dog_place_bloody_paw_print`
    place one print through `game_create_track_effect_between`, with alpha
    `(steps left + 2) / total`, so the prints fade out over ten steps.
 
-## 6. PC vs PS2
+## 8. PC vs PS2
 
-| PC VA | PC name | PS2 twin | PS2 size | PC size | status |
-|---|---|---|---|---|---|
-| 0x005adfb0 | `blood_tick` | `Tick__7C_bloodFf` | 472 | 369 | CONFIRMED |
-| 0x005ae130 | `blood_init` | `Init__7C_bloodFR8S_vectorR8S_vectorfib` | 32 | 71 | CONFIRMED |
-| 0x005ae180 | `blood_manager_game_init` | `GameInit__15C_blood_managerFv` | 8 | 34 | CONFIRMED |
-| 0x005ae1b0 | `blood_manager_game_done` | `GameDone__15C_blood_managerFv` | 96 | 77 | CONFIRMED |
-| 0x005ae200 | `blood_manager_tick` | `Tick__15C_blood_managerFUi` | 244 | 150 | CONFIRMED |
-| 0x005ae2a0 | `blood_manager_add_blood` | `AddBlood__15C_blood_managerFR8S_vectorR8S_vectorfib` | 196 | 473 | CONFIRMED |
-| - | - | `__ct__7C_bloodFv` | 8 | - | folded on PC into `folded_return_this` (§2) |
-| - | - | `__dt__7C_bloodFv` | 68 | - | inlined on PC as a bare `operator_delete_wrapper` |
-| - | - | `__ct__15C_blood_managerFv` | 52 | - | folded on PC into `folded_vector_ctor_at_0x04` (§2) |
-| - | - | `__dt__15C_blood_managerFv` | 100 | - | folded on PC into `folded_vector_free_at_0x04` (§2) |
+Sizes of the twins, in bytes (PS2 / PC): `blood_tick` 472 / 369, `blood_init` 32 / 71, `blood_manager_game_init` 8 / 34,
+`blood_manager_game_done` 96 / 77, `blood_manager_tick` 244 / 150, `blood_manager_add_blood` 196 / 473.
+
+The PS2 `__ct__7C_bloodFv` (8 bytes) and `__ct__15C_blood_managerFv` (52) and `__dt__15C_blood_managerFv` (100) are the folds of §4a,
+and `__dt__7C_bloodFv` (68) is the inlined delete of §3c. No twin is stamped on `folded_return_this`, whose address serves two other
+owners.
 
 * **Record size differs:** PC 0x24 against PS2 0x30, because the PS2 pads `S_vector` to 16
   bytes. The manager differs too: the PS2 keeps a count + array, the PC a `std::vector`.
-* **The `vel.y > 20.0` test** (§3 step 2): the PS2 decompiles it cleanly as `if (20.0 < fVar4)`,
+* **The `vel.y > 20.0` test** (§5 step 2): the PS2 decompiles it cleanly as `if (20.0 < fVar4)`,
   which settles Ghidra's x87 comparison output on the PC side.
 * **Not polymorphic on either build.** The PS2 symbol table declares `__vt__8C_bottle` but no
   `__vt__7C_blood` or `__vt__15C_blood_manager`; the PS2 `__ct__15C_blood_managerFv` is the same
@@ -221,25 +299,29 @@ foliage, water, body) get none. The producer list is a closed set: the two place
   stubs, so blood drops, bullet marks and bloody prints are simulated but never placed there. The
   placer's argument order and types come from the mangled signature
   `(S_vector&, S_vector&, float, S_vector&, float, int, bool, float, bool, bool, I3D_frame*)`,
-  and the projector slots of §5b were matched field for field to the PS2 `I3D_projector` setters
+  and the projector slots of §7b were matched field for field to the PS2 `I3D_projector` setters
   (`SetOrthogonal` `+0x1e0` and `SetAlpha` `+0x1e8` on both builds; `SetProjectorLock` PS2
   `+0x200` ↔ PC `+0x1f8`, `SetMode` `+0x20c` ↔ `+0x204`, texture `+0x204` ↔ `+0x1fc`).
 * **`BloodStep__5C_dogFUi`** is the twin of `dog_place_bloody_paw_print`: it places texture-8
   paw prints through `CreateTrackEffect`. `cbCollTester__5C_dogFP18tDynamicCollObject` / `cbCollTester__7C_humanFP18tDynamicCollObject`
-  are the twins of the two arming callbacks of §5e.
+  are the twins of the two arming callbacks of §7e.
 
-## 7. Related
+| PS2 VA | PS2 method | Why there is no PC function |
+|---|---|---|
+| 0x001229f0 | `__ct__7C_bloodFv` | Realised by `folded_return_this`, whose address serves two other owners (§4a) |
 
-`structs/game.md` (the `+0x2d90` embed and the `+0x75c` pool) · `structs/collision.md` §1d
+## 9. Related
+
+`structs/game.md` (the `+0x2d90` embed and the `+0x75c` pool) · `structs/collision.md` §5c
 (dyn-coll type `0x48`) · `def-files-docs/materialy.md` (the per-surface decal index) ·
 `structs/dog.md` (paw prints) · `structs/human.md` (footprints) ·
 `basic/artifacts/hud_elements.md` §4 (the screen blood overlay, a different consumer of
 `2blood.bmp`).
 
-## 8. Open items
+## 10. Open items
 
 | item | state |
 |---|---|
-| bloody footprints (index 6) and dog paw prints (index 8) in game | the producers are traced (§5e); whether they appear in game at effects quality 2 after walking through a blood stain is not checked |
-| placer argument 5 (§5b) | 0.3 for blood, 0.002 for shots, 0.2 for a grenade; its consumer is not traced |
-| the misdirected `SetProjectorLock(3)` of §5c | what the lock changes on screen is not measured |
+| bloody footprints (index 6) and dog paw prints (index 8) in game | the producers are traced (§7e); whether they appear in game at effects quality 2 after walking through a blood stain is not checked |
+| placer argument 5 (§7b) | 0.3 for blood, 0.002 for shots, 0.2 for a grenade; its consumer is not traced |
+| the misdirected `SetProjectorLock(3)` of §7c | what the lock changes on screen is not measured |

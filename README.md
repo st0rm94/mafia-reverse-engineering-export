@@ -1,7 +1,7 @@
 # Mafia: The City of Lost Heaven (PC, 2002) — reverse-engineering export
 
 <!-- version -->
-**Export version:** `2026.10.13.1`
+**Export version:** `2026.11.17`
 <!-- /version -->
 
 Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
@@ -31,7 +31,7 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 |---|---:|---|
 | `basic/artifacts/` | 13 | gameplay and engine write-ups (two in the topic subdirectories `racing/` and `garage/`) |
 | `police-system/artifacts/` | 5 | the police and offence system |
-| `structs/` | 114 | one doc per class/subsystem: layout, fields, methods, PC↔PS2 twin tables |
+| `structs/` | 115 | one doc per class/subsystem: layout, fields, methods, PC↔PS2 twin tables |
 | `def-files-docs/` | 5 | shipped data formats and tables |
 | `script-mapping/artifacts/` | 3 | the mission-script VM: opcode ↔ command ↔ handler |
 
@@ -49,16 +49,16 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
   `cache_base_block.md`, `camera.md`, `car.md`, `car_database.md`, `car_extended.md`, `carcyclopedia.md`,
   `cartridge.md`, `check_seg.md`, `chunk.md`, `clock.md`, `collision.md`, `console.md`, `crash_obj.md`,
   `crash_report.md`, `crt_runtime_tail.md`, `debris.md`, `def_tables.md`, `detector.md`, `dog.md`,
-  `door.md`, `driver.md`, `drop_in_weapon.md`, `dropout.md`, `entity.md`, `fake_shadow.md`, `fire.md`,
+  `door.md`, `driver.md`, `drop_in_weapon.md`, `dropout.md`, `entity.md`, `entity_kind.md`, `fake_shadow.md`, `fire.md`,
   `force_feedback.md`, `game.md`, `game_menus.md`, `garage.md`, `glass_shatter.md`, `grenade.md`,
   `gui_screen.md`, `gui_widget.md`, `hud.md`, `human.md`, `i3d_cache.md`, `i3d_frame.md`, `input.md`,
   `inventory.md`, `lightness.md`, `line_batch.md`, `loadsave.md`, `mission.md`, `multiplayer.md`,
   `net_event_msg.md`, `net_session.md`, `particle.md`, `pedestrian.md`, `physical_object.md`, `player.md`,
   `police-action.md`, `police-board.md`, `police_manager.md`,
-  `program.md`, `public_physics.md`, `pumper.md`, `pursuit-event-manager.md`,
+  `program.md`, `public_physics.md`, `pumper.md`, `pursuit_event.md`,
   `race_session.md`, `racecam.md`, `racing.md`, `racing_menus.md`, `railway.md`, `railway_switch.md`,
   `random_morph.md`, `recorder.md`, `roads.md`, `safedisc_stub.md`, `screen_fade.md`, `seagull_flock.md`,
-  `shot_skeleton.md`, `smoke_trail.md`, `soundArena.md`, `sound_table.md`, `speech.md`, `spike_strip.md`,
+  `shot_skeleton.md`, `smoke_trail.md`, `sound_arena.md`, `sound_table.md`, `speech.md`, `spike_strip.md`,
   `string.md`, `textdb.md`, `traffic_car.md`, `using_object.md`, `uv_scroll.md`, `vehicle.md`, `wagon.md`,
   `web_node.md`, `web_path.md`
 - **def-files-docs:** `materialy.md`, `predmety.md`, `textdb.csv`, `textdb.json`, `vehicles-bin.md`
@@ -80,9 +80,9 @@ Created 2026-09-28 18:41 +0200 · history in `CHANGELOG.md`
 <!-- stats -->
 | change | result |
 |---|---|
-| function names | 5,098 functions named, **0 `FUN_` left**; each docblock keeps `Renamed from FUN_xxxxxxxx` |
+| function names | 5,098 functions named, **0 `FUN_` left**; 5,010 of the 5,010 that Ghidra left as `FUN_xxxxxxxx` keep that id as provenance (`Renamed from FUN_xxxxxxxx`) |
 | compiler glue | 385 `EHHandler_*` and 1,290 `Unwind_*` funclets named by owner |
-| PS2 twins | 2,602 functions mapped to their original PS2 developer method (`PS2 twin:` line + registry column) |
+| PS2 twins | 2,629 functions mapped to their original PS2 developer method (`PS2 twin:` line + registry column) |
 | docblocks | ~5,400: what it does, parameters, return value, evidence |
 | inline comments | ~9,900 `//` lines inside bodies; ~400 per-`case` docblocks in the script/AI dispatchers |
 | globals and data | ~1,100 `g_*` globals + ~1,800 `s_*` strings named; raw `DAT_` tokens 1,253 → 14 |

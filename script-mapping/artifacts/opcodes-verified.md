@@ -1,6 +1,6 @@
 # Mafia script-VM opcodes — verified
 
-**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-10-11 18:29 +0200
+**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-11-01 15:38 +0100
 
 Per-command evidence for the runtime dispatcher `program_process_command` (`0x005bb2d0`, jump
 table at `0x005c7700`, opcode range `1..0x186`).
@@ -162,13 +162,13 @@ world-frame list at `*(g_act_mission+0x24) + 0x144/+0x148`; `1` = the static lis
 `&g_actor_global_list_alloc` (via `LAB_0055922e`), a wider object set. The writer runs two passes
 for both variants — pass 1 keeps `obj_type ∈ {4, 8}` (type 4 = the actor's vehicle, resolved
 against the `manager+0xa0` stride-8 pair table), pass 2 everything else — both gated by
-`obj+0x65 == 0` (the `C_actor` save-exclusion byte, `structs/actor.md` §1b).
+`obj+0x65 == 0` (the `C_actor` save-exclusion byte, `structs/actor.md` §2).
 
 ### 3.5 Police manager
 
 | Opcode | Command | Handler | Behaviour | Evidence |
 |---|---|---|---|---|
-| `0x86` / 134 | `policemanager_on [xx, yy]` | `police_manager_apply_state` (enable = 1) | Enables the police system and registers the player ¹. | Body reads both args without an arg-count check; `+0x34` has no reader in the police manager range; the `yy` pool effect is confirmed in game. |
+| `0x86` / 134 | `policemanager_on [xx, yy]` | `police_manager_apply_state` (enable = 1) | Enables the police system and registers the player ¹. | Body reads both args without an arg-count check; `police_manager_tick` reads `+0x34` for the arrest end-screen; the `yy` pool effect is confirmed in game. |
 | `0x87` / 135 | `policemanager_add "name"` | `police_manager_register_actor` | Registers an actor, by **name**, for offence detection like the player ². | Name loop: `vec_index_addr_stride_0x4` + `i3d_frame_get_name` + `__strcmpi`. |
 | `0x88` / 136 | `policemanager_del "name"` | `police_manager_unregister_actor` | Unregisters an actor added by `policemanager_add` ³. | Same name loop; no second-arg branch. |
 | `0x89` / 137 | `policemanager_setspeed xx, yy` | `police_manager_set_speed_thresholds` | Sets the fine (`xx`) and arrest (`yy`) speed thresholds, in km/h ⁴. | `* 0.2777778` (km/h → m/s) fingerprint + `game_get_police_manager`. |
@@ -178,7 +178,8 @@ against the `manager+0xa0` stride-8 pair table), pass 2 everything else — both
 | `0x173` / 371 | `police_speed_factor xx, yy` | writes `g_police_speed_factor` (`0x006552d0`) | Sets the global police-car chase speed coefficient, clamped to `[0.0, 1.0]` ⁸. | The `[0, 1]` clamp matches the documented float range `<0,1>`. |
 | `0x183` / 387 | `m7_zastavzkurvenepolise` | `police_board_release_all_group_vehicles` | Mission-7 helper (Czech: "stop the fucking police"), no args: halts every squad's chase vehicle ⁹. | Case `0x183` is the **only** caller; verified in game. Used in mission `MISE07B-CHULIGANI`, script `detector_konec` (2 calls) before the ending animation. |
 
-¹ `xx` is stored at `police_manager+0x34` and never read (shipped value 980000). `yy` is booleanized
+¹ `xx` is stored at `police_manager+0x34`, the textdb id of the arrest end-screen's text (shipped value
+980000, "You've been arrested"); `police_manager_tick` passes it to `gui_game_over_ctor`. `yy` is booleanized
 to `+0x39` and selects the vehicle pool: `0` = `poli00` / `polimFor00` / `polimTud00`, non-zero =
 `polimFor00` / `polimTud00` / `polCad00`. That `rand_range()` switch sits inside the wanted-spawn
 branch, so `yy` affects only reinforcements that spawn during an active wanted substate; ordinary
@@ -212,7 +213,7 @@ even when the icon is transparent"*.
 ⁷ `ww` = spawn radius (float, passed through); `xx` = target actor (bounds against `param_1[0x17]`,
 `folded_get_dword_0x10()` = 2 or `0x1b`); `yy` optional, mapped `(yy != 0) ? 0 : 4` into the
 worker's mode parameter, which is the new squad's opening tier: 0 = gun, 4 = handcuffs
-(`structs/police-action.md` §3). Sequence: `game_get_police_manager()` (`C_game+0x2da0`, the
+(`structs/police-action.md` §4). Sequence: `game_get_police_manager()` (`C_game+0x2da0`, the
 `police_manager`) → `police_manager_spawn_patrol_car_reinforcements_at_radius(target, mode, radius)`,
 which picks a navmesh point at least `radius * 0.66` away, deploys a pooled patrol car, seats two
 pooled cops in it (pump shotgun `0x0b` and S&W revolver `0x08`, 30 reserve rounds each) and engages

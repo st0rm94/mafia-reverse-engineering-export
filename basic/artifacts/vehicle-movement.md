@@ -1,6 +1,6 @@
 # Vehicle Movement & Physics — Mafia: The City of Lost Heaven
 
-**Created** 2026-06-07 11:06 +0200 · **Modified** 2026-10-12 20:58 +0200
+**Created** 2026-06-07 11:06 +0200 · **Modified** 2026-10-29 16:42 +0100
 
 How a car moves each frame in `Game.exe`. Anchors are VAs / function names / field offsets.
 
@@ -40,7 +40,7 @@ There is no single "Update" — the vehicle is ticked through a cluster of virtu
 | #14 | `+0x38` (`C_car_ex` override) | `car_extended_update` | `C_car_ex::Update`; the burnt-corpse spawn is one of its five blocks |
 | #15 | `+0x3c` | `car_net_apply_remote_state` | 🔴 **NOT the live integrator** — the dead-reckoning extrapolator for a remotely-owned car (§3); inherited unchanged by `C_car_ex` |
 
-Slot 15 is the network-extrapolation slot family-wide; `C_airplane`'s slot 15 is a bare `ret 4` (`structs/bottle.md` §3a).
+Slot 15 is the network-extrapolation slot family-wide; `C_airplane`'s slot 15 is a bare `ret 4` (`structs/bottle.md` §9a).
 
 ---
 
@@ -96,7 +96,7 @@ Called twice per `vehicle_move`, and once each by `car_recompute_velocity` and
 2. **Surface.** On contact the wheel stores the contact point `+0x28`, the normal `+0x40` and the
    collision record `+0x124`, and sets flag bit `0x8`. On a new surface material (`+0xb4`, byte 3
    of the contact record) it looks up the tyre's surface entry (index `+0xb0`) in the tyre's surface
-   list. A record with flag `0x10000` raises the contact latch `+0x28` (`structs/vehicle.md` §2a).
+   list. A record with flag `0x10000` raises the contact latch `+0x28` (`structs/vehicle.md` §2).
    Material 3 is the sidewalk the offence check in `car_ai_tick` looks for.
 3. **Spring and damper.** With the extension `x = +0x14 − min(hub height, +0x14)` and
    `v = (+0x94 − x) / dt`, the suspension force is `+0x90 = (+0x8c − x) · +0x88`, plus `v · +0x9c`

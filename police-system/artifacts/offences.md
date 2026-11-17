@@ -1,6 +1,6 @@
 # Police Offences — storage, bit mapping, and on-screen text
 
-**Created** 2026-06-03 16:00 +0200 · **Modified** 2026-10-13 18:08 +0200
+**Created** 2026-06-03 16:00 +0200 · **Modified** 2026-11-01 15:38 +0100
 
 This document covers: how an offence is recorded, how `get_pm_state` reads it, how the police
 come to *notice* it, and how the offence text reaches the HUD. It is built from static analysis
@@ -570,7 +570,7 @@ direction. The sidewalk line shares this gate too; it is additionally blocked by
 
 ## 7. Cross-references
 
-- `structs/police_manager.md` §3 — `pursuit_record` field layout.
+- `structs/police_manager.md` §1 — `pursuit_record` field layout.
 - `police-system/artifacts/police-system.md` — runtime behaviour, textdb string list, call chain.
 - `police-system/artifacts/police-manager.md` — the pursuit state machine and dispatch sequence.
 - `script-mapping/artifacts/opcodes-verified.md` — `get_pm_state` (case 0xae) + the `get_pm_*` cluster.
@@ -621,7 +621,7 @@ alternate-mode selector (0 → normal strings 2100–2110 / 2150–2160; non-0 �
    searching icon appears. Stealing another car after that does make the searching icon appear
    (identity pending). Two traced paths produce exactly this; both set the face-known flag of the
    squads chasing the player (`police_action+0x68`) while leaving their known vehicle at the old car
-   or at "none" (`structs/police_manager.md` §3.2): **(a)** `entity_hit` — the car striking a police
+   or at "none" (`structs/police_manager.md` §8): **(a)** `entity_hit` — the car striking a police
    officer whose squad targets the driver forces `police_board_update_sighting(driver, 0, 1)`, which
    records the current car and the face on every squad; **(b)** the no-decay bit 13 re-derives
    pending gun every inner tick, so `police_manager_try_dispatch_pursuit_for_target` keeps

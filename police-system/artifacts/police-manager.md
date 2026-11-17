@@ -1,6 +1,6 @@
 # police_manager family — the player-side police engine
 
-**Created** 2026-06-21 19:30 +0200 · **Modified** 2026-09-30 23:08 +0200
+**Created** 2026-06-21 19:30 +0200 · **Modified** 2026-11-01 15:38 +0100
 
 Static analysis grounded in the body of `police_manager_tick`. Field names follow
 `structs/police_manager.md`; offence storage, escalation and noticing geometry are in
@@ -186,7 +186,7 @@ clears and both the icon and bar disappear; a later re-sighting re-arms from scr
 - icon index 5 (handcuffs + substate) → if `reinforcement_counter` (`record+0x5c`) < 1, set it to 1
   and spawn one patrol car crewed by two cops as a handcuffs-tier squad via
   `police_manager_spawn_patrol_car_reinforcements_at_radius(player, 4, 200.0f)`; the `4` is the
-  squad's opening tier (`structs/police-action.md` §3).
+  squad's opening tier (`structs/police-action.md` §4).
 - icon index 6 (gun + substate) → if `+0x5c` < 2, set it to 2 and spawn two such cars as gun-tier
   squads (mode 0) at radius 200.
   Waves escalate once per tier; `+0x5c` is the wave latch (0/1/2).
@@ -222,7 +222,7 @@ player (`police_manager_count_officers_alive_for_target`: the `record+0x74` entr
 `police_manager_record_set_tracked_vehicle_for_target` when the squad ends (`police_board_end_pursuit`,
 the with-car path of `police_action_disband`). The squad fields themselves are written by
 `police_board_create_and_engage`, `police_board_refresh_target_vehicle` and the identity batch of
-`police_board_update_sighting` (`structs/police_manager.md` §3.2). This reproduces the documented
+`police_board_update_sighting` (`structs/police_manager.md` §8). This reproduces the documented
 transitions (`police-system/artifacts/police-system.md` §"Transparent (Faded) Substate"):
 
 - **identity_pending → 1 (UNKNOWN / searching):**
@@ -239,7 +239,7 @@ The `+0x51` writers form a closed set — a byte-store census of the whole binar
 a `pursuit_record`: the four in `police_manager_tick` (`0x005cc77b`, `0x005cc786`, `0x005cc7a4`,
 `0x005cc7b1`), `police_manager_register_actor` and `police_manager_record_clear_pursuit_state` (both
 write 0). An in-car assault on an officer keeps the player known through two traced paths, the
-`entity_hit` identity batch and the sticky bit-13 re-dispatch (`structs/police_manager.md` §3.2).
+`entity_hit` identity batch and the sticky bit-13 re-dispatch (`structs/police_manager.md` §8).
 
 ## 6. Police HUD update (icon + wanted bar)
 
@@ -291,4 +291,4 @@ To drive the reinforcement waves (§4), the same block computes a combined index
 
 - **Which identity path an in-car assault takes.** Leaving the car after assaulting an officer
   keeps the player KNOWN. Both mechanisms are traced (§5); which one fires in a given assault needs
-  an in-game check, with the discriminators listed in `structs/police_manager.md` §9.
+  an in-game check, with the discriminators listed in `structs/police_manager.md` §14.

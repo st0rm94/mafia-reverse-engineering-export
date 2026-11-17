@@ -1,6 +1,6 @@
 # How a script command becomes a `program_process_command` case
 
-**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-10-12 20:57 +0200
+**Created** 2026-09-07 22:05 +0200 · **Modified** 2026-10-30 20:21 +0100
 
 This file answers the question *given a script command name, which `case 0xNN:` in
 `program_process_command` implements it?* The answer is byte-exact for all 391 commands and
@@ -195,7 +195,7 @@ which is what makes it a free check on the PC extraction.
 ## 8. Appendix — the `[0x005c7da0, 0x005c9740)` helper tail, by command
 
 126 function starts. **112 are reached ONLY from `program_process_command`**, which is what
-makes this range hard to name from behaviour alone (`structs/program.md` §6): a one-line
+makes this range hard to name from behaviour alone (`structs/program.md` §8): a one-line
 accessor tells nothing by itself, and its single consumer is a 50 KB switch. With the case map
 the consumer is readable.
 
@@ -350,7 +350,7 @@ The names are the validation: every row lands on the command its name predicts �
 
 | VA | command | what it settles |
 |---|---|---|
-| `0x005c8550` / `_8560` / `_8570` | `STREAM_CONNECT` | `i3d_face_group_get_material_ptr`, `i3d_mesh_level_get_face_group_count_ptr`, `i3d_mesh_object_get_lod_count_ptr`; `glass_shatter_cut_mesh` walks the identical chain (`structs/i3d_frame.md` §9) |
+| `0x005c8550` / `_8560` / `_8570` | `STREAM_CONNECT` | `i3d_face_group_get_material_ptr`, `i3d_mesh_level_get_face_group_count_ptr`, `i3d_mesh_object_get_lod_count_ptr`; `glass_shatter_cut_mesh` walks the identical chain (`structs/i3d_frame.md` §8) |
 | `0x005c86b0` | `CREATEWEAPONFROMFRAME` | the `operator_new(0x38)` constructor's owner class: `using_object_record_ctor` |
 | `0x005c9060` | `SETLMLEVEL` | the `'LMAP'` frame-tree walk: `program_switch_light_map` |
 | `0x005c8fe0` | `HUMAN_RETURNFROMPANIC` | the consumer of `entity_set_ai_state_resettable` |
@@ -389,7 +389,7 @@ program counter stays put and the script re-runs the same instruction every tick
 
 ⚠️ Their base-dispatcher slot points at the default arm *precisely because* the derived
 class owns them — the empty slot is the consequence of the override, not evidence of a
-missing feature. `structs/detector.md` §1 carries five of these six mappings from the
+missing feature. `structs/detector.md` §4 carries five of these six mappings from the
 `C_detector` side. Of the 15 opcodes whose base slot is the default arm, 6 are these; the
 other **9** are §9a.
 
@@ -415,7 +415,7 @@ through to `return 0`, a decode failure at script load.
 
 🔑 **`EVENT`'s opcode IS the instruction type.** The compiler stores a command's opcode AS the
 instruction type, so the marker `program_set_event` scans for *is* the `EVENT` command — which
-joins this document's `EVENT = opcode 0x48` to `structs/program.md` §5d's event marker at
+joins this document's `EVENT = opcode 0x48` to `structs/program.md` §10d's event marker at
 instruction type `0x48`.
 
 ---

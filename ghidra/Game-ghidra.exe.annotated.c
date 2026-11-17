@@ -11592,16 +11592,17 @@ LAB_0040bc79:
  *     4. Call `ai_path_find_segment_for_node(*(seg+0x34), param_3)` (per-segment
  *        init helper).
  *     5. Read new segment's TYPE discriminator at `seg[+0x38]` (float):
- *        - **0.0**  (type 0 = explicit-point segment): compute midpoint
- *          of `seg[0..2]` and `seg[3..5]`, store at `this+0x80..+0x88`
- *          (current target world-pos). Capture `seg[9..11]` (likely
- *          velocity/heading/lookahead) at `this+0x74..+0x7c`. Compute
- *          midpoint distance² at `this+0x90`.
+ *        - **0.0**  (type 0 = gate segment): compute the midpoint
+ *          of `seg[0..2]` and `seg[3..5]` (gates A / B), store at `this+0x80..+0x88`
+ *          (the arrival-test centre). Copy `seg[9..11]` (the waypoint's `pos`, element
+ *          `+0x24`) to `this+0x74..+0x7c` (the movement target). Store the arrival
+ *          radius² at `this+0x90`.
  *        - **1.4013e-45** (= bit pattern 1, type 1 = nav-graph node
  *          segment): look up nav-graph node at `*(g_act_mission+0x2c)+4 +
  *          (int)seg[0xd] * 0x1e` (= node array indexed by `seg[0xd]`).
- *          Copy node XYZ (node+0..+8) into `this+0x80..+0x88`. Capture
- *          `seg[9..11]` at `this+0x74..+0x7c`. Read node's radius²
+ *          Copy node XYZ (node+0..+8) into `this+0x80..+0x88` (the arrival centre).
+ *          Copy `seg[9..11]` (`pos`) to `this+0x74..+0x7c` (the movement target).
+ *          Read node's radius²
  *          (ushort at node+0x10), compute `(radius/100)²` and store
  *          at `this+0x90`.
  *        - **2.8026e-45** (= bit pattern 2, type 2 = same as type 1
@@ -11613,18 +11614,18 @@ LAB_0040bc79:
  *   Receiver shape (path-follower context):
  *     +0x04/+0x08  = path-segment vector (begin/end of 0x3c-byte segs)
  *     +0x58        = current-segment cursor (int; -1 = none)
- *     +0x74..+0x7c = current segment's per-segment params (3 floats —
- *                    likely speed/heading/lookahead from seg[9..11])
- *     +0x80..+0x88 = current target world-pos (vec3)
+ *     +0x74..+0x7c = movement target: the waypoint's `pos` (seg[9..11]), which
+ *                    `ai_path_tick` passes to `human_move_to` (structs/ai_path.md §7)
+ *     +0x80..+0x88 = arrival-test centre (gate midpoint or web node)
  *     +0x8c        = state code (0=no segments, 1=active, 2=alt, 3/4=
  *                    terminal — sibling functions distinguish more states)
- *     +0x90        = distance² to target (or radius² for nav-node segs)
+ *     +0x90        = arrival radius² around `this+0x80`
  *     +0x98        = scratch slot (cleared on cursor reset)
  *
  *   Path-segment layout (stride 0x3c bytes per segment):
  *     [0..2]   = endpoint-A vec3 (XYZ floats, type-0 segments)
  *     [3..5]   = endpoint-B vec3 (XYZ floats, type-0 segments)
- *     [9..11]  = per-segment params (likely speed/heading/lookahead)
+ *     [9..11]  = the waypoint's own position (`pos`, element +0x24)
  *     [0xd]    = nav-node index (float-encoded int, type-1/2 segments)
  *     [0x34]   = some sub-context pointer (passed to ai_path_find_segment_for_node)
  *     [0x38]   = TYPE discriminator (float; 0.0 / bit-1 / bit-2)
@@ -11652,8 +11653,8 @@ LAB_0040bc79:
  *     target is now staged (1=yes, 0=no).
  *
  * Side effects:
- *   - Mutates `this+0x58` (cursor), `this+0x74..+0x7c` (params),
- *     `this+0x80..+0x88` (target pos), `this+0x8c` (state code),
+ *   - Mutates `this+0x58` (cursor), `this+0x74..+0x7c` (movement target),
+ *     `this+0x80..+0x88` (arrival centre), `this+0x8c` (state code),
  *     `this+0x90` (distance² gate), `this+0x98` (scratch).
  *   - Reads nav-graph node table at `*(g_act_mission+0x2c)+4` for
  *     type-1/2 segments.
@@ -11758,12 +11759,13 @@ void __thiscall ai_path_advance_to_next_normal_waypoint(int param_1,undefined4 p
  * ai_path_load_normal_waypoint - stage the CURRENT normal waypoint (no cursor advance)
  *
  * What it does: reads the normal waypoint container at `this+0x04`/`+0x08` (stride 0x3c)
- *   at the current cursor `this+0x58` and stages the waypoint into the receiver's target
- *   slots (`+0x74..0x7c` direction, `+0x80..0x88` position, `+0x8c` state, `+0x90`
- *   distance^2). Skips forward by one first if `ai_path_is_pos_in_next_connection` says
- *   the actor is already inside the following connection. The record's type
- *   discriminator at element `+0x38` selects between a free midpoint (0) and snapping to
- *   a C_web_node (1/2, stride 0x1e via `*(g_act_mission+0x2c)+4`).
+ *   at the current cursor `this+0x58` and stages the waypoint into the receiver
+ *   (`+0x74..0x7c` movement target = the element's `pos`, `+0x80..0x88` arrival-test
+ *   centre, `+0x8c` state, `+0x90` arrival radius^2). Skips forward by one first if
+ *   `ai_path_is_pos_in_next_connection` says the actor is inside the following
+ *   connection. The record's type discriminator at element `+0x38` puts the arrival
+ *   centre at the gate midpoint (0) or snaps it to a C_web_node (1/2, stride 0x1e via
+ *   `*(g_act_mission+0x2c)+4`). See structs/ai_path.md §7.
  * Parameters: param_1 (ai_path*): this; param_2: the out-vector the PS2 signature
  *   declares (both builds stage into `this` instead of writing through it).
  * Returns: void.
@@ -12189,7 +12191,7 @@ int ai_path_is_point2d_in_checkpoint_radius(float *param_1,float *param_2,float 
 }
 
 /*
- * ai_path_tick(this, param_2, entity, param_4, param_5) -> void —
+ * ai_path_tick(this, param_2, entity, param_4, param_5) -> char —
  *
  * PS2 twin: `Tick__7ai_pathFUiP7C_humanbb` (0x00365510)  [CONFIRMED]
  *     Identical 7-callee SET with zero extras on either side — GetNextNormalWaypoint,
@@ -12202,14 +12204,14 @@ int ai_path_is_point2d_in_checkpoint_radius(float *param_1,float *param_2,float 
  *     point — this one ADVANCES along the path, that one revalidates and can abandon it.
  *
  *     Per-frame tick for one entity following the path described by
- *     the `ai_path` `this`. Reads the entity's current
- *     world-position, compares against the current target staged in
- *     `this+0x80..+0x88`, and either commits movement toward the
- *     target (via `human_move_to`) OR advances the segment cursor
- *     (via `ai_path_advance_to_next_normal_waypoint`) when the target has
- *     been reached or skipped. State-2 paths additionally walk a
- *     side-vector at `this+0x14[+0x5c*0x18]` and fire arrival events
- *     by element type.
+ *     the `ai_path` `this`. Reads the entity's current world position and
+ *     tests arrival against the centre at `this+0x80..+0x88` (`arrival_center`)
+ *     with the radius² at `this+0x90`. Outside it, moves the entity toward the
+ *     movement target at `this+0x74..+0x7c` (`move_target`) via `human_move_to`;
+ *     inside it, or when `human_move_to` returns 0, advances the cursor via
+ *     `ai_path_advance_to_next_normal_waypoint`. State-2 paths additionally walk
+ *     the spec vector at `this+0x14[+0x5c*0x18]` and ghost the detour blocker by
+ *     its type. See structs/ai_path.md §7.
  *
  *   Algorithm (state-dependent on `this+0x8c`):
  *     **State 0 / 3 / 4**: early-return (no active target / terminal).
@@ -12219,14 +12221,15 @@ int ai_path_is_point2d_in_checkpoint_radius(float *param_1,float *param_2,float 
  *       b. If `this+0x71 != 0` (some flag): mask param_4 low byte to 0.
  *       c. `cVar7 = ai_path_is_last_normal_waypoint()` (NAMING-DEFERRED — likely LOS or
  *          path-blocked predicate).
- *       d. Compute dist² from entity to target at `this+0x80..+0x88`.
+ *       d. Compute dist² from entity to the arrival centre at `this+0x80..+0x88`.
  *          If `cVar7 == 0` AND `dist² < this+0x90` (the gate):
  *          bVar6 = true (reached target).
  *       e. If `param_5 == 0 && cVar7 == 0 && ai_path_is_turning_at_normal_waypoint(&local_c)`
  *          (NAMING-DEFERRED predicate): set param_5 = 1.
- *       f. If NOT reached AND `human_move_to(param_2, param_4,
- *          *(this+0x64), cVar7, param_5)` returns non-zero (commit
- *          movement succeeded): return.
+ *       f. If NOT reached AND `human_move_to(entity, &this+0x74, param_2, param_4,
+ *          *(this+0x64), cVar7, param_5)` returns non-zero: return that value.
+ *          The walker goes in ECX and the target address in EDX; Ghidra drops both
+ *          register arguments, so the body shows only the five stack arguments.
  *       g. Otherwise fall through to LAB_0040cc3f (advance).
  *
  *     **State 2** (active target with arrival events):
@@ -12239,8 +12242,8 @@ int ai_path_is_point2d_in_checkpoint_radius(float *param_1,float *param_2,float 
  *              type 6:            ai_ghost_add_or_refresh(inner, key, frame_ts+800,  0.25)
  *              type 0x1b:         ai_ghost_add_human_colliders(inner, frame_ts+2000, 1.0)
  *              default:           goto advance
- *       c. Try commit via `human_move_to(param_2, param_4,
- *          *(this+0x64), 0, 1)`; if succeeds, return.
+ *       c. Try `human_move_to(entity, &this+0x74, param_2, param_4,
+ *          *(this+0x64), 0, 1)`; if it returns non-zero, return that value.
  *       d. Else try `ai_path_is_pos_in_next_connection(&local_c)`; on FALSE call
  *          `ai_path_advance_to_next_spec_waypoint(&local_c)` (NAMING-DEFERRED), then call
  *          `ai_path_update_spec_waypoints(local_c, local_8, local_4, 1, entity)`
@@ -12264,15 +12267,16 @@ int ai_path_is_point2d_in_checkpoint_radius(float *param_1,float *param_2,float 
  *               and a key dword at +0x14)
  *     +0x5c   = cursor into the side-vector (int; ≥0 = active)
  *     +0x64   = some sub-context pointer (passed to human_move_to)
+ *     +0x74   = movement target (`move_target`), passed to human_move_to in EDX
+ *     +0x80   = arrival-test centre (`arrival_center`); +0x90 its radius²
  *     +0x71   = byte flag (controls param_4 masking)
  *
  * Calling convention: `__thiscall` — `this` in ECX.
  *
  * Params:
  *   - this (ECX)        = path-follower context pointer.
- *   - param_2           = passthrough to `human_move_to` (likely a
- *                         movement-controller or entity-controller
- *                         pointer; semantic NOT pinned).
+ *   - param_2           = a uint (the PS2 signature's `Ui`) passed through
+ *                         to `human_move_to` as its first stack argument.
  *   - entity (param_3)  = entity pointer (with +0x68 I3D frame). The
  *                         entity whose position is checked against
  *                         the current target.
@@ -12281,7 +12285,9 @@ int ai_path_is_point2d_in_checkpoint_radius(float *param_1,float *param_2,float 
  *   - param_5           = char flag passed through; may be elevated
  *                         to 1 in the state-1 path via `ai_path_is_turning_at_normal_waypoint`.
  *
- * Returns: void. Side effects via `human_move_to` (commit) /
+ * Returns: char in AL (Ghidra renders the definition as void): the non-zero
+ *     result of `human_move_to`, or the result of the advance call on the
+ *     other paths. Side effects via `human_move_to` (movement) /
  *     `ai_path_advance_to_next_normal_waypoint` (advance) /
  *     `entity_dispatch_event`-like helpers.
  *
@@ -12290,7 +12296,7 @@ int ai_path_is_point2d_in_checkpoint_radius(float *param_1,float *param_2,float 
  *   - May fire `ai_ghost_add_or_refresh` / `ai_ghost_add_human_colliders` arrival events on
  *     state-2 side-vector elements (NAMING-DEFERRED — likely
  *     "schedule task event" with timestamp + duration).
- *   - May commit movement via `human_move_to` (NAMING-DEFERRED).
+ *   - Moves the entity toward `this+0x74` via `human_move_to`.
  *
  * Callers: 19 callsites file-wide.
  *

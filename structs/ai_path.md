@@ -1,6 +1,6 @@
 # `ai_path` — one computed route, handed to an NPC action
 
-**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-11-09 09:51 +0100
+**Created** 2026-07-27 13:56 +0200 · **Modified** 2026-11-17 20:15 +0100
 
 An `ai_path` is a **route object**: the result `ai_wayfind` produces and the thing the movement
 `ai_action` factories carry. It sits one layer above the raw graph — `ai_path` consumes
@@ -23,7 +23,9 @@ An `ai_path` is a **route object**: the result `ai_wayfind` produces and the thi
 ## 1. Base field layout
 
 PC offsets. The three containers are MSVC `std::vector`s — an allocator byte, then begin / end /
-capacity — and their element type names come from the PS2 container symbols (§10).
+capacity — and their element type names come from the PS2 container symbols (§10). The 1.2
+executable keeps every field from `+0x58` on at the same offset; its NORMAL container sits at
+`+0x1c` and its SPEC container at `+0x2c` (`ai_path_tick` is `0x005026c0` there).
 
 ```c
 typedef struct ai_path {                    // 0x9c bytes
@@ -50,10 +52,10 @@ typedef struct ai_path {                    // 0x9c bytes
     /* +0x6c */ uint32_t     spec_corner;        // [H] the blocker corner the last search chose; no reader (class census)
     /* +0x70 */ uint8_t      spec_inserted;      // [H] a search level inserted its spec waypoint
     /* +0x71 */ uint8_t      blocked_flag;       // [H] a blocker is standing in the way
-    /* +0x74 */ float        staged_point[3];    // [H] the current waypoint's own position
-    /* +0x80 */ float        staged_target[3];   // [H] where the actor is actually steering
+    /* +0x74 */ float        move_target[3];     // [H] the point the walker heads for (§7)
+    /* +0x80 */ float        arrival_center[3];  // [H] the arrival test's centre; the walker does not steer to it (§7)
     /* +0x8c */ uint32_t     state;              // [H] 0 none · 1 normal · 2 spec · 3 invalidated · 4 abandoned
-    /* +0x90 */ float        tolerance_sq;       // [H] arrival radius^2 for staged_target
+    /* +0x90 */ float        tolerance_sq;       // [H] arrival radius^2 for arrival_center
     /* +0x94 */ uint32_t     unused_94;          // [U] no access; no reader (class census)
     /* +0x98 */ void        *cached_blocker;     // [H] the TYPE-1 special of the current segment
 } ai_path;
@@ -66,12 +68,12 @@ The route proper.
 ```c
 typedef struct ai_path_node {               // 0x3c bytes
     /* +0x00 */ float     gate_a[3];           // [H] gate point A
-    /* +0x0c */ float     gate_b[3];           // [H] gate point B; the A/B midpoint steers type 0
+    /* +0x0c */ float     gate_b[3];           // [H] gate point B; the A/B midpoint is type 0's arrival centre
     /* +0x18 */ float     dir[3];              // [H] the waypoint's unit direction
     /* +0x24 */ float     pos[3];              // [H] the waypoint's own position
     /* +0x30 */ float     width;               // [H] the corridor width at this end
     /* +0x34 */ uint32_t  web_node;            // [H] C_web_node index
-    /* +0x38 */ uint32_t  type;                // [H] 0 gate midpoint · 1 / 2 snap to the web node
+    /* +0x38 */ uint32_t  type;                // [H] arrival centre: 0 gate midpoint · 1 / 2 the web node
 } ai_path_node;
 ```
 
@@ -142,10 +144,10 @@ writers and readers named in each row. "The three searches" are the
 | +0x6c | spec_corner | H | the three searches (the index of the chosen footprint corner; the coll-list search stores it through a float local) | - | no reader (class census, as `+0x4c`; the `+0x6c` of `ai_path_is_pos_in_next_connection` is the next waypoint's `width`) |
 | +0x70 | spec_inserted | H | the three searches (= 1), `ai_path_update_spec_waypoints` (clears it before each search) | the three searches | of the recursion's levels only the first to finish inserts |
 | +0x71 | blocked_flag | H | `ai_path_revalidate_for_actor` | `ai_path_tick`, `ai_path_revalidate_for_actor` | set while a blocker stands in the way, cleared when `no_progress` falls back to 0 |
-| +0x74 | staged_point | H | the normal getters, `ai_path_advance_to_next_spec_waypoint` | `dog_follow_path` (steers the dog at `+0x74..+0x7c` in its states 1 and 2) | the current waypoint's `pos` |
-| +0x80 | staged_target | H | the normal getters | `ai_path_tick` | the gate midpoint (type 0) or the web node position (types 1/2) |
+| +0x74 | move_target | H | the normal getters, `ai_path_advance_to_next_spec_waypoint` (the detour point) | `ai_path_tick` (both arms pass its address to `human_move_to` in EDX), `dog_follow_path` (steers the dog at `+0x74..+0x7c` in its states 1 and 2) | the movement target: the current waypoint's `pos`, or the detour point in state 2 (§7) |
+| +0x80 | arrival_center | H | the normal getters | `ai_path_tick` (its arrival test only, against `tolerance_sq`) | the arrival-test centre: the gate midpoint (type 0) or the web node position (types 1/2); a detour leaves it unchanged (§7) |
 | +0x8c | state | H | the three searches (= 3), the normal getters and `ai_path_advance_to_next_spec_waypoint` (1 / 2), `ai_path_revalidate_for_actor` (= 4), `ai_action_invalidate_path_for_actor` (= 3) | `ai_path_update_spec_waypoints`, `ai_path_tick`, `ai_path_revalidate_for_actor`, `ai_path_is_invalidated`, `ai_path_is_abandoned`, `ai_path_get_state`, `dog_follow_path` | the value set 0..4 is closed by the 29 writes to `+0x8c` in the binary |
-| +0x90 | tolerance_sq | H | the normal getters | `ai_path_tick`, `dog_follow_path` (its arrival test against `staged_point`) | the arrival radius² |
+| +0x90 | tolerance_sq | H | the normal getters | `ai_path_tick`, `dog_follow_path` (its arrival test against `move_target`) | the arrival radius² |
 | +0x94 | unused_94 | U | - | - | no access; no reader (class census: every `ai_path_*`, `ai_wayfind_*`, `ai_action_*` and `dog_*` function, and `entity_action_tick`) |
 | +0x98 | cached_blocker | H | `ai_path_find_segment_for_node`, `ai_path_advance_to_next_normal_waypoint` | `ai_path_find_segment_for_node`, `dog_follow_path` (writes the special's `+0x2c` through it) | a piece of geometry bound to a live scene frame (`structs/check_seg.md` §4c, §5) |
 
@@ -156,10 +158,10 @@ writers and readers named in each row. "The three searches" are the
 | +0x00 | gate_a | H | `ai_wayfind_build_path_node_from_nodes`, `ai_wayfind_build_path_node_from_positions`, `ai_wayfind_compute_node_left_right_gate` | the normal getters, `ai_path_is_pos_in_next_connection` | the node position minus the perpendicular times the width |
 | +0x0c | gate_b | H | the two builders, `ai_wayfind_compute_node_left_right_gate` | the normal getters, `ai_path_is_pos_in_next_connection` | the node position plus the perpendicular times the width |
 | +0x18 | dir | H | the two builders (normalised), `ai_wayfind_compute_node_left_right_gate` (the bisector at a sharp turn) | the same three, to derive the gate perpendicular | read only by its builders; no reader after the element is stored |
-| +0x24 | pos | H | the two builders, `ai_wayfind_build_optimal_path` (the last element), `ai_wayfind_compute_node_left_right_gate` (0.5 off the corner at a sharp turn, else `1.2 - dot` along the perpendicular) | `ai_path_get_destination` (the last element), the normal getters | the route destination is the last element's `pos` |
+| +0x24 | pos | H | the two builders, `ai_wayfind_build_optimal_path` (the last element), `ai_wayfind_compute_node_left_right_gate` (0.5 off the corner at a sharp turn, else `1.2 - dot` along the perpendicular) | `ai_path_get_destination` (the last element), the normal getters | the movement target while the waypoint is current (copied to `move_target`); the route destination is the last element's `pos` |
 | +0x30 | width | H | `ai_wayfind_build_optimal_path` (0.5 on the positional end node, the one with `web_node` -1) | `ai_path_is_pos_in_next_connection` | used when either end has no web node; otherwise the web node's `+0x10 & 0xffff` × `0.01` |
 | +0x34 | web_node | H | `ai_wayfind_build_optimal_path` (the route's node index before each insert; -1 on the positional end node) | the normal getters (types 1/2), `ai_path_update_spec_waypoints` (`!= -1`), `ai_path_is_pos_in_next_connection`, the three searches (the current and the previous waypoint's node), `entity_action_tick` (through `ai_path_normal_waypoint_at`) | resolved against `*(g_act_mission+0x2c)+4` at stride `0x1e` |
-| +0x38 | type | H | the two builders (= 0), `ai_wayfind_compute_node_left_right_gate` (1 or 2 at a turn sharper than 45 degrees, `dot <= 0.707`, by the sign of `vec2_signed_angle_diff`, when the two offset edges intersect; 0 otherwise) | the normal getters | 0 steers at the A/B midpoint; 1 and 2 snap to the web node and give the side the corner is on |
+| +0x38 | type | H | the two builders (= 0), `ai_wayfind_compute_node_left_right_gate` (1 or 2 at a turn sharper than 45 degrees, `dot <= 0.707`, by the sign of `vec2_signed_angle_diff`, when the two offset edges intersect; 0 otherwise) | the normal getters | 0 centres the arrival test on the A/B midpoint; 1 and 2 centre it on the web node and give the side the corner is on |
 
 ### 2b. `ai_path_specnode`
 
@@ -338,6 +340,22 @@ records whose blocker is leaving.
 | arity | `(this, uint, C_human*, bool, bool)` | `(this, C_actor*)` |
 | always does | picks the next waypoint and stages it | re-runs `ai_path_update_spec_waypoints` and re-stages |
 | can set state 4 | no | **yes** — give-up or teleport |
+
+`ai_path_tick` — move or advance. The walker always heads for `move_target` (`+0x74`): both arms
+pass its address to `human_move_to` in EDX, with the walker in ECX. `arrival_center` (`+0x80`) and
+`tolerance_sq` (`+0x90`) only decide arrival: outside that radius the walker keeps moving, inside
+it the tick advances the cursor instead. For a normal waypoint the two points differ:
+`move_target` is the element's `pos`, `arrival_center` the gate midpoint (type 0) or the web node
+(types 1/2). During a detour (state 2) `ai_path_advance_to_next_spec_waypoint` replaces only
+`move_target` with the detour point, so the arrival centre stays on the normal waypoint.
+`ai_path_tick` returns a `char` in AL: the non-zero result of `human_move_to`, or the result of
+the advance call on the other paths.
+
+Observed in game (mission 07-02, Sarah walking home): the walker followed the line through the
+waypoints' `pos` points, 0.11 units off on average and 0.33 at most over about 80 samples, while
+the gate points A and B lay 2 to 5 units apart across the pavement. Also observed: a walking
+NPC's `ai_path` is freed and allocated again every few seconds, and the new one often lands at
+the old address (same `0x9c` size), so a cached pointer can refer to a new route.
 
 `ai_path_revalidate_for_actor` — the guard ladder in front of its unconditional tail:
 

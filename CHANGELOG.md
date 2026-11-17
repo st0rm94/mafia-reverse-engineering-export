@@ -3,6 +3,32 @@
 One section per export version (date tag). Counts are measured on the annotated decompilation
 `ghidra/Game-ghidra.exe.annotated.c` against Ghidra's default auto-analysis of `Game.exe` 1.0.
 
+## 2026.11.17.1 — `ai_path` movement target and arrival centre
+
+Reported in issue #2: two `ai_path` fields had their roles swapped. Checked against the
+instructions of `Game.exe` 1.0; the in-game observations from the report are recorded as such.
+
+- `structs/ai_path.md`:
+  - `+0x74` is the **movement target**: both arms of `ai_path_tick` pass its address to
+    `human_move_to` in EDX, with the walker in ECX. `+0x80` is only the **arrival-test centre**,
+    read with the radius² at `+0x90`;
+  - the two fields are renamed after their roles: `staged_point` → `move_target` (`+0x74`),
+    `staged_target` → `arrival_center` (`+0x80`);
+  - §1 and §2 (the two field rows, `ai_path_node.gate_b`, `.pos` and `.type`) describe the roles that
+    way; a detour (state 2) replaces only `+0x74`, so the arrival centre stays on the normal
+    waypoint;
+  - §7 explains how `ai_path_tick` chooses between moving and advancing, that it returns a `char`,
+    and records the in-game observations: the walker follows the waypoints' `pos` points (mission
+    07-02), and a walking NPC's `ai_path` is freed and allocated again every few seconds, often at
+    the same address;
+  - §1 notes the 1.2 executable's container offsets (`+0x1c` normal, `+0x2c` spec; fields from
+    `+0x58` on unchanged).
+- Annotated decompilation: the docblocks of `ai_path_tick`, `ai_path_advance_to_next_normal_waypoint`
+  and `ai_path_load_normal_waypoint` describe the two fields the same way, by their new names; the
+  `ai_path_tick` docblock gives the full `human_move_to` call (the two register arguments Ghidra
+  does not show) and its `char` return.
+- Ghidra database `ghidra/Game.exe.gzf`: unchanged.
+
 ## 2026.11.17 — struct docs on one standard, field-by-field recovery, 21 renames, Ghidra names synced
 
 - Struct docs (`structs/`, now 115: 112 updated, 1 new, 2 renamed):
